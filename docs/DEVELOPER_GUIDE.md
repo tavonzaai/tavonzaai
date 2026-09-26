@@ -33,12 +33,12 @@
 
 Before you start, make sure the following tools are installed on your machine.
 
-| Tool | Minimum Version | Install |
-|------|----------------|---------|
-| **Node.js** | `>= 20.0.0` | [nodejs.org](https://nodejs.org) or `nvm install 20` |
-| **pnpm** | `>= 9.0.0` | `npm install -g pnpm@9` |
-| **Docker & Docker Compose** | Latest stable | [docker.com](https://www.docker.com/get-started) |
-| **Git** | Latest stable | [git-scm.com](https://git-scm.com) |
+| Tool                        | Minimum Version | Install                                              |
+| --------------------------- | --------------- | ---------------------------------------------------- |
+| **Node.js**                 | `>= 20.0.0`     | [nodejs.org](https://nodejs.org) or `nvm install 20` |
+| **pnpm**                    | `>= 9.0.0`      | `npm install -g pnpm@9`                              |
+| **Docker & Docker Compose** | Latest stable   | [docker.com](https://www.docker.com/get-started)     |
+| **Git**                     | Latest stable   | [git-scm.com](https://git-scm.com)                   |
 
 Verify your setup:
 
@@ -149,23 +149,23 @@ Your branch  →  dev  →  prod  →  main
 
 > These branches are **protected** — no one pushes directly to them. All changes go through a PR.
 
-| Branch | Environment | Purpose |
-|--------|-------------|--------|
-| `main` | 🟢 **Production** (live) | The actual platform users interact with. Only fully battle-tested code from `prod` ever lands here. |
-| `prod` | 🟡 **Pre-Production** (staging) | Fully QA'd and stress-tested before promotion to `main`. Acts as the final safety net. |
-| `dev` | 🔵 **Development** (team integration) | Where all developer PRs land. The tech lead reviews and merges here. All automated CI runs on PRs targeting `dev`. |
+| Branch | Environment                           | Purpose                                                                                                            |
+| ------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `main` | 🟢 **Production** (live)              | The actual platform users interact with. Only fully battle-tested code from `prod` ever lands here.                |
+| `prod` | 🟡 **Pre-Production** (staging)       | Fully QA'd and stress-tested before promotion to `main`. Acts as the final safety net.                             |
+| `dev`  | 🔵 **Development** (team integration) | Where all developer PRs land. The tech lead reviews and merges here. All automated CI runs on PRs targeting `dev`. |
 
 ### Developer Branches (your working branch)
 
 You always create your branch from `dev`, work on it, then open a PR **back to `dev`**. You never target `prod` or `main` directly.
 
-| Branch pattern | Purpose |
-|----------------|---------|
-| `feature/<ticket-id>-short-description` | New features |
-| `fix/<ticket-id>-short-description` | Bug fixes |
-| `chore/<description>` | Tooling, config, dependency updates, docs |
-| `refactor/<description>` | Code restructuring (no behaviour change) |
-| `hotfix/<ticket-id>-short-description` | Critical production fixes (PR directly to `prod` + backport to `dev`) |
+| Branch pattern                          | Purpose                                                               |
+| --------------------------------------- | --------------------------------------------------------------------- |
+| `feature/<ticket-id>-short-description` | New features                                                          |
+| `fix/<ticket-id>-short-description`     | Bug fixes                                                             |
+| `chore/<description>`                   | Tooling, config, dependency updates, docs                             |
+| `refactor/<description>`                | Code restructuring (no behaviour change)                              |
+| `hotfix/<ticket-id>-short-description`  | Critical production fixes (PR directly to `prod` + backport to `dev`) |
 
 ### How Code Gets to Production
 
@@ -186,7 +186,7 @@ You always create your branch from `dev`, work on it, then open a PR **back to `
    QA / integration testing happens here
 
 5. Tech lead promotes prod → main  (PR: prod → main)
-   Production environment deploys automatically
+   Production environment deploys manually by tiggering action
    🚀 Users see the changes
 ```
 
@@ -224,13 +224,13 @@ pnpm dev
 
 This starts all apps concurrently with their respective ports:
 
-| App | URL |
-|-----|-----|
-| API (NestJS) | http://localhost:3000 |
+| App                  | URL                   |
+| -------------------- | --------------------- |
+| API (NestJS)         | http://localhost:3000 |
 | Realtime (WebSocket) | http://localhost:3001 |
-| Customer Frontend | http://localhost:3100 |
-| Staff Frontend | http://localhost:3101 |
-| Admin Frontend | http://localhost:3102 |
+| Customer Frontend    | http://localhost:3100 |
+| Staff Frontend       | http://localhost:3101 |
+| Admin Frontend       | http://localhost:3102 |
 
 ### Run a Specific App Only
 
@@ -276,10 +276,10 @@ These rules apply to **every** developer, regardless of role.
 
 ```typescript
 // ❌ Wrong — imports AWS SDK directly into domain logic
-import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client } from "@aws-sdk/client-s3";
 
 // ✅ Correct — use the storage port from @tavonza/storage
-import { StoragePort } from '@tavonza/storage';
+import { StoragePort } from "@tavonza/storage";
 ```
 
 ### Commit Message Format (Conventional Commits)
@@ -296,16 +296,16 @@ All commit messages must follow [Conventional Commits](https://www.conventionalc
 
 **Types:**
 
-| Type | When to use |
-|------|------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `chore` | Build process, tooling, deps |
-| `docs` | Documentation only |
+| Type       | When to use                             |
+| ---------- | --------------------------------------- |
+| `feat`     | New feature                             |
+| `fix`      | Bug fix                                 |
+| `chore`    | Build process, tooling, deps            |
+| `docs`     | Documentation only                      |
 | `refactor` | Code restructuring (no behavior change) |
-| `test` | Adding or fixing tests |
-| `perf` | Performance improvement |
-| `ci` | CI/CD configuration |
+| `test`     | Adding or fixing tests                  |
+| `perf`     | Performance improvement                 |
+| `ci`       | CI/CD configuration                     |
 
 **Examples:**
 
@@ -328,11 +328,11 @@ git commit -m "docs: update developer guide with AI role section"
 
 ### Your Apps
 
-| App | Path | Port | Audience |
-|-----|------|------|---------|
-| Customer App | `frontend/customer/` | 3100 | Restaurant guests (QR scan) |
-| Staff App | `frontend/staff/` | 3101 | Waiters, kitchen, cashier, manager |
-| Admin App | `frontend/admin/` | 3102 | Tenant & branch admins |
+| App          | Path                 | Port | Audience                           |
+| ------------ | -------------------- | ---- | ---------------------------------- |
+| Customer App | `frontend/customer/` | 3100 | Restaurant guests (QR scan)        |
+| Staff App    | `frontend/staff/`    | 3101 | Waiters, kitchen, cashier, manager |
+| Admin App    | `frontend/admin/`    | 3102 | Tenant & branch admins             |
 
 ### Tech Stack
 
@@ -358,8 +358,8 @@ pnpm --filter @frontend/admin dev
 Frontend apps may import from `@tavonza/contracts` and `@tavonza/shared`:
 
 ```typescript
-import type { OrderDto } from '@tavonza/contracts';
-import { formatCurrency } from '@tavonza/shared';
+import type { OrderDto } from "@tavonza/contracts";
+import { formatCurrency } from "@tavonza/shared";
 ```
 
 > **Important:** Frontend apps must NOT import from `@tavonza/database`, `@tavonza/queue`, `@tavonza/authorization`, or any server-only package.
@@ -396,12 +396,12 @@ if (user.role === 'admin') {
 
 ### Your Apps & Packages
 
-| Path | Purpose |
-|------|---------|
-| `apps/api/` | Main NestJS REST API, domain modules |
-| `apps/realtime/` | WebSocket gateway |
-| `apps/worker/` | Background jobs, outbox processor |
-| `packages/*` | Shared internal libraries |
+| Path             | Purpose                              |
+| ---------------- | ------------------------------------ |
+| `apps/api/`      | Main NestJS REST API, domain modules |
+| `apps/realtime/` | WebSocket gateway                    |
+| `apps/worker/`   | Background jobs, outbox processor    |
+| `packages/*`     | Shared internal libraries            |
 
 ### Tech Stack
 
@@ -490,7 +490,7 @@ async getOrder(@Param('id') id: string, @Actor() actor: ActorContext) {
 When a significant state change occurs (e.g., order placed, payment confirmed), emit a domain event:
 
 ```typescript
-import { OrderPlacedEvent } from '@tavonza/events';
+import { OrderPlacedEvent } from "@tavonza/events";
 
 // Inside your application service
 this.eventBus.publish(new OrderPlacedEvent({ orderId, organizationId, items }));
@@ -514,63 +514,120 @@ If you're creating a new shared library under `packages/`:
 
 ### Your App
 
-| Path | Purpose | Runtime |
-|------|---------|---------|
-| `apps/ai/` | AI agent runtime, context builder, Tool Gateway | Node.js (tsx in dev) |
+| Path       | Purpose                                                          |
+| ---------- | ---------------------------------------------------------------- |
+| `apps/ai/` | AI agent runtime, context builder, Tool Gateway, model services |
 
-### Tech Stack
+### Language & Framework Freedom
 
-- **Language:** TypeScript
-- **Runtime (dev):** `tsx watch` (hot reload)
-- **Runtime (prod):** compiled JS via `tsc`
-- **Dependencies:** `@tavonza/authorization`, `@tavonza/contracts`, `@tavonza/observability`, `@tavonza/shared`
+The AI app does **not** enforce a specific language or framework. You have full flexibility based on the task:
 
-### Starting Development
+| Language | Common use case | Suggested tools |
+|----------|----------------|------------------|
+| **Python** | ML models, vector embeddings, LLM orchestration | FastAPI, LangChain, LlamaIndex, Haystack |
+| **TypeScript** | Tool Gateway client, lightweight orchestration | tsx, Node.js |
+
+> **Recommendation:** Use **Python + FastAPI** as the main AI service runtime. It gives you the richest ecosystem for LLMs, embeddings, vector stores, and ML pipelines. Use TypeScript only for lightweight gateway clients or integration glue if needed.
+
+### Python Setup (FastAPI)
 
 ```bash
-pnpm --filter @tavonza/ai dev
-# Starts with: tsx watch src/main.ts
+# AI service lives in apps/ai/
+cd apps/ai
+
+# Create a virtual environment (Python 3.11+)
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the dev server
+uvicorn main:app --reload --port 8000
 ```
+
+AI service runs on **http://localhost:8000** in development.
+
+### Python Project Structure (recommended)
+
+```
+apps/ai/
+├── main.py               # FastAPI app entrypoint
+├── requirements.txt      # Python dependencies
+├── requirements-dev.txt  # Dev/test dependencies
+├── .python-version       # Pin Python version (e.g. 3.11)
+├── routers/              # FastAPI route handlers (tool endpoints)
+├── services/             # Business logic (LLM calls, embeddings, etc.)
+├── tools/                # Tool Gateway tool implementations
+├── schemas/              # Pydantic request/response models
+└── tests/                # pytest test suite
+```
+
+### Vector Store & Embedding Choices
+
+You have full freedom here — choose what fits the task:
+
+| Tool | Purpose |
+|------|---------|
+| **pgvector** | Postgres-native vector search (simplest, already in infra) |
+| **Qdrant** | Dedicated vector DB (better for scale) |
+| **Pinecone** | Managed cloud vector DB |
+| **Chroma** | Local development, prototyping |
+| **Weaviate** | Full-featured, open-source |
+
+> Start with **pgvector** — it reuses the existing Postgres infra with zero extra services. Switch to a dedicated vector DB only if you hit performance limits.
 
 ### The Golden Rule: AI Cannot Bypass the Platform
 
 **AI is an authorized client of the platform, not a privileged back-channel.**
 
 - AI calls platform capabilities through the **Tool Gateway** only.
-- AI never receives direct database access.
-- AI never bypasses the authorization layer.
+- AI **never** receives direct database access.
+- AI **never** bypasses the authorization layer.
 - Every AI tool call is subject to the exact same `Actor + Permission + Scope + Resource` checks as a human user action.
 
-```typescript
-// ✅ Correct — AI calls through the Tool Gateway (which enforces authorization)
-const result = await toolGateway.invoke('orders.getStatus', {
-  actor: aiActor,
-  params: { orderId }
-});
+```python
+# ✅ Correct — AI calls through the Tool Gateway (which enforces authorization)
+result = await tool_gateway.invoke(
+    tool="orders.getStatus",
+    actor=ai_actor,
+    params={"order_id": order_id},
+)
 
-// ❌ Wrong — AI directly queries the database
-const order = await db.query('SELECT * FROM orders WHERE id = $1', [orderId]);
+# ❌ Wrong — AI directly queries the database
+order = await db.execute("SELECT * FROM orders WHERE id = $1", [order_id])
 ```
 
 ### AI Actor Context
 
-When the AI performs actions on behalf of a user session, it must carry a scoped `ActorContext` that represents the authenticated session context — not a super-user identity.
+When the AI performs actions on behalf of a user session, it must carry a scoped `ActorContext` that represents the authenticated session — not a super-user identity. Pass this context on every Tool Gateway call.
 
-### Tool Development
+### Adding a New AI Tool
 
-When adding new tools to the Tool Gateway:
+1. Define the tool's input/output schema in `apps/ai/schemas/` (Pydantic models)
+2. Define the contract in `@tavonza/contracts` so the API knows what to expose
+3. Implement the tool handler in `apps/api/` under the relevant domain module
+4. Register the tool in the Tool Gateway registry
+5. Call it from your Python service via the Tool Gateway HTTP endpoint
+6. Write `pytest` tests for your AI service logic
+7. Write integration tests verifying authorization is enforced
 
-1. Define the tool's input/output contract in `@tavonza/contracts`
-2. Implement the tool handler in `apps/api/` under the relevant domain module
-3. Register the tool in the Tool Gateway registry
-4. Write unit tests for the handler logic
-5. Write integration tests for the authorization boundary (ensure a lower-privileged actor cannot call it)
+### Python Code Rules
+
+- Use **Python 3.11+**
+- Use **Pydantic v2** for all request/response models — no raw dicts
+- Use **async/await** throughout (FastAPI is async-first)
+- Use **type hints** on every function — no untyped code
+- Use **pytest** for tests, co-locate as `test_<module>.py`
+- Pin all dependencies with exact versions in `requirements.txt`
+- Use **python-dotenv** for env variables — never hardcode secrets
 
 ### AI-Specific Rules
 
 - **No hallucinated data** — AI must only surface data retrieved via verified tool calls.
-- **Audit everything** — Every tool invocation must be logged via `@tavonza/observability` audit telemetry.
-- **Fail closed** — If a tool call fails or authorization is denied, AI should surface a clear error, not a fabricated fallback.
+- **Audit everything** — Every tool invocation must be logged (structured JSON logs).
+- **Fail closed** — If a tool call fails or authorization is denied, return a clear error. Never fabricate a fallback response.
+- **No direct AWS SDK calls in AI business logic** — use the platform's storage/queue abstractions via the Tool Gateway.
 
 ---
 
@@ -618,13 +675,13 @@ pnpm --filter @frontend/customer test
 
 ### Test Conventions
 
-| Layer | Test Type | Tool |
-|-------|-----------|------|
-| Domain logic | Unit tests | Jest / Vitest |
-| Application services | Unit tests with mocks | Jest / Vitest |
-| API endpoints | Integration tests | Jest + Supertest |
-| Frontend components | Component tests | Vitest + Testing Library |
-| Authorization boundaries | Integration tests | Jest + Supertest |
+| Layer                    | Test Type             | Tool                     |
+| ------------------------ | --------------------- | ------------------------ |
+| Domain logic             | Unit tests            | Jest / Vitest            |
+| Application services     | Unit tests with mocks | Jest / Vitest            |
+| API endpoints            | Integration tests     | Jest + Supertest         |
+| Frontend components      | Component tests       | Vitest + Testing Library |
+| Authorization boundaries | Integration tests     | Jest + Supertest         |
 
 ### Writing Tests
 
@@ -640,22 +697,16 @@ pnpm --filter @frontend/customer test
 
 ---
 
-## 14. Linting & Type Checking
+## 14. Type Checking
 
-Run lint and typecheck before pushing:
+Run typecheck before pushing to catch any type errors early:
 
 ```bash
-# Lint all workspaces
-pnpm lint
-
 # Typecheck all workspaces
 pnpm typecheck
-
-# Run both together (same as CI)
-pnpm turbo run lint typecheck
 ```
 
-These are enforced automatically in CI on every push and PR.
+This is enforced automatically in CI on every push and PR. There is no separate lint step — TypeScript strict mode (`noImplicitAny`, `strictNullChecks`, etc.) in `tsconfig.base.json` acts as your code quality guard.
 
 ---
 
@@ -664,12 +715,12 @@ These are enforced automatically in CI on every push and PR.
 ### Before Pushing — Checklist
 
 ```bash
-# 1. Make sure your branch is up to date with develop
+# 1. Make sure your branch is up to date with dev
 git fetch origin
-git rebase origin/develop
+git rebase origin/dev
 
-# 2. Run lint and typecheck
-pnpm lint && pnpm typecheck
+# 2. Run typecheck
+pnpm typecheck
 
 # 3. Run tests
 pnpm test
@@ -686,15 +737,15 @@ git push origin feature/TAVN-123-add-order-cancellation
 
 ### Always Rebase, Never Merge
 
-When syncing your branch with `develop`, **rebase** instead of merging to keep a clean linear history:
+When syncing your branch with `dev`, **rebase** instead of merging to keep a clean linear history:
 
 ```bash
 # ✅ Do this
 git fetch origin
-git rebase origin/develop
+git rebase origin/dev
 
 # ❌ Don't do this
-git merge origin/develop
+git merge origin/dev
 ```
 
 If you have conflicts during rebase:
@@ -785,22 +836,22 @@ Every PR/push
 
 ### CI Jobs
 
-| Job | Triggered by |
-|-----|--------------|
-| `typecheck-*` | Path-filtered per workspace |
-| `test-api` | `apps/api/**` or `packages/**` |
-| `test-ai` | `apps/ai/**` or `packages/**` |
+| Job              | Triggered by                                              |
+| ---------------- | --------------------------------------------------------- |
+| `typecheck-*`    | Path-filtered per workspace                               |
+| `test-api`       | `apps/api/**` or `packages/**`                            |
+| `test-ai`        | `apps/ai/**` or `packages/**`                             |
 | `security-audit` | Always — reports HIGH/CRITICAL dependency vulnerabilities |
 
 CI uses `pnpm --frozen-lockfile` — **do not edit `pnpm-lock.yaml` manually**.
 
 ### Deployment (auto-triggered on merge)
 
-| Branch | Environment | What happens |
-|--------|-------------|-------------|
-| `dev` | 🔵 Development | Auto-deploys on push — team can test immediately |
-| `prod` | 🟡 Pre-Production | Auto-deploys on push — QA and stress testing |
-| `main` | 🟢 Production | Auto-deploys on push — live platform, real users |
+| Branch | Environment       | What happens                                     |
+| ------ | ----------------- | ------------------------------------------------ |
+| `dev`  | 🔵 Development    | Auto-deploys on push — team can test immediately |
+| `prod` | 🟡 Pre-Production | Auto-deploys on push — QA and stress testing     |
+| `main` | 🟢 Production     | Auto-deploys on push — live platform, real users |
 
 ---
 
@@ -879,4 +930,4 @@ ADRs are required for any change that alters architectural boundaries, adds new 
 
 ---
 
-*Last updated: September 2026 — Tavonza AI Platform Engineering Team*
+_Last updated: September 2026 — Tavonza AI Platform Engineering Team_
