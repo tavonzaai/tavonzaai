@@ -1,0 +1,24 @@
+{
+  "name": "@platform/ai",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx watch src/main.ts",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@platform/authorization": "workspace:*",
+    "@platform/config": "workspace:*",
+    "@platform/contracts": "workspace:*",
+    "@platform/observability": "workspace:*",
+    "@platform/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5"
+  }
+}

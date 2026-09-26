@@ -1,0 +1,14 @@
+name: Deploy (Dev)
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+jobs:
+  deploy-dev:
+    name: Build & Deploy to Dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder Step
+        run: echo "Deploy to Dev workflow placeholder - to be implemented with AWS ECS deployment"

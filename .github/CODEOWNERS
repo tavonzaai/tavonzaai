@@ -1,0 +1,28 @@
+# Global repository owners
+* @devlopersabbir
+
+# Infrastructure & DevOps
+/infra/ @devlopersabbir
+/.github/workflows/ @devlopersabbir
+/docker/ @devlopersabbir
+
+# Core Architectural Boundaries & Packages
+/packages/authorization/ @devlopersabbir
+/packages/contracts/ @devlopersabbir
+/packages/database/ @devlopersabbir
+/.agent/ @devlopersabbir
+
+# Backend Applications & Domains
+/apps/api/src/modules/identity/ @devlopersabbir
+/apps/api/src/modules/authorization/ @devlopersabbir
+/apps/api/src/modules/payments/ @devlopersabbir
+/apps/api/src/modules/orders/ @devlopersabbir
+/apps/api/src/modules/kitchen/ @devlopersabbir
+
+# AI Subsystem
+/apps/ai/ @devlopersabbir
+
+# Frontend Surfaces
+/frontend/customer/ @devlopersabbir
+/frontend/staff/ @devlopersabbir
+/frontend/admin/ @devlopersabbir

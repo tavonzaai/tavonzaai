@@ -1,0 +1,14 @@
+name: Deploy (Production)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  deploy-production:
+    name: Build & Deploy to Production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder Step
+        run: echo "Deploy to Production workflow placeholder - to be implemented with AWS ECS deployment"
