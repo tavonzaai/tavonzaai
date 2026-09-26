@@ -85,26 +85,8 @@ jobs:
       - name: Typecheck API
         run: pnpm turbo run typecheck --filter=@tavonza/api
 
-  # ─── Typecheck: AI ─────────────────────────────────────────────────────────
-  typecheck-ai:
-    name: "Typecheck › AI"
-    needs: changes
-    if: needs.changes.outputs.ai == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@tavonza/ai^...
-      - name: Typecheck AI
-        run: pnpm turbo run typecheck --filter=@tavonza/ai
+  # NOTE: AI service (apps/ai) is pure Python — no turbo typecheck job.
+  # Python type checking is the AI team's responsibility (mypy / pyright locally).
 
   # ─── Typecheck: Realtime ───────────────────────────────────────────────────
   typecheck-realtime:

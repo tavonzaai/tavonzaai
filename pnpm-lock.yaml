@@ -15,34 +15,6 @@ importers:
         specifier: ^5.4.5
         version: 5.9.3
 
-  apps/ai:
-    dependencies:
-      '@tavonza/authorization':
-        specifier: workspace:*
-        version: link:../../packages/authorization
-      '@tavonza/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      '@tavonza/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@tavonza/observability':
-        specifier: workspace:*
-        version: link:../../packages/observability
-      '@tavonza/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-    devDependencies:
-      '@types/node':
-        specifier: ^20.12.7
-        version: 20.19.43
-      tsx:
-        specifier: ^4.7.2
-        version: 4.23.15
-      typescript:
-        specifier: ^5.4.5
-        version: 5.9.3
-
   apps/api:
     dependencies:
       '@nestjs/common':
