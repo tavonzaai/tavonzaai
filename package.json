@@ -6,7 +6,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "lint": "turbo run typecheck",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean"

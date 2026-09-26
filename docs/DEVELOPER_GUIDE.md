@@ -1,0 +1,809 @@
+# Developer Guide — Tavonza AI Platform
+
+> **Welcome to the team!** This guide walks every developer through the full workflow: cloning the repo, writing code, branching, installing packages, running the dev server, testing, and finally pushing your changes and opening a Pull Request.
+>
+> There are role-specific sections for **Frontend**, **Backend**, and **AI** engineers. Read the universal sections first, then jump to your role's section.
+
+---
+
+## Table of Contents
+
+1. [Prerequisites](#1-prerequisites)
+2. [Cloning the Repository](#2-cloning-the-repository)
+3. [Environment Setup](#3-environment-setup)
+4. [Installing Dependencies](#4-installing-dependencies)
+5. [Monorepo Structure Overview](#5-monorepo-structure-overview)
+6. [Branching Strategy](#6-branching-strategy)
+7. [Running the Development Server](#7-running-the-development-server)
+8. [Writing Code — Universal Rules](#8-writing-code--universal-rules)
+9. [Role Guide: Frontend Developer](#9-role-guide-frontend-developer)
+10. [Role Guide: Backend Developer](#10-role-guide-backend-developer)
+11. [Role Guide: AI Developer](#11-role-guide-ai-developer)
+12. [Installing New Packages](#12-installing-new-packages)
+13. [Testing](#13-testing)
+14. [Linting & Type Checking](#14-linting--type-checking)
+15. [Pushing Your Changes](#15-pushing-your-changes)
+16. [Opening a Pull Request](#16-opening-a-pull-request)
+17. [CI/CD Pipeline](#17-cicd-pipeline)
+18. [Common Pitfalls & FAQ](#18-common-pitfalls--faq)
+
+---
+
+## 1. Prerequisites
+
+Before you start, make sure the following tools are installed on your machine.
+
+| Tool | Minimum Version | Install |
+|------|----------------|---------|
+| **Node.js** | `>= 20.0.0` | [nodejs.org](https://nodejs.org) or `nvm install 20` |
+| **pnpm** | `>= 9.0.0` | `npm install -g pnpm@9` |
+| **Docker & Docker Compose** | Latest stable | [docker.com](https://www.docker.com/get-started) |
+| **Git** | Latest stable | [git-scm.com](https://git-scm.com) |
+
+Verify your setup:
+
+```bash
+node --version    # should print v20.x.x or later
+pnpm --version    # should print 9.x.x or later
+docker --version  # should print Docker version 24.x or later
+git --version     # should print git version 2.x or later
+```
+
+> **Why pnpm?** This monorepo uses **pnpm workspaces** to manage dependencies across all apps and packages. Do not use `npm` or `yarn` — doing so will corrupt the lockfile and break CI.
+
+---
+
+## 2. Cloning the Repository
+
+```bash
+# Clone via SSH (recommended — requires your SSH key added to GitHub)
+git clone git@github.com:tavonzaai/tavonzaai.git
+
+# Or clone via HTTPS
+git clone https://github.com/tavonzaai/tavonzaai.git
+
+# Navigate into the project
+cd tavonzaai
+```
+
+---
+
+## 3. Environment Setup
+
+The project uses `.env` files at the **monorepo root** as well as per-app `.env` files where needed.
+
+```bash
+# Copy the example env file to create your local .env
+cp .env.example .env
+```
+
+Open `.env` and fill in the required values. Ask a team lead for any secrets you don't have access to.
+
+> **Never commit `.env` to git.** It is already listed in `.gitignore`. Commit only `.env.example` (with dummy/placeholder values) when adding new environment variables.
+
+---
+
+## 4. Installing Dependencies
+
+Run this **once** from the monorepo root after cloning (and again whenever `pnpm-lock.yaml` changes):
+
+```bash
+pnpm install
+```
+
+This installs dependencies for **all** apps and packages in the workspace simultaneously. You do not need to `cd` into each directory.
+
+---
+
+## 5. Monorepo Structure Overview
+
+```text
+tavonzaai/
+├── apps/
+│   ├── api/          # NestJS REST API & domain orchestration  (port 3000)
+│   ├── realtime/     # WebSocket gateway & presence            (port 3001)
+│   ├── worker/       # Background queue workers & scheduled jobs
+│   └── ai/           # AI agent runtime & Tool Gateway
+│
+├── packages/         # Shared internal libraries (@tavonza/*)
+│   ├── authorization/  # Capability & scope models
+│   ├── contracts/      # Cross-domain DTOs & API specs
+│   ├── database/       # DB connection & migrations
+│   ├── events/         # Domain events & outbox schemas
+│   ├── observability/  # Logging, metrics, tracing
+│   ├── queue/          # Queue interfaces (SQS)
+│   ├── storage/        # Object storage abstractions (S3)
+│   ├── config/         # Environment schema validation
+│   └── shared/         # Pure domain-agnostic utilities
+│
+├── frontend/
+│   ├── customer/     # QR-driven ordering experience          (port 3100)
+│   ├── staff/        # Operational staff app                  (port 3101)
+│   └── admin/        # Tenant & branch admin console          (port 3102)
+│
+├── infra/            # Terraform infrastructure code
+├── docs/             # Documentation & runbooks
+├── docker/           # Dockerfiles & docker-compose
+├── scripts/          # Developer automation scripts
+└── .agent/           # Architectural source of truth & ADRs
+```
+
+**Package naming convention:** All internal packages are prefixed `@tavonza/*` (e.g., `@tavonza/contracts`, `@tavonza/shared`). When referencing them in `package.json`, use the workspace protocol:
+
+```json
+"@tavonza/contracts": "workspace:*"
+```
+
+---
+
+## 6. Branching Strategy
+
+We follow a **trunk-based development** model with short-lived feature branches.
+
+### Branch Types
+
+| Branch | Purpose | Merges into |
+|--------|---------|-------------|
+| `main` | Production-ready code. Protected. Never commit directly. | — |
+| `develop` | Integration branch. All features merge here first. | `main` (via release) |
+| `feature/<ticket-id>-short-description` | New features | `develop` |
+| `fix/<ticket-id>-short-description` | Bug fixes | `develop` |
+| `hotfix/<ticket-id>-short-description` | Urgent production fixes | `main` + `develop` |
+| `chore/<description>` | Tooling, configs, docs | `develop` |
+| `refactor/<description>` | Code cleanup with no feature change | `develop` |
+
+### Creating a Branch
+
+```bash
+# Always branch off develop (or main for hotfixes)
+git checkout develop
+git pull origin develop
+
+# Create your feature branch
+git checkout -b feature/TAVN-123-add-order-status-endpoint
+```
+
+### Branch Naming Rules
+
+- Use **kebab-case** only
+- Always include the **ticket/issue ID** (e.g., `TAVN-123`)
+- Keep descriptions short and meaningful
+- ✅ `feature/TAVN-42-waiter-table-assignment`
+- ❌ `my-changes`, `fix`, `test123`
+
+---
+
+## 7. Running the Development Server
+
+### Run Everything (All Apps)
+
+From the monorepo root, Turborepo orchestrates all dev servers in parallel:
+
+```bash
+pnpm dev
+```
+
+This starts all apps concurrently with their respective ports:
+
+| App | URL |
+|-----|-----|
+| API (NestJS) | http://localhost:3000 |
+| Realtime (WebSocket) | http://localhost:3001 |
+| Customer Frontend | http://localhost:3100 |
+| Staff Frontend | http://localhost:3101 |
+| Admin Frontend | http://localhost:3102 |
+
+### Run a Specific App Only
+
+```bash
+# Run only the API
+pnpm --filter @tavonza/api dev
+
+# Run only the admin frontend
+pnpm --filter @frontend/admin dev
+
+# Run only the AI service
+pnpm --filter @tavonza/ai dev
+```
+
+### Run with Docker (Recommended for Backend)
+
+For a more realistic environment with Postgres, Redis, and other backing services:
+
+```bash
+docker compose -f docker/docker-compose.dev.yml up
+```
+
+---
+
+## 8. Writing Code — Universal Rules
+
+These rules apply to **every** developer, regardless of role.
+
+### TypeScript First
+
+- All code is written in **TypeScript**. No `.js` files in `apps/` or `packages/`.
+- The base `tsconfig.base.json` enforces strict mode. **Do not loosen it.**
+- Common flags enforced: `noImplicitAny`, `strictNullChecks`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`.
+
+### No Cross-Domain Database Access
+
+```
+✅ Domain A communicates with Domain B via Application Services or Domain Events
+❌ Domain A's repository directly queries Domain B's database tables
+```
+
+### No Direct AWS SDK Imports in Domain Code
+
+```typescript
+// ❌ Wrong — imports AWS SDK directly into domain logic
+import { S3Client } from '@aws-sdk/client-s3';
+
+// ✅ Correct — use the storage port from @tavonza/storage
+import { StoragePort } from '@tavonza/storage';
+```
+
+### Commit Message Format (Conventional Commits)
+
+All commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <short summary>
+
+[optional body]
+
+[optional footer]
+```
+
+**Types:**
+
+| Type | When to use |
+|------|------------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `chore` | Build process, tooling, deps |
+| `docs` | Documentation only |
+| `refactor` | Code restructuring (no behavior change) |
+| `test` | Adding or fixing tests |
+| `perf` | Performance improvement |
+| `ci` | CI/CD configuration |
+
+**Examples:**
+
+```bash
+git commit -m "feat(orders): add order status update endpoint"
+git commit -m "fix(auth): resolve token expiry edge case"
+git commit -m "chore: bump @tavonza/contracts to 0.2.0"
+git commit -m "docs: update developer guide with AI role section"
+```
+
+### Small, Focused Commits
+
+- One logical change per commit
+- Don't commit commented-out code
+- Don't commit `console.log` / debug statements
+
+---
+
+## 9. Role Guide: Frontend Developer
+
+### Your Apps
+
+| App | Path | Port | Audience |
+|-----|------|------|---------|
+| Customer App | `frontend/customer/` | 3100 | Restaurant guests (QR scan) |
+| Staff App | `frontend/staff/` | 3101 | Waiters, kitchen, cashier, manager |
+| Admin App | `frontend/admin/` | 3102 | Tenant & branch admins |
+
+### Tech Stack
+
+- **Framework:** Next.js 14 (App Router)
+- **Language:** TypeScript
+- **Styling:** CSS Modules / Vanilla CSS (unless team decides otherwise)
+- **Package scope:** `@frontend/<app-name>`
+
+### Starting Development
+
+```bash
+# Run all frontends
+pnpm dev
+
+# Or just one
+pnpm --filter @frontend/customer dev
+pnpm --filter @frontend/staff dev
+pnpm --filter @frontend/admin dev
+```
+
+### Using Shared Packages
+
+Frontend apps may import from `@tavonza/contracts` and `@tavonza/shared`:
+
+```typescript
+import type { OrderDto } from '@tavonza/contracts';
+import { formatCurrency } from '@tavonza/shared';
+```
+
+> **Important:** Frontend apps must NOT import from `@tavonza/database`, `@tavonza/queue`, `@tavonza/authorization`, or any server-only package.
+
+### Authorization in Frontend
+
+- Authorization logic lives in the **backend** — period.
+- Frontend may check user roles for **UI purposes only** (e.g., hiding a button).
+- Never trust frontend authorization claims as a security boundary.
+
+```typescript
+// ✅ OK — UI-only guard
+if (user.role === 'manager') {
+  return <ManagerPanel />;
+}
+
+// ❌ Never do this — treating a frontend check as a security boundary
+if (user.role === 'admin') {
+  fetchSensitiveData(); // backend MUST enforce this too
+}
+```
+
+### Code Rules for Frontend
+
+1. **Components** — Keep them small and focused. One component = one responsibility.
+2. **Data fetching** — Use Server Components for initial data. Use Client Components only when you need interactivity.
+3. **Types** — Import DTO types from `@tavonza/contracts`, don't redefine them locally.
+4. **No inline styles** — Use CSS Modules or a shared design token system.
+5. **Accessibility** — All interactive elements must have proper `aria-*` attributes and keyboard support.
+
+---
+
+## 10. Role Guide: Backend Developer
+
+### Your Apps & Packages
+
+| Path | Purpose |
+|------|---------|
+| `apps/api/` | Main NestJS REST API, domain modules |
+| `apps/realtime/` | WebSocket gateway |
+| `apps/worker/` | Background jobs, outbox processor |
+| `packages/*` | Shared internal libraries |
+
+### Tech Stack
+
+- **Framework:** NestJS 10
+- **Language:** TypeScript (CommonJS module format for NestJS)
+- **Database:** PostgreSQL (via `@tavonza/database`)
+- **Queue:** SQS (via `@tavonza/queue`)
+- **Auth:** JWT + capability/scope model (via `@tavonza/authorization`)
+
+### Starting Development
+
+```bash
+# Run the API in watch mode
+pnpm --filter @tavonza/api dev
+
+# Or run all backend services
+pnpm dev
+```
+
+### Domain Module Structure
+
+Each business domain lives in `apps/api/src/modules/<domain>/` and follows this layout:
+
+```
+modules/orders/
+├── application/          # Use cases / application services
+│   ├── commands/
+│   └── queries/
+├── domain/               # Entities, value objects, domain events
+│   ├── entities/
+│   └── events/
+├── infrastructure/       # Repository implementations, adapters
+│   └── repositories/
+├── interface/            # Controllers, DTOs (request/response), guards
+│   ├── http/
+│   └── dtos/
+└── orders.module.ts
+```
+
+### The Dependency Rule
+
+Dependencies **always** flow inward:
+
+```
+Interface → Application → Domain → Infrastructure
+```
+
+- `Domain` has zero external dependencies — pure business logic only.
+- `Application` orchestrates domain objects and calls infrastructure via **ports (interfaces)**.
+- `Infrastructure` implements the ports.
+- `Interface` (controllers) only handles HTTP concerns — it never calls repositories directly.
+
+### Tenant Isolation
+
+Every query that accesses tenant-scoped data **must** include the `organizationId` (and often `branchId`) as a filter. Never return data across tenant boundaries.
+
+```typescript
+// ✅ Correct — always scope by organization
+async findOrders(organizationId: string, branchId: string) {
+  return this.orderRepo.findAll({ organizationId, branchId });
+}
+
+// ❌ Wrong — no tenant scoping
+async findOrders() {
+  return this.orderRepo.findAll(); // returns data from all tenants!
+}
+```
+
+### Authorization Pattern
+
+Authorization is handled via the `@tavonza/authorization` package. Use the provided guards and decorators:
+
+```typescript
+@Get(':id')
+@RequirePermission('orders:read')
+@UseGuards(AuthGuard, PermissionGuard)
+async getOrder(@Param('id') id: string, @Actor() actor: ActorContext) {
+  return this.getOrderQuery.execute({ id, actor });
+}
+```
+
+> The backend **always** re-validates permissions. Never skip authorization based on a client-supplied flag.
+
+### Domain Events
+
+When a significant state change occurs (e.g., order placed, payment confirmed), emit a domain event:
+
+```typescript
+import { OrderPlacedEvent } from '@tavonza/events';
+
+// Inside your application service
+this.eventBus.publish(new OrderPlacedEvent({ orderId, organizationId, items }));
+```
+
+Never call another domain's service directly — communicate via events.
+
+### Adding a New Package
+
+If you're creating a new shared library under `packages/`:
+
+1. Create the directory `packages/<name>/`
+2. Add `package.json` with `"name": "@tavonza/<name>"`
+3. Add `tsconfig.json` extending `../../tsconfig.base.json`
+4. Export via `index.ts`
+5. Reference it in other packages using `"@tavonza/<name>": "workspace:*"`
+
+---
+
+## 11. Role Guide: AI Developer
+
+### Your App
+
+| Path | Purpose | Runtime |
+|------|---------|---------|
+| `apps/ai/` | AI agent runtime, context builder, Tool Gateway | Node.js (tsx in dev) |
+
+### Tech Stack
+
+- **Language:** TypeScript
+- **Runtime (dev):** `tsx watch` (hot reload)
+- **Runtime (prod):** compiled JS via `tsc`
+- **Dependencies:** `@tavonza/authorization`, `@tavonza/contracts`, `@tavonza/observability`, `@tavonza/shared`
+
+### Starting Development
+
+```bash
+pnpm --filter @tavonza/ai dev
+# Starts with: tsx watch src/main.ts
+```
+
+### The Golden Rule: AI Cannot Bypass the Platform
+
+**AI is an authorized client of the platform, not a privileged back-channel.**
+
+- AI calls platform capabilities through the **Tool Gateway** only.
+- AI never receives direct database access.
+- AI never bypasses the authorization layer.
+- Every AI tool call is subject to the exact same `Actor + Permission + Scope + Resource` checks as a human user action.
+
+```typescript
+// ✅ Correct — AI calls through the Tool Gateway (which enforces authorization)
+const result = await toolGateway.invoke('orders.getStatus', {
+  actor: aiActor,
+  params: { orderId }
+});
+
+// ❌ Wrong — AI directly queries the database
+const order = await db.query('SELECT * FROM orders WHERE id = $1', [orderId]);
+```
+
+### AI Actor Context
+
+When the AI performs actions on behalf of a user session, it must carry a scoped `ActorContext` that represents the authenticated session context — not a super-user identity.
+
+### Tool Development
+
+When adding new tools to the Tool Gateway:
+
+1. Define the tool's input/output contract in `@tavonza/contracts`
+2. Implement the tool handler in `apps/api/` under the relevant domain module
+3. Register the tool in the Tool Gateway registry
+4. Write unit tests for the handler logic
+5. Write integration tests for the authorization boundary (ensure a lower-privileged actor cannot call it)
+
+### AI-Specific Rules
+
+- **No hallucinated data** — AI must only surface data retrieved via verified tool calls.
+- **Audit everything** — Every tool invocation must be logged via `@tavonza/observability` audit telemetry.
+- **Fail closed** — If a tool call fails or authorization is denied, AI should surface a clear error, not a fabricated fallback.
+
+---
+
+## 12. Installing New Packages
+
+### Adding a Dependency to a Specific App or Package
+
+```bash
+# Add to a specific workspace (e.g., the API)
+pnpm --filter @tavonza/api add <package-name>
+
+# Add a dev dependency
+pnpm --filter @tavonza/api add -D <package-name>
+
+# Add to a frontend app
+pnpm --filter @frontend/admin add <package-name>
+```
+
+### Adding a Root Dev Dependency
+
+For tooling that applies to the whole monorepo (e.g., prettier, eslint config):
+
+```bash
+pnpm add -D -w <package-name>
+```
+
+> **After every `pnpm add`** — the `pnpm-lock.yaml` will be updated. Commit it along with your `package.json` change.
+
+---
+
+## 13. Testing
+
+### Running All Tests
+
+```bash
+pnpm test
+```
+
+### Running Tests for a Specific App
+
+```bash
+pnpm --filter @tavonza/api test
+pnpm --filter @frontend/customer test
+```
+
+### Test Conventions
+
+| Layer | Test Type | Tool |
+|-------|-----------|------|
+| Domain logic | Unit tests | Jest / Vitest |
+| Application services | Unit tests with mocks | Jest / Vitest |
+| API endpoints | Integration tests | Jest + Supertest |
+| Frontend components | Component tests | Vitest + Testing Library |
+| Authorization boundaries | Integration tests | Jest + Supertest |
+
+### Writing Tests
+
+- Test file location: co-locate with the source file as `<filename>.spec.ts` or `<filename>.test.ts`.
+- Test description naming: use plain English — `it('should reject an order if the table is already closed', ...)`.
+- **Never** test implementation details — test **behaviour**.
+- Mock external dependencies (database, queue, AWS) at the infrastructure layer.
+
+### Coverage
+
+- Domain logic: aim for **> 80% coverage**.
+- Authorization boundaries: **100% coverage** — every permission check must have a test that verifies a denied case.
+
+---
+
+## 14. Linting & Type Checking
+
+Run lint and typecheck before pushing:
+
+```bash
+# Lint all workspaces
+pnpm lint
+
+# Typecheck all workspaces
+pnpm typecheck
+
+# Run both together (same as CI)
+pnpm turbo run lint typecheck
+```
+
+These are enforced automatically in CI on every push and PR.
+
+---
+
+## 15. Pushing Your Changes
+
+### Before Pushing — Checklist
+
+```bash
+# 1. Make sure your branch is up to date with develop
+git fetch origin
+git rebase origin/develop
+
+# 2. Run lint and typecheck
+pnpm lint && pnpm typecheck
+
+# 3. Run tests
+pnpm test
+
+# 4. Stage your changes
+git add .
+
+# 5. Commit with a conventional commit message
+git commit -m "feat(orders): add cancellation endpoint"
+
+# 6. Push
+git push origin feature/TAVN-123-add-order-cancellation
+```
+
+### Always Rebase, Never Merge
+
+When syncing your branch with `develop`, **rebase** instead of merging to keep a clean linear history:
+
+```bash
+# ✅ Do this
+git fetch origin
+git rebase origin/develop
+
+# ❌ Don't do this
+git merge origin/develop
+```
+
+If you have conflicts during rebase:
+
+```bash
+# Fix the conflict in the file, then:
+git add <conflicted-file>
+git rebase --continue
+```
+
+---
+
+## 16. Opening a Pull Request
+
+### Steps
+
+1. Push your branch to GitHub (see above).
+2. Go to `https://github.com/tavonzaai/tavonzaai` — GitHub will prompt you to open a PR.
+3. Fill in the **PR template** (`.github/pull_request_template.md`).
+4. Set the **base branch** to `develop` (or `main` for hotfixes).
+5. Assign yourself as the author.
+6. Request review from the relevant **CODEOWNERS** (`.github/CODEOWNERS`).
+
+### PR Title
+
+Follow the same Conventional Commit format:
+
+```
+feat(orders): add order cancellation endpoint
+fix(auth): resolve refresh token expiry edge case
+chore: update pnpm to 9.2.0
+```
+
+### PR Checklist (from the template)
+
+- [ ] Does NOT bypass domain boundaries
+- [ ] Does NOT import AWS SDKs into domain logic
+- [ ] Preserves backend authorization authority
+- [ ] Enforces tenant isolation
+- [ ] Emits domain events for cross-domain workflows
+- [ ] Includes an ADR under `.agent/ADR/` if changing architectural boundaries
+
+### Review Process
+
+- At least **1 approved review** is required before merge.
+- CI (lint, typecheck, tests) must pass.
+- Resolve all review comments before merging.
+- Use **"Squash and merge"** to keep a clean history on `develop`.
+
+### Draft PRs
+
+If your work is not ready for review but you want early feedback, open a **Draft PR**. This prevents accidental merge while still triggering CI.
+
+---
+
+## 17. CI/CD Pipeline
+
+GitHub Actions runs automatically on every push and PR to `main` and `develop`.
+
+### CI Jobs (`.github/workflows/ci.yml`)
+
+| Job | What it does |
+|-----|-------------|
+| **Lint & Typecheck** | Runs `pnpm turbo run lint typecheck` across all workspaces |
+| **Unit & Domain Tests** | Runs `pnpm turbo run test` across all workspaces |
+
+CI uses `pnpm --frozen-lockfile` — **do not change `pnpm-lock.yaml` manually**. Let pnpm manage it.
+
+### Deployment
+
+| Branch | Environment | Trigger |
+|--------|-------------|---------|
+| `develop` | Development | Auto-deploy on push |
+| `main` | Production | Auto-deploy on push |
+
+---
+
+## 18. Common Pitfalls & FAQ
+
+### ❓ I ran `npm install` by mistake. What do I do?
+
+Delete `package-lock.json` and `node_modules/`, then run `pnpm install`:
+
+```bash
+rm -rf node_modules package-lock.json
+pnpm install
+```
+
+### ❓ CI fails with "Dependencies lock file is not found"
+
+Your `pnpm-lock.yaml` was not committed. Fix it:
+
+```bash
+pnpm install   # regenerates pnpm-lock.yaml if missing
+git add pnpm-lock.yaml
+git commit -m "chore: track pnpm-lock.yaml for CI"
+git push
+```
+
+### ❓ TypeScript shows "Module not found" for a workspace package
+
+Make sure the package is built first. Workspace packages must be compiled before they can be consumed:
+
+```bash
+pnpm build
+# or build just the specific package
+pnpm --filter @tavonza/shared build
+```
+
+### ❓ My changes broke another workspace I didn't touch
+
+You likely changed a shared package (`packages/*`). Run the full build and test suite:
+
+```bash
+pnpm build && pnpm test
+```
+
+### ❓ I accidentally committed to `main` or `develop` directly
+
+```bash
+# Undo the last commit (keeps your changes staged)
+git reset --soft HEAD~1
+
+# Create a new branch and push there instead
+git checkout -b fix/my-accidental-commit
+git push origin fix/my-accidental-commit
+```
+
+### ❓ How do I add an ADR (Architecture Decision Record)?
+
+Create a file in `.agent/ADR/` following the existing format:
+
+```
+.agent/ADR/
+└── ADR-001-use-postgresql-for-persistence.md
+└── ADR-002-<your-decision>.md
+```
+
+ADRs are required for any change that alters architectural boundaries, adds new infrastructure, or changes the data model significantly.
+
+---
+
+## Getting Help
+
+- **Architecture questions** — Read the `.agent/` docs first (especially `ARCHITECTURE.md`, `RULES.md`, `FLOWS.md`).
+- **Blocked on a review** — Ping in the team channel with your PR link.
+- **Security concerns** — Escalate directly to the tech lead; do not open a public issue.
+
+---
+
+*Last updated: September 2026 — Tavonza AI Platform Engineering Team*
