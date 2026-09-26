@@ -7,75 +7,285 @@ on:
     branches: [main, develop]
 
 jobs:
-  typecheck:
-    name: Typecheck
+  # ─── Step 1: Detect which parts of the repo actually changed ───────────────
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      packages:        ${{ steps.filter.outputs.packages }}
+      api:             ${{ steps.filter.outputs.api }}
+      ai:              ${{ steps.filter.outputs.ai }}
+      realtime:        ${{ steps.filter.outputs.realtime }}
+      worker:          ${{ steps.filter.outputs.worker }}
+      frontend-admin:  ${{ steps.filter.outputs.frontend-admin }}
+      frontend-customer: ${{ steps.filter.outputs.frontend-customer }}
+      frontend-staff:  ${{ steps.filter.outputs.frontend-staff }}
+      ci-config:       ${{ steps.filter.outputs.ci-config }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            packages:
+              - 'packages/**'
+            api:
+              - 'apps/api/**'
+              - 'packages/**'
+            ai:
+              - 'apps/ai/**'
+              - 'packages/**'
+            realtime:
+              - 'apps/realtime/**'
+              - 'packages/**'
+            worker:
+              - 'apps/worker/**'
+              - 'packages/**'
+            frontend-admin:
+              - 'frontend/admin/**'
+              - 'packages/contracts/**'
+              - 'packages/shared/**'
+            frontend-customer:
+              - 'frontend/customer/**'
+              - 'packages/contracts/**'
+              - 'packages/shared/**'
+            frontend-staff:
+              - 'frontend/staff/**'
+              - 'packages/contracts/**'
+              - 'packages/shared/**'
+            ci-config:
+              - '.github/workflows/**'
+              - 'turbo.json'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'tsconfig*.json'
+
+  # ─── Step 2: Shared setup action (composite reuse) ─────────────────────────
+  # Each job below installs deps independently — GitHub caches pnpm store so
+  # repeated installs are fast (usually < 10s after first run).
+
+  # ─── Typecheck: API ────────────────────────────────────────────────────────
+  typecheck-api:
+    name: "Typecheck › API"
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci-config == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
         with:
           version: 9.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@tavonza/api^...
+      - name: Typecheck API
+        run: pnpm turbo run typecheck --filter=@tavonza/api
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+  # ─── Typecheck: AI ─────────────────────────────────────────────────────────
+  typecheck-ai:
+    name: "Typecheck › AI"
+    needs: changes
+    if: needs.changes.outputs.ai == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@tavonza/ai^...
+      - name: Typecheck AI
+        run: pnpm turbo run typecheck --filter=@tavonza/ai
 
-      - name: Run Turbo typecheck
-        run: pnpm turbo run typecheck
+  # ─── Typecheck: Realtime ───────────────────────────────────────────────────
+  typecheck-realtime:
+    name: "Typecheck › Realtime"
+    needs: changes
+    if: needs.changes.outputs.realtime == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@tavonza/realtime^...
+      - name: Typecheck Realtime
+        run: pnpm turbo run typecheck --filter=@tavonza/realtime
 
+  # ─── Typecheck: Worker ─────────────────────────────────────────────────────
+  typecheck-worker:
+    name: "Typecheck › Worker"
+    needs: changes
+    if: needs.changes.outputs.worker == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@tavonza/worker^...
+      - name: Typecheck Worker
+        run: pnpm turbo run typecheck --filter=@tavonza/worker
+
+  # ─── Typecheck: Shared Packages ────────────────────────────────────────────
+  typecheck-packages:
+    name: "Typecheck › Shared Packages"
+    needs: changes
+    if: needs.changes.outputs.packages == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck all shared packages
+        run: pnpm turbo run typecheck --filter='./packages/*'
+
+  # ─── Typecheck: Frontend Admin ─────────────────────────────────────────────
+  typecheck-frontend-admin:
+    name: "Typecheck › Frontend Admin"
+    needs: changes
+    if: needs.changes.outputs.frontend-admin == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@frontend/admin^...
+      - name: Typecheck Admin
+        run: pnpm turbo run typecheck --filter=@frontend/admin
+
+  # ─── Typecheck: Frontend Customer ──────────────────────────────────────────
+  typecheck-frontend-customer:
+    name: "Typecheck › Frontend Customer"
+    needs: changes
+    if: needs.changes.outputs.frontend-customer == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@frontend/customer^...
+      - name: Typecheck Customer
+        run: pnpm turbo run typecheck --filter=@frontend/customer
+
+  # ─── Typecheck: Frontend Staff ─────────────────────────────────────────────
+  typecheck-frontend-staff:
+    name: "Typecheck › Frontend Staff"
+    needs: changes
+    if: needs.changes.outputs.frontend-staff == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@frontend/staff^...
+      - name: Typecheck Staff
+        run: pnpm turbo run typecheck --filter=@frontend/staff
+
+  # ─── Tests: API ────────────────────────────────────────────────────────────
+  test-api:
+    name: "Tests › API"
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@tavonza/api^...
+      - name: Run API Tests
+        run: pnpm turbo run test --filter=@tavonza/api
+
+  # ─── Tests: AI ─────────────────────────────────────────────────────────────
+  test-ai:
+    name: "Tests › AI"
+    needs: changes
+    if: needs.changes.outputs.ai == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@tavonza/ai^...
+      - name: Run AI Tests
+        run: pnpm turbo run test --filter=@tavonza/ai
+
+  # ─── Security Audit (always runs) ──────────────────────────────────────────
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
         with:
           version: 9.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+      - run: pnpm install --frozen-lockfile
       - name: Audit dependencies for vulnerabilities
         run: pnpm audit --audit-level=high
         continue-on-error: true
-
-  test:
-    name: Unit & Domain Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run Turbo tests
-        run: pnpm turbo run test
