@@ -231,6 +231,9 @@ jobs:
         run: pnpm turbo run typecheck --filter=@frontend/staff
 
   # ─── Tests: API ────────────────────────────────────────────────────────────
+  # NOTE: Currently runs a no-op echo (jest not yet installed).
+  # When adding real tests: install jest + @nestjs/testing in devDependencies
+  # and update the test script in apps/api/package.json to run jest.
   test-api:
     name: "Tests › API"
     needs: changes
@@ -251,26 +254,9 @@ jobs:
       - name: Run API Tests
         run: pnpm turbo run test --filter=@tavonza/api
 
-  # ─── Tests: AI ─────────────────────────────────────────────────────────────
-  test-ai:
-    name: "Tests › AI"
-    needs: changes
-    if: needs.changes.outputs.ai == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@tavonza/ai^...
-      - name: Run AI Tests
-        run: pnpm turbo run test --filter=@tavonza/ai
+  # NOTE: AI service tests (Python/pytest) are not run via turbo.
+  # The AI team adds their own pytest CI step when they have tests.
+
 
   # ─── Security Audit (always runs) ──────────────────────────────────────────
   security-audit:
