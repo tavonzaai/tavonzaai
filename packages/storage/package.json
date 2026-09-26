@@ -1,5 +1,5 @@
 {
-  "name": "@platform/storage",
+  "name": "@tavonza/storage",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",

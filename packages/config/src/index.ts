@@ -1,5 +1,5 @@
 /**
- * @platform/config
+ * @tavonza/config
  * Environment configuration schema and validation
  */
 

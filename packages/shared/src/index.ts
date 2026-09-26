@@ -1,5 +1,5 @@
 /**
- * @platform/shared
+ * @tavonza/shared
  * Generic utilities, common errors, and primitives (strictly domain-agnostic)
  */
 

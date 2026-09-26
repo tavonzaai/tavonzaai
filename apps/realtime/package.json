@@ -1,5 +1,5 @@
 {
-  "name": "@platform/realtime",
+  "name": "@tavonza/realtime",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,12 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@platform/authorization": "workspace:*",
-    "@platform/config": "workspace:*",
-    "@platform/contracts": "workspace:*",
-    "@platform/events": "workspace:*",
-    "@platform/observability": "workspace:*",
-    "@platform/shared": "workspace:*",
+    "@tavonza/authorization": "workspace:*",
+    "@tavonza/config": "workspace:*",
+    "@tavonza/contracts": "workspace:*",
+    "@tavonza/events": "workspace:*",
+    "@tavonza/observability": "workspace:*",
+    "@tavonza/shared": "workspace:*",
     "ws": "^8.16.0"
   },
   "devDependencies": {

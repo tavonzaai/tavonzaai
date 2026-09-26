@@ -1,5 +1,5 @@
 {
-  "name": "@platform/worker",
+  "name": "@tavonza/worker",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,15 +10,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@platform/authorization": "workspace:*",
-    "@platform/config": "workspace:*",
-    "@platform/contracts": "workspace:*",
-    "@platform/database": "workspace:*",
-    "@platform/events": "workspace:*",
-    "@platform/observability": "workspace:*",
-    "@platform/queue": "workspace:*",
-    "@platform/shared": "workspace:*",
-    "@platform/storage": "workspace:*"
+    "@tavonza/authorization": "workspace:*",
+    "@tavonza/config": "workspace:*",
+    "@tavonza/contracts": "workspace:*",
+    "@tavonza/database": "workspace:*",
+    "@tavonza/events": "workspace:*",
+    "@tavonza/observability": "workspace:*",
+    "@tavonza/queue": "workspace:*",
+    "@tavonza/shared": "workspace:*",
+    "@tavonza/storage": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

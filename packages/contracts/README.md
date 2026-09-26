@@ -1,4 +1,4 @@
-# @platform/contracts
+# @tavonza/contracts
 
 Cross-domain contracts, API specifications, and shared DTOs
 

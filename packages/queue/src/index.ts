@@ -1,5 +1,5 @@
 /**
- * @platform/queue
+ * @tavonza/queue
  * Queue abstraction interfaces and job payloads
  */
 
