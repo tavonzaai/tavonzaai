@@ -258,9 +258,9 @@ jobs:
   # The AI team adds their own pytest CI step when they have tests.
 
 
-  # ─── Security Audit (always runs) ──────────────────────────────────────────
-  security-audit:
-    name: Security Audit
+  # ─── Security Audit: Node.js (always runs) ──────────────────────────────────
+  security-audit-node:
+    name: "Security Audit › Node.js"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -272,6 +272,21 @@ jobs:
           node-version: 20
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - name: Audit dependencies for vulnerabilities
+      - name: Audit Node.js dependencies for vulnerabilities
         run: pnpm audit --audit-level=high
+        continue-on-error: true
+
+  # ─── Security Audit: Python (always runs) ───────────────────────────────────
+  security-audit-python:
+    name: "Security Audit › Python"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Audit Python dependencies for vulnerabilities
+        run: pip-audit -r apps/ai/requirements.txt
         continue-on-error: true
