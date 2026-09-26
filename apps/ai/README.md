@@ -1,97 +1,97 @@
 # Tavonza AI Service
 
-Python/FastAPI AI agent runtime for the Tavonza platform.
+This service is yours. You decide how to organize it, what libraries to use, and how to build it.  
+This document only defines **the boundaries you must work within** and **how to get started**.
 
-## Structure
-
-```
-apps/ai/
-├── main.py                  # FastAPI app entrypoint
-├── config.py                # Environment config (pydantic-settings)
-├── requirements.txt         # Runtime dependencies
-├── requirements-dev.txt     # Dev/test dependencies
-├── .python-version          # Python version pin (3.11)
-├── .env.example             # Copy to .env and fill in secrets
-│
-├── routers/                 # FastAPI route handlers
-│   ├── health.py            # GET /health
-│   └── tools.py             # Tool invocation endpoints
-│
-├── gateway/                 # Tool Gateway HTTP client
-│   └── tool_gateway.py      # The ONLY way to call platform data
-│
-├── schemas/                 # Pydantic v2 request/response models
-│   └── base.py              # ActorContext, ToolInvokeRequest/Response
-│
-├── src/                     # Core AI logic (existing structure)
-│   ├── agents/              # AI agent definitions
-│   ├── tools/               # Tool implementations
-│   │   ├── registry/        # Tool registry
-│   │   ├── definitions/     # Tool definitions and metadata
-│   │   ├── executor/        # Tool execution logic
-│   │   └── authorization/   # Tool-level auth checks
-│   ├── context/             # Context building
-│   │   ├── context-builder/ # Builds actor context
-│   │   ├── context-providers/ # Data providers for context
-│   │   └── scope-resolver/  # Scope resolution
-│   ├── policies/            # AI action/confirmation policies
-│   ├── providers/           # LLM provider adapters
-│   ├── conversations/       # Conversation state
-│   └── audit/               # Audit logging
-│
-└── tests/                   # pytest test suite
-    └── test_health.py       # Example test
-```
+---
 
 ## Setup
 
-**Prerequisites:** Python 3.11+
+**Python 3.11+** is required.
 
 ```bash
-# From apps/ai/
+cd apps/ai
+
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
-pip install -r requirements-dev.txt
 
-cp .env.example .env
-# Fill in .env with your secrets
-```
+cp .env.example .env             # fill in your keys
 
-## Running
-
-```bash
-# Development (hot reload)
 uvicorn main:app --reload --port 8000
-
-# Production
-uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-API docs available at: http://localhost:8000/docs
+API is live at **http://localhost:8000**  
+Interactive docs at **http://localhost:8000/docs**
 
-## Testing
+---
 
-```bash
-pytest tests/
+## Your Role
+
+You are a **client of the backend API** (`apps/api`, running on port 3000).
+
+You do not own any database tables. You do not write migrations. You do not call the database directly.
+
+When you need platform data (orders, menus, sessions, users — anything), you call the backend API, which handles authorization and returns what you are allowed to see. Treat it like any external REST API.
+
+```
+Your AI service  →  POST http://localhost:3000/tools/invoke  →  backend does the auth + DB work  →  returns result
 ```
 
-## The Golden Rule
+The backend team will expose a **Tool Gateway endpoint**. You call it with:
+- what tool you want to run (e.g. `orders.getStatus`)
+- the user/session context (who is asking)
+- the parameters
 
-**AI never touches the database directly.**
+The backend enforces all permissions. You just consume the response.
 
-Every platform capability is called through the Tool Gateway:
+---
 
-```python
-from gateway.tool_gateway import tool_gateway
+## Hard Rules
 
-result = await tool_gateway.invoke(
-    tool="orders.getStatus",
-    actor=actor_context,
-    params={"order_id": order_id},
-)
-```
+These are non-negotiable architectural boundaries:
 
-The Tool Gateway enforces the full authorization chain:
-`Actor → Permission → Scope → Resource → Domain Rules`
+1. **No direct database access.** You do not connect to Postgres, Redis, or any other data store owned by the backend. Ever.
+
+2. **No AWS SDK calls in your business logic.** If you need to store something (e.g. embeddings, files), ask the backend team to expose a tool endpoint for it. You call that endpoint; the backend handles the actual storage.
+
+3. **Always carry user context.** Every request you make to the backend must include the authenticated user/session context. AI never acts as a super-user.
+
+4. **Fail closed.** If a backend call fails or is denied, surface an error. Never fabricate or guess a response from missing data.
+
+5. **Audit your tool calls.** Log every outgoing Tool Gateway call with the tool name, actor, and result status. Structured JSON logs only.
+
+---
+
+## Language & Tools
+
+Use whatever you need. Suggested starting points:
+
+| Need | Options |
+|------|---------|
+| Web framework | **FastAPI** (already set up), Flask |
+| LLM orchestration | LangChain, LlamaIndex, Haystack, raw API calls |
+| Vector search | pgvector (via backend tool), Qdrant, Pinecone, Chroma |
+| Embeddings | OpenAI, sentence-transformers, Cohere |
+| Testing | pytest + pytest-asyncio |
+
+Add any package to `requirements.txt`. You own that file.
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in your values. Never commit `.env`.
+
+Ask the team lead if you need any backend API keys or service URLs.
+
+---
+
+## Deploying
+
+You do not handle deployment. The DevOps team handles it.  
+What you need to ensure:
+- `GET /health` returns `{"status": "ok"}` (used by load balancer)
+- Your service starts with `uvicorn main:app --host 0.0.0.0 --port 8000`
+- All secrets come from environment variables, never hardcoded
