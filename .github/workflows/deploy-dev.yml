@@ -1,8 +1,11 @@
-name: Deploy (Dev)
+name: Deploy (Dev Environment)
+
+# Triggers automatically when code is merged into the 'dev' branch.
+# This deploys to the development environment for team testing.
 
 on:
   push:
-    branches: [develop]
+    branches: [dev]
   workflow_dispatch:
 
 jobs:

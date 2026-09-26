@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, prod, dev]
   push:
-    branches: [main, develop]
+    branches: [main, prod, dev]
 
 jobs:
   # ─── Step 1: Detect which parts of the repo actually changed ───────────────

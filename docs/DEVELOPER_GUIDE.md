@@ -138,38 +138,77 @@ tavonzaai/
 
 ## 6. Branching Strategy
 
-We follow a **trunk-based development** model with short-lived feature branches.
+We use a **3-tier protected branch model**. Code flows in one direction only:
 
-### Branch Types
+```
+Your branch  →  dev  →  prod  →  main
+   (PR)       (review) (staging) (live)
+```
 
-| Branch | Purpose | Merges into |
-|--------|---------|-------------|
-| `main` | Production-ready code. Protected. Never commit directly. | — |
-| `develop` | Integration branch. All features merge here first. | `main` (via release) |
-| `feature/<ticket-id>-short-description` | New features | `develop` |
-| `fix/<ticket-id>-short-description` | Bug fixes | `develop` |
-| `hotfix/<ticket-id>-short-description` | Urgent production fixes | `main` + `develop` |
-| `chore/<description>` | Tooling, configs, docs | `develop` |
-| `refactor/<description>` | Code cleanup with no feature change | `develop` |
+### The Three Protected Branches
 
-### Creating a Branch
+> These branches are **protected** — no one pushes directly to them. All changes go through a PR.
+
+| Branch | Environment | Purpose |
+|--------|-------------|--------|
+| `main` | 🟢 **Production** (live) | The actual platform users interact with. Only fully battle-tested code from `prod` ever lands here. |
+| `prod` | 🟡 **Pre-Production** (staging) | Fully QA'd and stress-tested before promotion to `main`. Acts as the final safety net. |
+| `dev` | 🔵 **Development** (team integration) | Where all developer PRs land. The tech lead reviews and merges here. All automated CI runs on PRs targeting `dev`. |
+
+### Developer Branches (your working branch)
+
+You always create your branch from `dev`, work on it, then open a PR **back to `dev`**. You never target `prod` or `main` directly.
+
+| Branch pattern | Purpose |
+|----------------|---------|
+| `feature/<ticket-id>-short-description` | New features |
+| `fix/<ticket-id>-short-description` | Bug fixes |
+| `chore/<description>` | Tooling, config, dependency updates, docs |
+| `refactor/<description>` | Code restructuring (no behaviour change) |
+| `hotfix/<ticket-id>-short-description` | Critical production fixes (PR directly to `prod` + backport to `dev`) |
+
+### How Code Gets to Production
+
+```
+1. You create a branch from dev
+   git checkout dev && git pull origin dev
+   git checkout -b feature/TAVN-123-order-cancellation
+
+2. You write code, commit, push
+   git push origin feature/TAVN-123-order-cancellation
+
+3. You open a PR → targeting dev
+   CI runs automatically (typecheck, tests)
+   Tech lead reviews and merges
+
+4. Tech lead promotes dev → prod  (PR: dev → prod)
+   Pre-production environment deploys automatically
+   QA / integration testing happens here
+
+5. Tech lead promotes prod → main  (PR: prod → main)
+   Production environment deploys automatically
+   🚀 Users see the changes
+```
+
+### Creating Your Branch
 
 ```bash
-# Always branch off develop (or main for hotfixes)
-git checkout develop
-git pull origin develop
+# Always start from dev
+git checkout dev
+git pull origin dev
 
-# Create your feature branch
-git checkout -b feature/TAVN-123-add-order-status-endpoint
+# Create your branch
+git checkout -b feature/TAVN-123-add-order-cancellation
 ```
 
 ### Branch Naming Rules
 
-- Use **kebab-case** only
+- Use **kebab-case** only — no spaces, no uppercase
 - Always include the **ticket/issue ID** (e.g., `TAVN-123`)
-- Keep descriptions short and meaningful
+- Keep the description short and meaningful
 - ✅ `feature/TAVN-42-waiter-table-assignment`
-- ❌ `my-changes`, `fix`, `test123`
+- ✅ `fix/TAVN-99-cart-total-rounding-error`
+- ❌ `my-changes`, `fix`, `test123`, `sabbir-branch`
 
 ---
 
@@ -672,12 +711,14 @@ git rebase --continue
 
 ### Steps
 
-1. Push your branch to GitHub (see above).
+1. Push your branch to GitHub (see [Pushing Your Changes](#15-pushing-your-changes)).
 2. Go to `https://github.com/tavonzaai/tavonzaai` — GitHub will prompt you to open a PR.
 3. Fill in the **PR template** (`.github/pull_request_template.md`).
-4. Set the **base branch** to `develop` (or `main` for hotfixes).
+4. **Set the base branch to `dev`** — this is where all developer PRs land. Never target `prod` or `main` directly.
 5. Assign yourself as the author.
-6. Request review from the relevant **CODEOWNERS** (`.github/CODEOWNERS`).
+6. Request review — the tech lead will be automatically notified via CODEOWNERS.
+
+> **Hotfix exception:** If you need to fix a critical production bug urgently, open the PR targeting `prod`. After merging, immediately open a backport PR to `dev` so the fix isn't lost.
 
 ### PR Title
 
@@ -691,6 +732,7 @@ chore: update pnpm to 9.2.0
 
 ### PR Checklist (from the template)
 
+- [ ] Base branch is `dev` (not `main` or `prod`)
 - [ ] Does NOT bypass domain boundaries
 - [ ] Does NOT import AWS SDKs into domain logic
 - [ ] Preserves backend authorization authority
@@ -700,36 +742,65 @@ chore: update pnpm to 9.2.0
 
 ### Review Process
 
-- At least **1 approved review** is required before merge.
-- CI (lint, typecheck, tests) must pass.
-- Resolve all review comments before merging.
-- Use **"Squash and merge"** to keep a clean history on `develop`.
+- **Tech lead reviews all PRs to `dev`** — do not merge your own PR.
+- CI (typecheck, tests, security audit) must be green before review.
+- Resolve all review comments before the PR is merged.
+- Use **"Squash and merge"** — keeps a clean linear history on `dev`.
 
 ### Draft PRs
 
-If your work is not ready for review but you want early feedback, open a **Draft PR**. This prevents accidental merge while still triggering CI.
+If your work is not ready for review but you want early feedback or CI results, open a **Draft PR**. This prevents accidental merge while still triggering CI.
 
 ---
 
 ## 17. CI/CD Pipeline
 
-GitHub Actions runs automatically on every push and PR to `main` and `develop`.
+### When CI Runs
 
-### CI Jobs (`.github/workflows/ci.yml`)
+CI runs automatically on every **PR and push** to `main`, `prod`, and `dev`.
 
-| Job | What it does |
-|-----|-------------|
-| **Lint & Typecheck** | Runs `pnpm turbo run lint typecheck` across all workspaces |
-| **Unit & Domain Tests** | Runs `pnpm turbo run test` across all workspaces |
+### Smart Path-Based CI
 
-CI uses `pnpm --frozen-lockfile` — **do not change `pnpm-lock.yaml` manually**. Let pnpm manage it.
+CI only checks the parts of the repo that actually changed. If you only touched `frontend/admin/`, the API and staff app checks are **skipped** — no wasted time.
 
-### Deployment
+```
+Every PR/push
+      │
+      ▼
+ [detect-changes]           ← always runs (~5s)
+  dorny/paths-filter
+      │
+      ├─ packages/**    ──► typecheck-packages (triggers everything)
+      ├─ apps/api/**    ──► typecheck-api  +  test-api
+      ├─ apps/ai/**     ──► typecheck-ai   +  test-ai
+      ├─ apps/realtime/ ──► typecheck-realtime
+      ├─ apps/worker/** ──► typecheck-worker
+      ├─ frontend/admin ──► typecheck-frontend-admin
+      ├─ frontend/cust. ──► typecheck-frontend-customer
+      ├─ frontend/staff ──► typecheck-frontend-staff
+      └─ .github/**     ──► ALL jobs run (CI config changed)
 
-| Branch | Environment | Trigger |
-|--------|-------------|---------|
-| `develop` | Development | Auto-deploy on push |
-| `main` | Production | Auto-deploy on push |
+ [security-audit]           ← always runs on every push/PR
+```
+
+### CI Jobs
+
+| Job | Triggered by |
+|-----|--------------|
+| `typecheck-*` | Path-filtered per workspace |
+| `test-api` | `apps/api/**` or `packages/**` |
+| `test-ai` | `apps/ai/**` or `packages/**` |
+| `security-audit` | Always — reports HIGH/CRITICAL dependency vulnerabilities |
+
+CI uses `pnpm --frozen-lockfile` — **do not edit `pnpm-lock.yaml` manually**.
+
+### Deployment (auto-triggered on merge)
+
+| Branch | Environment | What happens |
+|--------|-------------|-------------|
+| `dev` | 🔵 Development | Auto-deploys on push — team can test immediately |
+| `prod` | 🟡 Pre-Production | Auto-deploys on push — QA and stress testing |
+| `main` | 🟢 Production | Auto-deploys on push — live platform, real users |
 
 ---
 
@@ -773,15 +844,17 @@ You likely changed a shared package (`packages/*`). Run the full build and test 
 pnpm build && pnpm test
 ```
 
-### ❓ I accidentally committed to `main` or `develop` directly
+### ❓ I accidentally committed to `main`, `prod`, or `dev` directly
 
 ```bash
-# Undo the last commit (keeps your changes staged)
+# Undo the last commit (keeps your changes staged, does NOT lose your work)
 git reset --soft HEAD~1
 
-# Create a new branch and push there instead
-git checkout -b fix/my-accidental-commit
-git push origin fix/my-accidental-commit
+# Create a proper branch and push there instead
+git checkout -b fix/TAVN-my-accidental-commit
+git push origin fix/TAVN-my-accidental-commit
+
+# Then open a PR targeting dev as normal
 ```
 
 ### ❓ How do I add an ADR (Architecture Decision Record)?

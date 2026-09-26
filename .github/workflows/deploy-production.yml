@@ -1,8 +1,12 @@
 name: Deploy (Production)
 
+# Triggers automatically when code is merged into the 'main' branch.
+# 'main' is the live production branch — only battle-tested code from
+# 'prod' should ever be promoted here.
+
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:

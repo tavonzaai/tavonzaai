@@ -1,14 +1,18 @@
-name: Deploy (Staging)
+name: Deploy (Pre-Production)
+
+# Triggers automatically when code is merged into the 'prod' branch.
+# This deploys to the pre-production environment — fully battle-tested
+# before promotion to the real production (main) branch.
 
 on:
   push:
-    branches: [release/*]
+    branches: [prod]
   workflow_dispatch:
 
 jobs:
-  deploy-staging:
-    name: Build & Deploy to Staging
+  deploy-preprod:
+    name: Build & Deploy to Pre-Production
     runs-on: ubuntu-latest
     steps:
       - name: Placeholder Step
-        run: echo "Deploy to Staging workflow placeholder - to be implemented with AWS ECS deployment"
+        run: echo "Deploy to Pre-Production workflow placeholder - to be implemented with AWS ECS deployment"
