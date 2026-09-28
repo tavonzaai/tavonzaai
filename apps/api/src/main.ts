@@ -1,9 +1,19 @@
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { ValidationPipe } from "@nestjs/common";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // ── Global Pipes ─────────────────────────────────────────────────────────
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,       // strip unknown props
+      forbidNonWhitelisted: true,
+      transform: true,       // auto-cast types (e.g. string → number)
+    }),
+  );
 
   // ── Swagger / OpenAPI ────────────────────────────────────────────────────
   const config = new DocumentBuilder()
@@ -16,8 +26,16 @@ async function bootstrap() {
     )
     // ── Tag Groups (prefix = "Actor | Domain") ────────────────────────────
     .addTag("Customer | Auth", "Account registration, login, OTP verification, and password reset for customers")
+    .addTag("Customer | Sessions", "Table QR scanning, guest joining, and order modes")
+    .addTag("Customer | Menus", "Menu categories, items, and add-ons")
+    .addTag("Customer | Orders", "Cart management, checkout, and order tracking")
+    .addTag("Customer | Payments", "Payment methods, checkout, and receipts")
+    .addTag("Customer | Feedback", "Customer ratings, tips, and reviews")
+    .addTag("Customer | Alerts", "Send alerts to your waiter (call_waiter, request_bill, need_help, custom)")
+    .addTag("Waiter | Tables", "View and manage table assignments for the waiter's shift")
+    .addTag("Waiter | Orders", "Accept, reject, serve, and create orders at assigned tables")
+    .addTag("Waiter | Alerts", "View, acknowledge, and resolve customer alerts")
     // Future groups (uncomment as implemented):
-    // .addTag("Waiter | Orders",   "Order acceptance, rejection, and service for waiters")
     // .addTag("Kitchen | Tickets", "Kitchen ticket management and preparation workflow")
     // .addTag("Cashier | Payments","Payment processing and session closure")
     // .addTag("Manager | Branch",  "Branch, menu, staff, and reporting management")

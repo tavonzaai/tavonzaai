@@ -44,6 +44,15 @@ export const Permission = {
 
   // Customer feedback
   FEEDBACK_CREATE: 'feedback.create',
+
+  // Alert capabilities
+  ALERTS_CREATE: 'alerts.create',
+  ALERTS_READ: 'alerts.read',
+  ALERTS_ACKNOWLEDGE: 'alerts.acknowledge',
+  ALERTS_RESOLVE: 'alerts.resolve',
+
+  // Customer management (waiter auto-creates customer accounts)
+  CUSTOMERS_CREATE: 'customers.create',
 } as const;
 
 export type Permission = (typeof Permission)[keyof typeof Permission];

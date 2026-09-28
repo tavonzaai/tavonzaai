@@ -19,7 +19,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcryptjs';
+import * as argon2 from 'argon2';
 import { RoleLabel, ScopeType, resolvePermissions } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
 import type { User } from '../../domain/entities/user.entity';
@@ -33,7 +33,6 @@ import type {
 import type { AuthTokensDto, RegisterResponseDto } from '../../presentation/http/dto/auth-response.dto';
 import { UserProfileDto } from '../../presentation/http/dto/auth-response.dto';
 
-const SALT_ROUNDS = 12;
 const OTP_EXPIRY_MINUTES = 10;
 
 @Injectable()
@@ -56,7 +55,7 @@ export class AuthService {
 
     this.validatePassword(dto.password);
 
-    const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
+    const passwordHash = await argon2.hash(dto.password);
 
     const user = await this.userRepo.create({
       email: dto.email.toLowerCase(),
@@ -87,7 +86,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
+    const passwordMatch = await argon2.verify(user.passwordHash, dto.password);
     if (!passwordMatch) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -110,7 +109,7 @@ export class AuthService {
       throw new UnauthorizedException('Access denied');
     }
 
-    const tokenMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+    const tokenMatch = await argon2.verify(user.refreshToken, refreshToken);
     if (!tokenMatch) {
       throw new UnauthorizedException('Access denied');
     }
@@ -144,7 +143,7 @@ export class AuthService {
       throw new BadRequestException('OTP code is invalid or has expired');
     }
 
-    const codeMatch = await bcrypt.compare(dto.code, otp.code);
+    const codeMatch = await argon2.verify(otp.code, dto.code);
     if (!codeMatch) {
       throw new BadRequestException('Incorrect verification code');
     }
@@ -180,7 +179,7 @@ export class AuthService {
       throw new BadRequestException('OTP code is invalid or has expired');
     }
 
-    const codeMatch = await bcrypt.compare(dto.code, otp.code);
+    const codeMatch = await argon2.verify(otp.code, dto.code);
     if (!codeMatch) {
       throw new BadRequestException('Incorrect verification code');
     }
@@ -188,7 +187,7 @@ export class AuthService {
     this.validatePassword(dto.newPassword);
 
     await this.userRepo.markOtpUsed(otp.id);
-    const newHash = await bcrypt.hash(dto.newPassword, SALT_ROUNDS);
+    const newHash = await argon2.hash(dto.newPassword);
     await this.userRepo.updatePassword(user.id, newHash);
 
     // Invalidate all refresh tokens on password reset
@@ -232,7 +231,7 @@ export class AuthService {
       secret: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET,
     });
 
-    const hashedRefresh = await bcrypt.hash(refreshToken, SALT_ROUNDS);
+    const hashedRefresh = await argon2.hash(refreshToken);
     await this.userRepo.updateRefreshToken(user.id, hashedRefresh);
 
     return {
@@ -248,7 +247,7 @@ export class AuthService {
   ): Promise<string> {
     // Generate 5-digit code (matches Figma Verify screen)
     const code = Math.floor(10000 + Math.random() * 90000).toString();
-    const codeHash = await bcrypt.hash(code, SALT_ROUNDS);
+    const codeHash = await argon2.hash(code);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     await this.userRepo.createOtp({ userId, code: codeHash, type, expiresAt });

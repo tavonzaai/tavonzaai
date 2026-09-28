@@ -59,7 +59,7 @@ export class AuthController {
    * Sends OTP for verification and does not return tokens until verified/logged in.
    */
   @Post('register')
-  @ApiOperation({ summary: 'Create a new customer account' })
+  @ApiOperation({ summary: '[Customer] Create a new customer account' })
   @ApiCreatedResponse({ type: RegisterResponseDto })
   @ApiConflictResponse({ description: 'Email already in use' })
   @ApiBadRequestResponse({ description: 'Weak password or invalid input' })
@@ -74,7 +74,7 @@ export class AuthController {
    */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiOperation({ summary: '[Customer] Login with email and password' })
   @ApiOkResponse({ type: AuthTokensDto })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
   async login(@Body() dto: LoginDto): Promise<AuthTokensDto> {
@@ -89,7 +89,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiOperation({ summary: '[Customer] Refresh access token' })
   @ApiOkResponse({ type: AuthTokensDto })
   @ApiUnauthorizedResponse()
   async refresh(
@@ -106,7 +106,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Logout and invalidate refresh token' })
+  @ApiOperation({ summary: '[Customer] Logout and invalidate refresh token' })
   @ApiOkResponse({ type: MessageResponseDto })
   async logout(@CurrentUser() user: JwtPayload): Promise<MessageResponseDto> {
     await this.authService.logout(user.sub);
@@ -120,7 +120,7 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiOperation({ summary: '[Customer] Get current user profile' })
   @ApiOkResponse({ type: UserProfileDto })
   @ApiUnauthorizedResponse()
   async getMe(@CurrentUser() user: JwtPayload): Promise<UserProfileDto> {
@@ -133,7 +133,7 @@ export class AuthController {
    */
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify OTP code (email verification or password reset)' })
+  @ApiOperation({ summary: '[Customer] Verify OTP code (email verification or password reset)' })
   @ApiOkResponse({ type: MessageResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid or expired OTP' })
   async verifyOtp(@Body() dto: VerifyOtpDto): Promise<MessageResponseDto> {
@@ -147,7 +147,7 @@ export class AuthController {
    */
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send password reset OTP to email' })
+  @ApiOperation({ summary: '[Customer] Send password reset OTP to email' })
   @ApiOkResponse({ type: MessageResponseDto })
   async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<MessageResponseDto> {
     await this.authService.forgotPassword(dto);
@@ -160,7 +160,7 @@ export class AuthController {
    */
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset password using OTP code' })
+  @ApiOperation({ summary: '[Customer] Reset password using OTP code' })
   @ApiOkResponse({ type: MessageResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid OTP or weak password' })
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<MessageResponseDto> {
@@ -174,7 +174,7 @@ export class AuthController {
    */
   @Post('resend-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Resend OTP verification code' })
+  @ApiOperation({ summary: '[Customer] Resend OTP verification code' })
   @ApiOkResponse({ type: MessageResponseDto })
   async resendOtp(
     @Body() body: { email: string; type: 'email_verification' | 'phone_verification' | 'password_reset' },
