@@ -118,3 +118,12 @@ resource "aws_iam_user_policy" "ses_smtp_policy" {
   user   = aws_iam_user.ses_smtp[0].name
   policy = data.aws_iam_policy_document.ses_send_email[0].json
 }
+
+# ------------------------------------------------------------------------------
+# 5. Verified Email Identities (Allows sending in SES Sandbox without domain access)
+# ------------------------------------------------------------------------------
+
+resource "aws_ses_email_identity" "emails" {
+  for_each = toset(var.verified_email_identities)
+  email    = each.value
+}

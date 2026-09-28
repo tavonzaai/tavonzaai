@@ -52,16 +52,28 @@ variable "assign_public_ip" {
   default     = false
 }
 
+variable "enable_secrets_manager_access" {
+  description = "Whether to attach Secrets Manager policy to ECS execution and task roles"
+  type        = bool
+  default     = true
+}
+
 variable "secrets_manager_arn" {
   description = "ARN of the Secrets Manager secret for secret injection"
   type        = string
-  default     = null
+  default     = ""
+}
+
+variable "enable_s3_access" {
+  description = "Whether to attach S3 policy to ECS task role"
+  type        = bool
+  default     = true
 }
 
 variable "s3_bucket_arn" {
   description = "ARN of the S3 bucket for task IAM permissions"
   type        = string
-  default     = null
+  default     = ""
 }
 
 variable "services" {

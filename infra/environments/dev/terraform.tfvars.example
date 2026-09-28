@@ -17,14 +17,7 @@ domain_name     = "example.com" # Change to your actual domain name e.g. "tavonz
 api_subdomain   = "api"         # Creates api.example.com
 admin_subdomain = "admin"       # Creates admin.example.com
 
-# Zoho Mail & DNS Configuration
-enable_zoho_mail = true
-zoho_mx_records = [
-  "10 mx.zoho.com",
-  "20 mx2.zoho.com",
-  "50 mx3.zoho.com"
-]
-zoho_spf_record     = "v=spf1 include:dc-8e814c8572._spfm.tavonzaai.co.uk ~all"
+# Custom DNS Records
 extra_txt_records   = {}
 extra_cname_records = {}
 

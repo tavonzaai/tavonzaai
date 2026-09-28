@@ -18,6 +18,8 @@ import { AuditModule } from "./modules/audit/audit.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { AiModule } from "./modules/ai/ai.module";
 
+import { AppController } from "./app.controller";
+
 @Module({
   imports: [
     // Infrastructure — must be first (provides Drizzle DB globally)
@@ -41,7 +43,7 @@ import { AiModule } from "./modules/ai/ai.module";
     AnalyticsModule,
     AiModule,
   ],
-  controllers: [],
+  controllers: [AppController],
   providers: [],
 })
 export class AppModule {}

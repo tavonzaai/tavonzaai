@@ -253,9 +253,6 @@ module "route53" {
   admin_subdomain     = var.admin_subdomain
   alb_dns_name        = module.alb.alb_dns_name
   alb_zone_id         = module.alb.alb_zone_id
-  enable_zoho_mail    = var.enable_zoho_mail
-  zoho_mx_records     = var.zoho_mx_records
-  zoho_spf_record     = var.zoho_spf_record
   extra_txt_records   = var.extra_txt_records
   extra_cname_records = var.extra_cname_records
 }

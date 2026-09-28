@@ -182,6 +182,7 @@ module "elasticache" {
 
 # 8. ACM Certificate Module (DNS Validated)
 module "acm" {
+  count  = var.enable_https ? 1 : 0
   source = "../../modules/acm"
 
   domain_name               = var.domain_name
@@ -198,7 +199,8 @@ module "alb" {
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.public_subnet_ids
   security_group_ids = [module.security_groups.alb_security_group_id]
-  certificate_arn    = module.acm.certificate_arn
+  enable_https       = var.enable_https
+  certificate_arn    = var.enable_https && length(module.acm) > 0 ? module.acm[0].certificate_arn : null
   domain_name        = var.domain_name
   api_subdomain      = var.api_subdomain
   admin_subdomain    = var.admin_subdomain
@@ -258,7 +260,7 @@ module "ecs" {
       environment = [
         { name = "NODE_ENV", value = "development" },
         { name = "PORT", value = tostring(var.nextjs_port) },
-        { name = "NEXT_PUBLIC_API_URL", value = "https://${var.api_subdomain}.${var.domain_name}" }
+        { name = "NEXT_PUBLIC_API_URL", value = var.enable_https ? "https://${var.api_subdomain}.${var.domain_name}" : "http://${module.alb.alb_dns_name}/api" }
       ]
       secrets = []
     }
@@ -273,7 +275,7 @@ module "ecs" {
       environment = [
         { name = "NODE_ENV", value = "development" },
         { name = "PORT", value = tostring(var.admin_port) },
-        { name = "NEXT_PUBLIC_API_URL", value = "https://${var.api_subdomain}.${var.domain_name}" }
+        { name = "NEXT_PUBLIC_API_URL", value = var.enable_https ? "https://${var.api_subdomain}.${var.domain_name}" : "http://${module.alb.alb_dns_name}/api" }
       ]
       secrets = []
     }
@@ -290,9 +292,6 @@ module "route53" {
   admin_subdomain     = var.admin_subdomain
   alb_dns_name        = module.alb.alb_dns_name
   alb_zone_id         = module.alb.alb_zone_id
-  enable_zoho_mail    = var.enable_zoho_mail
-  zoho_mx_records     = var.zoho_mx_records
-  zoho_spf_record     = var.zoho_spf_record
   extra_txt_records   = var.extra_txt_records
   extra_cname_records = var.extra_cname_records
 }
@@ -308,9 +307,10 @@ module "ses" {
   mail_from_subdomain = var.ses_mail_from_subdomain
   enable_dmarc        = var.ses_enable_dmarc
   dmarc_policy        = var.ses_dmarc_policy
-  create_smtp_user    = var.ses_create_smtp_user
-  project_name        = var.project_name
-  environment         = var.environment
+  create_smtp_user          = var.ses_create_smtp_user
+  verified_email_identities = var.ses_verified_email_identities
+  project_name              = var.project_name
+  environment               = var.environment
   tags = {
     Project     = var.project_name
     Environment = var.environment
