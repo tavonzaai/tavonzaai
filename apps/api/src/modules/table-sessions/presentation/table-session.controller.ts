@@ -1,0 +1,147 @@
+// ============================================================================
+// Table Sessions Controller
+// ============================================================================
+//
+// Figma Screens:
+//   QR Scan Screen    → POST /sessions/scan
+//   Splash Screen     → GET  /sessions/:sessionId
+//   Share Code Screen → POST /sessions/:sessionId/share-code
+//   Guest Menu        → POST /sessions/join
+//   Order Mode        → PATCH /sessions/order-mode
+// ============================================================================
+
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiCreatedResponse,
+} from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
+import { TableSessionService } from '../application/services/table-session.service';
+import { JwtAuthGuard } from '../.././../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import type { JwtPayload } from '../../identity/infrastructure/adapters/jwt.strategy';
+
+// ── DTOs ──────────────────────────────────────────────────────────────
+
+class ScanQrDto {
+  @ApiProperty({ description: 'Branch UUID from QR code' }) branchId!: string;
+  @ApiProperty({ description: 'Table UUID from QR code' }) tableId!: string;
+  @ApiProperty({ description: 'Human-readable table number', example: 'Table 08' }) tableNumber!: string;
+}
+
+class JoinSessionDto {
+  @ApiProperty({ description: '6-char share code from host QR', example: 'ABC123' }) code!: string;
+  @ApiProperty({ required: false, description: 'Display name for non-logged-in guests' }) displayName?: string;
+}
+
+class OrderModeDto {
+  @ApiProperty({ enum: ['individual', 'together'] }) orderMode!: 'individual' | 'together';
+  @ApiProperty({ description: 'Customer session ID' }) customerSessionId!: string;
+}
+
+// ── Controller ────────────────────────────────────────────────────────
+
+@ApiTags('sessions')
+@Controller('sessions')
+export class TableSessionController {
+  constructor(private readonly sessionService: TableSessionService) {}
+
+  /**
+   * POST /sessions/scan
+   * Figma: QR Scan Screen → Splash Screen
+   * Called when customer scans the QR code on the table.
+   */
+  @Post('scan')
+  @ApiOperation({ summary: 'Scan table QR code — creates or joins a table session' })
+  @ApiCreatedResponse({ description: 'Session created or returned with table info' })
+  async scanQr(
+    @Body() dto: ScanQrDto,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.sessionService.scanQr({
+      ...dto,
+      userId: user?.sub,
+    });
+  }
+
+  /**
+   * GET /sessions/:sessionId
+   * Returns session data with all guests — used for Splash screen info
+   */
+  @Get(':sessionId')
+  @ApiOperation({ summary: 'Get table session with guests list' })
+  @ApiOkResponse({ description: 'Session detail with customers' })
+  async getSession(@Param('sessionId') sessionId: string) {
+    return this.sessionService.getSession(sessionId);
+  }
+
+  /**
+   * POST /sessions/:sessionId/share-code
+   * Figma: "Share Code" screen — generates 6-char code + 30-second QR
+   */
+  @Post(':sessionId/share-code')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Generate share code QR for HostGuest feature (30s expiry)' })
+  async generateShareCode(@Param('sessionId') sessionId: string) {
+    return this.sessionService.generateShareCode(sessionId);
+  }
+
+  /**
+   * POST /sessions/join
+   * Figma: Guest scans host's QR → joins table as guest
+   * Shows "You've joined the table as a Host Guest" banner on menu
+   */
+  @Post('join')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Join a table session using host share code' })
+  async joinSession(
+    @Body() dto: JoinSessionDto,
+    @CurrentUser() user?: JwtPayload,
+  ) {
+    return this.sessionService.joinByCode({
+      code: dto.code,
+      userId: user?.sub,
+      displayName: dto.displayName,
+    });
+  }
+
+  /**
+   * PATCH /sessions/order-mode
+   * Figma: "Order Individually" / "Order together" selection in cart
+   */
+  @Patch('order-mode')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set order mode: individual or together with guests' })
+  async setOrderMode(@Body() dto: OrderModeDto) {
+    return this.sessionService.setOrderMode(dto.customerSessionId, dto.orderMode);
+  }
+
+  /**
+   * POST /sessions/:sessionId/close
+   * Called after payment is completed
+   */
+  @Post(':sessionId/close')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Close table session after payment' })
+  async closeSession(@Param('sessionId') sessionId: string) {
+    await this.sessionService.closeSession(sessionId);
+    return { message: 'Session closed' };
+  }
+}
