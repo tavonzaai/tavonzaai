@@ -18,13 +18,3 @@ output "www_fqdn" {
   value       = aws_route53_record.www.fqdn
 }
 
-output "zoho_mx_records" {
-  description = "Configured Zoho MX records"
-  value       = var.enable_zoho_mail ? aws_route53_record.zoho_mx[0].records : []
-}
-
-output "zoho_spf_record" {
-  description = "Configured Zoho SPF record"
-  value       = var.enable_zoho_mail ? aws_route53_record.zoho_spf[0].records : []
-}
-

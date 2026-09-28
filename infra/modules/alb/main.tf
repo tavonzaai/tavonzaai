@@ -110,21 +110,36 @@ resource "aws_lb_target_group_attachment" "admin" {
   port             = var.admin_port
 }
 
+locals {
+  active_listener_arn = var.enable_https ? aws_lb_listener.https[0].arn : aws_lb_listener.http.arn
+}
+
 # Listeners
 
-# HTTP Port 80 Listener -> Redirect to HTTPS
+# HTTP Port 80 Listener
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.this.arn
   port              = 80
   protocol          = "HTTP"
 
-  default_action {
-    type = "redirect"
+  dynamic "default_action" {
+    for_each = var.enable_https ? [1] : []
+    content {
+      type = "redirect"
 
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+  }
+
+  dynamic "default_action" {
+    for_each = var.enable_https ? [] : [1]
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.nextjs.arn
     }
   }
 
@@ -133,6 +148,7 @@ resource "aws_lb_listener" "http" {
 
 # HTTPS Port 443 Listener
 resource "aws_lb_listener" "https" {
+  count             = var.enable_https ? 1 : 0
   load_balancer_arn = aws_lb.this.arn
   port              = 443
   protocol          = "HTTPS"
@@ -152,11 +168,11 @@ resource "aws_lb_listener" "https" {
   tags = var.tags
 }
 
-# Host-Based Routing Rules (HTTPS)
+# Routing Rules
 
 # Rule 1: API Subdomain -> Backend Target Group (api.example.com)
 resource "aws_lb_listener_rule" "api" {
-  listener_arn = aws_lb_listener.https.arn
+  listener_arn = local.active_listener_arn
   priority     = 10
 
   action {
@@ -173,9 +189,29 @@ resource "aws_lb_listener_rule" "api" {
   tags = var.tags
 }
 
+# Rule 1b: API Path-Based Routing (for direct ALB access when no custom domain)
+resource "aws_lb_listener_rule" "api_path" {
+  count        = var.enable_https ? 0 : 1
+  listener_arn = local.active_listener_arn
+  priority     = 15
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api", "/api/*", "/health"]
+    }
+  }
+
+  tags = var.tags
+}
+
 # Rule 2: Root Domain -> Next.js Target Group (example.com, www.example.com)
 resource "aws_lb_listener_rule" "nextjs" {
-  listener_arn = aws_lb_listener.https.arn
+  listener_arn = local.active_listener_arn
   priority     = 20
 
   action {
@@ -197,7 +233,7 @@ resource "aws_lb_listener_rule" "nextjs" {
 
 # Rule 3: Admin Subdomain -> React Admin Target Group (admin.example.com)
 resource "aws_lb_listener_rule" "admin" {
-  listener_arn = aws_lb_listener.https.arn
+  listener_arn = local.active_listener_arn
   priority     = 30
 
   action {
@@ -208,6 +244,26 @@ resource "aws_lb_listener_rule" "admin" {
   condition {
     host_header {
       values = ["${var.admin_subdomain}.${var.domain_name}"]
+    }
+  }
+
+  tags = var.tags
+}
+
+# Rule 3b: Admin Path-Based Routing (for direct ALB access when no custom domain)
+resource "aws_lb_listener_rule" "admin_path" {
+  count        = var.enable_https ? 0 : 1
+  listener_arn = local.active_listener_arn
+  priority     = 35
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.admin.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/admin", "/admin/*"]
     }
   }
 

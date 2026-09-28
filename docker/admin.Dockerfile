@@ -15,7 +15,7 @@ RUN pnpm --filter @frontend/admin build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3102
+ENV PORT=3043
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
@@ -30,5 +30,5 @@ COPY --from=builder /app/frontend/admin/package.json ./frontend/admin/package.js
 COPY --from=builder /app/frontend/admin/node_modules ./frontend/admin/node_modules
 
 USER nextjs
-EXPOSE 3102
+EXPOSE 3043
 CMD ["pnpm", "--filter", "@frontend/admin", "start"]

@@ -45,16 +45,16 @@ output "alb_arn" {
 }
 
 output "acm_certificate_arn" {
-  description = "ARN of the ACM SSL Certificate"
-  value       = module.acm.certificate_arn
+  description = "ARN of the ACM SSL Certificate (null if enable_https is false)"
+  value       = var.enable_https && length(module.acm) > 0 ? module.acm[0].certificate_arn : null
 }
 
 output "application_urls" {
-  description = "Public HTTPS application endpoints configured in Route 53"
+  description = "Public application endpoints (ALB HTTP endpoints if enable_https is false, Route 53 HTTPS if true)"
   value = {
-    frontend_nextjs = "https://${module.route53.root_fqdn}"
-    backend_api     = "https://${module.route53.api_fqdn}"
-    admin_dashboard = "https://${module.route53.admin_fqdn}"
+    frontend_nextjs = var.enable_https ? "https://${module.route53.root_fqdn}" : "http://${module.alb.alb_dns_name}"
+    backend_api     = var.enable_https ? "https://${module.route53.api_fqdn}" : "http://${module.alb.alb_dns_name}/api"
+    admin_dashboard = var.enable_https ? "https://${module.route53.admin_fqdn}" : "http://${module.alb.alb_dns_name}/admin"
   }
 }
 

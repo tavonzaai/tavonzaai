@@ -1,6 +1,6 @@
 # AWS Provider & Project Settings
 aws_region   = "eu-west-1"
-aws_profile  = "milkey"
+aws_profile  = "milkey-dev"
 project_name = "tavonzaai"
 environment  = "dev"
 
@@ -16,15 +16,9 @@ single_nat_gateway       = true # Cost-optimized: Single NAT Gateway for dev
 domain_name     = "tavonzaai.net"
 api_subdomain   = "api"
 admin_subdomain = "admin"
+enable_https    = false # Set to true once domain is purchased and pointed to Route 53
 
-# Zoho Mail & DNS Configuration
-enable_zoho_mail = true
-zoho_mx_records = [
-  "10 mx.zoho.com",
-  "20 mx2.zoho.com",
-  "50 mx3.zoho.com"
-]
-zoho_spf_record     = "v=spf1 include:dc-8e814c8572._spfm.tavonzaai.co.uk include:amazonses.com ~all"
+# Custom DNS Records
 extra_txt_records   = {}
 extra_cname_records = {}
 
@@ -35,7 +29,8 @@ ses_enable_mail_from    = true
 ses_mail_from_subdomain = "mail"
 ses_enable_dmarc        = true
 ses_dmarc_policy        = "v=DMARC1; p=none; sp=none; aspf=r; adkim=r;"
-ses_create_smtp_user    = true
+ses_create_smtp_user          = true
+ses_verified_email_identities = [] # Add your personal/team email address here (e.g. ["dev@example.com"]) to verify in SES for testing in sandbox mode
 
 # Application Ports & Health Checks
 backend_port              = 5000
@@ -93,5 +88,5 @@ create_github_oidc_provider    = true
 
 # Testing Stage - Restrict ALB Access to Whitelisted Client & Developer IPs
 alb_ingress_cidr_blocks = [
-  "0.0.0.0",
+  "0.0.0.0/0",
 ]
