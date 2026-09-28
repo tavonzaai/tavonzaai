@@ -106,7 +106,7 @@ module "secrets_manager" {
     SMTP_PASS            = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_password_v4 : ""
     SMTP_FROM            = "noreply@${var.domain_name}"
     SMTP_SECURE          = "false"
-    COMPANY_NAME         = "Backlyst"
+    COMPANY_NAME         = "tavonzaai"
   }
 }
 
@@ -180,37 +180,7 @@ module "elasticache" {
   environment              = var.environment
 }
 
-# 8. Backend EC2 Instance Module (Deployed into Private App Subnet)
-module "backend_ec2" {
-  source = "../../modules/ec2"
-
-  instance_name        = "${local.name_prefix}-backend"
-  ami_id               = var.backend_ami_id
-  instance_type        = var.backend_instance_type
-  subnet_id            = module.vpc.private_app_subnet_ids[0]
-  security_group_ids   = [module.security_groups.backend_security_group_id]
-  iam_instance_profile = module.iam.backend_instance_profile_name
-  key_name             = var.ssh_key_name
-  root_volume_size     = var.backend_root_volume_size
-  user_data            = local.ec2_bootstrap_user_data
-}
-
-# 9. Frontend EC2 Instance Module (Hosts Next.js & React Admin in Private App Subnet)
-module "frontend_ec2" {
-  source = "../../modules/ec2"
-
-  instance_name        = "${local.name_prefix}-frontend"
-  ami_id               = var.frontend_ami_id
-  instance_type        = var.frontend_instance_type
-  subnet_id            = module.vpc.private_app_subnet_ids[0]
-  security_group_ids   = [module.security_groups.frontend_security_group_id]
-  iam_instance_profile = module.iam.frontend_instance_profile_name
-  key_name             = var.ssh_key_name
-  root_volume_size     = var.frontend_root_volume_size
-  user_data            = local.ec2_bootstrap_user_data
-}
-
-# 10. ACM Certificate Module (DNS Validated)
+# 8. ACM Certificate Module (DNS Validated)
 module "acm" {
   source = "../../modules/acm"
 
@@ -219,21 +189,20 @@ module "acm" {
   route53_zone_id           = aws_route53_zone.primary.zone_id
 }
 
-# 11. Application Load Balancer Module (Deployed into Public Subnets)
+# 9. Application Load Balancer Module (Deployed into Public Subnets)
 module "alb" {
   source = "../../modules/alb"
 
-  project_name         = var.project_name
-  environment          = var.environment
-  vpc_id               = module.vpc.vpc_id
-  subnet_ids           = module.vpc.public_subnet_ids
-  security_group_ids   = [module.security_groups.alb_security_group_id]
-  certificate_arn      = module.acm.certificate_arn
-  domain_name          = var.domain_name
-  api_subdomain        = var.api_subdomain
-  admin_subdomain      = var.admin_subdomain
-  backend_instance_id  = module.backend_ec2.instance_id
-  frontend_instance_id = module.frontend_ec2.instance_id
+  project_name       = var.project_name
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  subnet_ids         = module.vpc.public_subnet_ids
+  security_group_ids = [module.security_groups.alb_security_group_id]
+  certificate_arn    = module.acm.certificate_arn
+  domain_name        = var.domain_name
+  api_subdomain      = var.api_subdomain
+  admin_subdomain    = var.admin_subdomain
+  target_type        = "ip"
 
   backend_port              = var.backend_port
   nextjs_port               = var.nextjs_port
@@ -241,6 +210,74 @@ module "alb" {
   backend_health_check_path = var.backend_health_check_path
   nextjs_health_check_path  = var.nextjs_health_check_path
   admin_health_check_path   = var.admin_health_check_path
+}
+
+# 10. Amazon Elastic Container Service (ECS) Fargate Cluster & Microservices
+module "ecs" {
+  source = "../../modules/ecs"
+
+  project_name              = var.project_name
+  environment               = var.environment
+  vpc_id                    = module.vpc.vpc_id
+  subnet_ids                = module.vpc.private_app_subnet_ids
+  security_group_ids        = [module.security_groups.ecs_security_group_id]
+  aws_region                = var.aws_region
+  use_fargate_spot          = var.ecs_use_fargate_spot
+  enable_container_insights = var.ecs_enable_container_insights
+  log_retention_days        = var.ecs_log_retention_days
+  secrets_manager_arn       = module.secrets_manager.secret_arn
+  s3_bucket_arn             = module.s3.bucket_arn
+
+  services = {
+    backend = {
+      name             = "backend"
+      container_image  = var.backend_container_image != "" ? var.backend_container_image : "${module.ecr.repository_urls["backend"]}:latest"
+      container_port   = var.backend_port
+      cpu              = var.backend_task_cpu
+      memory           = var.backend_task_memory
+      desired_count    = var.backend_desired_count
+      target_group_arn = module.alb.backend_target_group_arn
+      environment = [
+        { name = "NODE_ENV", value = "development" },
+        { name = "PORT", value = tostring(var.backend_port) }
+      ]
+      secrets = [
+        { name = "DATABASE_URL", valueFrom = "${module.secrets_manager.secret_arn}:DATABASE_URL::" },
+        { name = "REDIS_URL", valueFrom = "${module.secrets_manager.secret_arn}:REDIS_URL::" },
+        { name = "JWT_SECRET", valueFrom = "${module.secrets_manager.secret_arn}:JWT_SECRET::" }
+      ]
+    }
+    frontend = {
+      name             = "frontend"
+      container_image  = var.frontend_container_image != "" ? var.frontend_container_image : "${module.ecr.repository_urls["frontend"]}:latest"
+      container_port   = var.nextjs_port
+      cpu              = var.frontend_task_cpu
+      memory           = var.frontend_task_memory
+      desired_count    = var.frontend_desired_count
+      target_group_arn = module.alb.nextjs_target_group_arn
+      environment = [
+        { name = "NODE_ENV", value = "development" },
+        { name = "PORT", value = tostring(var.nextjs_port) },
+        { name = "NEXT_PUBLIC_API_URL", value = "https://${var.api_subdomain}.${var.domain_name}" }
+      ]
+      secrets = []
+    }
+    admin = {
+      name             = "admin"
+      container_image  = var.admin_container_image != "" ? var.admin_container_image : "${module.ecr.repository_urls["admin-dashboard"]}:latest"
+      container_port   = var.admin_port
+      cpu              = var.admin_task_cpu
+      memory           = var.admin_task_memory
+      desired_count    = var.admin_desired_count
+      target_group_arn = module.alb.admin_target_group_arn
+      environment = [
+        { name = "NODE_ENV", value = "development" },
+        { name = "PORT", value = tostring(var.admin_port) },
+        { name = "NEXT_PUBLIC_API_URL", value = "https://${var.api_subdomain}.${var.domain_name}" }
+      ]
+      secrets = []
+    }
+  }
 }
 
 # 12. Route 53 DNS Alias Records Module

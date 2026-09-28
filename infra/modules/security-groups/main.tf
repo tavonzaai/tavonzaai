@@ -179,3 +179,94 @@ resource "aws_security_group_rule" "redis_ingress_from_backend" {
   source_security_group_id = aws_security_group.backend.id
   security_group_id        = aws_security_group.redis.id
 }
+
+# ==============================================================================
+# Security Group: Amazon ECS Tasks
+# ==============================================================================
+resource "aws_security_group" "ecs" {
+  name        = "${var.project_name}-${var.environment}-ecs-sg"
+  description = "Security group for ECS tasks running in private application subnets"
+  vpc_id      = var.vpc_id
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-${var.environment}-ecs-sg"
+  })
+}
+
+# Allow Backend API traffic from ALB SG to ECS tasks
+resource "aws_security_group_rule" "ecs_ingress_backend_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Backend API traffic from ALB SG to ECS tasks"
+  from_port                = var.backend_port
+  to_port                  = var.backend_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ecs.id
+}
+
+# Allow Next.js traffic from ALB SG to ECS tasks
+resource "aws_security_group_rule" "ecs_ingress_nextjs_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Next.js traffic from ALB SG to ECS tasks"
+  from_port                = var.nextjs_port
+  to_port                  = var.nextjs_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ecs.id
+}
+
+# Allow React Admin traffic from ALB SG to ECS tasks
+resource "aws_security_group_rule" "ecs_ingress_admin_from_alb" {
+  type                     = "ingress"
+  description              = "Allow React Admin traffic from ALB SG to ECS tasks"
+  from_port                = var.admin_port
+  to_port                  = var.admin_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ecs.id
+}
+
+# Allow inter-service communication within the ECS cluster
+resource "aws_security_group_rule" "ecs_ingress_self" {
+  type              = "ingress"
+  description       = "Allow internal traffic between containers in the ECS cluster"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  self              = true
+  security_group_id = aws_security_group.ecs.id
+}
+
+# Allow outbound traffic for ECS tasks (pulling images, AWS APIs, NAT Gateway)
+resource "aws_security_group_rule" "ecs_egress_all" {
+  type              = "egress"
+  description       = "Allow all outbound traffic from ECS tasks"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.ecs.id
+}
+
+# Allow PostgreSQL traffic from ECS SG to RDS
+resource "aws_security_group_rule" "rds_ingress_from_ecs" {
+  type                     = "ingress"
+  description              = "Allow PostgreSQL access from ECS SG"
+  from_port                = var.postgres_port
+  to_port                  = var.postgres_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs.id
+  security_group_id        = aws_security_group.rds.id
+}
+
+# Allow Redis / Valkey traffic from ECS SG to ElastiCache
+resource "aws_security_group_rule" "redis_ingress_from_ecs" {
+  type                     = "ingress"
+  description              = "Allow Redis / Valkey access from ECS SG"
+  from_port                = var.redis_port
+  to_port                  = var.redis_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs.id
+  security_group_id        = aws_security_group.redis.id
+}
+

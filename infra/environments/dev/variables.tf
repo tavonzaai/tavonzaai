@@ -59,7 +59,7 @@ variable "single_nat_gateway" {
 
 # Domain and DNS Configuration
 variable "domain_name" {
-  description = "Primary hosted zone domain name (e.g. example.com or backlyst.co.uk)"
+  description = "Primary hosted zone domain name (e.g. example.com or tavonzaai.co.uk)"
   type        = string
 }
 
@@ -176,40 +176,140 @@ variable "admin_health_check_path" {
   type        = string
 }
 
-# EC2 Compute Configuration
+# EC2 Compute Configuration (Legacy / Optional)
 variable "backend_instance_type" {
   description = "EC2 instance type for Backend host"
   type        = string
+  default     = "t3.small"
 }
 
 variable "frontend_instance_type" {
   description = "EC2 instance type for Frontend host"
   type        = string
+  default     = "t3.small"
 }
 
 variable "backend_ami_id" {
   description = "Custom AMI ID for Backend EC2 (leave empty to use Debian 13)"
   type        = string
+  default     = ""
 }
 
 variable "frontend_ami_id" {
   description = "Custom AMI ID for Frontend EC2 (leave empty to use Debian 13)"
   type        = string
+  default     = ""
 }
 
 variable "ssh_key_name" {
   description = "Optional EC2 SSH Key Pair name (SSM Session Manager is the primary access method)"
   type        = string
+  default     = ""
 }
 
 variable "backend_root_volume_size" {
   description = "Backend EC2 root EBS volume size in GB"
   type        = number
+  default     = 20
 }
 
 variable "frontend_root_volume_size" {
   description = "Frontend EC2 root EBS volume size in GB"
   type        = number
+  default     = 20
+}
+
+# ==============================================================================
+# Amazon ECS Container Configuration
+# ==============================================================================
+variable "ecs_use_fargate_spot" {
+  description = "Whether to use Fargate Spot for cost optimization (70% savings, recommended for dev)"
+  type        = bool
+  default     = true
+}
+
+variable "ecs_enable_container_insights" {
+  description = "Whether to enable CloudWatch Container Insights on ECS cluster"
+  type        = bool
+  default     = false
+}
+
+variable "ecs_log_retention_days" {
+  description = "Log retention period in days for ECS service CloudWatch log groups"
+  type        = number
+  default     = 7
+}
+
+variable "backend_container_image" {
+  description = "Container image for Backend API (defaults to ECR repository latest image)"
+  type        = string
+  default     = ""
+}
+
+variable "frontend_container_image" {
+  description = "Container image for Frontend Next.js app (defaults to ECR repository latest image)"
+  type        = string
+  default     = ""
+}
+
+variable "admin_container_image" {
+  description = "Container image for React Admin app (defaults to ECR repository latest image)"
+  type        = string
+  default     = ""
+}
+
+variable "backend_task_cpu" {
+  description = "CPU units for Backend task (256 = 0.25 vCPU)"
+  type        = number
+  default     = 256
+}
+
+variable "backend_task_memory" {
+  description = "Memory for Backend task in MB (512 = 0.5 GB)"
+  type        = number
+  default     = 512
+}
+
+variable "backend_desired_count" {
+  description = "Desired number of running Backend task containers"
+  type        = number
+  default     = 1
+}
+
+variable "frontend_task_cpu" {
+  description = "CPU units for Frontend task"
+  type        = number
+  default     = 256
+}
+
+variable "frontend_task_memory" {
+  description = "Memory for Frontend task in MB"
+  type        = number
+  default     = 512
+}
+
+variable "frontend_desired_count" {
+  description = "Desired number of running Frontend task containers"
+  type        = number
+  default     = 1
+}
+
+variable "admin_task_cpu" {
+  description = "CPU units for Admin dashboard task"
+  type        = number
+  default     = 256
+}
+
+variable "admin_task_memory" {
+  description = "Memory for Admin dashboard task in MB"
+  type        = number
+  default     = 512
+}
+
+variable "admin_desired_count" {
+  description = "Desired number of running Admin dashboard task containers"
+  type        = number
+  default     = 1
 }
 
 # S3 Storage Configuration
@@ -381,7 +481,7 @@ variable "enable_github_actions_ecr_role" {
 }
 
 variable "github_repository" {
-  description = "GitHub repository in org/repo format (e.g. backlyst/backlystapp) allowed to push to ECR"
+  description = "GitHub repository in org/repo format (e.g. tavonzaai/tavonzaaiapp) allowed to push to ECR"
   type        = string
   default     = ""
 }

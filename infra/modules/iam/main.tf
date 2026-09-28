@@ -467,3 +467,54 @@ resource "aws_iam_role_policy_attachment" "github_actions_ssm_ec2" {
   role       = aws_iam_role.github_actions_ecr[0].name
   policy_arn = aws_iam_policy.github_actions_ssm_ec2[0].arn
 }
+
+# ==============================================================================
+# GitHub Actions CI/CD ECS Deployment Policy
+# ==============================================================================
+data "aws_iam_policy_document" "github_actions_ecs_deploy" {
+  count = var.enable_github_actions_role && var.github_repository != "" ? 1 : 0
+
+  statement {
+    sid    = "ECSDeploymentPermissions"
+    effect = "Allow"
+    actions = [
+      "ecs:DescribeServices",
+      "ecs:UpdateService",
+      "ecs:DescribeTaskDefinition",
+      "ecs:RegisterTaskDefinition",
+      "ecs:ListTasks",
+      "ecs:DescribeTasks"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "IAMPassRoleForECS"
+    effect = "Allow"
+    actions = [
+      "iam:PassRole"
+    ]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_policy" "github_actions_ecs_deploy" {
+  count       = var.enable_github_actions_role && var.github_repository != "" ? 1 : 0
+  name        = "${var.project_name}-${var.environment}-github-actions-ecs-deploy"
+  description = "Allows GitHub Actions CI/CD to deploy tasks and update services on Amazon ECS"
+  policy      = data.aws_iam_policy_document.github_actions_ecs_deploy[0].json
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_ecs_deploy" {
+  count      = var.enable_github_actions_role && var.github_repository != "" ? 1 : 0
+  role       = aws_iam_role.github_actions_ecr[0].name
+  policy_arn = aws_iam_policy.github_actions_ecs_deploy[0].arn
+}
+

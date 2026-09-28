@@ -45,14 +45,22 @@ variable "admin_subdomain" {
   default     = "admin"
 }
 
-variable "backend_instance_id" {
-  description = "EC2 Instance ID for Backend API"
+variable "target_type" {
+  description = "Target type for ALB target groups (ip for ECS Fargate, instance for EC2)"
   type        = string
+  default     = "ip"
+}
+
+variable "backend_instance_id" {
+  description = "EC2 Instance ID for Backend API (required only if target_type is instance)"
+  type        = string
+  default     = null
 }
 
 variable "frontend_instance_id" {
-  description = "EC2 Instance ID for Frontend (Next.js & Admin)"
+  description = "EC2 Instance ID for Frontend (required only if target_type is instance)"
   type        = string
+  default     = null
 }
 
 variable "backend_port" {

@@ -63,7 +63,7 @@ variable "enable_github_actions_role" {
 }
 
 variable "github_repository" {
-  description = "GitHub repository name in org/repo format (e.g. backlyst/backlystapp) for OIDC trust relationship"
+  description = "GitHub repository name in org/repo format (e.g. tavonzaai/tavonzaaiapp) for OIDC trust relationship"
   type        = string
   default     = ""
 }

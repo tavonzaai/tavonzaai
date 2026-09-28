@@ -36,13 +36,13 @@ variable "storage_type" {
 variable "db_name" {
   description = "Initial database name"
   type        = string
-  default     = "backlyst_db"
+  default     = "tavonzaai_db"
 }
 
 variable "db_username" {
   description = "Database master username"
   type        = string
-  default     = "backlyst_user"
+  default     = "tavonzaai_user"
 }
 
 variable "db_password" {

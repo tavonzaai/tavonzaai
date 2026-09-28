@@ -17,10 +17,13 @@ jobs:
       ai:              ${{ steps.filter.outputs.ai }}
       realtime:        ${{ steps.filter.outputs.realtime }}
       worker:          ${{ steps.filter.outputs.worker }}
-      frontend-admin:  ${{ steps.filter.outputs.frontend-admin }}
-      frontend-customer: ${{ steps.filter.outputs.frontend-customer }}
-      frontend-staff:  ${{ steps.filter.outputs.frontend-staff }}
-      ci-config:       ${{ steps.filter.outputs.ci-config }}
+      frontend-admin:          ${{ steps.filter.outputs.frontend-admin }}
+      frontend-customer:       ${{ steps.filter.outputs.frontend-customer }}
+      frontend-staff:          ${{ steps.filter.outputs.frontend-staff }}
+      frontend-branch-manager: ${{ steps.filter.outputs.frontend-branch-manager }}
+      frontend-cashier:        ${{ steps.filter.outputs.frontend-cashier }}
+      frontend-kitchen:        ${{ steps.filter.outputs.frontend-kitchen }}
+      ci-config:               ${{ steps.filter.outputs.ci-config }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -51,6 +54,18 @@ jobs:
               - 'packages/shared/**'
             frontend-staff:
               - 'frontend/staff/**'
+              - 'packages/contracts/**'
+              - 'packages/shared/**'
+            frontend-branch-manager:
+              - 'frontend/branch-manager/**'
+              - 'packages/contracts/**'
+              - 'packages/shared/**'
+            frontend-cashier:
+              - 'frontend/cashier/**'
+              - 'packages/contracts/**'
+              - 'packages/shared/**'
+            frontend-kitchen:
+              - 'frontend/kitchen/**'
               - 'packages/contracts/**'
               - 'packages/shared/**'
             ci-config:
@@ -211,6 +226,70 @@ jobs:
         run: pnpm turbo run build --filter=@frontend/staff^...
       - name: Typecheck Staff
         run: pnpm turbo run typecheck --filter=@frontend/staff
+
+  # ─── Typecheck: Frontend Branch Manager ────────────────────────────────────
+  typecheck-frontend-branch-manager:
+    name: "Typecheck › Frontend Branch Manager"
+    needs: changes
+    if: needs.changes.outputs.frontend-branch-manager == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@frontend/branch-manager^...
+      - name: Typecheck Branch Manager
+        run: pnpm turbo run typecheck --filter=@frontend/branch-manager
+
+  # ─── Typecheck: Frontend Cashier ───────────────────────────────────────────
+  typecheck-frontend-cashier:
+    name: "Typecheck › Frontend Cashier"
+    needs: changes
+    if: needs.changes.outputs.frontend-cashier == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@frontend/cashier^...
+      - name: Typecheck Cashier
+        run: pnpm turbo run typecheck --filter=@frontend/cashier
+
+  # ─── Typecheck: Frontend Kitchen ───────────────────────────────────────────
+  typecheck-frontend-kitchen:
+    name: "Typecheck › Frontend Kitchen"
+    needs: changes
+    if: needs.changes.outputs.frontend-kitchen == 'true' || needs.changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.1.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages first
+        run: pnpm turbo run build --filter=@frontend/kitchen^...
+      - name: Typecheck Kitchen
+        run: pnpm turbo run typecheck --filter=@frontend/kitchen
+
 
   # ─── Tests: API ────────────────────────────────────────────────────────────
   # NOTE: Currently runs a no-op echo (jest not yet installed).

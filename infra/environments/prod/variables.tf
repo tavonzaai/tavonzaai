@@ -59,7 +59,7 @@ variable "single_nat_gateway" {
 
 # Domain and DNS Configuration
 variable "domain_name" {
-  description = "Primary hosted zone domain name (e.g. backlyst.co.uk)"
+  description = "Primary hosted zone domain name (e.g. tavonzaai.co.uk)"
   type        = string
 }
 
@@ -381,7 +381,7 @@ variable "enable_github_actions_ecr_role" {
 }
 
 variable "github_repository" {
-  description = "GitHub repository in org/repo format (e.g. backlyst/backlystapp) allowed to push to ECR"
+  description = "GitHub repository in org/repo format (e.g. tavonzaai/tavonzaaiapp) allowed to push to ECR"
   type        = string
   default     = ""
 }

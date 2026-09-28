@@ -1,7 +1,7 @@
 # AWS Provider & Project Settings
 aws_region   = "eu-west-2"
 aws_profile  = "" # Leave empty when using temporary STS session credentials
-project_name = "backlyst"
+project_name = "tavonzaai"
 environment  = "prod"
 
 # Custom 3-Tier VPC Settings
@@ -13,7 +13,7 @@ enable_nat_gateway       = true
 single_nat_gateway       = true # Set to false for Multi-AZ NAT Gateway high-availability
 
 # Domain & DNS
-domain_name     = "backlyst.co.uk"
+domain_name     = "tavonzaai.co.uk"
 api_subdomain   = "api"
 admin_subdomain = "admin"
 
@@ -24,7 +24,7 @@ zoho_mx_records = [
   "20 mx2.zoho.com",
   "50 mx3.zoho.com"
 ]
-zoho_spf_record     = "v=spf1 include:dc-8e814c8572._spfm.backlyst.co.uk ~all"
+zoho_spf_record     = "v=spf1 include:dc-8e814c8572._spfm.tavonzaai.co.uk ~all"
 extra_txt_records   = {}
 extra_cname_records = {}
 
@@ -55,7 +55,7 @@ backend_root_volume_size  = 10
 frontend_root_volume_size = 10
 
 # S3 Storage Settings
-s3_bucket_name = "backlyst-prod-storage-bucket"
+s3_bucket_name = "tavonzaai-prod-storage-bucket"
 
 # Secrets Manager Settings
 secret_name = ""
@@ -65,9 +65,9 @@ rds_engine_version             = "17"
 rds_instance_class             = "db.t3.micro"
 rds_allocated_storage          = 20
 rds_storage_type               = "gp3"
-rds_db_name                    = "backlyst_db"
-rds_db_username                = "backlyst_user"
-rds_db_password                = "BacklystPass2026Prod" # To be set/rotated in Secrets Manager
+rds_db_name                    = "tavonzaai_db"
+rds_db_username                = "tavonzaai_user"
+rds_db_password                = "tavonzaaiPass2026Prod" # To be set/rotated in Secrets Manager
 rds_publicly_accessible        = false
 rds_skip_final_snapshot        = false
 rds_deletion_protection        = true
@@ -78,7 +78,7 @@ rds_storage_encrypted          = true
 rds_multi_az                   = false
 
 # ElastiCache Redis / Valkey Settings (Serverless Capped at 1GB RAM)
-elasticache_cache_name               = "backlyst-prod-cache"
+elasticache_cache_name               = "tavonzaai-prod-cache"
 elasticache_engine                   = "valkey"
 elasticache_major_engine_version     = "8"
 elasticache_max_storage_gb           = 1

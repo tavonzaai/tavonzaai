@@ -1,5 +1,5 @@
 variable "domain_name" {
-  description = "Domain name for SES identity verification (e.g. backlyst.co.uk)"
+  description = "Domain name for SES identity verification (e.g. tavonzaai.co.uk)"
   type        = string
 }
 

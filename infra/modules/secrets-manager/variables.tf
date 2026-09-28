@@ -1,5 +1,5 @@
 variable "secret_name" {
-  description = "Name/path of the Secrets Manager secret (e.g. /dev/backlyst/backend)"
+  description = "Name/path of the Secrets Manager secret (e.g. /dev/tavonzaai/backend)"
   type        = string
 }
 
@@ -30,7 +30,7 @@ variable "initial_secret_keys" {
     SMTP_PASS            = ""
     SMTP_FROM            = ""
     SMTP_SECURE          = "false"
-    COMPANY_NAME         = "Backlyst"
+    COMPANY_NAME         = "tavonzaai"
     EC2_ADMIN_PASSWORD   = ""
   }
 }

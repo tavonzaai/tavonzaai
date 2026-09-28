@@ -220,7 +220,100 @@ importers:
         specifier: ^5.4.5
         version: 5.9.3
 
+  frontend/branch-manager:
+    dependencies:
+      '@tavonza/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@tavonza/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      next:
+        specifier: ^14.2.3
+        version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.19.43
+      '@types/react':
+        specifier: ^18.3.1
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.7(@types/react@18.3.31)
+      typescript:
+        specifier: ^5.4.5
+        version: 5.9.3
+
+  frontend/cashier:
+    dependencies:
+      '@tavonza/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@tavonza/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      next:
+        specifier: ^14.2.3
+        version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.19.43
+      '@types/react':
+        specifier: ^18.3.1
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.7(@types/react@18.3.31)
+      typescript:
+        specifier: ^5.4.5
+        version: 5.9.3
+
   frontend/customer:
+    dependencies:
+      '@tavonza/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@tavonza/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      next:
+        specifier: ^14.2.3
+        version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.19.43
+      '@types/react':
+        specifier: ^18.3.1
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.7(@types/react@18.3.31)
+      typescript:
+        specifier: ^5.4.5
+        version: 5.9.3
+
+  frontend/kitchen:
     dependencies:
       '@tavonza/contracts':
         specifier: workspace:*

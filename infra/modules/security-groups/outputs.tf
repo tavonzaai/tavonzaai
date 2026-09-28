@@ -22,3 +22,9 @@ output "redis_security_group_id" {
   description = "ID of the ElastiCache Redis security group"
   value       = aws_security_group.redis.id
 }
+
+output "ecs_security_group_id" {
+  description = "ID of the ECS tasks security group"
+  value       = aws_security_group.ecs.id
+}
+

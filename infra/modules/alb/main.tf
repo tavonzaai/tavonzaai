@@ -20,7 +20,7 @@ resource "aws_lb_target_group" "backend" {
   port        = var.backend_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
-  target_type = "instance"
+  target_type = var.target_type
 
   health_check {
     enabled             = true
@@ -40,6 +40,7 @@ resource "aws_lb_target_group" "backend" {
 }
 
 resource "aws_lb_target_group_attachment" "backend" {
+  count            = var.target_type == "instance" && var.backend_instance_id != null ? 1 : 0
   target_group_arn = aws_lb_target_group.backend.arn
   target_id        = var.backend_instance_id
   port             = var.backend_port
@@ -51,7 +52,7 @@ resource "aws_lb_target_group" "nextjs" {
   port        = var.nextjs_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
-  target_type = "instance"
+  target_type = var.target_type
 
   health_check {
     enabled             = true
@@ -71,6 +72,7 @@ resource "aws_lb_target_group" "nextjs" {
 }
 
 resource "aws_lb_target_group_attachment" "nextjs" {
+  count            = var.target_type == "instance" && var.frontend_instance_id != null ? 1 : 0
   target_group_arn = aws_lb_target_group.nextjs.arn
   target_id        = var.frontend_instance_id
   port             = var.nextjs_port
@@ -82,7 +84,7 @@ resource "aws_lb_target_group" "admin" {
   port        = var.admin_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
-  target_type = "instance"
+  target_type = var.target_type
 
   health_check {
     enabled             = true
@@ -102,6 +104,7 @@ resource "aws_lb_target_group" "admin" {
 }
 
 resource "aws_lb_target_group_attachment" "admin" {
+  count            = var.target_type == "instance" && var.frontend_instance_id != null ? 1 : 0
   target_group_arn = aws_lb_target_group.admin.arn
   target_id        = var.frontend_instance_id
   port             = var.admin_port

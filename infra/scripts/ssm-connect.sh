@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Backlyst AWS EC2 SSM Connection Helper
+# tavonzaai AWS EC2 SSM Connection Helper
 # Connects securely to private EC2 instances without SSH keys or open port 22
 # ==============================================================================
 
@@ -9,7 +9,7 @@ set -euo pipefail
 # Default configuration
 AWS_REGION="${AWS_REGION:-eu-west-2}"
 AWS_PROFILE="${AWS_PROFILE:-tom}"
-PROJECT_NAME="backlyst"
+PROJECT_NAME="tavonzaai"
 ENVIRONMENT="${2:-dev}"
 
 # Check for AWS CLI
@@ -50,7 +50,7 @@ TARGET="${1:-}"
 
 if [ -z "${TARGET}" ]; then
   echo "========================================================"
-  echo "  Backlyst EC2 SSM Connector (${ENVIRONMENT})"
+  echo "  tavonzaai EC2 SSM Connector (${ENVIRONMENT})"
   echo "========================================================"
   echo "Select an instance to connect to:"
   echo "  1) Backend  (${PROJECT_NAME}-${ENVIRONMENT}-backend)"

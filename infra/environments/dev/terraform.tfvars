@@ -24,7 +24,7 @@ zoho_mx_records = [
   "20 mx2.zoho.com",
   "50 mx3.zoho.com"
 ]
-zoho_spf_record     = "v=spf1 include:dc-8e814c8572._spfm.backlyst.co.uk include:amazonses.com ~all"
+zoho_spf_record     = "v=spf1 include:dc-8e814c8572._spfm.tavonzaai.co.uk include:amazonses.com ~all"
 extra_txt_records   = {}
 extra_cname_records = {}
 
@@ -55,7 +55,7 @@ backend_root_volume_size  = 20
 frontend_root_volume_size = 20
 
 # S3 Storage Settings
-s3_bucket_name = "backlyst-dev-storage-bucket"
+s3_bucket_name = "tavonzaai-dev-storage-bucket"
 
 # Secrets Manager Settings
 secret_name = ""
@@ -65,9 +65,9 @@ rds_engine_version             = "17"
 rds_instance_class             = "db.t3.micro"
 rds_allocated_storage          = 20
 rds_storage_type               = "gp3"
-rds_db_name                    = "backlyst_db"
-rds_db_username                = "backlyst_user"
-rds_db_password                = "BacklystPass2026Dev"
+rds_db_name                    = "tavonzaai_db"
+rds_db_username                = "tavonzaai_user"
+rds_db_password                = "tavonzaaiPass2026Dev"
 rds_publicly_accessible        = false
 rds_skip_final_snapshot        = true
 rds_deletion_protection        = false
@@ -78,7 +78,7 @@ rds_storage_encrypted          = true
 rds_multi_az                   = false
 
 # ElastiCache Redis / Valkey Settings (Serverless Capped at 1GB RAM)
-elasticache_cache_name               = "backlyst-dev-cache"
+elasticache_cache_name               = "tavonzaai-dev-cache"
 elasticache_engine                   = "valkey"
 elasticache_major_engine_version     = "8"
 elasticache_max_storage_gb           = 1
@@ -87,7 +87,7 @@ elasticache_snapshot_retention_limit = 0
 
 # GitHub Actions CI/CD & ECR Role Settings
 enable_github_actions_ecr_role = true
-github_repository              = "*backlystapp"
+github_repository              = "*tavonzaaiapp"
 github_branches                = ["*"]
 create_github_oidc_provider    = true
 

@@ -13,7 +13,7 @@ enable_nat_gateway       = true
 single_nat_gateway       = true # Cost-optimized: Single NAT Gateway for dev
 
 # Domain & DNS (Must match an existing Route 53 Hosted Zone)
-domain_name     = "example.com" # Change to your actual domain name e.g. "backlyst.co.uk"
+domain_name     = "example.com" # Change to your actual domain name e.g. "tavonzaai.co.uk"
 api_subdomain   = "api"         # Creates api.example.com
 admin_subdomain = "admin"       # Creates admin.example.com
 
@@ -24,7 +24,7 @@ zoho_mx_records = [
   "20 mx2.zoho.com",
   "50 mx3.zoho.com"
 ]
-zoho_spf_record     = "v=spf1 include:dc-8e814c8572._spfm.backlyst.co.uk ~all"
+zoho_spf_record     = "v=spf1 include:dc-8e814c8572._spfm.tavonzaai.co.uk ~all"
 extra_txt_records   = {}
 extra_cname_records = {}
 
@@ -55,18 +55,18 @@ backend_root_volume_size  = 20
 frontend_root_volume_size = 20
 
 # S3 Storage Settings
-s3_bucket_name = "backlyst-dev-storage-bucket-unique-id"
+s3_bucket_name = "tavonzaai-dev-storage-bucket-unique-id"
 
 # Secrets Manager Settings
-secret_name = "" # Optional custom name e.g. "/dev/backlyst/backend"
+secret_name = "" # Optional custom name e.g. "/dev/tavonzaai/backend"
 
 # RDS PostgreSQL Database Settings
 rds_engine_version             = "17"
 rds_instance_class             = "db.t3.micro"
 rds_allocated_storage          = 20
 rds_storage_type               = "gp3"
-rds_db_name                    = "backlyst_db"
-rds_db_username                = "backlyst_user"
+rds_db_name                    = "tavonzaai_db"
+rds_db_username                = "tavonzaai_user"
 rds_db_password                = "ChangeMeToAStrongPassword123!" # Passwords should not be committed to Git
 rds_publicly_accessible        = false
 rds_skip_final_snapshot        = true
@@ -78,7 +78,7 @@ rds_storage_encrypted          = true
 rds_multi_az                   = false
 
 # ElastiCache Redis / Valkey Settings
-elasticache_cache_name               = "backlyst-dev-cache"
+elasticache_cache_name               = "tavonzaai-dev-cache"
 elasticache_engine                   = "valkey"
 elasticache_major_engine_version     = "8"
 elasticache_max_storage_gb           = 1
@@ -95,7 +95,7 @@ ecr_max_tagged_image_count     = 30
 
 # GitHub Actions CI/CD & IAM Settings
 enable_github_actions_ecr_role = true
-github_repository              = "backlyst/backlystapp" # Format: org/repo
+github_repository              = "tavonzaai/tavonzaaiapp" # Format: org/repo
 github_branches                = ["main", "dev"]
 create_github_oidc_provider    = true # Set false if an OIDC provider for token.actions.githubusercontent.com already exists
 

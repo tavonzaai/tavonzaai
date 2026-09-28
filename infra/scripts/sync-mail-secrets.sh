@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Backlyst AWS SES - Secrets Manager & Backend Mail Synchronizer
+# tavonzaai AWS SES - Secrets Manager & Backend Mail Synchronizer
 # Extracts SES SMTP credentials from Terraform and updates Secrets Manager
 # ==============================================================================
 
@@ -12,10 +12,10 @@ AWS_PROFILE="${AWS_PROFILE:-tom}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TERRAFORM_DIR="$SCRIPT_DIR/../terraform/environments/$ENV"
-SECRET_NAME="/$ENV/backlyst/backend"
+SECRET_NAME="/$ENV/tavonzaai/backend"
 
 echo "========================================================"
-echo "  Backlyst Mail Service Sync ($ENV)"
+echo "  tavonzaai Mail Service Sync ($ENV)"
 echo "========================================================"
 
 # Profile flag
@@ -63,11 +63,11 @@ current['SMTP_PORT'] = sys.argv[3]
 current['SMTP_USER'] = sys.argv[4]
 current['SMTP_PASS'] = sys.argv[5]
 if 'SMTP_FROM' not in current or not current['SMTP_FROM']:
-    current['SMTP_FROM'] = 'noreply@backlyst.co.uk'
+    current['SMTP_FROM'] = 'noreply@tavonzaai.co.uk'
 if 'SMTP_SECURE' not in current or not current['SMTP_SECURE']:
     current['SMTP_SECURE'] = 'false'
 if 'COMPANY_NAME' not in current or not current['COMPANY_NAME']:
-    current['COMPANY_NAME'] = 'Backlyst'
+    current['COMPANY_NAME'] = 'tavonzaai'
 print(json.dumps(current))
 " "$CURRENT_SECRET" "$SMTP_HOST" "$SMTP_PORT" "$SMTP_USER" "$SMTP_PASS")
 
@@ -87,7 +87,7 @@ if [[ "$RESTART" =~ ^[Yy]$ ]]; then
   INSTANCE_ID=$(aws ec2 describe-instances \
     --region "$AWS_REGION" \
     ${PROFILE_ARG} \
-    --filters "Name=tag:Name,Values=backlyst-$ENV-backend" "Name=instance-state-name,Values=running" \
+    --filters "Name=tag:Name,Values=tavonzaai-$ENV-backend" "Name=instance-state-name,Values=running" \
     --query "Reservations[0].Instances[0].InstanceId" \
     --output text 2>/dev/null || echo "")
 
@@ -98,7 +98,7 @@ if [[ "$RESTART" =~ ^[Yy]$ ]]; then
       ${PROFILE_ARG} \
       --instance-ids "$INSTANCE_ID" \
       --document-name "AWS-RunShellScript" \
-      --parameters "commands=[\"sudo bash /opt/backlyst/backend/start-backend.sh\"]" \
+      --parameters "commands=[\"sudo bash /opt/tavonzaai/backend/start-backend.sh\"]" \
       --comment "Restart backend with new mail settings" > /dev/null
     echo "✅ Restart command sent to backend EC2 instance."
   else

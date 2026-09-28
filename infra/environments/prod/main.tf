@@ -106,7 +106,7 @@ module "secrets_manager" {
     SMTP_PASS            = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_password_v4 : ""
     SMTP_FROM            = "noreply@${var.domain_name}"
     SMTP_SECURE          = "false"
-    COMPANY_NAME         = "Backlyst"
+    COMPANY_NAME         = "tavonzaai"
   }
 }
 
