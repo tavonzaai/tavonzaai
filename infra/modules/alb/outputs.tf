@@ -24,8 +24,8 @@ output "http_listener_arn" {
 }
 
 output "https_listener_arn" {
-  description = "The ARN of the HTTPS listener"
-  value       = aws_lb_listener.https.arn
+  description = "The ARN of the HTTPS listener (null if enable_https is false)"
+  value       = var.enable_https && length(aws_lb_listener.https) > 0 ? aws_lb_listener.https[0].arn : null
 }
 
 output "backend_target_group_arn" {

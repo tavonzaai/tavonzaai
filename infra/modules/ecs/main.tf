@@ -57,7 +57,7 @@ resource "aws_iam_role_policy_attachment" "execution_standard" {
 }
 
 data "aws_iam_policy_document" "execution_secrets" {
-  count = var.secrets_manager_arn != null && var.secrets_manager_arn != "" ? 1 : 0
+  count = var.enable_secrets_manager_access ? 1 : 0
 
   statement {
     sid    = "SecretsManagerReadForEnvInjection"
@@ -71,7 +71,7 @@ data "aws_iam_policy_document" "execution_secrets" {
 }
 
 resource "aws_iam_policy" "execution_secrets" {
-  count       = var.secrets_manager_arn != null && var.secrets_manager_arn != "" ? 1 : 0
+  count       = var.enable_secrets_manager_access ? 1 : 0
   name        = "${var.project_name}-${var.environment}-ecs-execution-secrets"
   description = "Allows ECS agent to retrieve secrets from Secrets Manager for container environment injection"
   policy      = data.aws_iam_policy_document.execution_secrets[0].json
@@ -80,7 +80,7 @@ resource "aws_iam_policy" "execution_secrets" {
 }
 
 resource "aws_iam_role_policy_attachment" "execution_secrets" {
-  count      = var.secrets_manager_arn != null && var.secrets_manager_arn != "" ? 1 : 0
+  count      = var.enable_secrets_manager_access ? 1 : 0
   role       = aws_iam_role.execution.name
   policy_arn = aws_iam_policy.execution_secrets[0].arn
 }
@@ -96,7 +96,7 @@ resource "aws_iam_role" "task" {
 }
 
 data "aws_iam_policy_document" "task_s3" {
-  count = var.s3_bucket_arn != null && var.s3_bucket_arn != "" ? 1 : 0
+  count = var.enable_s3_access ? 1 : 0
 
   statement {
     sid    = "S3BucketAccess"
@@ -121,7 +121,7 @@ data "aws_iam_policy_document" "task_s3" {
 }
 
 resource "aws_iam_policy" "task_s3" {
-  count       = var.s3_bucket_arn != null && var.s3_bucket_arn != "" ? 1 : 0
+  count       = var.enable_s3_access ? 1 : 0
   name        = "${var.project_name}-${var.environment}-ecs-task-s3"
   description = "Allows ECS containers to access designated S3 storage bucket"
   policy      = data.aws_iam_policy_document.task_s3[0].json
@@ -130,13 +130,13 @@ resource "aws_iam_policy" "task_s3" {
 }
 
 resource "aws_iam_role_policy_attachment" "task_s3" {
-  count      = var.s3_bucket_arn != null && var.s3_bucket_arn != "" ? 1 : 0
+  count      = var.enable_s3_access ? 1 : 0
   role       = aws_iam_role.task.name
   policy_arn = aws_iam_policy.task_s3[0].arn
 }
 
 data "aws_iam_policy_document" "task_secrets" {
-  count = var.secrets_manager_arn != null && var.secrets_manager_arn != "" ? 1 : 0
+  count = var.enable_secrets_manager_access ? 1 : 0
 
   statement {
     sid    = "SecretsManagerReadAtRuntime"
@@ -150,7 +150,7 @@ data "aws_iam_policy_document" "task_secrets" {
 }
 
 resource "aws_iam_policy" "task_secrets" {
-  count       = var.secrets_manager_arn != null && var.secrets_manager_arn != "" ? 1 : 0
+  count       = var.enable_secrets_manager_access ? 1 : 0
   name        = "${var.project_name}-${var.environment}-ecs-task-secrets"
   description = "Allows ECS containers to read application secrets at runtime"
   policy      = data.aws_iam_policy_document.task_secrets[0].json
@@ -159,7 +159,7 @@ resource "aws_iam_policy" "task_secrets" {
 }
 
 resource "aws_iam_role_policy_attachment" "task_secrets" {
-  count      = var.secrets_manager_arn != null && var.secrets_manager_arn != "" ? 1 : 0
+  count      = var.enable_secrets_manager_access ? 1 : 0
   role       = aws_iam_role.task.name
   policy_arn = aws_iam_policy.task_secrets[0].arn
 }

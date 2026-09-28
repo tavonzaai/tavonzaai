@@ -71,3 +71,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "verified_email_identities" {
+  description = "List of individual email addresses to verify in SES (allows sending in SES Sandbox before domain verification)"
+  type        = list(string)
+  default     = []
+}

@@ -23,9 +23,16 @@ variable "security_group_ids" {
   type        = list(string)
 }
 
+variable "enable_https" {
+  description = "Whether to configure HTTPS listener with ACM certificate. If false, HTTP port 80 routes traffic directly."
+  type        = bool
+  default     = true
+}
+
 variable "certificate_arn" {
-  description = "ARN of the ACM certificate for HTTPS listener"
+  description = "ARN of the ACM certificate for HTTPS listener (required if enable_https is true)"
   type        = string
+  default     = null
 }
 
 variable "domain_name" {
