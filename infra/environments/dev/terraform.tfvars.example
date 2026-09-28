@@ -1,7 +1,7 @@
 # AWS Provider & Project Settings
-aws_region   = "eu-west-2"
+aws_region   = "eu-west-1"
 aws_profile  = "default" # Or leave empty string "" to use standard AWS env vars / instance profile
-project_name = "backlyst"
+project_name = "tavonzaai"
 environment  = "dev"
 
 # Custom 3-Tier VPC Settings

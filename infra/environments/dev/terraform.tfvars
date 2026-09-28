@@ -1,7 +1,7 @@
 # AWS Provider & Project Settings
-aws_region   = "eu-west-2"
-aws_profile  = "tom"
-project_name = "backlyst"
+aws_region   = "eu-west-1"
+aws_profile  = "milkey"
+project_name = "tavonzaai"
 environment  = "dev"
 
 # Custom 3-Tier VPC Settings
@@ -13,7 +13,7 @@ enable_nat_gateway       = true
 single_nat_gateway       = true # Cost-optimized: Single NAT Gateway for dev
 
 # Domain & DNS
-domain_name     = "backlyst.co.uk"
+domain_name     = "tavonzaai.net"
 api_subdomain   = "api"
 admin_subdomain = "admin"
 
@@ -93,10 +93,5 @@ create_github_oidc_provider    = true
 
 # Testing Stage - Restrict ALB Access to Whitelisted Client & Developer IPs
 alb_ingress_cidr_blocks = [
-  "83.110.227.12/32", # Client IP 1
-  "94.201.232.22/32", # Client IP 2
-  "10.10.24.74/32",   # Developer IP 1 (devops)
-  "10.10.24.20/32",   # Developer IP 2 (backend)
-  "10.10.24.18/32",   # Developer IP 3 (backend)
-  "10.10.23.25/32"    # Developer IP 4 (frontend)
+  "0.0.0.0",
 ]
