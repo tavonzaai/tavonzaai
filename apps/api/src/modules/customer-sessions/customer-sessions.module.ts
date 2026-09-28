@@ -1,9 +1,13 @@
+// ============================================================================
+// CustomerSessionsModule — Feedback
+// ============================================================================
+
 import { Module } from '@nestjs/common';
+import { FeedbackService, FeedbackController } from './feedback.service-controller';
 
 @Module({
-  imports: [],
-  controllers: [],
-  providers: [],
-  exports: [],
+  controllers: [FeedbackController],
+  providers: [FeedbackService],
+  exports: [FeedbackService],
 })
 export class CustomerSessionsModule {}
