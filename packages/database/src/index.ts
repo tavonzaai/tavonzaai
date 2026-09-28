@@ -1,6 +1,14 @@
 /**
  * @tavonza/database
- * Database connection, schema definitions, and migration tooling
+ * Database connection, schema definitions, and migration tooling (Drizzle ORM)
  */
 
-export {};
+// Client + injection token
+export { DRIZZLE, createDrizzleDatabase } from './client';
+export type { DrizzleDatabase } from './client';
+
+// NestJS module
+export { DatabaseModule } from './database.module';
+
+// Schema (tables + relations) — so repositories can import table references
+export * from './schema';

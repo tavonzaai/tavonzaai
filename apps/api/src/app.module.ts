@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { DatabaseModule } from "@tavonza/database";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { AuthorizationModule } from "./modules/authorization/authorization.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
@@ -19,6 +20,9 @@ import { AiModule } from "./modules/ai/ai.module";
 
 @Module({
   imports: [
+    // Infrastructure — must be first (provides Drizzle DB globally)
+    DatabaseModule,
+
     IdentityModule,
     AuthorizationModule,
     OrganizationsModule,
