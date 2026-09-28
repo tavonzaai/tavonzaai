@@ -30,7 +30,7 @@ import type {
   ForgotPasswordDto,
   ResetPasswordDto,
 } from '../../presentation/http/dto/auth-request.dto';
-import type { AuthTokensDto } from '../../presentation/http/dto/auth-response.dto';
+import type { AuthTokensDto, RegisterResponseDto } from '../../presentation/http/dto/auth-response.dto';
 import { UserProfileDto } from '../../presentation/http/dto/auth-response.dto';
 
 const SALT_ROUNDS = 12;
@@ -48,7 +48,7 @@ export class AuthService {
   // Per .agent architecture: Public self-registration is EXCLUSIVELY for customers.
   // Staff/operators are provisioned through internal administration/staff assignment.
 
-  async register(dto: RegisterDto): Promise<AuthTokensDto> {
+  async register(dto: RegisterDto): Promise<RegisterResponseDto> {
     const existing = await this.userRepo.findByEmail(dto.email.toLowerCase());
     if (existing) {
       throw new ConflictException('An account with this email already exists');
@@ -69,17 +69,20 @@ export class AuthService {
       scopes: [{ type: ScopeType.SESSION }],
     });
 
-    // Send OTP for email verification (fire-and-forget in production)
+    // Send OTP for email verification (logged to console until SES/SMTP is configured)
     await this.generateAndSendOtp(user.id, 'email_verification');
 
-    return this.issueTokens(user);
+    return {
+      message: 'Account created successfully. Please verify your email with the OTP code sent to your email.',
+      email: user.email,
+    };
   }
 
   // ── Login ──────────────────────────────────────────────────────────────
   // Figma: Log In screen
 
   async login(dto: LoginDto): Promise<AuthTokensDto> {
-    const user = await this.userRepo.findByEmail(dto.email.toLowerCase());
+    const user = await this.userRepo.findByEmailOrPhone(dto.email);
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -87,6 +90,13 @@ export class AuthService {
     const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordMatch) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // Must verify either email or phone number before logging in
+    if (!user.isEmailVerified && !user.isPhoneVerified) {
+      throw new UnauthorizedException(
+        'Account is not verified. Please verify your email or phone number before logging in.',
+      );
     }
 
     return this.issueTokens(user);
@@ -123,10 +133,10 @@ export class AuthService {
   }
 
   // ── Verify OTP ─────────────────────────────────────────────────────────
-  // Figma: Verify screen — 5-digit code sent to email
+  // Figma: Verify screen — 5-digit code sent to email or phone
 
   async verifyOtp(dto: VerifyOtpDto): Promise<void> {
-    const user = await this.userRepo.findByEmail(dto.email.toLowerCase());
+    const user = await this.userRepo.findByEmailOrPhone(dto.email);
     if (!user) throw new NotFoundException('User not found');
 
     const otp = await this.userRepo.findValidOtp(user.id, dto.type);
@@ -143,14 +153,16 @@ export class AuthService {
 
     if (dto.type === 'email_verification') {
       await this.userRepo.markEmailVerified(user.id);
+    } else if (dto.type === 'phone_verification') {
+      await this.userRepo.markPhoneVerified(user.id);
     }
   }
 
   // ── Forgot Password ────────────────────────────────────────────────────
 
   async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
-    const user = await this.userRepo.findByEmail(dto.email.toLowerCase());
-    // Always return success to prevent email enumeration
+    const user = await this.userRepo.findByEmailOrPhone(dto.email);
+    // Always return success to prevent enumeration
     if (!user) return;
 
     await this.generateAndSendOtp(user.id, 'password_reset');
@@ -160,7 +172,7 @@ export class AuthService {
   // Figma: New Pass screen
 
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
-    const user = await this.userRepo.findByEmail(dto.email.toLowerCase());
+    const user = await this.userRepo.findByEmailOrPhone(dto.email);
     if (!user) throw new NotFoundException('User not found');
 
     const otp = await this.userRepo.findValidOtp(user.id, 'password_reset');
@@ -186,8 +198,11 @@ export class AuthService {
   // ── Resend OTP ─────────────────────────────────────────────────────────
   // Figma: "Resend" countdown on Verify screen
 
-  async resendOtp(email: string, type: 'email_verification' | 'password_reset'): Promise<void> {
-    const user = await this.userRepo.findByEmail(email.toLowerCase());
+  async resendOtp(
+    identifier: string,
+    type: 'email_verification' | 'phone_verification' | 'password_reset',
+  ): Promise<void> {
+    const user = await this.userRepo.findByEmailOrPhone(identifier);
     if (!user) return; // Prevent enumeration
 
     await this.generateAndSendOtp(user.id, type);
@@ -229,7 +244,7 @@ export class AuthService {
 
   private async generateAndSendOtp(
     userId: string,
-    type: 'email_verification' | 'password_reset',
+    type: 'email_verification' | 'phone_verification' | 'password_reset',
   ): Promise<string> {
     // Generate 5-digit code (matches Figma Verify screen)
     const code = Math.floor(10000 + Math.random() * 90000).toString();

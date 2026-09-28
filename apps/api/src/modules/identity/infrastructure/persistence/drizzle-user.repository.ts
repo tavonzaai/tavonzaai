@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, gt } from 'drizzle-orm';
+import { eq, and, gt, or } from 'drizzle-orm';
 import { DRIZZLE } from '@tavonza/database';
 import { users, otpCodes } from '@tavonza/database';
 import type { User, OtpCode } from '../../domain/entities/user.entity';
@@ -21,6 +21,16 @@ export class DrizzleUserRepository {
       .select()
       .from(users)
       .where(eq(users.email, email))
+      .limit(1);
+    return result[0] ?? null;
+  }
+
+  async findByEmailOrPhone(identifier: string): Promise<User | null> {
+    const trimmed = identifier.trim();
+    const result = await this.db
+      .select()
+      .from(users)
+      .where(or(eq(users.email, trimmed.toLowerCase()), eq(users.phone, trimmed)))
       .limit(1);
     return result[0] ?? null;
   }
@@ -80,6 +90,13 @@ export class DrizzleUserRepository {
     await this.db
       .update(users)
       .set({ isEmailVerified: true, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  }
+
+  async markPhoneVerified(userId: string): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ isPhoneVerified: true, updatedAt: new Date() })
       .where(eq(users.id, userId));
   }
 

@@ -35,12 +35,14 @@ export const users = pgTable(
     organizationId: uuid('organization_id'),
     isActive: boolean('is_active').default(true).notNull(),
     isEmailVerified: boolean('is_email_verified').default(false).notNull(),
+    isPhoneVerified: boolean('is_phone_verified').default(false).notNull(),
     refreshToken: text('refresh_token'), // hashed
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => ({
     emailIdx: index('users_email_idx').on(table.email),
+    phoneIdx: index('users_phone_idx').on(table.phone),
     orgIdx: index('users_org_idx').on(table.organizationId),
   }),
 );

@@ -17,6 +17,7 @@ export interface User {
   organizationId?: string | null;
   isActive: boolean;
   isEmailVerified: boolean;
+  isPhoneVerified: boolean;
   refreshToken?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -26,7 +27,7 @@ export interface OtpCode {
   id: string;
   userId: string;
   code: string;
-  type: 'email_verification' | 'password_reset';
+  type: 'email_verification' | 'phone_verification' | 'password_reset';
   expiresAt: Date;
   usedAt?: Date | null;
   createdAt: Date;

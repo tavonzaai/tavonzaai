@@ -42,7 +42,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
 } from './dto/auth-request.dto';
-import { AuthTokensDto, UserProfileDto, MessageResponseDto } from './dto/auth-response.dto';
+import { AuthTokensDto, UserProfileDto, MessageResponseDto, RegisterResponseDto } from './dto/auth-response.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../infrastructure/adapters/jwt.strategy';
@@ -56,13 +56,14 @@ export class AuthController {
    * POST /auth/register
    * Figma: Create Account screen
    * Fields: firstName, lastName, email, phone, password
+   * Sends OTP for verification and does not return tokens until verified/logged in.
    */
   @Post('register')
-  @ApiOperation({ summary: 'Create a new account' })
-  @ApiCreatedResponse({ type: AuthTokensDto })
+  @ApiOperation({ summary: 'Create a new customer account' })
+  @ApiCreatedResponse({ type: RegisterResponseDto })
   @ApiConflictResponse({ description: 'Email already in use' })
   @ApiBadRequestResponse({ description: 'Weak password or invalid input' })
-  async register(@Body() dto: RegisterDto): Promise<AuthTokensDto> {
+  async register(@Body() dto: RegisterDto): Promise<RegisterResponseDto> {
     return this.authService.register(dto);
   }
 
@@ -176,7 +177,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Resend OTP verification code' })
   @ApiOkResponse({ type: MessageResponseDto })
   async resendOtp(
-    @Body() body: { email: string; type: 'email_verification' | 'password_reset' },
+    @Body() body: { email: string; type: 'email_verification' | 'phone_verification' | 'password_reset' },
   ): Promise<MessageResponseDto> {
     await this.authService.resendOtp(body.email, body.type);
     return { message: 'If an account exists, a new code has been sent' };

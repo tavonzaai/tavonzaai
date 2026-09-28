@@ -27,7 +27,7 @@ export class RegisterDto {
 // ─── Login ────────────────────────────────────────────────────────────
 
 export class LoginDto {
-  @ApiProperty({ example: 'john@example.com' })
+  @ApiProperty({ example: 'john@example.com', description: 'Email address or phone number' })
   email!: string;
 
   @ApiProperty({ example: 'SecurePass123!' })
@@ -41,18 +41,18 @@ export class RefreshTokenDto {
   refreshToken!: string;
 }
 
-// ─── Verify OTP (Email Verification / Password Reset) ─────────────────
-// Figma: 5-digit code sent to email
+// ─── Verify OTP (Email Verification, Phone Verification, Password Reset)
+// Figma: 5-digit code sent to email or phone
 
 export class VerifyOtpDto {
-  @ApiProperty({ example: 'john@example.com' })
+  @ApiProperty({ example: 'john@example.com', description: 'Email address or phone number' })
   email!: string;
 
   @ApiProperty({ example: '48291', description: '5-digit verification code' })
   code!: string;
 
-  @ApiProperty({ enum: ['email_verification', 'password_reset'] })
-  type!: 'email_verification' | 'password_reset';
+  @ApiProperty({ enum: ['email_verification', 'phone_verification', 'password_reset'] })
+  type!: 'email_verification' | 'phone_verification' | 'password_reset';
 }
 
 // ─── Forgot Password ──────────────────────────────────────────────────

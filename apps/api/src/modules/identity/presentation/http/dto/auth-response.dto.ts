@@ -19,6 +19,7 @@ export class UserProfileDto {
   @ApiProperty({ type: 'array', description: 'Assigned authorization scopes' }) scopes!: Scope[];
   @ApiProperty({ required: false }) organizationId?: string | null;
   @ApiProperty() isEmailVerified!: boolean;
+  @ApiProperty() isPhoneVerified!: boolean;
   @ApiProperty() createdAt!: Date;
 
   static fromEntity(user: User): UserProfileDto {
@@ -33,6 +34,7 @@ export class UserProfileDto {
     dto.scopes = user.scopes ?? [];
     dto.organizationId = user.organizationId;
     dto.isEmailVerified = user.isEmailVerified;
+    dto.isPhoneVerified = user.isPhoneVerified;
     dto.createdAt = user.createdAt;
     return dto;
   }
@@ -55,3 +57,14 @@ export class AuthTokensDto {
 export class MessageResponseDto {
   @ApiProperty() message!: string;
 }
+
+// ─── Register Response ────────────────────────────────────────────────
+
+export class RegisterResponseDto {
+  @ApiProperty({ example: 'Account created successfully. Please verify your email with the OTP code sent to your email.' })
+  message!: string;
+
+  @ApiProperty({ example: 'customer@example.com' })
+  email!: string;
+}
+
