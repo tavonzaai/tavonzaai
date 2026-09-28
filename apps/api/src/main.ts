@@ -14,6 +14,13 @@ async function bootstrap() {
       { type: "http", scheme: "bearer", bearerFormat: "JWT" },
       "access-token",
     )
+    // ── Tag Groups (prefix = "Actor | Domain") ────────────────────────────
+    .addTag("Customer | Auth", "Account registration, login, OTP verification, and password reset for customers")
+    // Future groups (uncomment as implemented):
+    // .addTag("Waiter | Orders",   "Order acceptance, rejection, and service for waiters")
+    // .addTag("Kitchen | Tickets", "Kitchen ticket management and preparation workflow")
+    // .addTag("Cashier | Payments","Payment processing and session closure")
+    // .addTag("Manager | Branch",  "Branch, menu, staff, and reporting management")
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
