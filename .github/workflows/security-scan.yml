@@ -1,0 +1,76 @@
+name: Security & Hygiene Scan
+
+# Required for all branches.
+# Runs on every push, pull request, or when called by other workflows.
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+jobs:
+  # ─── 1. Check for Forbidden Root Directories (.vscode, public) ───────────────
+  forbidden-folders-scan:
+    name: "Scan › Forbidden Root Folders"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Enforce No Forbidden Root Folders (.vscode / public)
+        run: |
+          VIOLATIONS=0
+
+          if [ -d ".vscode" ]; then
+            echo "::error file=.vscode,title=High Priority Security Violation::Forbidden folder '.vscode' detected in repository root. Local editor configs, workspace state, or credentials must never be committed."
+            VIOLATIONS=1
+          fi
+
+          if [ -d "public" ]; then
+            echo "::error file=public,title=High Priority Architecture Violation::Forbidden folder 'public' detected in repository root. In this monorepo, static public assets must reside in their respective frontend workspace (e.g. frontend/*/public)."
+            VIOLATIONS=1
+          fi
+
+          if [ $VIOLATIONS -ne 0 ]; then
+            echo "CRITICAL FAILURE: Forbidden root directories detected. Aborting pipeline immediately with high priority."
+            exit 1
+          fi
+
+          echo "Pre-flight security check passed: No forbidden root directories found."
+
+  # ─── 2. Node.js Dependency Security Audit ────────────────────────────────────
+  node-security-audit:
+    name: "Audit › Node.js Dependencies"
+    needs: [forbidden-folders-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-pnpm
+
+      - name: Audit Node.js dependencies
+        run: pnpm audit --audit-level=high
+        continue-on-error: true
+
+  # ─── 3. Python Dependency Security Audit ─────────────────────────────────────
+  python-security-audit:
+    name: "Audit › Python Dependencies"
+    needs: [forbidden-folders-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit Python dependencies
+        run: pip-audit -r apps/ai/requirements.txt
+        continue-on-error: true
