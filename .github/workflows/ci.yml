@@ -86,7 +86,11 @@ jobs:
   typecheck-apps:
     name: "Typecheck › ${{ matrix.pkg.name }}"
     needs: [security-scan, changes]
-    if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs.ci-config == 'true'
+    if: |
+      needs.changes.outputs.api == 'true' ||
+      needs.changes.outputs.realtime == 'true' ||
+      needs.changes.outputs.worker == 'true' ||
+      needs.changes.outputs['ci-config'] == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -97,17 +101,28 @@ jobs:
           - { id: 'worker', name: 'Worker (@tavonza/worker)', filter: '@tavonza/worker' }
     steps:
       - uses: actions/checkout@v4
+        if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
       - uses: ./.github/actions/setup-pnpm
+        if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
       - name: Build shared dependencies
+        if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
         run: pnpm turbo run build --filter=${{ matrix.pkg.filter }}^...
       - name: Run Typecheck
+        if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
         run: pnpm turbo run typecheck --filter=${{ matrix.pkg.filter }}
 
   # ─── Step 4: Typecheck Frontend Applications ────────────────────────────────
   typecheck-frontends:
     name: "Typecheck › ${{ matrix.app.name }}"
     needs: [security-scan, changes]
-    if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs.ci-config == 'true'
+    if: |
+      needs.changes.outputs['frontend-admin'] == 'true' ||
+      needs.changes.outputs['frontend-customer'] == 'true' ||
+      needs.changes.outputs['frontend-staff'] == 'true' ||
+      needs.changes.outputs['frontend-branch-manager'] == 'true' ||
+      needs.changes.outputs['frontend-cashier'] == 'true' ||
+      needs.changes.outputs['frontend-kitchen'] == 'true' ||
+      needs.changes.outputs['ci-config'] == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -121,17 +136,21 @@ jobs:
           - { id: 'frontend-kitchen', name: 'Kitchen', filter: '@frontend/kitchen' }
     steps:
       - uses: actions/checkout@v4
+        if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
       - uses: ./.github/actions/setup-pnpm
+        if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
       - name: Build shared dependencies
+        if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
         run: pnpm turbo run build --filter=${{ matrix.app.filter }}^...
       - name: Run Typecheck
+        if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
         run: pnpm turbo run typecheck --filter=${{ matrix.app.filter }}
 
   # ─── Step 5: Unit & Integration Tests ────────────────────────────────────────
   test-api:
     name: "Tests › API"
     needs: [security-scan, changes]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci-config == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs['ci-config'] == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
