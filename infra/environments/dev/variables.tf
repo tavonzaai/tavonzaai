@@ -73,24 +73,15 @@ variable "admin_subdomain" {
   type        = string
 }
 
-# Zoho Mail & Custom DNS Records
-variable "enable_zoho_mail" {
-  description = "Whether to create Zoho Mail MX and SPF records"
+variable "enable_https" {
+  description = "Whether to enable HTTPS with ACM certificate validation. Set to false if domain is not yet purchased or pointed to Route 53."
   type        = bool
+  default     = false
 }
 
-variable "zoho_mx_records" {
-  description = "List of Zoho MX records with priorities"
-  type        = list(string)
-}
-
-variable "zoho_spf_record" {
-  description = "Zoho SPF TXT record value"
-  type        = string
-}
-
+# Custom DNS Records
 variable "extra_txt_records" {
-  description = "Additional TXT records (e.g. DKIM, DMARC, Zoho verification)"
+  description = "Additional TXT records (e.g. DKIM, DMARC, verification)"
   type = map(object({
     name    = string
     records = list(string)
@@ -99,7 +90,7 @@ variable "extra_txt_records" {
 }
 
 variable "extra_cname_records" {
-  description = "Additional CNAME records (e.g. DKIM, Zoho verification)"
+  description = "Additional CNAME records (e.g. DKIM, verification)"
   type = map(object({
     name   = string
     record = string
@@ -143,6 +134,12 @@ variable "ses_create_smtp_user" {
   description = "Whether to create an IAM user with credentials for sending email via SES SMTP"
   type        = bool
   default     = true
+}
+
+variable "ses_verified_email_identities" {
+  description = "List of individual email addresses to verify in SES for testing in sandbox mode without domain ownership"
+  type        = list(string)
+  default     = []
 }
 
 # Application Ports & Health Checks

@@ -28,25 +28,9 @@ variable "alb_zone_id" {
   type        = string
 }
 
-# Zoho Mail & Email Records
-variable "enable_zoho_mail" {
-  description = "Whether to create Zoho Mail MX and SPF records"
-  type        = bool
-}
-
-variable "zoho_mx_records" {
-  description = "List of Zoho MX records with priorities"
-  type        = list(string)
-}
-
-variable "zoho_spf_record" {
-  description = "Zoho SPF TXT record value"
-  type        = string
-}
-
 # Additional Custom DNS Records (DKIM, DMARC, Domain Verification)
 variable "extra_txt_records" {
-  description = "Additional TXT records (e.g. DKIM, DMARC, Zoho verification)"
+  description = "Additional TXT records (e.g. DKIM, DMARC, verification)"
   type = map(object({
     name    = string
     records = list(string)
@@ -55,7 +39,7 @@ variable "extra_txt_records" {
 }
 
 variable "extra_cname_records" {
-  description = "Additional CNAME records (e.g. DKIM, Zoho verification)"
+  description = "Additional CNAME records (e.g. DKIM, verification)"
   type = map(object({
     name   = string
     record = string

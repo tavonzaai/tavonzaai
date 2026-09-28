@@ -55,32 +55,6 @@ resource "aws_route53_record" "www" {
 }
 
 # ------------------------------------------------------------------------------
-# Zoho Mail DNS Records
-# ------------------------------------------------------------------------------
-
-# Route 53 MX Records for Zoho Mail
-resource "aws_route53_record" "zoho_mx" {
-  count           = var.enable_zoho_mail ? 1 : 0
-  allow_overwrite = true
-  zone_id         = var.route53_zone_id
-  name            = var.domain_name
-  type            = "MX"
-  ttl             = 300
-  records         = var.zoho_mx_records
-}
-
-# Route 53 SPF / TXT Record for Zoho Mail
-resource "aws_route53_record" "zoho_spf" {
-  count           = var.enable_zoho_mail ? 1 : 0
-  allow_overwrite = true
-  zone_id         = var.route53_zone_id
-  name            = var.domain_name
-  type            = "TXT"
-  ttl             = 300
-  records         = [var.zoho_spf_record]
-}
-
-# ------------------------------------------------------------------------------
 # Optional Custom Records (DKIM, DMARC, Domain Verification, etc.)
 # ------------------------------------------------------------------------------
 
