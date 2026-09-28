@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@nestjs/common": "^10.3.8",
+    "@tavonza/authorization": "workspace:*",
     "drizzle-orm": "^0.31.0",
     "pg": "^8.12.0"
   },

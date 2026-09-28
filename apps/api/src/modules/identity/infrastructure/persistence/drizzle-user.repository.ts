@@ -40,7 +40,9 @@ export class DrizzleUserRepository {
     firstName: string;
     lastName: string;
     phone?: string;
-    role?: User['role'];
+    role?: string;
+    permissions?: User['permissions'];
+    scopes?: User['scopes'];
     organizationId?: string;
   }): Promise<User> {
     const result = await this.db
@@ -51,7 +53,9 @@ export class DrizzleUserRepository {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone ?? null,
-        role: data.role ?? 'staff',
+        role: data.role ?? 'customer',
+        permissions: data.permissions ?? [],
+        scopes: data.scopes ?? [],
         organizationId: data.organizationId ?? null,
       })
       .returning();

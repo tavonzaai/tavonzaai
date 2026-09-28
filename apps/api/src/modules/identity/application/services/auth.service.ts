@@ -20,6 +20,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { RoleLabel, ScopeType, resolvePermissions } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
 import type { User } from '../../domain/entities/user.entity';
 import type {
@@ -43,7 +44,9 @@ export class AuthService {
   ) {}
 
   // ── Register ───────────────────────────────────────────────────────────
-  // Figma: Create Account screen
+  // Figma: Create Account screen (Customer Ordering Experience)
+  // Per .agent architecture: Public self-registration is EXCLUSIVELY for customers.
+  // Staff/operators are provisioned through internal administration/staff assignment.
 
   async register(dto: RegisterDto): Promise<AuthTokensDto> {
     const existing = await this.userRepo.findByEmail(dto.email.toLowerCase());
@@ -61,6 +64,9 @@ export class AuthService {
       firstName: dto.firstName.trim(),
       lastName: dto.lastName.trim(),
       phone: dto.phone,
+      role: RoleLabel.CUSTOMER,
+      permissions: [],
+      scopes: [{ type: ScopeType.SESSION }],
     });
 
     // Send OTP for email verification (fire-and-forget in production)
@@ -190,7 +196,17 @@ export class AuthService {
   // ── Internal Helpers ───────────────────────────────────────────────────
 
   private async issueTokens(user: User): Promise<AuthTokensDto> {
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const permissions = resolvePermissions(user.role, user.permissions);
+    const scopes = user.scopes ?? [];
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      permissions,
+      scopes,
+      organizationId: user.organizationId,
+    };
 
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: (process.env.JWT_EXPIRATION ?? '15m') as unknown as number,
