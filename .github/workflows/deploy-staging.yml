@@ -10,8 +10,13 @@ on:
   workflow_dispatch:
 
 jobs:
+  security-scan:
+    name: Pre-Deployment Security Scan
+    uses: ./.github/workflows/security-scan.yml
+
   deploy-preprod:
     name: Build & Deploy to Pre-Production
+    needs: [security-scan]
     runs-on: ubuntu-latest
     steps:
       - name: Placeholder Step

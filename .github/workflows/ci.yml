@@ -7,16 +7,22 @@ on:
     branches: [main, prod, dev]
 
 jobs:
-  # ─── Step 1: Detect which parts of the repo actually changed ───────────────
+  # ─── Step 1: Security & Root Hygiene Scan (Mandatory First Gate) ────────────
+  security-scan:
+    name: Security & Root Scan
+    uses: ./.github/workflows/security-scan.yml
+
+  # ─── Step 2: Detect which parts of the repo actually changed ────────────────
   changes:
     name: Detect Changes
+    needs: [security-scan]
     runs-on: ubuntu-latest
     outputs:
-      packages:        ${{ steps.filter.outputs.packages }}
-      api:             ${{ steps.filter.outputs.api }}
-      ai:              ${{ steps.filter.outputs.ai }}
-      realtime:        ${{ steps.filter.outputs.realtime }}
-      worker:          ${{ steps.filter.outputs.worker }}
+      packages:                ${{ steps.filter.outputs.packages }}
+      api:                     ${{ steps.filter.outputs.api }}
+      ai:                      ${{ steps.filter.outputs.ai }}
+      realtime:                ${{ steps.filter.outputs.realtime }}
+      worker:                  ${{ steps.filter.outputs.worker }}
       frontend-admin:          ${{ steps.filter.outputs.frontend-admin }}
       frontend-customer:       ${{ steps.filter.outputs.frontend-customer }}
       frontend-staff:          ${{ steps.filter.outputs.frontend-staff }}
@@ -70,284 +76,67 @@ jobs:
               - 'packages/shared/**'
             ci-config:
               - '.github/workflows/**'
+              - '.github/actions/**'
               - 'turbo.json'
               - 'pnpm-workspace.yaml'
               - 'package.json'
               - 'tsconfig*.json'
 
-  # ─── Step 2: Shared setup action (composite reuse) ─────────────────────────
-  # Each job below installs deps independently — GitHub caches pnpm store so
-  # repeated installs are fast (usually < 10s after first run).
-
-  # ─── Typecheck: API ────────────────────────────────────────────────────────
-  typecheck-api:
-    name: "Typecheck › API"
-    needs: changes
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci-config == 'true'
+  # ─── Step 3: Typecheck Backend Apps & Workers ───────────────────────────────
+  typecheck-apps:
+    name: "Typecheck › ${{ matrix.pkg.name }}"
+    needs: [security-scan, changes]
+    if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs.ci-config == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg:
+          - { id: 'api', name: 'API (@tavonza/api)', filter: '@tavonza/api' }
+          - { id: 'realtime', name: 'Realtime (@tavonza/realtime)', filter: '@tavonza/realtime' }
+          - { id: 'worker', name: 'Worker (@tavonza/worker)', filter: '@tavonza/worker' }
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@tavonza/api^...
-      - name: Typecheck API
-        run: pnpm turbo run typecheck --filter=@tavonza/api
+      - uses: ./.github/actions/setup-pnpm
+      - name: Build shared dependencies
+        run: pnpm turbo run build --filter=${{ matrix.pkg.filter }}^...
+      - name: Run Typecheck
+        run: pnpm turbo run typecheck --filter=${{ matrix.pkg.filter }}
 
-  # NOTE: AI service (apps/ai) is pure Python — no turbo typecheck job.
-  # Python type checking is the AI team's responsibility (mypy / pyright locally).
-
-  # ─── Typecheck: Realtime ───────────────────────────────────────────────────
-  typecheck-realtime:
-    name: "Typecheck › Realtime"
-    needs: changes
-    if: needs.changes.outputs.realtime == 'true' || needs.changes.outputs.ci-config == 'true'
+  # ─── Step 4: Typecheck Frontend Applications ────────────────────────────────
+  typecheck-frontends:
+    name: "Typecheck › ${{ matrix.app.name }}"
+    needs: [security-scan, changes]
+    if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs.ci-config == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - { id: 'frontend-admin', name: 'Admin', filter: '@frontend/admin' }
+          - { id: 'frontend-customer', name: 'Customer', filter: '@frontend/customer' }
+          - { id: 'frontend-staff', name: 'Staff', filter: '@frontend/staff' }
+          - { id: 'frontend-branch-manager', name: 'Branch Manager', filter: '@frontend/branch-manager' }
+          - { id: 'frontend-cashier', name: 'Cashier', filter: '@frontend/cashier' }
+          - { id: 'frontend-kitchen', name: 'Kitchen', filter: '@frontend/kitchen' }
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@tavonza/realtime^...
-      - name: Typecheck Realtime
-        run: pnpm turbo run typecheck --filter=@tavonza/realtime
+      - uses: ./.github/actions/setup-pnpm
+      - name: Build shared dependencies
+        run: pnpm turbo run build --filter=${{ matrix.app.filter }}^...
+      - name: Run Typecheck
+        run: pnpm turbo run typecheck --filter=${{ matrix.app.filter }}
 
-  # ─── Typecheck: Worker ─────────────────────────────────────────────────────
-  typecheck-worker:
-    name: "Typecheck › Worker"
-    needs: changes
-    if: needs.changes.outputs.worker == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@tavonza/worker^...
-      - name: Typecheck Worker
-        run: pnpm turbo run typecheck --filter=@tavonza/worker
-
-  # ─── Typecheck: Shared Packages ────────────────────────────────────────────
-  typecheck-packages:
-    name: "Typecheck › Shared Packages"
-    needs: changes
-    if: needs.changes.outputs.packages == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Typecheck all shared packages
-        run: pnpm turbo run typecheck --filter='./packages/*'
-
-  # ─── Typecheck: Frontend Admin ─────────────────────────────────────────────
-  typecheck-frontend-admin:
-    name: "Typecheck › Frontend Admin"
-    needs: changes
-    if: needs.changes.outputs.frontend-admin == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@frontend/admin^...
-      - name: Typecheck Admin
-        run: pnpm turbo run typecheck --filter=@frontend/admin
-
-  # ─── Typecheck: Frontend Customer ──────────────────────────────────────────
-  typecheck-frontend-customer:
-    name: "Typecheck › Frontend Customer"
-    needs: changes
-    if: needs.changes.outputs.frontend-customer == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@frontend/customer^...
-      - name: Typecheck Customer
-        run: pnpm turbo run typecheck --filter=@frontend/customer
-
-  # ─── Typecheck: Frontend Staff ─────────────────────────────────────────────
-  typecheck-frontend-staff:
-    name: "Typecheck › Frontend Staff"
-    needs: changes
-    if: needs.changes.outputs.frontend-staff == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@frontend/staff^...
-      - name: Typecheck Staff
-        run: pnpm turbo run typecheck --filter=@frontend/staff
-
-  # ─── Typecheck: Frontend Branch Manager ────────────────────────────────────
-  typecheck-frontend-branch-manager:
-    name: "Typecheck › Frontend Branch Manager"
-    needs: changes
-    if: needs.changes.outputs.frontend-branch-manager == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@frontend/branch-manager^...
-      - name: Typecheck Branch Manager
-        run: pnpm turbo run typecheck --filter=@frontend/branch-manager
-
-  # ─── Typecheck: Frontend Cashier ───────────────────────────────────────────
-  typecheck-frontend-cashier:
-    name: "Typecheck › Frontend Cashier"
-    needs: changes
-    if: needs.changes.outputs.frontend-cashier == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@frontend/cashier^...
-      - name: Typecheck Cashier
-        run: pnpm turbo run typecheck --filter=@frontend/cashier
-
-  # ─── Typecheck: Frontend Kitchen ───────────────────────────────────────────
-  typecheck-frontend-kitchen:
-    name: "Typecheck › Frontend Kitchen"
-    needs: changes
-    if: needs.changes.outputs.frontend-kitchen == 'true' || needs.changes.outputs.ci-config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
-        run: pnpm turbo run build --filter=@frontend/kitchen^...
-      - name: Typecheck Kitchen
-        run: pnpm turbo run typecheck --filter=@frontend/kitchen
-
-
-  # ─── Tests: API ────────────────────────────────────────────────────────────
-  # NOTE: Currently runs a no-op echo (jest not yet installed).
-  # When adding real tests: install jest + @nestjs/testing in devDependencies
-  # and update the test script in apps/api/package.json to run jest.
+  # ─── Step 5: Unit & Integration Tests ────────────────────────────────────────
   test-api:
     name: "Tests › API"
-    needs: changes
+    needs: [security-scan, changes]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci-config == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Build shared packages first
+      - uses: ./.github/actions/setup-pnpm
+      - name: Build shared dependencies
         run: pnpm turbo run build --filter=@tavonza/api^...
       - name: Run API Tests
         run: pnpm turbo run test --filter=@tavonza/api
-
-  # NOTE: AI service tests (Python/pytest) are not run via turbo.
-  # The AI team adds their own pytest CI step when they have tests.
-
-
-  # ─── Security Audit: Node.js (always runs) ──────────────────────────────────
-  security-audit-node:
-    name: "Security Audit › Node.js"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.1.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - name: Audit Node.js dependencies for vulnerabilities
-        run: pnpm audit --audit-level=high
-        continue-on-error: true
-
-  # ─── Security Audit: Python (always runs) ───────────────────────────────────
-  security-audit-python:
-    name: "Security Audit › Python"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install pip-audit
-        run: pip install pip-audit
-      - name: Audit Python dependencies for vulnerabilities
-        run: pip-audit -r apps/ai/requirements.txt
-        continue-on-error: true
