@@ -28,9 +28,15 @@ env:
   ECS_CLUSTER: tavonzaai-dev-cluster
 
 jobs:
-  # ─── 1. Detect Changes ────────────────────────────────────────────────────────
+  # ─── 1. Security Scan Gate (Mandatory Pre-Flight) ───────────────────────────
+  security-scan:
+    name: Security & Root Scan
+    uses: ./.github/workflows/security-scan.yml
+
+  # ─── 2. Detect Changes ──────────────────────────────────────────────────────
   detect-changes:
     name: Detect Changed Microservices
+    needs: [security-scan]
     runs-on: ubuntu-latest
     outputs:
       backend:  ${{ steps.filter.outputs.backend }}
