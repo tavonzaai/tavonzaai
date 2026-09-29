@@ -270,7 +270,7 @@ The backend dispatcher for `POST /internal/tools/execute` must handle these 8 to
 | 1 | `get_menu` | `menu.read` | `{}` | `{"items": [{"name": "Wagyu Burger", "price": 18.5, "category": "Mains"}]}` |
 | 2 | `get_table_status` | `tables.read` | `{"table_id": "T1"}` | `{"table_id": "T1", "status": "OCCUPIED", "capacity": 4}` |
 | 3 | `get_order_status` | `orders.read` | `{"order_id": "ord_101"}` (or `null` for table active order) | `{"order_id": "ord_101", "status": "PREPARING", "items_count": 3}` |
-| 4 | `get_kitchen_queue` | `orders.read` | `{"station": "grill"}` (or `null` for all) | `{"station": "ALL", "pending_count": 3, "items": [{"name": "Ribeye", "station": "grill", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"}]}` |
+| 4 | `get_kitchen_queue` | `orders.read` *(migrates to `kitchen.read` when Kitchen domain is built)* | `{"station": "grill"}` (or `null` for all) | `{"station": "ALL", "pending_count": 3, "items": [{"name": "Ribeye", "station": "grill", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"}]}` |
 | 5 | `get_branch_summary` | `reports.read` | `{}` | `{"total_tables": 10, "occupied_tables": 4, "available_tables": 6, "open_orders": 3, "audit_events_count": 120}` |
 | 6 | `get_audit_events` | `reports.read` | `{}` | `{"events": [{"action": "order.created", "actor": "Customer T1", "timestamp": "2m ago"}]}` |
 | 7 | `get_table_bill` | `payments.read` | `{"table_id": "T1"}` | `{"table_code": "T1", "subtotal": 52.5, "tax": 5.25, "total": 57.75, "paid_amount": 0.0, "balance_due": 57.75, "status": "UNPAID", "items": [{"name": "Burger", "quantity": 2, "price": 18.5, "line_total": 37.0}]}` |

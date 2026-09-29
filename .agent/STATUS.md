@@ -10,7 +10,7 @@ Do not use this document to silently redefine architecture. Architectural change
 
 ## Current Phase
 
-**Architecture / Repository Initialization**
+**Phase 2 — AI Subsystem Complete / Backend Integration Pending**
 
 The current objective is to establish:
 
@@ -38,6 +38,8 @@ The current objective is to establish:
 - Realtime is not the source of truth.
 - AI uses authorized tools/application services.
 - AI does not access the database directly.
+- AI subsystem (`apps/ai`) is **fully implemented** — agent runtime, tool executor, RBAC gate, voice pipeline, audit trail, conversation store (PR #10 merged to `dev`).
+- Backend integration spec written (`docs/AI_BACKEND_INTEGRATION_SPEC.md`) — backend team to implement 5 `/internal/*` endpoints.
 - PostgreSQL is the primary transactional database.
 - AWS managed services are preferred initially.
 - ECS/Fargate is the initial compute direction.
