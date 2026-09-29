@@ -1,6 +1,28 @@
+# Tavonza AI Service — Python dependencies
+
+# ---- Web Framework & Server ----
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
+slowapi>=0.1.9
+
+# ---- Validation & Settings ----
 pydantic>=2.7.0
 pydantic-settings>=2.2.0
-httpx>=0.27.0
 python-dotenv>=1.0.0
+
+# ---- HTTP Client (calling the platform backend tool gateway) ----
+httpx>=0.27.0
+tenacity>=8.3.0
+
+# ---- LLM Model Providers ----
+groq>=0.11.0
+
+# ---- Cloud Voice Pipeline (Whisper STT + Edge Neural TTS) ----
+edge-tts>=7.0.0
+python-multipart>=0.0.9
+
+# ---- Cache & Distributed Conversation Memory (Redis) ----
+redis>=5.0.0
+
+# ---- Structured Observability & Logging ----
+structlog>=24.1.0
