@@ -1,5 +1,5 @@
 // ============================================================================
-// StaffModule — Waiter domain: tables, orders, alerts
+// WaiterModule — Waiter domain: tables, orders, alerts
 // ============================================================================
 
 import { Module } from '@nestjs/common';
@@ -35,4 +35,4 @@ import {
   ],
   exports: [WaiterService],
 })
-export class StaffModule {}
+export class WaiterModule {}
