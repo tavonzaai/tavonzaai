@@ -52,3 +52,34 @@ output "admin_repository_arn" {
   description = "ECR repository ARN for admin dashboard service"
   value       = lookup({ for k, v in aws_ecr_repository.this : k => v.arn }, "admin-dashboard", null)
 }
+
+output "ai_repository_url" {
+  description = "ECR repository URL for AI service"
+  value       = lookup({ for k, v in aws_ecr_repository.this : k => v.repository_url }, "ai", null)
+}
+
+output "ai_repository_arn" {
+  description = "ECR repository ARN for AI service"
+  value       = lookup({ for k, v in aws_ecr_repository.this : k => v.arn }, "ai", null)
+}
+
+output "kitchen_repository_url" {
+  description = "ECR repository URL for Kitchen service"
+  value       = lookup({ for k, v in aws_ecr_repository.this : k => v.repository_url }, "kitchen", null)
+}
+
+output "kitchen_repository_arn" {
+  description = "ECR repository ARN for Kitchen service"
+  value       = lookup({ for k, v in aws_ecr_repository.this : k => v.arn }, "kitchen", null)
+}
+
+output "cashier_repository_url" {
+  description = "ECR repository URL for Cashier service"
+  value       = lookup({ for k, v in aws_ecr_repository.this : k => v.repository_url }, "cashier", null)
+}
+
+output "cashier_repository_arn" {
+  description = "ECR repository ARN for Cashier service"
+  value       = lookup({ for k, v in aws_ecr_repository.this : k => v.arn }, "cashier", null)
+}
+

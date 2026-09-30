@@ -41,16 +41,20 @@ output "alb_arn" {
 }
 
 output "acm_certificate_arn" {
-  description = "ARN of the ACM SSL Certificate"
-  value       = module.acm.certificate_arn
+  description = "ARN of the ACM SSL Certificate (null if enable_https is false)"
+  value       = var.enable_https && length(module.acm) > 0 ? module.acm[0].certificate_arn : null
 }
 
 output "application_urls" {
-  description = "Public HTTPS application endpoints configured in Route 53"
+  description = "Public application endpoints (HTTPS via Route 53 or HTTP via ALB)"
   value = {
-    frontend_nextjs = "https://${module.route53.root_fqdn}"
-    backend_api     = "https://${module.route53.api_fqdn}"
-    admin_dashboard = "https://${module.route53.admin_fqdn}"
+    customer     = var.enable_https ? "https://${module.route53.root_fqdn}" : "http://${module.alb.alb_dns_name}"
+    customer_www = var.enable_https ? "https://${module.route53.www_fqdn}" : "http://${module.alb.alb_dns_name}"
+    api          = var.enable_https ? "https://${module.route53.api_fqdn}" : "http://${module.alb.alb_dns_name}/api"
+    ai           = var.enable_https ? "https://${module.route53.ai_fqdn}" : "http://${module.alb.alb_dns_name}/ai"
+    kitchen      = var.enable_https ? "https://${module.route53.kitchen_fqdn}" : "http://${module.alb.alb_dns_name}/kitchen"
+    cashier      = var.enable_https ? "https://${module.route53.cashier_fqdn}" : "http://${module.alb.alb_dns_name}/cashier"
+    admin        = var.admin_subdomain != "" ? (var.enable_https ? "https://${module.route53.admin_fqdn}" : "http://${module.alb.alb_dns_name}/admin") : null
   }
 }
 
@@ -168,9 +172,31 @@ output "ecr_frontend_repository_url" {
   value       = module.ecr.frontend_repository_url
 }
 
-output "ecr_admin_repository_url" {
-  description = "ECR repository URL for admin dashboard Docker images"
-  value       = module.ecr.admin_repository_url
+output "ecr_ai_repository_url" {
+  description = "ECR repository URL for AI service Docker images"
+  value       = module.ecr.ai_repository_url
+}
+
+output "ecr_kitchen_repository_url" {
+  description = "ECR repository URL for kitchen frontend Docker images"
+  value       = module.ecr.kitchen_repository_url
+}
+
+output "ecr_cashier_repository_url" {
+  description = "ECR repository URL for cashier frontend Docker images"
+  value       = module.ecr.cashier_repository_url
+}
+
+output "alb_target_group_arns" {
+  description = "ARNs for all service target groups attached to the ALB"
+  value = {
+    backend  = module.alb.backend_target_group_arn
+    customer = module.alb.customer_target_group_arn
+    ai       = module.alb.ai_target_group_arn
+    kitchen  = module.alb.kitchen_target_group_arn
+    cashier  = module.alb.cashier_target_group_arn
+    admin    = module.alb.admin_target_group_arn
+  }
 }
 
 output "github_actions_ecr_role_arn" {
