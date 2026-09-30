@@ -98,7 +98,7 @@ module "secrets_manager" {
   secret_name = local.secret_name
   description = "Application secrets for ${local.name_prefix}"
   initial_secret_keys = {
-    DATABASE_URL         = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public"
+    DATABASE_URL         = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
     DATABASE_PASSWORD    = var.rds_db_password
     JWT_SECRET           = ""
     REDIS_URL            = "redis://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
