@@ -1,4 +1,5 @@
 FROM node:20-alpine AS base
+RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
 WORKDIR /app
 
@@ -12,7 +13,7 @@ COPY frontend/admin/ ./frontend/admin/
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @frontend/admin build
 
-FROM node:20-alpine AS runner
+FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3043
