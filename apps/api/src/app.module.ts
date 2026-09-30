@@ -14,9 +14,6 @@ import { OrdersModule } from "./modules/orders/orders.module";
 import { KitchenModule } from "./modules/kitchen/kitchen.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
-import { AuditModule } from "./modules/audit/audit.module";
-import { AnalyticsModule } from "./modules/analytics/analytics.module";
-import { AiModule } from "./modules/ai/ai.module";
 
 import { AppController } from "./app.controller";
 
@@ -39,9 +36,6 @@ import { AppController } from "./app.controller";
     KitchenModule,
     PaymentsModule,
     NotificationsModule,
-    AuditModule,
-    AnalyticsModule,
-    AiModule,
   ],
   controllers: [AppController],
   providers: [],

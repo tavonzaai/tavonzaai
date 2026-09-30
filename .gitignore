@@ -27,12 +27,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+temp_auto_push.bat
 # OS Files
 .DS_Store
 Thumbs.db
 
 # IDEs
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -58,3 +58,5 @@ coverage/
 .nyc_output/
 
 tfplan
+.gitignore
+branch_structure.json
