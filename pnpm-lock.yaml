@@ -347,7 +347,7 @@ importers:
         specifier: ^5.4.5
         version: 5.9.3
 
-  frontend/staff:
+  frontend/waiter:
     dependencies:
       '@tavonza/contracts':
         specifier: workspace:*
