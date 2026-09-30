@@ -16,6 +16,7 @@ import {
   text,
   numeric,
   integer,
+  boolean,
   timestamp,
   json,
   index,
@@ -47,6 +48,13 @@ export const orders = pgTable(
     tax: numeric('tax', { precision: 10, scale: 2 }).default('0').notNull(),
     total: numeric('total', { precision: 10, scale: 2 }).default('0').notNull(),
     estimatedPrepTime: integer('estimated_prep_time'), // minutes
+    // ── Waiter tracking ──────────────────────────────────────────────
+    // NULL = customer placed; set = waiter placed order on behalf of customer
+    placedByWaiterId: uuid('placed_by_waiter_id'),
+    // true = customer account was auto-created by waiter (no OTP gate required)
+    customerAutoCreated: boolean('customer_auto_created').default(false).notNull(),
+    // Waiter-supplied reason when rejecting an order
+    rejectionReason: text('rejection_reason'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
     submittedAt: timestamp('submitted_at'),
@@ -59,6 +67,7 @@ export const orders = pgTable(
     branchStatusIdx: index('orders_branch_status_idx').on(table.branchId, table.status),
     tableStatusIdx: index('orders_table_status_idx').on(table.tableId, table.status),
     tableSessionIdx: index('orders_table_session_idx').on(table.tableSessionId),
+    waiterIdx: index('orders_placed_by_waiter_idx').on(table.placedByWaiterId),
   }),
 );
 

@@ -17,6 +17,7 @@
 // ============================================================================
 
 import { Controller, Get, Param, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { MenuService } from '../../application/services/menu.service';
 import {
   MenuCategoryResponseDto,
@@ -24,6 +25,7 @@ import {
   MenuItemDetailResponseDto,
 } from '../dtos/menu-response.dto';
 
+@ApiTags('Customer | Menus')
 @Controller('menus')
 export class MenuController {
   constructor(private readonly menuService: MenuService) {}
@@ -35,6 +37,8 @@ export class MenuController {
    * Returns all active categories for a branch (Burgers, Dessert, Mexican...)
    */
   @Get(':branchId/categories')
+  @ApiOperation({ summary: '[Customer] Get active menu categories for branch' })
+  @ApiOkResponse({ type: [MenuCategoryResponseDto] })
   async getCategories(
     @Param('branchId') branchId: string,
   ): Promise<MenuCategoryResponseDto[]> {
@@ -49,6 +53,8 @@ export class MenuController {
    * Supports filtering by category, search text, and popular flag.
    */
   @Get(':branchId/items')
+  @ApiOperation({ summary: '[Customer] Get menu items with category, search, and popularity filters' })
+  @ApiOkResponse({ type: [MenuItemListResponseDto] })
   async getItems(
     @Param('branchId') branchId: string,
     @Query('categoryId') categoryId?: string,
@@ -71,6 +77,8 @@ export class MenuController {
    * allergens, wine pairing, prep time, calories, etc.
    */
   @Get('items/:itemId')
+  @ApiOperation({ summary: '[Customer] Get menu item detail with add-ons and nutritional info' })
+  @ApiOkResponse({ type: MenuItemDetailResponseDto })
   async getItemDetail(
     @Param('itemId') itemId: string,
   ): Promise<MenuItemDetailResponseDto> {

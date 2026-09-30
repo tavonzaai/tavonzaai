@@ -260,15 +260,15 @@ export class DrizzleOrderRepository implements IOrderRepository {
     return this.toDomain(result!);
   }
 
-  /** Generate order number like "#10001". */
-  private async generateOrderNumber(branchId: string): Promise<string> {
+  /** Generate order number like "#10001-482". */
+  private async generateOrderNumber(_branchId: string): Promise<string> {
     const [result] = await this.db
       .select({ count: sql<number>`count(*)::int` })
-      .from(orders)
-      .where(eq(orders.branchId, branchId));
+      .from(orders);
 
-    const number = 10000 + (result?.count ?? 0) + 1;
-    return `#${number}`;
+    const seq = (result?.count ?? 0) + 1;
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    return `#${10000 + seq}-${randomSuffix}`;
   }
 
   // ── Mapper (DB → Domain) ────────────────────────────────────────────

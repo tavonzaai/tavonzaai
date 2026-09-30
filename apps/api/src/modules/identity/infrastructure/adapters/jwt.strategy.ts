@@ -6,10 +6,15 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
+import type { Permission, Scope } from '@tavonza/authorization';
+
 export interface JwtPayload {
   sub: string;
   email: string;
   role: string;
+  permissions?: Permission[];
+  scopes?: Scope[];
+  organizationId?: string | null;
   iat?: number;
   exp?: number;
 }

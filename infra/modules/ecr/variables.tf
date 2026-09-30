@@ -11,7 +11,7 @@ variable "environment" {
 variable "repository_names" {
   description = "List of microservice / component names to create dedicated ECR repositories for"
   type        = list(string)
-  default     = ["backend", "frontend", "admin-dashboard"]
+  default     = ["backend", "frontend", "ai", "kitchen", "cashier", "admin-dashboard"]
 }
 
 variable "image_tag_mutability" {
