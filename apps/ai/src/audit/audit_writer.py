@@ -41,8 +41,8 @@ def _sanitize_audit_after(tool_name: str, result: dict[str, Any]) -> Any:
         return {"action": "query_menu", "count": len(items)}
 
     if tool_name == "get_inventory":
-        inv = data.get("inventory", []) if isinstance(data, dict) else []
-        return {"action": "query_inventory", "count": len(inv)}
+        inv = (data.get("items") or data.get("inventory") or []) if isinstance(data, dict) else []
+        return {"action": "query_inventory", "count": len(inv) if isinstance(inv, list) else 0}
 
     if isinstance(data, dict):
         try:
