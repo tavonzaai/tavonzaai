@@ -4,7 +4,7 @@
 
 The primary transactional database is PostgreSQL.
 
-Prisma is the initial ORM/data-access technology.
+Drizzle is the ORM/data-access technology.
 
 The database is authoritative for persistent business state.
 

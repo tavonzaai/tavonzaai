@@ -18,11 +18,15 @@
 /apps/api/src/modules/payments/ @devlopersabbir
 /apps/api/src/modules/orders/ @devlopersabbir
 /apps/api/src/modules/kitchen/ @devlopersabbir
+/apps/api/src/modules/waiter/ @devlopersabbir
 
 # AI Subsystem
 /apps/ai/ @devlopersabbir
 
 # Frontend Surfaces
 /frontend/customer/ @devlopersabbir
-/frontend/staff/ @devlopersabbir
+/frontend/waiter/ @devlopersabbir
 /frontend/admin/ @devlopersabbir
+/frontend/branch-manager/ @devlopersabbir
+/frontend/cashier/ @devlopersabbir
+/frontend/kitchen/ @devlopersabbir
