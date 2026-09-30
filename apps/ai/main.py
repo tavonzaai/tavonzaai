@@ -1,25 +1,25 @@
 """
 Tavonza AI Service — Entrypoint
 ================================
-Start here. Everything else is up to you.
+Run from apps/ai directory:
+    uvicorn main:app --reload --port 8000
 
-Run: uvicorn main:app --reload --port 8000
-Docs: http://localhost:8000/docs
+Run from repository root:
+    python -m uvicorn apps.ai.main:app --port 8000 --reload
+
+Interactive API documentation:
+    http://localhost:8000/docs
 """
 
-from fastapi import FastAPI
+import sys
+from pathlib import Path
 
-app = FastAPI(
-    title="Tavonza AI Service",
-    version="0.1.0",
-)
+# Ensure src is directly importable
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
+from src.main import app  # noqa: E402 # type: ignore
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
+__all__ = ["app"]
 
-
-@app.get("/")
-async def hello():
-    return {"message": "Tavonza AI service is running"}
