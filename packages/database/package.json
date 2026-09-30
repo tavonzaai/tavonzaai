@@ -16,12 +16,14 @@
   },
   "dependencies": {
     "@nestjs/common": "^10.3.8",
+    "@tavonza/authorization": "workspace:*",
     "drizzle-orm": "^0.31.0",
     "pg": "^8.12.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
     "@types/pg": "^8.11.6",
+    "dotenv": "^18.0.4",
     "drizzle-kit": "^0.22.0",
     "typescript": "^5.4.5"
   }

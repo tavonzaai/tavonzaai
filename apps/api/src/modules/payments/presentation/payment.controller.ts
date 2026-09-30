@@ -58,7 +58,7 @@ class CreatePaymentDto {
 
 // ── Controller ────────────────────────────────────────────────────────
 
-@ApiTags('payments')
+@ApiTags('Customer | Payments')
 @Controller('payments')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
@@ -69,7 +69,7 @@ export class PaymentController {
    * Returns available payment methods (card, cash, QR)
    */
   @Get('options')
-  @ApiOperation({ summary: 'Get available payment methods for a branch' })
+  @ApiOperation({ summary: '[Customer] Get available payment methods for a branch' })
   @ApiOkResponse({ description: 'List of payment methods' })
   async getOptions(@Query('branchId') branchId: string) {
     return this.paymentService.getPaymentOptions(branchId);
@@ -82,7 +82,7 @@ export class PaymentController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Process payment for an order' })
+  @ApiOperation({ summary: '[Customer] Process payment for an order' })
   @ApiCreatedResponse({ description: 'Payment processed — use paymentId for receipt' })
   async createPayment(@Body() dto: CreatePaymentDto) {
     return this.paymentService.createPayment(dto);
@@ -94,7 +94,7 @@ export class PaymentController {
    * Shows: transactionId (#ID-...), date, time, total, "PAID" badge
    */
   @Get(':paymentId')
-  @ApiOperation({ summary: 'Get payment receipt — shown on Thank You screen' })
+  @ApiOperation({ summary: '[Customer] Get payment receipt — shown on Thank You screen' })
   @ApiOkResponse({ description: 'Payment receipt with transaction details' })
   async getPayment(@Param('paymentId') paymentId: string) {
     return this.paymentService.getPayment(paymentId);
@@ -105,7 +105,7 @@ export class PaymentController {
    * Get payment for a specific order
    */
   @Get('order/:orderId')
-  @ApiOperation({ summary: 'Get payment by order ID' })
+  @ApiOperation({ summary: '[Customer] Get payment by order ID' })
   async getPaymentByOrder(@Param('orderId') orderId: string) {
     return this.paymentService.getPaymentByOrder(orderId);
   }

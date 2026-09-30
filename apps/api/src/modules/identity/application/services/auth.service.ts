@@ -19,7 +19,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcryptjs';
+import * as argon2 from 'argon2';
+import { RoleLabel, ScopeType, resolvePermissions } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
 import type { User } from '../../domain/entities/user.entity';
 import type {
@@ -29,10 +30,9 @@ import type {
   ForgotPasswordDto,
   ResetPasswordDto,
 } from '../../presentation/http/dto/auth-request.dto';
-import type { AuthTokensDto } from '../../presentation/http/dto/auth-response.dto';
+import type { AuthTokensDto, RegisterResponseDto } from '../../presentation/http/dto/auth-response.dto';
 import { UserProfileDto } from '../../presentation/http/dto/auth-response.dto';
 
-const SALT_ROUNDS = 12;
 const OTP_EXPIRY_MINUTES = 10;
 
 @Injectable()
@@ -43,9 +43,11 @@ export class AuthService {
   ) {}
 
   // ── Register ───────────────────────────────────────────────────────────
-  // Figma: Create Account screen
+  // Figma: Create Account screen (Customer Ordering Experience)
+  // Per .agent architecture: Public self-registration is EXCLUSIVELY for customers.
+  // Staff/operators are provisioned through internal administration/staff assignment.
 
-  async register(dto: RegisterDto): Promise<AuthTokensDto> {
+  async register(dto: RegisterDto): Promise<RegisterResponseDto> {
     const existing = await this.userRepo.findByEmail(dto.email.toLowerCase());
     if (existing) {
       throw new ConflictException('An account with this email already exists');
@@ -53,7 +55,7 @@ export class AuthService {
 
     this.validatePassword(dto.password);
 
-    const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
+    const passwordHash = await argon2.hash(dto.password);
 
     const user = await this.userRepo.create({
       email: dto.email.toLowerCase(),
@@ -61,26 +63,39 @@ export class AuthService {
       firstName: dto.firstName.trim(),
       lastName: dto.lastName.trim(),
       phone: dto.phone,
+      role: RoleLabel.CUSTOMER,
+      permissions: [],
+      scopes: [{ type: ScopeType.SESSION }],
     });
 
-    // Send OTP for email verification (fire-and-forget in production)
+    // Send OTP for email verification (logged to console until SES/SMTP is configured)
     await this.generateAndSendOtp(user.id, 'email_verification');
 
-    return this.issueTokens(user);
+    return {
+      message: 'Account created successfully. Please verify your email with the OTP code sent to your email.',
+      email: user.email,
+    };
   }
 
   // ── Login ──────────────────────────────────────────────────────────────
   // Figma: Log In screen
 
   async login(dto: LoginDto): Promise<AuthTokensDto> {
-    const user = await this.userRepo.findByEmail(dto.email.toLowerCase());
+    const user = await this.userRepo.findByEmailOrPhone(dto.email);
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
+    const passwordMatch = await argon2.verify(user.passwordHash, dto.password);
     if (!passwordMatch) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // Must verify either email or phone number before logging in
+    if (!user.isEmailVerified && !user.isPhoneVerified) {
+      throw new UnauthorizedException(
+        'Account is not verified. Please verify your email or phone number before logging in.',
+      );
     }
 
     return this.issueTokens(user);
@@ -94,7 +109,7 @@ export class AuthService {
       throw new UnauthorizedException('Access denied');
     }
 
-    const tokenMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+    const tokenMatch = await argon2.verify(user.refreshToken, refreshToken);
     if (!tokenMatch) {
       throw new UnauthorizedException('Access denied');
     }
@@ -117,10 +132,10 @@ export class AuthService {
   }
 
   // ── Verify OTP ─────────────────────────────────────────────────────────
-  // Figma: Verify screen — 5-digit code sent to email
+  // Figma: Verify screen — 5-digit code sent to email or phone
 
   async verifyOtp(dto: VerifyOtpDto): Promise<void> {
-    const user = await this.userRepo.findByEmail(dto.email.toLowerCase());
+    const user = await this.userRepo.findByEmailOrPhone(dto.email);
     if (!user) throw new NotFoundException('User not found');
 
     const otp = await this.userRepo.findValidOtp(user.id, dto.type);
@@ -128,7 +143,7 @@ export class AuthService {
       throw new BadRequestException('OTP code is invalid or has expired');
     }
 
-    const codeMatch = await bcrypt.compare(dto.code, otp.code);
+    const codeMatch = await argon2.verify(otp.code, dto.code);
     if (!codeMatch) {
       throw new BadRequestException('Incorrect verification code');
     }
@@ -137,14 +152,16 @@ export class AuthService {
 
     if (dto.type === 'email_verification') {
       await this.userRepo.markEmailVerified(user.id);
+    } else if (dto.type === 'phone_verification') {
+      await this.userRepo.markPhoneVerified(user.id);
     }
   }
 
   // ── Forgot Password ────────────────────────────────────────────────────
 
   async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
-    const user = await this.userRepo.findByEmail(dto.email.toLowerCase());
-    // Always return success to prevent email enumeration
+    const user = await this.userRepo.findByEmailOrPhone(dto.email);
+    // Always return success to prevent enumeration
     if (!user) return;
 
     await this.generateAndSendOtp(user.id, 'password_reset');
@@ -154,7 +171,7 @@ export class AuthService {
   // Figma: New Pass screen
 
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
-    const user = await this.userRepo.findByEmail(dto.email.toLowerCase());
+    const user = await this.userRepo.findByEmailOrPhone(dto.email);
     if (!user) throw new NotFoundException('User not found');
 
     const otp = await this.userRepo.findValidOtp(user.id, 'password_reset');
@@ -162,7 +179,7 @@ export class AuthService {
       throw new BadRequestException('OTP code is invalid or has expired');
     }
 
-    const codeMatch = await bcrypt.compare(dto.code, otp.code);
+    const codeMatch = await argon2.verify(otp.code, dto.code);
     if (!codeMatch) {
       throw new BadRequestException('Incorrect verification code');
     }
@@ -170,7 +187,7 @@ export class AuthService {
     this.validatePassword(dto.newPassword);
 
     await this.userRepo.markOtpUsed(otp.id);
-    const newHash = await bcrypt.hash(dto.newPassword, SALT_ROUNDS);
+    const newHash = await argon2.hash(dto.newPassword);
     await this.userRepo.updatePassword(user.id, newHash);
 
     // Invalidate all refresh tokens on password reset
@@ -180,8 +197,11 @@ export class AuthService {
   // ── Resend OTP ─────────────────────────────────────────────────────────
   // Figma: "Resend" countdown on Verify screen
 
-  async resendOtp(email: string, type: 'email_verification' | 'password_reset'): Promise<void> {
-    const user = await this.userRepo.findByEmail(email.toLowerCase());
+  async resendOtp(
+    identifier: string,
+    type: 'email_verification' | 'phone_verification' | 'password_reset',
+  ): Promise<void> {
+    const user = await this.userRepo.findByEmailOrPhone(identifier);
     if (!user) return; // Prevent enumeration
 
     await this.generateAndSendOtp(user.id, type);
@@ -190,7 +210,17 @@ export class AuthService {
   // ── Internal Helpers ───────────────────────────────────────────────────
 
   private async issueTokens(user: User): Promise<AuthTokensDto> {
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const permissions = resolvePermissions(user.role, user.permissions);
+    const scopes = user.scopes ?? [];
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      permissions,
+      scopes,
+      organizationId: user.organizationId,
+    };
 
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: (process.env.JWT_EXPIRATION ?? '15m') as unknown as number,
@@ -201,7 +231,7 @@ export class AuthService {
       secret: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET,
     });
 
-    const hashedRefresh = await bcrypt.hash(refreshToken, SALT_ROUNDS);
+    const hashedRefresh = await argon2.hash(refreshToken);
     await this.userRepo.updateRefreshToken(user.id, hashedRefresh);
 
     return {
@@ -213,11 +243,11 @@ export class AuthService {
 
   private async generateAndSendOtp(
     userId: string,
-    type: 'email_verification' | 'password_reset',
+    type: 'email_verification' | 'phone_verification' | 'password_reset',
   ): Promise<string> {
     // Generate 5-digit code (matches Figma Verify screen)
     const code = Math.floor(10000 + Math.random() * 90000).toString();
-    const codeHash = await bcrypt.hash(code, SALT_ROUNDS);
+    const codeHash = await argon2.hash(code);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     await this.userRepo.createOtp({ userId, code: codeHash, type, expiresAt });

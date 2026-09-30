@@ -34,27 +34,50 @@ import { JwtAuthGuard } from '../.././../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../identity/infrastructure/adapters/jwt.strategy';
 
+import { IsUUID, IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
+
 // ── DTOs ──────────────────────────────────────────────────────────────
 
 class ScanQrDto {
-  @ApiProperty({ description: 'Branch UUID from QR code' }) branchId!: string;
-  @ApiProperty({ description: 'Table UUID from QR code' }) tableId!: string;
-  @ApiProperty({ description: 'Human-readable table number', example: 'Table 08' }) tableNumber!: string;
+  @ApiProperty({ description: 'Branch UUID from QR code' })
+  @IsUUID()
+  branchId!: string;
+
+  @ApiProperty({ description: 'Table UUID from QR code' })
+  @IsUUID()
+  tableId!: string;
+
+  @ApiProperty({ description: 'Human-readable table number', example: 'Table 08' })
+  @IsString()
+  @IsNotEmpty()
+  tableNumber!: string;
 }
 
 class JoinSessionDto {
-  @ApiProperty({ description: '6-char share code from host QR', example: 'ABC123' }) code!: string;
-  @ApiProperty({ required: false, description: 'Display name for non-logged-in guests' }) displayName?: string;
+  @ApiProperty({ description: '6-char share code from host QR', example: 'ABC123' })
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+
+  @ApiProperty({ required: false, description: 'Display name for non-logged-in guests' })
+  @IsOptional()
+  @IsString()
+  displayName?: string;
 }
 
 class OrderModeDto {
-  @ApiProperty({ enum: ['individual', 'together'] }) orderMode!: 'individual' | 'together';
-  @ApiProperty({ description: 'Customer session ID' }) customerSessionId!: string;
+  @ApiProperty({ enum: ['individual', 'together'] })
+  @IsIn(['individual', 'together'])
+  orderMode!: 'individual' | 'together';
+
+  @ApiProperty({ description: 'Customer session ID' })
+  @IsUUID()
+  customerSessionId!: string;
 }
 
 // ── Controller ────────────────────────────────────────────────────────
 
-@ApiTags('sessions')
+@ApiTags('Customer | Sessions')
 @Controller('sessions')
 export class TableSessionController {
   constructor(private readonly sessionService: TableSessionService) {}
@@ -65,7 +88,7 @@ export class TableSessionController {
    * Called when customer scans the QR code on the table.
    */
   @Post('scan')
-  @ApiOperation({ summary: 'Scan table QR code — creates or joins a table session' })
+  @ApiOperation({ summary: '[Customer] Scan table QR code — creates or joins a table session' })
   @ApiCreatedResponse({ description: 'Session created or returned with table info' })
   async scanQr(
     @Body() dto: ScanQrDto,
@@ -82,7 +105,7 @@ export class TableSessionController {
    * Returns session data with all guests — used for Splash screen info
    */
   @Get(':sessionId')
-  @ApiOperation({ summary: 'Get table session with guests list' })
+  @ApiOperation({ summary: '[Customer] Get table session with guests list' })
   @ApiOkResponse({ description: 'Session detail with customers' })
   async getSession(@Param('sessionId') sessionId: string) {
     return this.sessionService.getSession(sessionId);
@@ -96,7 +119,7 @@ export class TableSessionController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Generate share code QR for HostGuest feature (30s expiry)' })
+  @ApiOperation({ summary: '[Customer] Generate share code QR for HostGuest feature (30s expiry)' })
   async generateShareCode(@Param('sessionId') sessionId: string) {
     return this.sessionService.generateShareCode(sessionId);
   }
@@ -108,7 +131,7 @@ export class TableSessionController {
    */
   @Post('join')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Join a table session using host share code' })
+  @ApiOperation({ summary: '[Customer] Join a table session using host share code' })
   async joinSession(
     @Body() dto: JoinSessionDto,
     @CurrentUser() user?: JwtPayload,
@@ -116,7 +139,6 @@ export class TableSessionController {
     return this.sessionService.joinByCode({
       code: dto.code,
       userId: user?.sub,
-      displayName: dto.displayName,
     });
   }
 
@@ -126,7 +148,7 @@ export class TableSessionController {
    */
   @Patch('order-mode')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Set order mode: individual or together with guests' })
+  @ApiOperation({ summary: '[Customer] Set order mode: individual or together with guests' })
   async setOrderMode(@Body() dto: OrderModeDto) {
     return this.sessionService.setOrderMode(dto.customerSessionId, dto.orderMode);
   }
@@ -139,7 +161,7 @@ export class TableSessionController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Close table session after payment' })
+  @ApiOperation({ summary: '[Customer] Close table session after payment' })
   async closeSession(@Param('sessionId') sessionId: string) {
     await this.sessionService.closeSession(sessionId);
     return { message: 'Session closed' };

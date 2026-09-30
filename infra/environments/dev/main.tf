@@ -60,6 +60,9 @@ module "security_groups" {
   vpc_id                  = module.vpc.vpc_id
   backend_port            = var.backend_port
   nextjs_port             = var.nextjs_port
+  ai_port                 = var.ai_port
+  kitchen_port            = var.kitchen_port
+  cashier_port            = var.cashier_port
   admin_port              = var.admin_port
   postgres_port           = 5432
   redis_port              = 6379
@@ -203,14 +206,23 @@ module "alb" {
   certificate_arn    = var.enable_https && length(module.acm) > 0 ? module.acm[0].certificate_arn : null
   domain_name        = var.domain_name
   api_subdomain      = var.api_subdomain
+  ai_subdomain       = var.ai_subdomain
+  kitchen_subdomain  = var.kitchen_subdomain
+  cashier_subdomain  = var.cashier_subdomain
   admin_subdomain    = var.admin_subdomain
   target_type        = "ip"
 
   backend_port              = var.backend_port
   nextjs_port               = var.nextjs_port
+  ai_port                   = var.ai_port
+  kitchen_port              = var.kitchen_port
+  cashier_port              = var.cashier_port
   admin_port                = var.admin_port
   backend_health_check_path = var.backend_health_check_path
   nextjs_health_check_path  = var.nextjs_health_check_path
+  ai_health_check_path      = var.ai_health_check_path
+  kitchen_health_check_path = var.kitchen_health_check_path
+  cashier_health_check_path = var.cashier_health_check_path
   admin_health_check_path   = var.admin_health_check_path
 }
 
@@ -289,6 +301,9 @@ module "route53" {
   route53_zone_id     = aws_route53_zone.primary.zone_id
   domain_name         = var.domain_name
   api_subdomain       = var.api_subdomain
+  ai_subdomain        = var.ai_subdomain
+  kitchen_subdomain   = var.kitchen_subdomain
+  cashier_subdomain   = var.cashier_subdomain
   admin_subdomain     = var.admin_subdomain
   alb_dns_name        = module.alb.alb_dns_name
   alb_zone_id         = module.alb.alb_zone_id
@@ -301,12 +316,12 @@ module "ses" {
   count  = var.enable_ses ? 1 : 0
   source = "../../modules/ses"
 
-  domain_name         = var.domain_name
-  route53_zone_id     = aws_route53_zone.primary.zone_id
-  enable_mail_from    = var.ses_enable_mail_from
-  mail_from_subdomain = var.ses_mail_from_subdomain
-  enable_dmarc        = var.ses_enable_dmarc
-  dmarc_policy        = var.ses_dmarc_policy
+  domain_name               = var.domain_name
+  route53_zone_id           = aws_route53_zone.primary.zone_id
+  enable_mail_from          = var.ses_enable_mail_from
+  mail_from_subdomain       = var.ses_mail_from_subdomain
+  enable_dmarc              = var.ses_enable_dmarc
+  dmarc_policy              = var.ses_dmarc_policy
   create_smtp_user          = var.ses_create_smtp_user
   verified_email_identities = var.ses_verified_email_identities
   project_name              = var.project_name

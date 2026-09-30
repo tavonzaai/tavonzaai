@@ -2,6 +2,8 @@
 // User Domain Entity
 // ============================================================================
 
+import type { Permission, Scope } from '@tavonza/authorization';
+
 export interface User {
   id: string;
   email: string;
@@ -9,10 +11,13 @@ export interface User {
   firstName: string;
   lastName: string;
   phone?: string | null;
-  role: 'super_admin' | 'owner' | 'manager' | 'staff' | 'kitchen';
+  role: string; // Label (e.g. 'customer', 'waiter', 'kitchen', 'cashier', 'manager', 'owner', 'super_admin')
+  permissions: Permission[];
+  scopes: Scope[];
   organizationId?: string | null;
   isActive: boolean;
   isEmailVerified: boolean;
+  isPhoneVerified: boolean;
   refreshToken?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -22,7 +27,7 @@ export interface OtpCode {
   id: string;
   userId: string;
   code: string;
-  type: 'email_verification' | 'password_reset';
+  type: 'email_verification' | 'phone_verification' | 'password_reset';
   expiresAt: Date;
   usedAt?: Date | null;
   createdAt: Date;

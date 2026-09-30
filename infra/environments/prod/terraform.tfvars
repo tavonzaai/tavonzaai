@@ -1,6 +1,6 @@
 # AWS Provider & Project Settings
 aws_region   = "eu-west-2"
-aws_profile  = "" # Leave empty when using temporary STS session credentials
+aws_profile  = "milkey-dev"
 project_name = "tavonzaai"
 environment  = "prod"
 
@@ -12,10 +12,14 @@ private_db_subnet_cidrs  = ["10.0.20.0/24", "10.0.21.0/24"]
 enable_nat_gateway       = true
 single_nat_gateway       = true # Set to false for Multi-AZ NAT Gateway high-availability
 
-# Domain & DNS
-domain_name     = "tavonzaai.co.uk"
-api_subdomain   = "api"
-admin_subdomain = "admin"
+# Domain & DNS Configuration
+domain_name       = "tavonza.com"
+api_subdomain     = "api"
+ai_subdomain      = "ai"
+kitchen_subdomain = "kitchen"
+cashier_subdomain = "cashier"
+admin_subdomain   = "admin"
+enable_https      = true
 
 # Custom DNS Records
 extra_txt_records   = {}
@@ -31,12 +35,29 @@ ses_dmarc_policy        = "v=DMARC1; p=none; sp=none; aspf=r; adkim=r;"
 ses_create_smtp_user    = true
 
 # Application Ports & Health Checks
+# 1. Customer Frontend -> tavonza.com (Next.js)
+nextjs_port              = 3000
+nextjs_health_check_path = "/"
+
+# 2. Backend API -> api.tavonza.com (NestJS)
 backend_port              = 5000
-nextjs_port               = 3000
-admin_port                = 3043
 backend_health_check_path = "/health"
-nextjs_health_check_path  = "/"
-admin_health_check_path   = "/"
+
+# 3. AI Service -> ai.tavonza.com (FastAPI)
+ai_port              = 8000
+ai_health_check_path = "/health"
+
+# 4. Kitchen Frontend -> kitchen.tavonza.com (Next.js)
+kitchen_port              = 3105
+kitchen_health_check_path = "/"
+
+# 5. Cashier Frontend -> cashier.tavonza.com (Next.js)
+cashier_port              = 3104
+cashier_health_check_path = "/"
+
+# Admin Dashboard -> admin.tavonza.com
+admin_port              = 3043
+admin_health_check_path = "/"
 
 # EC2 Compute Settings (Rightsized for Cost Optimization)
 backend_instance_type     = "t3.small"
@@ -78,11 +99,18 @@ elasticache_max_storage_gb           = 1
 elasticache_max_ecpu_per_second      = 1000
 elasticache_snapshot_retention_limit = 1
 
-# Testing Stage - Restrict ALB Access to Whitelisted Client & Developer IPs
-alb_ingress_cidr_blocks = [
-  "83.110.227.12/32", # Client IP 1
-  "94.201.232.22/32", # Client IP 2
-  "10.10.24.74/32",   # Developer IP 1
-  "10.10.24.20/32",   # Developer IP 2
-  "10.10.24.18/32"    # Developer IP 3
+# Elastic Container Registry (ECR) Repositories
+ecr_repository_names = [
+  "backend",        # NestJS API (api.tavonza.com)
+  "frontend",       # Customer Next.js Frontend (tavonza.com)
+  "ai",             # Python FastAPI AI service (ai.tavonza.com)
+  "kitchen",        # Kitchen Next.js Frontend (kitchen.tavonza.com)
+  "cashier",        # Cashier Next.js Frontend (cashier.tavonza.com)
+  "admin-dashboard" # Admin React Dashboard (admin.tavonza.com)
 ]
+
+# ALB Ingress Access (Default: Open to public Internet for tavonza.com)
+alb_ingress_cidr_blocks = [
+  "0.0.0.0/0"
+]
+

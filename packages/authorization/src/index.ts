@@ -1,6 +1,10 @@
-/**
- * @tavonza/authorization
- * Capability and scope-based authorization contracts, actor models, and rule interfaces
- */
+// ============================================================================
+// @tavonza/authorization — Public API
+// ============================================================================
 
-export {};
+export * from './actor';
+export * from './permission';
+export * from './scope';
+export * from './role';
+export * from './security-context';
+export * from './evaluator';
