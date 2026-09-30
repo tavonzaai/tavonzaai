@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { ApiProperty } from '@nestjs/swagger';
+import { resolvePermissions, type Permission, type Scope } from '@tavonza/authorization';
 import type { User } from '../../../domain/entities/user.entity';
 
 // ─── User Profile ─────────────────────────────────────────────────────
@@ -13,9 +14,12 @@ export class UserProfileDto {
   @ApiProperty() firstName!: string;
   @ApiProperty() lastName!: string;
   @ApiProperty({ required: false }) phone?: string | null;
-  @ApiProperty() role!: string;
+  @ApiProperty({ example: 'customer', description: 'Role label (convenience bundle)' }) role!: string;
+  @ApiProperty({ type: [String], description: 'Effective capabilities/permissions' }) permissions!: Permission[];
+  @ApiProperty({ type: 'array', description: 'Assigned authorization scopes' }) scopes!: Scope[];
   @ApiProperty({ required: false }) organizationId?: string | null;
   @ApiProperty() isEmailVerified!: boolean;
+  @ApiProperty() isPhoneVerified!: boolean;
   @ApiProperty() createdAt!: Date;
 
   static fromEntity(user: User): UserProfileDto {
@@ -26,8 +30,11 @@ export class UserProfileDto {
     dto.lastName = user.lastName;
     dto.phone = user.phone;
     dto.role = user.role;
+    dto.permissions = resolvePermissions(user.role, user.permissions);
+    dto.scopes = user.scopes ?? [];
     dto.organizationId = user.organizationId;
     dto.isEmailVerified = user.isEmailVerified;
+    dto.isPhoneVerified = user.isPhoneVerified;
     dto.createdAt = user.createdAt;
     return dto;
   }
@@ -50,3 +57,14 @@ export class AuthTokensDto {
 export class MessageResponseDto {
   @ApiProperty() message!: string;
 }
+
+// ─── Register Response ────────────────────────────────────────────────
+
+export class RegisterResponseDto {
+  @ApiProperty({ example: 'Account created successfully. Please verify your email with the OTP code sent to your email.' })
+  message!: string;
+
+  @ApiProperty({ example: 'customer@example.com' })
+  email!: string;
+}
+
