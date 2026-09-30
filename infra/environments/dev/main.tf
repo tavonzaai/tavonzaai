@@ -253,7 +253,8 @@ module "ecs" {
       target_group_arn = module.alb.backend_target_group_arn
       environment = [
         { name = "NODE_ENV", value = "development" },
-        { name = "PORT", value = tostring(var.backend_port) }
+        { name = "PORT", value = tostring(var.backend_port) },
+        { name = "NODE_TLS_REJECT_UNAUTHORIZED", value = "0" }
       ]
       secrets = [
         { name = "DATABASE_URL", valueFrom = "${module.secrets_manager.secret_arn}:DATABASE_URL::" },

@@ -11,7 +11,7 @@ COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @tavonza/api build
+RUN npx turbo run build --filter=@tavonza/api...
 
 FROM node:20-alpine AS runner
 WORKDIR /app
