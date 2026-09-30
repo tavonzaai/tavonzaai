@@ -37,7 +37,7 @@ class JarvisAgent:
         self._executor = ToolExecutor(internal_client)
 
     async def handle_message(self, actor: ActorContext, session_id: str, message: str) -> str:
-        history = self._store.get(session_id)
+        history = await self._store.get_async(session_id)
         context_summary = await build_context(self._client, actor)
         tools = tools_for_actor(actor)
 
@@ -64,8 +64,8 @@ class JarvisAgent:
             tool_calls = response.get("tool_calls") or []
             if not tool_calls:
                 final_reply = response.get("content") or "I don't have an answer for that right now."
-                self._store.append(session_id, {"role": "user", "content": message})
-                self._store.append(session_id, {"role": "assistant", "content": final_reply})
+                await self._store.append_async(session_id, {"role": "user", "content": message})
+                await self._store.append_async(session_id, {"role": "assistant", "content": final_reply})
                 return final_reply
 
             formatted_tool_calls = [
@@ -102,13 +102,13 @@ class JarvisAgent:
                 })
 
         fallback = "I wasn't able to complete that — please rephrase or ask a staff member for help."
-        self._store.append(session_id, {"role": "user", "content": message})
-        self._store.append(session_id, {"role": "assistant", "content": fallback})
+        await self._store.append_async(session_id, {"role": "user", "content": message})
+        await self._store.append_async(session_id, {"role": "assistant", "content": fallback})
         return fallback
 
     async def stream_message(self, actor: ActorContext, session_id: str, message: str) -> AsyncGenerator[str, None]:
         """Streams tokens in SSE format: data: {"type": "chunk", "content": "..."}\n\n"""
-        history = self._store.get(session_id)
+        history = await self._store.get_async(session_id)
         context_summary = await build_context(self._client, actor)
         tools = tools_for_actor(actor)
 
@@ -143,8 +143,8 @@ class JarvisAgent:
                     piece = w if i == len(words) - 1 else w + " "
                     yield f"data: {json.dumps({'type': 'chunk', 'content': piece})}\n\n"
 
-                self._store.append(session_id, {"role": "user", "content": message})
-                self._store.append(session_id, {"role": "assistant", "content": content})
+                await self._store.append_async(session_id, {"role": "user", "content": message})
+                await self._store.append_async(session_id, {"role": "assistant", "content": content})
                 yield f"data: {json.dumps({'type': 'done', 'reply': content})}\n\n"
                 return
 
@@ -183,7 +183,7 @@ class JarvisAgent:
                 })
 
         fallback = "I wasn't able to complete that — please rephrase or ask a staff member for help."
-        self._store.append(session_id, {"role": "user", "content": message})
-        self._store.append(session_id, {"role": "assistant", "content": fallback})
+        await self._store.append_async(session_id, {"role": "user", "content": message})
+        await self._store.append_async(session_id, {"role": "assistant", "content": fallback})
         yield f"data: {json.dumps({'type': 'chunk', 'content': fallback})}\n\n"
         yield f"data: {json.dumps({'type': 'done', 'reply': fallback})}\n\n"

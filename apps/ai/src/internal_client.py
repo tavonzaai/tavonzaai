@@ -6,12 +6,15 @@ Never:
   AI -> SQL -> Database
 """
 
+import logging
 from typing import Any
 
 import httpx
 
 from src.config import settings
 from src.models import ActorContext
+
+logger = logging.getLogger(__name__)
 
 
 class BackendUnavailableError(Exception):
@@ -41,8 +44,12 @@ class InternalClient:
             resp = await self._client.post("/auth/resolve-actor", json={"token": user_token})
             if resp.status_code == 200:
                 return ActorContext(**resp.json())
-            # Backend explicitly rejected token (401/403)
-            return None
+            if resp.status_code in (401, 403):
+                # Backend explicitly rejected token
+                return None
+            raise BackendUnavailableError(
+                f"Backend returned HTTP {resp.status_code}: {resp.text}"
+            )
         except httpx.RequestError as e:
             # Network failure in production — fail closed (Rule 4: Fail closed)
             raise BackendUnavailableError(
@@ -91,8 +98,9 @@ class InternalClient:
             )
             resp.raise_for_status()
             return resp.json()
-        except Exception:
-            return self._mock_tool_result(tool_name, args)
+        except Exception as exc:
+            logger.error("Backend tool execution failed for '%s': %s", tool_name, exc)
+            return {"ok": False, "error": f"Tool execution failed: {exc}"}
 
     # ---- 4. Confirmation handshake (high-risk tools) ----
     async def confirm_tool(self, pending_confirmation_id: str, actor: ActorContext) -> dict[str, Any]:
@@ -108,12 +116,12 @@ class InternalClient:
     # ---- 5. Audit ----
     async def write_audit(self, record: dict[str, Any]) -> None:
         if settings.dev_mode_mock_backend:
-            print("[AUDIT-MOCK]", record)
+            logger.debug("[AUDIT-MOCK] %s", record)
             return
         try:
             await self._client.post("/audit", json=record)
-        except Exception:
-            print("[AUDIT-FALLBACK]", record)
+        except Exception as exc:
+            logger.error("[AUDIT-FALLBACK] Failed to write audit: %s. Record: %s", exc, record)
 
     # ---- Local fixtures (used only when DEV_MODE_MOCK_BACKEND=true) ----
     def _mock_actor(self, user_token: str = "") -> ActorContext:

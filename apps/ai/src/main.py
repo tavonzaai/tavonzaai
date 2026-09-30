@@ -121,6 +121,11 @@ async def chat_stream(request: Request, payload: ChatRequest, authorization: str
     return StreamingResponse(
         agent.stream_message(actor=actor, session_id=sid, message=payload.message),
         media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
@@ -133,12 +138,16 @@ async def voice_transcribe(request: Request, file: UploadFile = File(...), autho
         raise HTTPException(status_code=400, detail="Empty audio recording")
     if len(audio_bytes) > 25 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Audio file too large (max 25MB)")
-    text = await voice_service.transcribe_audio(
-        audio_bytes=audio_bytes,
-        filename=file.filename or "recording.webm",
-        content_type=file.content_type or "audio/webm",
-    )
-    return {"text": text}
+    try:
+        text = await voice_service.transcribe_audio(
+            audio_bytes=audio_bytes,
+            filename=file.filename or "recording.webm",
+            content_type=file.content_type or "audio/webm",
+        )
+        return {"text": text}
+    except Exception as exc:
+        logger.error("Audio transcription failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Voice transcription service temporarily unavailable") from exc
 
 
 @app.post("/ai/voice/synthesize")
