@@ -2,22 +2,21 @@
 
 import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import LoginView from '@/components/auth/LoginView';
+import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { getMe } from '@/redux/features/authApi';
 import { setCookie } from '@/redux/api/baseApi';
-import CreateAccountView from '@/components/auth/CreateAccountView';
-import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
-import BottomNav from '@/components/dashboard/BottomNav';
- 
-function LandingPageContent() {
+
+function LoginContent() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
+  const table = searchParams.get('table');
   const { user, isAuthenticated, isInitialized } = useAppSelector((state) => state.auth);
 
-  const tableParam = searchParams.get('table');
-  const forwardParam = tableParam ? `?table=${encodeURIComponent(tableParam)}` : '';
+  const forwardParam = table ? `?table=${encodeURIComponent(table)}` : '';
 
   useEffect(() => {
     setMounted(true);
@@ -28,22 +27,16 @@ function LandingPageContent() {
 
   useEffect(() => {
     if (mounted && isInitialized && isCustomer) {
-      // User is verified as CUSTOMER via session - redirect directly to menu
-      if (tableParam) {
-        if (typeof window !== 'undefined') {
-          const formatted = tableParam.toLowerCase().startsWith('table')
-            ? tableParam
-            : `Table ${tableParam.padStart(2, '0')}`;
-          setCookie('tavonza_table', formatted);
-        }
-        router.replace(`/menu?table=${encodeURIComponent(tableParam)}`);
-      } else {
-        router.replace('/menu');
+      if (table && typeof window !== 'undefined') {
+        const formatted = table.toLowerCase().startsWith('table')
+          ? table
+          : `Table ${table.padStart(2, '0')}`;
+        setCookie('tavonza_table', formatted);
       }
+      router.replace(`/menu${forwardParam}`);
     }
-  }, [mounted, isInitialized, isCustomer, tableParam, router]);
+  }, [mounted, isInitialized, isCustomer, table, forwardParam, router]);
 
-  // While rendering on server or checking session, show uniform loading state (prevents hydration mismatch)
   if (!mounted || !isInitialized || isCustomer) {
     return (
       <div className="w-full min-h-screen bg-black flex flex-col items-center justify-center text-white p-4">
@@ -55,19 +48,18 @@ function LandingPageContent() {
     );
   }
 
-  // Not authenticated: render create account form directly
   return (
     <AuthDesktopLayout>
-      <CreateAccountView
-        onAccountCreated={() => router.push(`/welcome${forwardParam}`)}
-        onGoBackToLogin={() => router.push(`/login${forwardParam}`)}
+      <LoginView
+        onLoginSuccess={() => router.push(`/menu${forwardParam}`)}
+        onForgotPassword={() => router.push(`/forgot-password${forwardParam}`)}
+        onCreateAccount={() => router.push(`/register${forwardParam}`)}
       />
-      
     </AuthDesktopLayout>
   );
 }
 
-export default function CustomerLandingPage() {
+export default function LoginPage() {
   return (
     <Suspense
       fallback={
@@ -76,7 +68,7 @@ export default function CustomerLandingPage() {
         </div>
       }
     >
-      <LandingPageContent />
+      <LoginContent />
     </Suspense>
   );
 }
