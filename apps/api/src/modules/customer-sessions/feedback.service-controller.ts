@@ -100,7 +100,7 @@ class SubmitFeedbackDto {
 
 // ── Controller ────────────────────────────────────────────────────────
 
-@ApiTags('feedback')
+@ApiTags('Customer | Feedback')
 @Controller('feedback')
 export class FeedbackController {
   constructor(private readonly feedbackService: FeedbackService) {}
@@ -112,7 +112,7 @@ export class FeedbackController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Submit order feedback and rating' })
+  @ApiOperation({ summary: '[Customer] Submit order feedback and rating' })
   @ApiCreatedResponse({ description: 'Feedback recorded — show Thank You screen' })
   async submitFeedback(@Body() dto: SubmitFeedbackDto) {
     const result = await this.feedbackService.submitFeedback(dto);
@@ -127,7 +127,7 @@ export class FeedbackController {
    * Check if feedback already submitted for this order
    */
   @Get('order/:orderId')
-  @ApiOperation({ summary: 'Get feedback for an order' })
+  @ApiOperation({ summary: '[Customer] Get feedback for an order' })
   @ApiOkResponse({ description: 'Feedback record or null if not yet submitted' })
   async getFeedbackByOrder(@Param('orderId') orderId: string) {
     return this.feedbackService.getFeedbackByOrder(orderId);

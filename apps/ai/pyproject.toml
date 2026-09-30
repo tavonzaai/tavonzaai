@@ -8,3 +8,25 @@ dependencies = []
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "E501",   # line length violations
+    "B008",   # do not perform function calls in argument defaults (standard FastAPI pattern)
+    "BLE001", # blind exception catch (intended for resilience/fallback)
+]
+
+

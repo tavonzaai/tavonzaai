@@ -303,9 +303,9 @@ export default function CreateAccountView({
           <button
             type="button"
             onClick={() => setAcceptedTerms(!acceptedTerms)}
-            className="text-xs text-white/80 font-['Poppins'] cursor-pointer hover:text-yellow-300 transition"
+            className="text-xs text-yellow-400 font-['Poppins'] underline cursor-pointer hover:text-yellow-300 transition"
           >
-            I accept terms and conditions
+            I accept term and condition
           </button>
         </div>
 
@@ -313,7 +313,7 @@ export default function CreateAccountView({
         <button
           type="submit"
           disabled={isSubmitting || !acceptedTerms}
-          className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 disabled:bg-yellow-400/40 text-black text-sm font-medium font-['Inter'] rounded-[100px] flex items-center justify-center gap-2 transition shadow-lg shadow-yellow-500/10 active:scale-[0.99] mt-3 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 disabled:bg-yellow-400/40 text-black text-sm font-medium font-['Inter'] rounded-lg flex items-center justify-center gap-2 transition shadow-lg shadow-yellow-500/10 active:scale-[0.99] mt-3 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
           {isSubmitting ? 'Creating account…' : 'Create Account'}
@@ -328,7 +328,7 @@ export default function CreateAccountView({
           onClick={onGoBackToLogin}
           className="text-yellow-400 text-sm font-['Inter'] font-semibold hover:text-yellow-300 underline transition cursor-pointer"
         >
-          Sign in
+          Log In
         </button>
       </div>
     </div>

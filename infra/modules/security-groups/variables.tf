@@ -31,6 +31,24 @@ variable "admin_port" {
   default     = 3043
 }
 
+variable "ai_port" {
+  description = "Port the AI FastAPI application listens on"
+  type        = number
+  default     = 8000
+}
+
+variable "kitchen_port" {
+  description = "Port the Kitchen application listens on"
+  type        = number
+  default     = 3105
+}
+
+variable "cashier_port" {
+  description = "Port the Cashier application listens on"
+  type        = number
+  default     = 3104
+}
+
 variable "postgres_port" {
   description = "Port PostgreSQL database listens on"
   type        = number

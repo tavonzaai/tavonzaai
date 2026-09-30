@@ -5,7 +5,7 @@ import { AuthorizationModule } from "./modules/authorization/authorization.modul
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { RestaurantsModule } from "./modules/restaurants/restaurants.module";
 import { BranchesModule } from "./modules/branches/branches.module";
-import { StaffModule } from "./modules/staff/staff.module";
+import { WaiterModule } from "./modules/waiter/waiter.module";
 import { TablesModule } from "./modules/tables/tables.module";
 import { MenusModule } from "./modules/menus/menus.module";
 import { CustomerSessionsModule } from "./modules/customer-sessions/customer-sessions.module";
@@ -30,7 +30,7 @@ import { AppController } from "./app.controller";
     OrganizationsModule,
     RestaurantsModule,
     BranchesModule,
-    StaffModule,
+    WaiterModule,
     TablesModule,
     MenusModule,
     CustomerSessionsModule,

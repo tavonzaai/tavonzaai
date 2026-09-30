@@ -31,6 +31,7 @@ import {
   Body,
   Query,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
 import { OrderService } from '../../application/services/order.service';
 import { OrderStatus } from '../../domain/enums/order-status.enum';
 import {
@@ -45,6 +46,7 @@ import {
   OrderDetailResponseDto,
 } from '../dtos/order-response.dto';
 
+@ApiTags('Customer | Orders')
 @Controller('orders')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
@@ -61,6 +63,8 @@ export class OrderController {
    * Creates one if it doesn't exist.
    */
   @Get('cart/:branchId/:tableId')
+  @ApiOperation({ summary: '[Customer] Get current cart for table' })
+  @ApiOkResponse({ type: CartResponseDto })
   async getCart(
     @Param('branchId') branchId: string,
     @Param('tableId') tableId: string,
@@ -76,6 +80,8 @@ export class OrderController {
    * Body: { menuItemId, quantity, specialInstructions?, addOns? }
    */
   @Post('cart/:orderId/items')
+  @ApiOperation({ summary: '[Customer] Add item to cart' })
+  @ApiCreatedResponse({ type: CartResponseDto })
   async addToCart(
     @Param('orderId') orderId: string,
     @Body() dto: AddToCartDto,
@@ -98,6 +104,8 @@ export class OrderController {
    * Figma: Quantity +/- on Order Summary screen
    */
   @Patch('cart/:orderId/items/:itemId')
+  @ApiOperation({ summary: '[Customer] Update cart item quantity or instructions' })
+  @ApiOkResponse({ type: CartResponseDto })
   async updateCartItem(
     @Param('orderId') orderId: string,
     @Param('itemId') itemId: string,
@@ -113,6 +121,8 @@ export class OrderController {
    * Figma: Remove item from cart
    */
   @Delete('cart/:orderId/items/:itemId')
+  @ApiOperation({ summary: '[Customer] Remove item from cart' })
+  @ApiOkResponse({ type: CartResponseDto })
   async removeCartItem(
     @Param('orderId') orderId: string,
     @Param('itemId') itemId: string,
@@ -129,6 +139,8 @@ export class OrderController {
    * After this, the waiter can see and accept the order.
    */
   @Post(':orderId/submit')
+  @ApiOperation({ summary: '[Customer] Place order (submit cart to waiter queue)' })
+  @ApiOkResponse({ type: OrderTrackingResponseDto })
   async submitOrder(
     @Param('orderId') orderId: string,
   ): Promise<OrderTrackingResponseDto> {
@@ -147,6 +159,8 @@ export class OrderController {
    *   ⬜ Served
    */
   @Get(':orderId/track')
+  @ApiOperation({ summary: '[Customer] Track order lifecycle status and progress' })
+  @ApiOkResponse({ type: OrderTrackingResponseDto })
   async trackOrder(
     @Param('orderId') orderId: string,
   ): Promise<OrderTrackingResponseDto> {
@@ -165,6 +179,8 @@ export class OrderController {
    * Lists orders for a branch, with optional status/table filters.
    */
   @Get('branch/:branchId')
+  @ApiOperation({ summary: '[Waiter] Get orders by branch with status filter' })
+  @ApiOkResponse({ type: [OrderListResponseDto] })
   async getOrdersByBranch(
     @Param('branchId') branchId: string,
     @Query('status') status?: string,
@@ -184,6 +200,8 @@ export class OrderController {
    * Returns full order detail with items and all metadata.
    */
   @Get(':orderId')
+  @ApiOperation({ summary: '[Customer/Waiter] Get order detail by order ID' })
+  @ApiOkResponse({ type: OrderDetailResponseDto })
   async getOrderDetail(
     @Param('orderId') orderId: string,
   ): Promise<OrderDetailResponseDto> {
@@ -201,6 +219,8 @@ export class OrderController {
    * Invalid transitions return a 400 with helpful error message.
    */
   @Patch(':orderId/status')
+  @ApiOperation({ summary: '[Waiter] Update order lifecycle status' })
+  @ApiOkResponse({ type: OrderDetailResponseDto })
   async updateOrderStatus(
     @Param('orderId') orderId: string,
     @Body() dto: UpdateOrderStatusDto,

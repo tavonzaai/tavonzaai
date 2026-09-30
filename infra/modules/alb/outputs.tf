@@ -29,16 +29,37 @@ output "https_listener_arn" {
 }
 
 output "backend_target_group_arn" {
-  description = "ARN of the Backend target group"
+  description = "ARN of the Backend API target group"
   value       = aws_lb_target_group.backend.arn
 }
 
-output "nextjs_target_group_arn" {
-  description = "ARN of the Next.js target group"
+output "ai_target_group_arn" {
+  description = "ARN of the AI FastAPI service target group"
+  value       = aws_lb_target_group.ai.arn
+}
+
+output "customer_target_group_arn" {
+  description = "ARN of the Customer frontend target group"
   value       = aws_lb_target_group.nextjs.arn
+}
+
+output "nextjs_target_group_arn" {
+  description = "ARN of the Next.js target group (alias for customer)"
+  value       = aws_lb_target_group.nextjs.arn
+}
+
+output "kitchen_target_group_arn" {
+  description = "ARN of the Kitchen frontend target group"
+  value       = aws_lb_target_group.kitchen.arn
+}
+
+output "cashier_target_group_arn" {
+  description = "ARN of the Cashier frontend target group"
+  value       = aws_lb_target_group.cashier.arn
 }
 
 output "admin_target_group_arn" {
   description = "ARN of the Admin dashboard target group"
   value       = aws_lb_target_group.admin.arn
 }
+

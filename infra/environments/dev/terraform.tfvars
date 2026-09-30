@@ -13,10 +13,14 @@ enable_nat_gateway       = true
 single_nat_gateway       = true # Cost-optimized: Single NAT Gateway for dev
 
 # Domain & DNS
-domain_name     = "tavonzaai.net"
-api_subdomain   = "api"
-admin_subdomain = "admin"
-enable_https    = false # Set to true once domain is purchased and pointed to Route 53
+domain_name       = "tavonza.com"
+api_subdomain     = "api"
+ai_subdomain      = "ai"
+kitchen_subdomain = "kitchen"
+cashier_subdomain = "cashier"
+admin_subdomain   = "admin"
+enable_https      = true
+
 
 # Custom DNS Records
 extra_txt_records   = {}
@@ -24,20 +28,26 @@ extra_cname_records = {}
 
 
 # AWS Simple Email Service (SES) Configuration
-enable_ses              = true
-ses_enable_mail_from    = true
-ses_mail_from_subdomain = "mail"
-ses_enable_dmarc        = true
-ses_dmarc_policy        = "v=DMARC1; p=none; sp=none; aspf=r; adkim=r;"
+enable_ses                    = true
+ses_enable_mail_from          = true
+ses_mail_from_subdomain       = "mail"
+ses_enable_dmarc              = true
+ses_dmarc_policy              = "v=DMARC1; p=none; sp=none; aspf=r; adkim=r;"
 ses_create_smtp_user          = true
 ses_verified_email_identities = [] # Add your personal/team email address here (e.g. ["dev@example.com"]) to verify in SES for testing in sandbox mode
 
 # Application Ports & Health Checks
 backend_port              = 5000
 nextjs_port               = 3000
+ai_port                   = 8000
+kitchen_port              = 3105
+cashier_port              = 3104
 admin_port                = 3043
 backend_health_check_path = "/health"
 nextjs_health_check_path  = "/"
+ai_health_check_path      = "/health"
+kitchen_health_check_path = "/"
+cashier_health_check_path = "/"
 admin_health_check_path   = "/"
 
 # EC2 Compute Settings (Rightsized for Cost Optimization)
@@ -82,9 +92,9 @@ elasticache_snapshot_retention_limit = 0
 
 # GitHub Actions CI/CD & ECR Role Settings
 enable_github_actions_ecr_role = true
-github_repository              = "*tavonzaaiapp"
+github_repository              = "tavonzaai/tavonzaai"
 github_branches                = ["*"]
-create_github_oidc_provider    = true
+create_github_oidc_provider    = false
 
 # Testing Stage - Restrict ALB Access to Whitelisted Client & Developer IPs
 alb_ingress_cidr_blocks = [

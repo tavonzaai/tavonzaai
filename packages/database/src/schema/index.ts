@@ -10,5 +10,7 @@ export * from './menu.schema';
 export * from './order.schema';
 export * from './user.schema';
 export * from './session.schema';
+export * from './staff.schema';
+export * from './alert.schema';
 
 

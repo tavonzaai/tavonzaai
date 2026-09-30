@@ -9,8 +9,11 @@
 //   3. @Global() makes it available everywhere without explicit imports
 // ============================================================================
 
-import { Global, Module } from '@nestjs/common';
-import { DRIZZLE, createDrizzleDatabase } from './client';
+import { Global, Module, Logger } from '@nestjs/common';
+import { DRIZZLE, createDrizzleDatabase, DrizzleDatabase } from './client';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { resolve } from 'path';
+import { existsSync } from 'fs';
 
 @Global()
 @Module({
@@ -23,6 +26,30 @@ import { DRIZZLE, createDrizzleDatabase } from './client';
           throw new Error('DATABASE_URL environment variable is required');
         }
         return createDrizzleDatabase(url);
+      },
+    },
+    {
+      provide: 'DATABASE_MIGRATION',
+      inject: [DRIZZLE],
+      useFactory: async (db: DrizzleDatabase) => {
+        const logger = new Logger('DatabaseMigration');
+        const candidates = [
+          resolve(__dirname, '../drizzle'),
+          resolve(__dirname, '../../packages/database/drizzle'),
+          resolve(process.cwd(), 'packages/database/drizzle'),
+          resolve(process.cwd(), 'drizzle'),
+        ];
+        const migrationsFolder = candidates.find((dir) => existsSync(dir));
+        if (migrationsFolder) {
+          try {
+            logger.log(`Running database migrations from ${migrationsFolder}...`);
+            await migrate(db, { migrationsFolder });
+            logger.log('Database migrations completed successfully');
+          } catch (error) {
+            logger.error('Database migration failed:', error);
+          }
+        }
+        return true;
       },
     },
   ],

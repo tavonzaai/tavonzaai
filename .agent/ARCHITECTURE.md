@@ -102,7 +102,7 @@ Contains business concepts and rules:
 - Domain events
 - Domain rules
 
-The domain layer must not depend directly on AWS SDKs, HTTP infrastructure, Prisma implementation details, or external providers.
+The domain layer must not depend directly on AWS SDKs, HTTP infrastructure, ORM implementation details, or external providers.
 
 ### Application Layer
 

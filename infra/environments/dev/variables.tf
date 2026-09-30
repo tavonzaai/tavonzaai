@@ -66,11 +66,31 @@ variable "domain_name" {
 variable "api_subdomain" {
   description = "Subdomain prefix for backend API"
   type        = string
+  default     = "api"
+}
+
+variable "ai_subdomain" {
+  description = "Subdomain prefix for AI service"
+  type        = string
+  default     = "ai"
+}
+
+variable "kitchen_subdomain" {
+  description = "Subdomain prefix for Kitchen frontend"
+  type        = string
+  default     = "kitchen"
+}
+
+variable "cashier_subdomain" {
+  description = "Subdomain prefix for Cashier frontend"
+  type        = string
+  default     = "cashier"
 }
 
 variable "admin_subdomain" {
   description = "Subdomain prefix for React Admin dashboard"
   type        = string
+  default     = "admin"
 }
 
 variable "enable_https" {
@@ -87,6 +107,7 @@ variable "extra_txt_records" {
     records = list(string)
     ttl     = number
   }))
+  default = {}
 }
 
 variable "extra_cname_records" {
@@ -96,6 +117,7 @@ variable "extra_cname_records" {
     record = string
     ttl    = number
   }))
+  default = {}
 }
 
 
@@ -146,31 +168,73 @@ variable "ses_verified_email_identities" {
 variable "backend_port" {
   description = "Port the backend Docker container listens on"
   type        = number
+  default     = 5000
 }
 
 variable "nextjs_port" {
-  description = "Port the Next.js Docker container listens on"
+  description = "Port the Next.js Customer Docker container listens on"
   type        = number
+  default     = 3000
+}
+
+variable "ai_port" {
+  description = "Port the AI FastAPI container listens on"
+  type        = number
+  default     = 8000
+}
+
+variable "kitchen_port" {
+  description = "Port the Kitchen frontend container listens on"
+  type        = number
+  default     = 3105
+}
+
+variable "cashier_port" {
+  description = "Port the Cashier frontend container listens on"
+  type        = number
+  default     = 3104
 }
 
 variable "admin_port" {
   description = "Port the React Admin Docker container listens on"
   type        = number
+  default     = 3043
 }
 
 variable "backend_health_check_path" {
   description = "Health check HTTP endpoint for backend service"
   type        = string
+  default     = "/health"
 }
 
 variable "nextjs_health_check_path" {
-  description = "Health check HTTP endpoint for Next.js service"
+  description = "Health check HTTP endpoint for Next.js customer service"
   type        = string
+  default     = "/"
+}
+
+variable "ai_health_check_path" {
+  description = "Health check HTTP endpoint for AI service"
+  type        = string
+  default     = "/health"
+}
+
+variable "kitchen_health_check_path" {
+  description = "Health check HTTP endpoint for Kitchen service"
+  type        = string
+  default     = "/"
+}
+
+variable "cashier_health_check_path" {
+  description = "Health check HTTP endpoint for Cashier service"
+  type        = string
+  default     = "/"
 }
 
 variable "admin_health_check_path" {
   description = "Health check HTTP endpoint for Admin dashboard service"
   type        = string
+  default     = "/"
 }
 
 # EC2 Compute Configuration (Legacy / Optional)
@@ -435,7 +499,7 @@ variable "elasticache_snapshot_retention_limit" {
 variable "ecr_repository_names" {
   description = "List of microservices/applications to create dedicated ECR repositories for"
   type        = list(string)
-  default     = ["backend", "frontend", "admin-dashboard"]
+  default     = ["backend", "frontend", "ai", "kitchen", "cashier", "admin-dashboard"]
 }
 
 variable "ecr_image_tag_mutability" {
