@@ -38,6 +38,11 @@ class ToolExecutor:
         # Strip any scope fields the LLM might have injected — scope always comes from ActorContext
         safe_args = {k: v for k, v in args.items() if k not in {"organization_id", "branch_id", "scope"}}
 
+        # Enforce table isolation for table guests to prevent prompt injection cross-table inspection
+        scoped_table = (actor.resource_scope or {}).get("table_code")
+        if scoped_table and "table_id" in safe_args:
+            safe_args["table_id"] = scoped_table
+
         # Execute through backend tool gateway
         result = await self._client.execute_tool(tool_name, safe_args, actor)
 
