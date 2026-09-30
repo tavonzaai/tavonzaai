@@ -25,7 +25,7 @@ jobs:
       worker:                  ${{ steps.filter.outputs.worker }}
       frontend-admin:          ${{ steps.filter.outputs.frontend-admin }}
       frontend-customer:       ${{ steps.filter.outputs.frontend-customer }}
-      frontend-staff:          ${{ steps.filter.outputs.frontend-staff }}
+      frontend-waiter:         ${{ steps.filter.outputs.frontend-waiter }}
       frontend-branch-manager: ${{ steps.filter.outputs.frontend-branch-manager }}
       frontend-cashier:        ${{ steps.filter.outputs.frontend-cashier }}
       frontend-kitchen:        ${{ steps.filter.outputs.frontend-kitchen }}
@@ -58,8 +58,8 @@ jobs:
               - 'frontend/customer/**'
               - 'packages/contracts/**'
               - 'packages/shared/**'
-            frontend-staff:
-              - 'frontend/staff/**'
+            frontend-waiter:
+              - 'frontend/waiter/**'
               - 'packages/contracts/**'
               - 'packages/shared/**'
             frontend-branch-manager:
@@ -118,7 +118,7 @@ jobs:
     if: |
       needs.changes.outputs['frontend-admin'] == 'true' ||
       needs.changes.outputs['frontend-customer'] == 'true' ||
-      needs.changes.outputs['frontend-staff'] == 'true' ||
+      needs.changes.outputs['frontend-waiter'] == 'true' ||
       needs.changes.outputs['frontend-branch-manager'] == 'true' ||
       needs.changes.outputs['frontend-cashier'] == 'true' ||
       needs.changes.outputs['frontend-kitchen'] == 'true' ||
@@ -130,7 +130,7 @@ jobs:
         app:
           - { id: 'frontend-admin', name: 'Admin', filter: '@frontend/admin' }
           - { id: 'frontend-customer', name: 'Customer', filter: '@frontend/customer' }
-          - { id: 'frontend-staff', name: 'Staff', filter: '@frontend/staff' }
+          - { id: 'frontend-waiter', name: 'Waiter', filter: '@frontend/waiter' }
           - { id: 'frontend-branch-manager', name: 'Branch Manager', filter: '@frontend/branch-manager' }
           - { id: 'frontend-cashier', name: 'Cashier', filter: '@frontend/cashier' }
           - { id: 'frontend-kitchen', name: 'Kitchen', filter: '@frontend/kitchen' }

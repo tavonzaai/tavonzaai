@@ -1,97 +1,134 @@
 # Tavonza AI Service
 
-This service is yours. You decide how to organize it, what libraries to use, and how to build it.  
-This document only defines **the boundaries you must work within** and **how to get started**.
+This service is the official AI subsystem for the Tavonza platform.
+It follows the architecture defined in [`.agent/AI.md`](../../.agent/AI.md) and [`.agent/AUTHORIZATION.md`](../../.agent/AUTHORIZATION.md).
 
 ---
 
-## Setup
+## 🚀 Setup & Getting Started
 
 **Python 3.11+** is required.
 
 ```bash
 cd apps/ai
 
+# 1. Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+# Windows:
+.venv\Scripts\activate
+# Linux/Mac:
+source .venv/bin/activate
 
+# 2. Install dependencies
 pip install -r requirements.txt
 
-cp .env.example .env             # fill in your keys
+# 3. Configure environment
+cp .env.example .env
+# Fill in GROQ_API_KEY and configure backend connection
 
+# 4. Start the service
 uvicorn main:app --reload --port 8000
 ```
 
 API is live at **http://localhost:8000**  
-Interactive docs at **http://localhost:8000/docs**
+Interactive OpenAPI documentation at **http://localhost:8000/docs**
 
 ---
 
-## Your Role
+## 🏛️ Architecture & Principle
 
-You are a **client of the backend API** (`apps/api`, running on port 3000).
+AI is an authorized client of the platform, not a privileged subsystem.
 
-You do not own any database tables. You do not write migrations. You do not call the database directly.
-
-When you need platform data (orders, menus, sessions, users — anything), you call the backend API, which handles authorization and returns what you are allowed to see. Treat it like any external REST API.
-
+```text
+AI Client / Frontend
+         ↓
+    apps/ai Runtime
+         ↓
+    Tool Gateway
+         ↓
+  apps/api Authorization
+         ↓
+ Application / Domain Service
+         ↓
+      Database
 ```
-Your AI service  →  POST http://localhost:3000/tools/invoke  →  backend does the auth + DB work  →  returns result
+
+### 🚫 Non-Negotiable Hard Rules
+1. **No direct database access**: AI never connects to PostgreSQL, Redis, or any data store owned by the backend (`AI -> SQL -> Database` is forbidden).
+2. **No AWS SDK calls in business logic**: All resource storage/access routes through authorized application endpoints.
+3. **Always carry user context**: Every request carries an `ActorContext` (`actor_type`, `acting_user_id`, `organization_id`, `branch_id`, `permissions`, `resource_scope`).
+4. **Fail closed**: If a backend tool call fails or is denied, surface an error. Never fabricate or hallucinate responses from missing data.
+5. **Audit your tool calls**: Every outgoing Tool Gateway call produces a structured JSON audit log.
+
+---
+
+## 🏗️ Structure
+
+```text
+apps/ai/
+├── main.py                     ← Entrypoint (exports FastAPI app)
+├── requirements.txt            ← Python dependencies
+├── .env.example                ← Environment variable template
+├── BACKEND_INTEGRATION.md      ← 5-route contract for the backend team (apps/api)
+└── src/
+    ├── main.py                 ← Core FastAPI app with auth, rate limiting & CORS
+    ├── config.py               ← Typed Pydantic Settings
+    ├── models.py               ← ActorContext, ChatRequest, ToolResult
+    ├── internal_client.py      ← ONLY client module that contacts apps/api
+    │
+    ├── agents/
+    │   └── jarvis_agent.py     ← Multi-turn tool execution loop & SSE streaming
+    │
+    ├── context/
+    │   ├── context_builder.py  ← Role-aware prompt context (guest, waiter, chef, cashier, manager)
+    │   └── scope_resolver.py   ← Enforces minimal, safe tenant & resource scope
+    │
+    ├── conversations/
+    │   └── store.py            ← Redis-backed conversation memory with local fallback
+    │
+    ├── policies/
+    │   ├── action_policy.py    ← Risk tiers: read_only, low_risk_mutation, high_risk_mutation
+    │   └── confirmation_policy.py ← Human confirmation handshake for sensitive actions
+    │
+    ├── providers/
+    │   ├── base.py             ← ModelProvider ABC isolating vendor SDKs
+    │   └── groq_provider.py    ← Groq LLM inference with model fallback chain
+    │
+    ├── tools/
+    │   ├── definitions/        ← Approved tool inventory & parameter schemas
+    │   ├── authorization/      ← Actor permission validation per tool
+    │   ├── executor/           ← Execution chain: Scope injection, execution & audit
+    │   └── registry/           ← Dynamic tool pruning based on ActorContext
+    │
+    ├── voice/
+    │   └── service.py          ← Groq Whisper Turbo STT + Edge Neural Cloud TTS
+    │
+    └── audit/
+        └── audit_writer.py     ← Structured platform audit logging
 ```
 
-The backend team will expose a **Tool Gateway endpoint**. You call it with:
-- what tool you want to run (e.g. `orders.getStatus`)
-- the user/session context (who is asking)
-- the parameters
+---
 
-The backend enforces all permissions. You just consume the response.
+## 📡 Exposed Endpoints
+
+| Method | Path | Description | Authorization |
+|--------|------|-------------|---------------|
+| `GET` | `/health` | Service health check | None |
+| `POST` | `/ai/chat` | Conversational text chat | Bearer JWT |
+| `POST` | `/ai/chat/stream` | Server-Sent Events (SSE) streaming chat | Bearer JWT |
+| `POST` | `/ai/voice/transcribe` | Audio file to text (Whisper Cloud) | Bearer JWT |
+| `POST` | `/ai/voice/synthesize` | Text to MP3 audio stream (Edge Neural TTS) | Bearer JWT |
+| `GET` | `/ai/voice/synthesize` | Direct audio source playback endpoint | Bearer JWT |
 
 ---
 
-## Hard Rules
+## 🔌 Connecting to the Backend (`apps/api`)
 
-These are non-negotiable architectural boundaries:
-
-1. **No direct database access.** You do not connect to Postgres, Redis, or any other data store owned by the backend. Ever.
-
-2. **No AWS SDK calls in your business logic.** If you need to store something (e.g. embeddings, files), ask the backend team to expose a tool endpoint for it. You call that endpoint; the backend handles the actual storage.
-
-3. **Always carry user context.** Every request you make to the backend must include the authenticated user/session context. AI never acts as a super-user.
-
-4. **Fail closed.** If a backend call fails or is denied, surface an error. Never fabricate or guess a response from missing data.
-
-5. **Audit your tool calls.** Log every outgoing Tool Gateway call with the tool name, actor, and result status. Structured JSON logs only.
-
----
-
-## Language & Tools
-
-Use whatever you need. Suggested starting points:
-
-| Need | Options |
-|------|---------|
-| Web framework | **FastAPI** (already set up), Flask |
-| LLM orchestration | LangChain, LlamaIndex, Haystack, raw API calls |
-| Vector search | pgvector (via backend tool), Qdrant, Pinecone, Chroma |
-| Embeddings | OpenAI, sentence-transformers, Cohere |
-| Testing | pytest + pytest-asyncio |
-
-Add any package to `requirements.txt`. You own that file.
-
----
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and fill in your values. Never commit `.env`.
-
-Ask the team lead if you need any backend API keys or service URLs.
-
----
-
-## Deploying
-
-You do not handle deployment. The DevOps team handles it.  
-What you need to ensure:
-- `GET /health` returns `{"status": "ok"}` (used by load balancer)
-- Your service starts with `uvicorn main:app --host 0.0.0.0 --port 8000`
-- All secrets come from environment variables, never hardcoded
+To switch from dev mock mode to the live backend:
+1. In `apps/ai/.env`:
+   ```bash
+   DEV_MODE_MOCK_BACKEND=false
+   INTERNAL_API_BASE_URL=http://localhost:3000/internal
+   INTERNAL_API_SERVICE_TOKEN=<shared-secret>
+   ```
+2. See [`BACKEND_INTEGRATION.md`](./BACKEND_INTEGRATION.md) for the 5 HTTP routes expected from `apps/api`.

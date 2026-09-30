@@ -215,9 +215,10 @@ ai/
 
 Model providers must be isolated behind a provider boundary.
 
-The initial provider may be AWS Bedrock or another approved provider.
+The current approved provider is **Groq Cloud** (models: `llama-3.3-70b-versatile`, `openai/gpt-oss-120b`).
 
-Business domains must not depend directly on a model vendor SDK.
+The provider is isolated behind a `ModelProvider` interface (`providers/base.py`), allowing future migration to AWS Bedrock or other providers without changing domain logic.
+
 
 ## AI and Realtime
 

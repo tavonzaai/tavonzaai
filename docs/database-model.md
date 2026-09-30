@@ -85,6 +85,23 @@ erDiagram
   }
 
   %% ══════════════════════════════════════
+  %% INVENTORY DOMAIN
+  %% ══════════════════════════════════════
+
+  inventory_items {
+    uuid        id               PK
+    uuid        branch_id        "indexed"
+    text        sku_code         UK "per branch"
+    text        name
+    numeric     on_hand          "10,3"
+    numeric     par_level        "10,3"
+    text        unit             "kg|L|ea|g"
+    text        status           "HEALTHY|LOW_STOCK|CRITICAL|OUT_OF_STOCK"
+    timestamp   last_updated_at  "default now"
+    timestamp   created_at
+  }
+
+  %% ══════════════════════════════════════
   %% ORDER DOMAIN
   %% ══════════════════════════════════════
 
@@ -95,7 +112,7 @@ erDiagram
     uuid        table_id             "indexed"
     uuid        table_session_id     "nullable FK → table_sessions"
     uuid        customer_session_id  "nullable FK → customer_sessions"
-    text        status               "DRAFT|SUBMITTED|ACCEPTED|PREPARING|READY|SERVED|CANCELLED"
+    text        status               "DRAFT|SUBMITTED|ACCEPTED|KITCHEN_QUEUE|PREPARING|READY|SERVED|REJECTED|CANCELLED"
     numeric     subtotal             "10,2 default 0"
     numeric     service_charge_rate  "4,2 default 0.05 (5%)"
     numeric     service_charge       "10,2 default 0"
