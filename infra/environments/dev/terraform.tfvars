@@ -92,9 +92,9 @@ elasticache_snapshot_retention_limit = 0
 
 # GitHub Actions CI/CD & ECR Role Settings
 enable_github_actions_ecr_role = true
-github_repository              = "*tavonzaaiapp"
+github_repository              = "tavonzaai/tavonzaai"
 github_branches                = ["*"]
-create_github_oidc_provider    = true
+create_github_oidc_provider    = false
 
 # Testing Stage - Restrict ALB Access to Whitelisted Client & Developer IPs
 alb_ingress_cidr_blocks = [
