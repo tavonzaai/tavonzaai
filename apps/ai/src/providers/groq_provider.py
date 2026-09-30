@@ -2,7 +2,13 @@ import json
 import logging
 from typing import Any
 
-from groq import AsyncGroq, RateLimitError
+from groq import (
+    APIConnectionError,
+    APITimeoutError,
+    AsyncGroq,
+    InternalServerError,
+    RateLimitError,
+)
 
 from ..config import settings
 from .base import ModelProvider, ProviderResponse, ToolCall
@@ -12,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 FALLBACK_MODELS = [
     settings.groq_model,
-    "llama-3.1-8b-instant",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b",
 ]
 
 
@@ -58,19 +65,26 @@ class GroqProvider(ModelProvider):
                 tool_calls: list[ToolCall] | None = None
                 tc_items = choice.tool_calls or []
                 if tc_items:
-                    tool_calls = [
-                        {
-                            "id": tc.id,
-                            "name": tc.function.name,
-                            "arguments": json.loads(tc.function.arguments or "{}"),
-                        }
-                        for tc in tc_items
-                    ]
-
+                    tool_calls = []
+                    for tc in tc_items:
+                        raw_args = tc.function.arguments or "{}"
+                        try:
+                            parsed_args = json.loads(raw_args)
+                            if not isinstance(parsed_args, dict):
+                                parsed_args = {}
+                        except Exception:
+                            parsed_args = {}
+                        tool_calls.append(
+                            {
+                                "id": tc.id,
+                                "name": tc.function.name,
+                                "arguments": parsed_args,
+                            }
+                        )
 
                 return {"role": "assistant", "content": choice.content, "tool_calls": tool_calls}
-            except RateLimitError as exc:
-                logger.warning("Groq model %s hit RateLimitError: %s. Trying fallback...", model_name, exc)
+            except (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError) as exc:
+                logger.warning("Groq model %s error (%s): %s. Trying fallback...", model_name, type(exc).__name__, exc)
                 last_exc = exc
                 continue
 

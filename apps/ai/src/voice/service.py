@@ -61,7 +61,7 @@ def humanize_text_for_speech(text: str) -> str:
     processed = re.sub(r"#{1,6}\s+", "", processed)
     processed = re.sub(r"[*_~]{1,3}", "", processed)
     processed = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", processed)
-    processed = re.sub(r"[\U00010000-\U0010ffff]", "", processed)
+    processed = re.sub(r"[\U00010000-\U0010ffff\u2600-\u27bf\u2b50-\u2b55]", "", processed)
     processed = re.sub(r"\s+", " ", processed).strip()
 
     return processed

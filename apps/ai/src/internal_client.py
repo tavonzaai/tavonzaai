@@ -44,8 +44,12 @@ class InternalClient:
             resp = await self._client.post("/auth/resolve-actor", json={"token": user_token})
             if resp.status_code == 200:
                 return ActorContext(**resp.json())
-            # Backend explicitly rejected token (401/403)
-            return None
+            if resp.status_code in (401, 403):
+                # Backend explicitly rejected token
+                return None
+            raise BackendUnavailableError(
+                f"Backend returned HTTP {resp.status_code}: {resp.text}"
+            )
         except httpx.RequestError as e:
             # Network failure in production — fail closed (Rule 4: Fail closed)
             raise BackendUnavailableError(
@@ -94,8 +98,9 @@ class InternalClient:
             )
             resp.raise_for_status()
             return resp.json()
-        except Exception:
-            return self._mock_tool_result(tool_name, args)
+        except Exception as exc:
+            logger.error("Backend tool execution failed for '%s': %s", tool_name, exc)
+            return {"ok": False, "error": f"Tool execution failed: {exc}"}
 
     # ---- 4. Confirmation handshake (high-risk tools) ----
     async def confirm_tool(self, pending_confirmation_id: str, actor: ActorContext) -> dict[str, Any]:

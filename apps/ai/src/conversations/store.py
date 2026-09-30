@@ -39,7 +39,13 @@ class ConversationStore:
             return
 
         try:
-            self._redis = aioredis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+            self._redis = aioredis.from_url(
+                settings.redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_connect_timeout=1.0,
+                socket_timeout=1.5,
+            )
             logger.info("ConversationStore: Redis connected at %s", settings.redis_url)
         except Exception as exc:
             logger.warning(
