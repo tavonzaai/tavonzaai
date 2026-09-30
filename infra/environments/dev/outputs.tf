@@ -64,13 +64,14 @@ output "application_urls" {
 
 output "route53_zone_id" {
   description = "Route 53 Public Hosted Zone ID"
-  value       = aws_route53_zone.primary.zone_id
+  value       = data.aws_route53_zone.primary.zone_id
 }
 
 output "route53_name_servers" {
   description = "Route 53 Public Hosted Zone Name Servers (Configure these at your domain registrar)"
-  value       = aws_route53_zone.primary.name_servers
+  value       = data.aws_route53_zone.primary.name_servers
 }
+
 
 # ==============================================================================
 # Amazon ECS Container Outputs
