@@ -190,7 +190,7 @@ module "acm" {
 
   domain_name               = var.domain_name
   subject_alternative_names = ["*.${var.domain_name}"]
-  route53_zone_id           = aws_route53_zone.primary.zone_id
+  route53_zone_id           = data.aws_route53_zone.primary.zone_id
 }
 
 # 9. Application Load Balancer Module (Deployed into Public Subnets)
@@ -298,7 +298,7 @@ module "ecs" {
 module "route53" {
   source = "../../modules/route53"
 
-  route53_zone_id     = aws_route53_zone.primary.zone_id
+  route53_zone_id     = data.aws_route53_zone.primary.zone_id
   domain_name         = var.domain_name
   api_subdomain       = var.api_subdomain
   ai_subdomain        = var.ai_subdomain
@@ -317,7 +317,7 @@ module "ses" {
   source = "../../modules/ses"
 
   domain_name               = var.domain_name
-  route53_zone_id           = aws_route53_zone.primary.zone_id
+  route53_zone_id           = data.aws_route53_zone.primary.zone_id
   enable_mail_from          = var.ses_enable_mail_from
   mail_from_subdomain       = var.ses_mail_from_subdomain
   enable_dmarc              = var.ses_enable_dmarc
