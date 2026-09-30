@@ -12,8 +12,7 @@ logger = logging.getLogger(__name__)
 
 FALLBACK_MODELS = [
     settings.groq_model,
-    "openai/gpt-oss-20b",
-    "qwen/qwen3.8-27b",
+    "llama-3.1-8b-instant",
 ]
 
 

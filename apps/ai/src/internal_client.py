@@ -6,12 +6,15 @@ Never:
   AI -> SQL -> Database
 """
 
+import logging
 from typing import Any
 
 import httpx
 
 from src.config import settings
 from src.models import ActorContext
+
+logger = logging.getLogger(__name__)
 
 
 class BackendUnavailableError(Exception):
@@ -108,12 +111,12 @@ class InternalClient:
     # ---- 5. Audit ----
     async def write_audit(self, record: dict[str, Any]) -> None:
         if settings.dev_mode_mock_backend:
-            print("[AUDIT-MOCK]", record)
+            logger.debug("[AUDIT-MOCK] %s", record)
             return
         try:
             await self._client.post("/audit", json=record)
-        except Exception:
-            print("[AUDIT-FALLBACK]", record)
+        except Exception as exc:
+            logger.error("[AUDIT-FALLBACK] Failed to write audit: %s. Record: %s", exc, record)
 
     # ---- Local fixtures (used only when DEV_MODE_MOCK_BACKEND=true) ----
     def _mock_actor(self, user_token: str = "") -> ActorContext:
