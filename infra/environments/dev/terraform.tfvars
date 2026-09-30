@@ -13,13 +13,14 @@ enable_nat_gateway       = true
 single_nat_gateway       = true # Cost-optimized: Single NAT Gateway for dev
 
 # Domain & DNS
-domain_name       = "tavonzaai.net"
+domain_name       = "tavonza.com"
 api_subdomain     = "api"
 ai_subdomain      = "ai"
 kitchen_subdomain = "kitchen"
 cashier_subdomain = "cashier"
 admin_subdomain   = "admin"
-enable_https      = false # Set to true once domain is purchased and pointed to Route 53
+enable_https      = true
+
 
 # Custom DNS Records
 extra_txt_records   = {}
