@@ -81,6 +81,17 @@ resource "aws_security_group_rule" "backend_ingress_from_alb" {
   security_group_id        = aws_security_group.backend.id
 }
 
+# Allow AI service traffic from ALB SG to Backend host
+resource "aws_security_group_rule" "backend_ingress_ai_from_alb" {
+  type                     = "ingress"
+  description              = "Allow AI service traffic from ALB SG to Backend host"
+  from_port                = var.ai_port
+  to_port                  = var.ai_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.backend.id
+}
+
 # Allow outbound traffic for package manager, docker registries, SSM, S3, Secrets Manager
 resource "aws_security_group_rule" "backend_egress_all" {
   type              = "egress"
@@ -95,7 +106,7 @@ resource "aws_security_group_rule" "backend_egress_all" {
 # Security Group: Frontend EC2 Instance
 resource "aws_security_group" "frontend" {
   name        = "${var.project_name}-${var.environment}-frontend-sg"
-  description = "Security group for Frontend EC2 instance running Next.js and React Admin containers"
+  description = "Security group for Frontend EC2 instance running Next.js, Kitchen, Cashier, and Admin containers"
   vpc_id      = var.vpc_id
 
   tags = merge(var.tags, {
@@ -103,12 +114,34 @@ resource "aws_security_group" "frontend" {
   })
 }
 
-# Allow Next.js traffic from ALB security group only
+# Allow Next.js Customer traffic from ALB security group only
 resource "aws_security_group_rule" "frontend_ingress_nextjs_from_alb" {
   type                     = "ingress"
-  description              = "Allow Next.js traffic from ALB SG only"
+  description              = "Allow Next.js Customer traffic from ALB SG only"
   from_port                = var.nextjs_port
   to_port                  = var.nextjs_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.frontend.id
+}
+
+# Allow Kitchen frontend traffic from ALB security group only
+resource "aws_security_group_rule" "frontend_ingress_kitchen_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Kitchen frontend traffic from ALB SG only"
+  from_port                = var.kitchen_port
+  to_port                  = var.kitchen_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.frontend.id
+}
+
+# Allow Cashier frontend traffic from ALB security group only
+resource "aws_security_group_rule" "frontend_ingress_cashier_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Cashier frontend traffic from ALB SG only"
+  from_port                = var.cashier_port
+  to_port                  = var.cashier_port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.alb.id
   security_group_id        = aws_security_group.frontend.id
@@ -221,6 +254,39 @@ resource "aws_security_group_rule" "ecs_ingress_admin_from_alb" {
   description              = "Allow React Admin traffic from ALB SG to ECS tasks"
   from_port                = var.admin_port
   to_port                  = var.admin_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ecs.id
+}
+
+# Allow AI service traffic from ALB SG to ECS tasks
+resource "aws_security_group_rule" "ecs_ingress_ai_from_alb" {
+  type                     = "ingress"
+  description              = "Allow AI service traffic from ALB SG to ECS tasks"
+  from_port                = var.ai_port
+  to_port                  = var.ai_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ecs.id
+}
+
+# Allow Kitchen frontend traffic from ALB SG to ECS tasks
+resource "aws_security_group_rule" "ecs_ingress_kitchen_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Kitchen frontend traffic from ALB SG to ECS tasks"
+  from_port                = var.kitchen_port
+  to_port                  = var.kitchen_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ecs.id
+}
+
+# Allow Cashier frontend traffic from ALB SG to ECS tasks
+resource "aws_security_group_rule" "ecs_ingress_cashier_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Cashier frontend traffic from ALB SG to ECS tasks"
+  from_port                = var.cashier_port
+  to_port                  = var.cashier_port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.alb.id
   security_group_id        = aws_security_group.ecs.id

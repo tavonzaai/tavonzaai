@@ -1,29 +1,43 @@
 // ============================================================================
 // Order Presentation — Request DTOs (Incoming Data)
 // ============================================================================
-// Request DTOs validate and type the data coming INTO the API.
-// They are separate from domain entities because:
-//   1. Not all entity fields should be settable by the client
-//   2. Validation decorators are a presentation concern, not domain
-//
-// NOTE: For production, add class-validator decorators (@IsString, @IsNumber, etc.)
-//       and use ValidationPipe in main.ts for automatic validation.
-// ============================================================================
+
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsString,
+  IsNotEmpty,
+  IsInt,
+  Min,
+  IsOptional,
+  IsArray,
+  IsUUID,
+} from 'class-validator';
 
 // ─── Add to Cart ──────────────────────────────────────────────────────
 // Figma: "Add To Cart" button on item detail screen
 
 export class AddToCartDto {
   /** ID of the menu item to add. */
+  @ApiProperty({ description: 'ID of the menu item to add' })
+  @IsUUID()
   menuItemId!: string;
 
   /** Quantity (default 1). Figma: quantity +/- buttons. */
+  @ApiProperty({ example: 1, minimum: 1 })
+  @IsInt()
+  @Min(1)
   quantity!: number;
 
   /** Optional note for the kitchen. Figma: "Add a note for the Kitchen..." */
+  @ApiPropertyOptional({ example: 'Extra crispy' })
+  @IsOptional()
+  @IsString()
   specialInstructions?: string;
 
   /** Selected add-ons. Figma: "+$1.50" checkboxes. */
+  @ApiPropertyOptional({ type: 'array' })
+  @IsOptional()
+  @IsArray()
   addOns?: Array<{ name: string; price: number }>;
 }
 
@@ -31,7 +45,15 @@ export class AddToCartDto {
 // Figma: Quantity change on Order Summary screen
 
 export class UpdateCartItemDto {
+  @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   quantity?: number;
+
+  @ApiPropertyOptional({ example: 'No sauce' })
+  @IsOptional()
+  @IsString()
   specialInstructions?: string;
 }
 
@@ -39,6 +61,8 @@ export class UpdateCartItemDto {
 // Figma: "Place Order" button
 
 export class SubmitOrderDto {
+  @ApiProperty()
+  @IsUUID()
   orderId!: string;
 }
 
@@ -47,5 +71,8 @@ export class SubmitOrderDto {
 
 export class UpdateOrderStatusDto {
   /** Target status. Must be a valid transition from the current status. */
+  @ApiProperty({ example: 'ACCEPTED' })
+  @IsString()
+  @IsNotEmpty()
   status!: string;
 }

@@ -11,11 +11,31 @@ variable "domain_name" {
 variable "api_subdomain" {
   description = "Subdomain prefix for API (e.g. api)"
   type        = string
+  default     = "api"
+}
+
+variable "ai_subdomain" {
+  description = "Subdomain prefix for AI service (e.g. ai)"
+  type        = string
+  default     = "ai"
+}
+
+variable "kitchen_subdomain" {
+  description = "Subdomain prefix for Kitchen frontend (e.g. kitchen)"
+  type        = string
+  default     = "kitchen"
+}
+
+variable "cashier_subdomain" {
+  description = "Subdomain prefix for Cashier frontend (e.g. cashier)"
+  type        = string
+  default     = "cashier"
 }
 
 variable "admin_subdomain" {
   description = "Subdomain prefix for Admin (e.g. admin)"
   type        = string
+  default     = "admin"
 }
 
 variable "alb_dns_name" {
@@ -36,6 +56,7 @@ variable "extra_txt_records" {
     records = list(string)
     ttl     = number
   }))
+  default = {}
 }
 
 variable "extra_cname_records" {
@@ -45,6 +66,8 @@ variable "extra_cname_records" {
     record = string
     ttl    = number
   }))
+  default = {}
 }
+
 
 

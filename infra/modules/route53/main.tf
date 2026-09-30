@@ -26,8 +26,51 @@ resource "aws_route53_record" "api" {
   }
 }
 
+# Route 53 Alias Record: AI Subdomain (ai.example.com)
+resource "aws_route53_record" "ai" {
+  allow_overwrite = true
+  zone_id         = var.route53_zone_id
+  name            = "${var.ai_subdomain}.${var.domain_name}"
+  type            = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Route 53 Alias Record: Kitchen Subdomain (kitchen.example.com)
+resource "aws_route53_record" "kitchen" {
+  allow_overwrite = true
+  zone_id         = var.route53_zone_id
+  name            = "${var.kitchen_subdomain}.${var.domain_name}"
+  type            = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Route 53 Alias Record: Cashier Subdomain (cashier.example.com)
+resource "aws_route53_record" "cashier" {
+  allow_overwrite = true
+  zone_id         = var.route53_zone_id
+  name            = "${var.cashier_subdomain}.${var.domain_name}"
+  type            = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
 # Route 53 Alias Record: Admin Subdomain (admin.example.com)
 resource "aws_route53_record" "admin" {
+  count           = var.admin_subdomain != "" ? 1 : 0
   allow_overwrite = true
   zone_id         = var.route53_zone_id
   name            = "${var.admin_subdomain}.${var.domain_name}"

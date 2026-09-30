@@ -46,6 +46,24 @@ variable "api_subdomain" {
   default     = "api"
 }
 
+variable "ai_subdomain" {
+  description = "Subdomain prefix for AI service (e.g. ai)"
+  type        = string
+  default     = "ai"
+}
+
+variable "kitchen_subdomain" {
+  description = "Subdomain prefix for Kitchen frontend (e.g. kitchen)"
+  type        = string
+  default     = "kitchen"
+}
+
+variable "cashier_subdomain" {
+  description = "Subdomain prefix for Cashier frontend (e.g. cashier)"
+  type        = string
+  default     = "cashier"
+}
+
 variable "admin_subdomain" {
   description = "Subdomain prefix for Admin (e.g. admin)"
   type        = string
@@ -70,6 +88,24 @@ variable "frontend_instance_id" {
   default     = null
 }
 
+variable "ai_instance_id" {
+  description = "EC2 Instance ID for AI service (defaults to backend_instance_id if null)"
+  type        = string
+  default     = null
+}
+
+variable "kitchen_instance_id" {
+  description = "EC2 Instance ID for Kitchen frontend (defaults to frontend_instance_id if null)"
+  type        = string
+  default     = null
+}
+
+variable "cashier_instance_id" {
+  description = "EC2 Instance ID for Cashier frontend (defaults to frontend_instance_id if null)"
+  type        = string
+  default     = null
+}
+
 variable "backend_port" {
   description = "Port the backend application listens on"
   type        = number
@@ -77,9 +113,27 @@ variable "backend_port" {
 }
 
 variable "nextjs_port" {
-  description = "Port the Next.js application listens on"
+  description = "Port the Next.js customer application listens on"
   type        = number
   default     = 3000
+}
+
+variable "ai_port" {
+  description = "Port the AI FastAPI application listens on"
+  type        = number
+  default     = 8000
+}
+
+variable "kitchen_port" {
+  description = "Port the Kitchen application listens on"
+  type        = number
+  default     = 3105
+}
+
+variable "cashier_port" {
+  description = "Port the Cashier application listens on"
+  type        = number
+  default     = 3104
 }
 
 variable "admin_port" {
@@ -95,7 +149,25 @@ variable "backend_health_check_path" {
 }
 
 variable "nextjs_health_check_path" {
-  description = "Health check path for Next.js service"
+  description = "Health check path for Next.js customer service"
+  type        = string
+  default     = "/"
+}
+
+variable "ai_health_check_path" {
+  description = "Health check path for AI service"
+  type        = string
+  default     = "/health"
+}
+
+variable "kitchen_health_check_path" {
+  description = "Health check path for Kitchen frontend"
+  type        = string
+  default     = "/"
+}
+
+variable "cashier_health_check_path" {
+  description = "Health check path for Cashier frontend"
   type        = string
   default     = "/"
 }
