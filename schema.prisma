@@ -1,0 +1,1143 @@
+// ============================================================================
+// RESTAURANT ORDERING & TABLE MANAGEMENT PLATFORM
+// Prisma Schema — MongoDB, Multi-Restaurant / Multi-Branch
+// ============================================================================
+// NOTES
+// - Built for MongoDB: relations use ObjectId refs (Mongo has no native FKs),
+//   and small tightly-coupled structures use Prisma "type" (embedded documents)
+//   instead of separate collections where that matches how they're read/written.
+// - Multi-tenancy model: Organization -> Restaurant -> Branch.
+// - Table status is split into a 7-state service lifecycle (TableServiceStatus)
+//   and a separate operational flag (TableOperationalFlag) for RESERVED/OUT_OF_SERVICE.
+// - TableSession binds customer + table + orders for the QR self-order flow.
+// - Order status audit uses the OrderStatusChangeLog / OrderItemStatusChangeLog
+//   collections (not embedded arrays).
+// - OrderItem stores price/name snapshots; no embedded OrderItemSnapshot on Order.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator dbml {
+  provider = "prisma-dbml-generator"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum GlobalRole {
+  SUPER_ADMIN // platform-level admin, cross-restaurant (has all permissions)
+  ADMIN // admin means owner/restaurant admin
+  STAFF // staff: waiter, kitchen staff, cashier, manager, etc. All branch staff in one role
+  CUSTOMER // means all restaurant customers.
+}
+
+enum StationType {
+  KITCHEN
+  BAR
+}
+
+enum ShiftSlotStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InventoryUnit {
+  KG
+  GRAM
+  LITER
+  ML
+  PIECE
+  BOX
+  PACKET
+}
+
+enum StaffRole {
+  BRANCH_MANAGER
+  HOST
+  WAITER
+  KITCHEN_STAFF
+  BARTENDER
+  CASHIER
+}
+
+enum PermissionAction {
+  MANAGE_MENU
+  MANAGE_TABLES
+  MANAGE_STAFF
+  MANAGE_RESERVATIONS
+  VIEW_ORDERS
+  UPDATE_ORDER_STATUS
+  MANAGE_PAYMENTS
+  APPLY_DISCOUNTS
+  VIEW_REPORTS
+  MANAGE_BRANCH_SETTINGS
+}
+
+enum OrderChannel {
+  DINE_IN
+  QR_SELF_ORDER
+  POS // waiter/cashier-entered
+  SELF_SERVICE_KIOSK
+  TAKEAWAY
+  DELIVERY // Phase 2 (Q19)
+  MOBILE_APP
+  WEB
+}
+
+// How a placed order reaches production. Branch-level setting, NOT a fixed path
+// (letter §3 / Q1). MVP default: WAITER_APPROVAL.
+enum OrderAcceptanceMode {
+  AUTO_ACCEPT // order enters production immediately
+  WAITER_APPROVAL // waiter reviews and accepts (MVP default)
+  MANAGER_APPROVAL // exceptional workflows / order types
+}
+
+// Predefined rejection reasons (Q4). The customer always gets a reason and can
+// modify + resubmit; `Order.rejectionReason` carries the optional free note.
+enum OrderRejectionReason {
+  ITEM_UNAVAILABLE
+  KITCHEN_CAPACITY
+  MODIFICATION_IMPOSSIBLE
+  ALLERGY_CONCERN
+  RESTAURANT_CLOSING
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING // placed, awaiting confirmation
+  CONFIRMED // accepted by branch/kitchen
+  PREPARING
+  READY // ready for pickup/serving
+  SERVED // delivered to table (dine-in)
+  COMPLETED // paid & closed
+  CANCELLED
+  REJECTED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  REFUNDED
+  FAILED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MOBILE_WALLET
+  ONLINE_GATEWAY
+}
+
+enum TableServiceStatus {
+  AVAILABLE
+  OCCUPIED // customer authenticated, no order yet
+  ORDERING // cart being built / awaiting waiter acceptance
+  PREPARING // order accepted, sent to kitchen/bar
+  SERVING // items ready or being served
+  PAYMENT_PENDING // all items served, awaiting payment
+  CLOSING // paid, waiter clearing table
+}
+
+enum TableOperationalFlag {
+  NORMAL
+  RESERVED
+  CLEANING
+  OUT_OF_SERVICE
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  SEATED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+  DELETED
+}
+
+enum OrderItemStatus {
+  PENDING
+  PREPARING
+  READY
+  SERVED
+  UNAVAILABLE
+  CANCELLED
+}
+
+enum Shape {
+  CIRCLE
+  SQUARE
+  RECTANGLE
+  TRIANGLE
+  HEXAGON
+}
+
+// Lifecycle of the TABLE-level session. Independent of Order/OrderItem/Payment
+// status (see "SEPARATE STATE MACHINES" in the header note).
+enum TableSessionStatus {
+  ACTIVE // table is open; guests may join, order and pay
+  BILL_REQUESTED // a guest asked for the bill; ordering may still continue
+  CLOSING // fully settled, waiter clearing the table
+  COMPLETED
+  ABANDONED
+}
+
+// Lifecycle of ONE guest inside a table session.
+enum GuestSessionStatus {
+  ACTIVE
+  LEFT // guest left/settled early while the table session continues
+  CLOSED // closed together with the table session
+}
+
+// What a single Payment is intended to cover. The precise money split is
+// recorded in PaymentAllocation; this is the guest-facing intent.
+enum PaymentScope {
+  ORDER // one order, in full
+  ORDER_ITEMS // selected items only (split by item)
+  GUEST_SESSION // everything one guest ordered ("pay for myself"/"pay for them")
+  TABLE_SESSION // the whole table
+}
+
+enum OtpPurpose {
+  TABLE_AUTH
+  PASSWORD_RESET
+}
+
+// ============================================================================
+// EMBEDDED (COMPOSITE) TYPES — MongoDB "type" blocks, not separate collections
+// ============================================================================
+
+type Address {
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  postalCode String?
+  country    String
+  lat        Float?
+  lng        Float?
+}
+
+// ============================================================================
+// ORGANIZATION / RESTAURANT / BRANCH
+// ============================================================================
+
+model Organization {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  ownerId   String   @db.ObjectId
+  owner     User     @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  slug      String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurants Restaurant[]
+
+  @@map("organizations")
+}
+
+model Restaurant {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String       @db.ObjectId
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  slug           String       @unique
+  logoUrl        String?
+  description    String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  branches       Branch[]
+  menuItems      MenuItem[]
+  menuCategories MenuCategory[]
+
+  @@map("restaurants")
+}
+
+model Branch {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  restaurantId String     @db.ObjectId
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  name         String
+  address      Address
+  phone        String?
+  timezone     String     @default("UTC")
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  staffAssignments    StaffAssignment[]
+  tables              Table[]
+  reservations        Reservation[]
+  orders              Order[]
+  waiterAssignments   WaiterTableAssignment[]
+  workShifts          WorkShift[]
+  suppliers           Supplier[]
+  inventoryItems      InventoryItem[]
+  inventoryCategories InventoryCategory[]
+  operatingHours      BranchOperatingHour[]
+  holidays            BranchHoliday[]
+  tableSessions       TableSession[]
+  settings            BranchSetting?
+  auditLogs           AuditLog[]
+  // closures            BranchClosure[]
+  // menuOverrides       BranchMenuItem[]
+  // waitlistEntries     WaitlistEntry[]
+  // operationalEvents   OperationalEvent[]
+  // jarvisInsights      JarvisInsight[]
+  // supportGrants       SupportAccessGrant[]
+  // integrations        Integration[]
+
+  @@index([restaurantId])
+  @@map("branches")
+}
+
+// Per-branch operating configuration. Split out of Branch so operational
+// toggles can be read/written independently of branch identity.
+//
+// This is where the client's "configurable, not fixed" requirements land
+// (letter §3, Q1, Q9, Q49): the MVP ships with WAITER_APPROVAL, but the mode is
+// a stored setting from day one, never a hardcoded path.
+model BranchSetting {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  branchId String @unique @db.ObjectId
+  branch   Branch @relation(fields: [branchId], references: [id])
+
+  // ---- Order acceptance (letter §3 / Q1) ----
+  orderAcceptanceMode OrderAcceptanceMode @default(WAITER_APPROVAL)
+  // Admin & Branch Manager can always accept as backup (Q1); this allows a
+  // branch to additionally let the cashier/host step in.
+  backupAccepterRoles StaffRole[]
+
+  // ---- Menu availability (Q9) ----
+  // false = show the item marked unavailable (client's preferred default);
+  // true  = hide it from the customer menu entirely.
+  hideUnavailableItems Boolean @default(false)
+
+  // ---- Table / guest sessions (letter §2, Q49) ----
+  allowMultipleGuestSessions Boolean @default(true)
+  // true  = every guest verifies their own OTP
+  // false = the first guest's auth covers the table, later guests just join
+  requireOtpPerGuest         Boolean @default(true)
+  allowSplitBill             Boolean @default(true)
+  allowGuestCheckoutWithoutAccount Boolean @default(true) // Q17/Q32
+  autoCloseIdleSessionMins   Int?
+
+  // ---- Money ----
+  currency          String  @default("USD")
+  taxPercent        Float   @default(0)
+  serviceChargePct  Float   @default(0)
+  tipEnabled        Boolean @default(true)
+
+  reservationsEnabled Boolean @default(true) // Q17
+  waitlistEnabled     Boolean @default(true) // Q13 (Host)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("branch_settings")
+}
+
+// ============================================================================
+// USERS, ROLES & PERMISSIONS
+// ============================================================================
+
+model User {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  email     String     @unique
+  contactNo String?    @unique
+  password  String?
+  fcmToken  String?
+  name      String
+  role      GlobalRole @default(CUSTOMER)
+  avatar    String?
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  ownedOrganizations        Organization[]             @relation("OrganizationOwner")
+  customer                  Customer?
+  admin                     Admin?
+  staff                     Staff?
+  owner                     Owner?
+  auditLogs                 AuditLog[]
+  orderStatusChangeLogs     OrderStatusChangeLog[]
+  orderItemStatusChangeLogs OrderItemStatusChangeLog[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Admin {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @unique @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  intro String @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admins")
+}
+
+model Staff {
+  id                 String                  @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String                  @unique @db.ObjectId
+  user               User                    @relation(fields: [userId], references: [id])
+  staffAssignments   StaffAssignment[]
+  waiterAssignments  WaiterTableAssignment[] @relation("AssignmentWaiter")
+  createdAssignments WaiterTableAssignment[] @relation("AssignmentCreatedBy")
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@map("staff")
+}
+
+model Owner {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @unique @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("owners")
+}
+
+// Links a staff User to a specific Branch with a role + explicit permissions.
+// Kept as its own collection (not embedded on User) because staff can be
+// assigned to multiple branches, and permissions are queried/updated
+// independently of the user's core profile.
+model StaffAssignment {
+  id          String             @id @default(auto()) @map("_id") @db.ObjectId
+  staffId     String             @db.ObjectId
+  staff       Staff              @relation(fields: [staffId], references: [id])
+  branchId    String             @db.ObjectId
+  branch      Branch             @relation(fields: [branchId], references: [id])
+  role        StaffRole
+  permissions PermissionAction[] // explicit overrides/grants beyond role defaults
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  workShifts WorkShift[]
+
+  @@unique([staffId, branchId])
+  @@index([branchId])
+  @@map("staff_assignments")
+}
+
+model Customer {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @unique @db.ObjectId
+  user           User     @relation(fields: [userId], references: [id])
+  defaultAddress Address?
+  loyaltyPoints  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  reservations  Reservation[]
+  orders        Order[]
+  reviews       OrderReview[]
+  guestSessions GuestSession[] // one row per table visit (was: tableSessions)
+
+  @@map("customers")
+}
+
+// ============================================================================
+// MENU
+// ============================================================================
+
+model MenuCategory {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  restaurantId String     @db.ObjectId
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  name         String
+  description  String?
+  displayOrder Int        @default(0)
+  isActive     Boolean    @default(true)
+
+  menuItems MenuItem[]
+
+  @@index([restaurantId])
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  restaurantId String       @db.ObjectId
+  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id])
+  categoryId   String       @db.ObjectId
+  category     MenuCategory @relation(fields: [categoryId], references: [id])
+  name         String
+  description  String?
+  imageUrl     String?
+  basePrice    Float
+  isAvailable  Boolean      @default(true)
+  isVegetarian Boolean      @default(false)
+  spiceLevel   Int? // 0-3, optional
+  displayOrder Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  modifierGroups ModifierGroup[]
+  orderItems     OrderItem[]
+
+  @@index([restaurantId])
+  @@index([categoryId])
+  @@map("menu_items")
+}
+
+// A group of choices attached to a menu item, e.g. "Size", "Add-ons".
+model ModifierGroup {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  menuItemId String   @db.ObjectId
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  name       String // e.g. "Size", "Toppings"
+  isRequired Boolean  @default(false)
+  minSelect  Int      @default(0)
+  maxSelect  Int      @default(1)
+
+  modifiers Modifier[]
+
+  @@index([menuItemId])
+  @@map("modifier_groups")
+}
+
+model Modifier {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  modifierGroupId String        @db.ObjectId
+  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id])
+  name            String // e.g. "Large", "Extra Cheese"
+  priceDelta      Float         @default(0)
+  isAvailable     Boolean       @default(true)
+
+  @@index([modifierGroupId])
+  @@map("modifiers")
+}
+
+// ============================================================================
+// TABLES & RESERVATIONS
+// ============================================================================
+
+model Table {
+  id              String               @id @default(auto()) @map("_id") @db.ObjectId
+  branchId        String               @db.ObjectId
+  branch          Branch               @relation(fields: [branchId], references: [id])
+  label           String // e.g. "T-12", "Patio 3"
+  capacity        Int
+  serviceStatus   TableServiceStatus   @default(AVAILABLE)
+  operationalFlag TableOperationalFlag @default(NORMAL)
+  qrCodeToken     String?              @unique // for QR self-order flows
+  shape           Shape                @default(SQUARE)
+  floor           Int                  @default(1)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  reservations      Reservation[]
+  orders            Order[]
+  waiterAssignments WaiterTableAssignment[]
+  tableSessions     TableSession[]
+  tableAuthOtps     TableAuthOtp[]
+  // waitlistEntries   WaitlistEntry[]  // TODO: define WaitlistEntry model when implementing waitlist feature
+
+  @@index([branchId])
+  @@index([branchId, serviceStatus])
+  @@map("tables")
+}
+
+model Reservation {
+  id             String            @id @default(auto()) @map("_id") @db.ObjectId
+  branchId       String            @db.ObjectId
+  branch         Branch            @relation(fields: [branchId], references: [id])
+  tableId        String?           @db.ObjectId
+  table          Table?            @relation(fields: [tableId], references: [id])
+  customerId     String?           @db.ObjectId
+  customer       Customer?         @relation(fields: [customerId], references: [id])
+  tableSessionId String?           @unique @db.ObjectId
+  tableSession   TableSession?     @relation(fields: [tableSessionId], references: [id])
+  guestName      String // captured even for non-account guests
+  guestPhone     String
+  partySize      Int
+  reservedFor    DateTime // requested date/time
+  durationMins   Int               @default(90)
+  status         ReservationStatus @default(PENDING)
+  specialRequest String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([branchId, reservedFor])
+  @@index([tableId])
+  @@index([status])
+  @@map("reservations")
+}
+
+model WaiterTableAssignment {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  branchId String @db.ObjectId
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  tableId String @db.ObjectId
+  table   Table  @relation(fields: [tableId], references: [id], onDelete: Restrict)
+
+  waiterId String @db.ObjectId
+  waiter   Staff  @relation("AssignmentWaiter", fields: [waiterId], references: [id], onDelete: Restrict)
+
+  assignedById String @db.ObjectId
+  assignedBy   Staff  @relation("AssignmentCreatedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  sessionStart DateTime
+  sessionEnd   DateTime
+  isActive     Boolean  @default(true) // manager can revoke early without deleting the audit row
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tableId, sessionStart, sessionEnd])
+  @@index([waiterId, sessionStart])
+  @@map("waiter_table_assignments")
+}
+
+// ============================================================================
+// TABLE SESSIONS & GUEST SESSIONS
+// ----------------------------------------------------------------------------
+// Client correction (letter §2): a table is NOT limited to one customer.
+//   TableSession  = the table is open for service   (one ACTIVE per table)
+//   GuestSession  = one person seated at that table (MANY per TableSession)
+//
+// Four guests at Table 12 all scan the same QR and JOIN the same TableSession
+// as four GuestSessions. A second scan must never return "table occupied".
+// Orders and payments hang off the guest session, so each guest can order
+// individually, identify their own items, split the bill, pay for another
+// guest, or pay for the whole table.
+//
+// "One ACTIVE TableSession per table" is still true and is enforced in the
+// service layer (Mongo has no partial unique index); the previous single
+// `customerId` column on TableSession — which is what enforced one customer
+// per table — has been removed.
+// ============================================================================
+
+model TableSession {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  tableId  String @db.ObjectId
+  table    Table  @relation(fields: [tableId], references: [id])
+  branchId String @db.ObjectId // denormalized: every branch-scoped read filters on it
+  branch   Branch @relation(fields: [branchId], references: [id])
+
+  // Short code a guest can use to join an open table session without rescanning.
+  joinCode  String?
+  partySize Int? // expected head count, from reservation or host
+
+  startedAt DateTime           @default(now())
+  endedAt   DateTime? // null while the session is open
+  status    TableSessionStatus @default(ACTIVE)
+
+  openedByStaffId String? @db.ObjectId // host/waiter who opened it (walk-in or reservation seating)
+  closedByStaffId String? @db.ObjectId // waiter/cashier who closed & cleared the table
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guestSessions GuestSession[]
+  orders        Order[] // every order (initial + supplementary) across all guests
+  payments      Payment[] // table-level payments (whole-table settle, split bill)
+  reservation   Reservation?
+  tableAuthOtps TableAuthOtp[]
+
+  @@index([tableId, status])
+  @@index([branchId, status])
+  @@map("table_sessions")
+}
+
+// One guest within a table session. `customerId` is optional on purpose:
+// Q17/Q32 allow a guest to order without a full Tavonza account, with the
+// profile linked later.
+model GuestSession {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  tableSessionId String       @db.ObjectId
+  tableSession   TableSession @relation(fields: [tableSessionId], references: [id])
+  customerId     String?      @db.ObjectId
+  customer       Customer?    @relation(fields: [customerId], references: [id])
+
+  displayName String? // "Guest 2" until the guest identifies themselves
+  contact     String? // phone/email this guest used, when they authenticated
+  seatLabel   String? // optional seat marker chosen by the host
+
+  // Null when the guest joined under the table session's existing auth rather
+  // than verifying their own OTP — see open question Q49 (per-guest OTP vs.
+  // first-guest-authenticates-for-the-table). Both are representable here.
+  otpVerifiedAt DateTime?
+  isHostGuest   Boolean            @default(false) // the guest who opened the table session
+  joinedAt      DateTime           @default(now())
+  leftAt        DateTime?
+  status        GuestSessionStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders   Order[] // orders this guest placed
+  payments Payment[] // payments this guest made (may cover other guests)
+
+  @@index([tableSessionId, status])
+  @@index([customerId])
+  @@map("guest_sessions")
+}
+
+// ============================================================================
+// ORDERS
+// ============================================================================
+
+model Order {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber String        @unique // human-readable, e.g. per-branch daily sequence
+  branchId    String        @db.ObjectId
+  branch      Branch        @relation(fields: [branchId], references: [id])
+  tableId     String?       @db.ObjectId
+  table       Table?        @relation(fields: [tableId], references: [id])
+  customerId  String?       @db.ObjectId
+  customer    Customer?     @relation(fields: [customerId], references: [id])
+  // Which table is being served (null for takeaway/delivery — Q19: an Order
+  // must not assume a physical table) …
+  tableSessionId String?       @db.ObjectId
+  tableSession   TableSession? @relation(fields: [tableSessionId], references: [id])
+  // … and WHICH GUEST at that table placed it, so each guest can identify and
+  // pay for their own items (letter §2).
+  guestSessionId String?       @db.ObjectId
+  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id])
+  channel        OrderChannel  @default(DINE_IN)
+  status         OrderStatus   @default(PENDING)
+
+  subtotal       Float
+  discountAmount Float @default(0)
+  taxAmount      Float @default(0)
+  serviceCharge  Float @default(0)
+  tipAmount      Float @default(0)
+  totalAmount    Float
+
+  // Payment progresses independently of fulfilment status (letter §4): an order
+  // can be SERVED and still UNPAID, or PAID while items are PREPARING.
+  paymentStatus PaymentStatus @default(UNPAID)
+  amountPaid    Float         @default(0) // cashier view: paid so far (Q7)
+
+  discountId          String?   @db.ObjectId
+  discount            Discount? @relation(fields: [discountId], references: [id])
+  discountCodeSnapshot String? // code as entered, preserved if the promo changes
+  discountAppliedById String?  @db.ObjectId // staff who applied a manual discount (Q20)
+
+  waiterAssignmentId String?                @db.ObjectId
+  waiterAssignment   WaiterTableAssignment? @relation(fields: [waiterAssignmentId], references: [id])
+
+  // ---- Acceptance (letter §3 / Q1) ----
+  // Snapshot of the branch's mode when the order was placed, so history stays
+  // readable after a branch switches modes.
+  acceptanceMode      OrderAcceptanceMode   @default(WAITER_APPROVAL)
+  acceptedById        String?               @db.ObjectId // waiter, manager or admin (backup)
+  acceptedAt          DateTime?
+  rejectedById        String?               @db.ObjectId
+  rejectedAt          DateTime?
+  rejectionReasonCode OrderRejectionReason? // predefined reason (Q4)
+  rejectionReason     String? // optional free-text note accompanying the code
+
+  placedByStaffId     String? @db.ObjectId // staff who entered a dine-in order, null for self-order
+  specialInstructions String?
+  resubmittedFromId   String? @db.ObjectId // link to the original rejected order (for re-submit chain)
+
+  // ---- Non-table channels (Q19) — an order need not belong to a table ----
+  guestName       String? // takeaway/delivery without an account
+  guestPhone      String?
+  deliveryAddress Address?
+  pickupAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments         Payment[]
+  orderItems       OrderItem[]
+  review           OrderReview?
+  statusChangeLogs OrderStatusChangeLog[]
+  allocations      PaymentAllocation[]
+
+  @@index([branchId, status])
+  @@index([tableId])
+  @@index([customerId])
+  @@index([tableSessionId])
+  @@index([guestSessionId])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  orderId String @db.ObjectId
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String   @db.ObjectId
+  product   MenuItem @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // --- price/name snapshot, exactly as specified in the requirement ---
+  productNameSnapshot String
+  unitPrice           Float
+  quantity            Int
+  subtotal            Float
+
+  // Denormalized at order time so the kitchen/bar dashboard can filter
+  // `WHERE stationType = X AND status = PENDING` without joining Product.
+  stationType StationType
+
+  status            OrderItemStatus @default(PENDING)
+  preparingAt       DateTime?
+  readyAt           DateTime?
+  servedAt          DateTime?
+  unavailableReason String? // populated when status = UNAVAILABLE (Kitchen/Bartender "mark unavailable")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  statusChangeLogs   OrderItemStatusChangeLog[]
+  paymentAllocations PaymentAllocation[]
+
+  @@index([orderId, status])
+  @@index([orderId, stationType, status])
+  @@map("order_items")
+}
+
+// A payment can settle a single order, selected items, one guest's tab, or the
+// whole table (letter §2). `orderId` is therefore optional — a whole-table
+// settle spans several orders — and the exact money split lives in
+// PaymentAllocation.
+model Payment {
+  id      String  @id @default(auto()) @map("_id") @db.ObjectId
+  orderId String? @db.ObjectId
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  tableSessionId String?       @db.ObjectId
+  tableSession   TableSession? @relation(fields: [tableSessionId], references: [id])
+
+  // The guest who PAID. Distinct from the guests being paid FOR, which lets one
+  // guest cover another guest or the entire table.
+  payerGuestSessionId String?       @db.ObjectId
+  payerGuestSession   GuestSession? @relation(fields: [payerGuestSessionId], references: [id])
+  paidForGuestIds     String[]      @db.ObjectId
+
+  scope          PaymentScope  @default(ORDER)
+  amount         Float
+  tipAmount      Float         @default(0)
+  method         PaymentMethod
+  status         PaymentStatus @default(UNPAID)
+  transactionRef String? // gateway/reference id
+  paidAt         DateTime?
+  settledById    String?       @db.ObjectId // cashier who settled the payment (§10.27)
+  collectedById  String?       @db.ObjectId // waiter who collected cash/card from table
+  refundedAt     DateTime? // when the refund was processed
+  refundRef      String? // refund transaction reference
+  refundAmount   Float? // partial or full refund amount
+  createdAt      DateTime      @default(now())
+
+  allocations PaymentAllocation[]
+
+  @@index([orderId])
+  @@index([tableSessionId])
+  @@index([payerGuestSessionId])
+  @@index([status])
+  @@map("payments")
+}
+
+// How one payment's money is distributed across orders/items. This is what
+// makes split-bill auditable: sum(allocations.amount) == payment.amount.
+model PaymentAllocation {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  paymentId String  @db.ObjectId
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  orderId String? @db.ObjectId
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  orderItemId String?    @db.ObjectId
+  orderItem   OrderItem? @relation(fields: [orderItemId], references: [id])
+
+  amount    Float
+  createdAt DateTime @default(now())
+
+  @@index([paymentId])
+  @@index([orderId])
+  @@index([orderItemId])
+  @@map("payment_allocations")
+}
+
+model Discount {
+  id         String       @id @default(auto()) @map("_id") @db.ObjectId
+  code       String       @unique
+  type       DiscountType
+  value      Float // percentage (0-100) or fixed amount depending on `type`
+  isActive   Boolean      @default(true)
+  validFrom  DateTime?
+  validUntil DateTime?
+  usageLimit Int?
+  timesUsed  Int          @default(0)
+
+  orders Order[]
+
+  @@map("discounts")
+}
+
+// ============================================================================
+// AUDIT LOG — tracks staff actions across the platform for accountability
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  branchId   String?  @db.ObjectId
+  branch     Branch?  @relation(fields: [branchId], references: [id])
+  actorId    String   @db.ObjectId
+  actor      User     @relation(fields: [actorId], references: [id])
+  action     String // e.g. "ORDER_STATUS_UPDATED", "MENU_ITEM_EDITED"
+  entityType String // e.g. "Order", "MenuItem"
+  entityId   String   @db.ObjectId
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([branchId])
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// WORK SHIFTS — combined slot + employee assignment per branch
+// ============================================================================
+
+model WorkShift {
+  id                String          @id @default(auto()) @map("_id") @db.ObjectId
+  branchId          String          @db.ObjectId
+  branch            Branch          @relation(fields: [branchId], references: [id])
+  staffAssignmentId String          @db.ObjectId
+  staffAssignment   StaffAssignment @relation(fields: [staffAssignmentId], references: [id])
+  name              String // e.g. "Morning Shift", "Night Shift"
+  startTime         DateTime // scheduled shift start (full timestamp)
+  endTime           DateTime // scheduled shift end (full timestamp)
+  durationMin       Int             @default(480) // 480 = 8 hours, enforced in app layer
+  date              DateTime // the calendar date this shift is for
+  status            ShiftSlotStatus @default(ACTIVE)
+  checkInAt         DateTime? // actual clock-in
+  checkOutAt        DateTime? // actual clock-out
+  note              String?
+  createdById       String          @db.ObjectId // manager who created/assigned
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([staffAssignmentId, date, startTime])
+  @@index([branchId])
+  @@index([branchId, date])
+  @@index([branchId, status])
+  @@index([staffAssignmentId, date])
+  @@map("work_shifts")
+}
+
+// ============================================================================
+// SUPPLIERS — branch-scoped supplier directory
+// ============================================================================
+
+model Supplier {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  branchId    String   @db.ObjectId
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  address     Address?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  inventoryItems InventoryItem[]
+
+  @@index([branchId])
+  @@index([branchId, isActive])
+  @@map("suppliers")
+}
+
+// ============================================================================
+// INVENTORY — branch-scoped stock items linked to suppliers
+// ============================================================================
+
+model InventoryCategory {
+  id             String          @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  description    String?
+  branchId       String          @db.ObjectId
+  branch         Branch          @relation(fields: [branchId], references: [id])
+  inventoryItems InventoryItem[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([branchId])
+  @@map("inventory_categories")
+}
+
+model InventoryItem {
+  id                String            @id @default(auto()) @map("_id") @db.ObjectId
+  branchId          String            @db.ObjectId
+  branch            Branch            @relation(fields: [branchId], references: [id])
+  supplierId        String            @db.ObjectId
+  supplier          Supplier          @relation(fields: [supplierId], references: [id])
+  categoryId        String            @db.ObjectId
+  category          InventoryCategory @relation(fields: [categoryId], references: [id])
+  name              String
+  sku               String? // stock-keeping unit code
+  unit              InventoryUnit
+  currentStock      Float             @default(0)
+  lowStockThreshold Float?
+  costPerUnit       Float? // purchase price
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([branchId])
+  @@index([supplierId])
+  @@index([branchId, isActive])
+  @@map("inventory_items")
+}
+
+// ============================================================================
+// ORDER REVIEWS — one review per order
+// ============================================================================
+
+model OrderReview {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderId    String   @unique @db.ObjectId // one review per order
+  order      Order    @relation(fields: [orderId], references: [id])
+  customerId String   @db.ObjectId
+  customer   Customer @relation(fields: [customerId], references: [id])
+  rating     Int // 1–5, validated in app layer
+  comment    String?
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([customerId])
+  @@map("order_reviews")
+}
+
+// ============================================================================
+// STATUS CHANGE LOG — audit trail for Order & OrderItem status transitions
+// ============================================================================
+
+model OrderStatusChangeLog {
+  id             String      @id @default(auto()) @map("_id") @db.ObjectId
+  orderId        String      @db.ObjectId
+  order          Order       @relation(fields: [orderId], references: [id])
+  previousStatus OrderStatus
+  newStatus      OrderStatus
+  changedById    String      @db.ObjectId // staff user ID, null if system
+  changedBy      User        @relation(fields: [changedById], references: [id])
+  note           String?
+  createdAt      DateTime    @default(now())
+
+  @@map("status_change_logs")
+}
+
+model OrderItemStatusChangeLog {
+  id             String          @id @default(auto()) @map("_id") @db.ObjectId
+  orderItemId    String          @db.ObjectId
+  orderItem      OrderItem       @relation(fields: [orderItemId], references: [id])
+  previousStatus OrderItemStatus
+  newStatus      OrderItemStatus
+  changedById    String?         @db.ObjectId // staff user ID, null if system
+  changedBy      User?           @relation(fields: [changedById], references: [id])
+  note           String?
+  createdAt      DateTime        @default(now())
+
+  @@map("order_item_status_change_logs")
+}
+
+// ============================================================================
+// BRANCH OPERATING HOURS & HOLIDAYS
+// ============================================================================
+
+model BranchOperatingHour {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  branchId  String   @db.ObjectId
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  dayOfWeek Int // 0 = Sunday, 6 = Saturday
+  openTime  String // "11:00" (HH:mm, 24h format)
+  closeTime String // "15:00" (HH:mm, 24h format)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+  @@map("branch_operating_hours")
+}
+
+model BranchHoliday {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  branchId  String   @db.ObjectId
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  date      DateTime // the specific calendar date
+  isClosed  Boolean  @default(true) // true = fully closed, false = special hours apply
+  label     String? // e.g. "Eid al-Fitr", "National Day"
+  openTime  String? // override open time (if isClosed = false)
+  closeTime String? // override close time (if isClosed = false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId, date])
+  @@map("branch_holidays")
+}
+
+// ============================================================================
+// AUTHENTICATION & SECURITY
+// ============================================================================
+
+model PasswordResetOtp {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  otp       String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_otps")
+}
+
+model TableAuthOtp {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  contact String // phone number or email
+  tableId String @db.ObjectId
+  table   Table  @relation(fields: [tableId], references: [id])
+
+  // Set when the OTP is for JOINING an already-open table session rather than
+  // opening a new one — the "second guest scans the same QR" case (letter §2).
+  tableSessionId String?       @db.ObjectId
+  tableSession   TableSession? @relation(fields: [tableSessionId], references: [id])
+
+  purpose   OtpPurpose @default(TABLE_AUTH)
+  otp       String
+  expiresAt DateTime
+  verified  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+
+  @@index([contact, tableId])
+  @@index([tableSessionId])
+  @@map("table_auth_otps")
+}
