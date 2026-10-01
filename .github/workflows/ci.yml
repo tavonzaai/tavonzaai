@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, prod, dev]
+    branches: [main, prod]
   push:
-    branches: [main, prod, dev]
+    branches: [main, prod]
 
 jobs:
   # ─── Step 1: Security & Root Hygiene Scan (Mandatory First Gate) ────────────
