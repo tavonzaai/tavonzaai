@@ -86,7 +86,7 @@ rds_db_password                = "tavonzaaiPass2026Prod" # To be set/rotated in 
 rds_publicly_accessible        = false
 rds_skip_final_snapshot        = false
 rds_deletion_protection        = true
-rds_backup_retention_period    = 7
+rds_backup_retention_period    = 1
 rds_auto_minor_version_upgrade = true
 rds_apply_immediately          = false
 rds_storage_encrypted          = true
@@ -114,4 +114,7 @@ ecr_repository_names = [
 alb_ingress_cidr_blocks = [
   "0.0.0.0/0"
 ]
+
+# GitHub Actions OIDC Provider (Already exists in AWS Account)
+create_github_oidc_provider = false
 

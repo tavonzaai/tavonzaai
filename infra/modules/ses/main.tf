@@ -69,7 +69,7 @@ resource "aws_route53_record" "ses_mail_from_spf" {
 
 resource "aws_route53_record" "dmarc" {
   count           = var.enable_dmarc ? 1 : 0
-  allow_overwrite = false
+  allow_overwrite = true
   zone_id         = var.route53_zone_id
   name            = "_dmarc.${var.domain_name}"
   type            = "TXT"

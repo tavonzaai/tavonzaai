@@ -29,7 +29,21 @@ export function getRedisConnection(config?: RedisConnectionConfig): Redis {
     };
   }
 
-  return new Redis(redisUrl, options);
+  const client = new Redis(redisUrl, options);
+
+  // Attach error handler to prevent Node.js from throwing unhandled 'error' events if Redis is temporarily unreachable
+  client.on('error', (err) => {
+    if (process.env.NODE_ENV !== 'production') {
+      // Debounce or quietly log connection issues in development
+      if (err.message.includes('ECONNREFUSED')) {
+        // Quietly handled — developer might not have started Redis container yet
+        return;
+      }
+    }
+    console.error(`[RedisConnection] Error: ${err.message}`);
+  });
+
+  return client;
 }
 
 /**
