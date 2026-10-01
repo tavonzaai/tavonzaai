@@ -69,7 +69,7 @@ resource "aws_route53_record" "ses_mail_from_spf" {
 
 resource "aws_route53_record" "dmarc" {
   count           = var.enable_dmarc ? 1 : 0
-  allow_overwrite = false
+  allow_overwrite = true
   zone_id         = var.route53_zone_id
   name            = "_dmarc.${var.domain_name}"
   type            = "TXT"
@@ -126,4 +126,37 @@ resource "aws_iam_user_policy" "ses_smtp_policy" {
 resource "aws_ses_email_identity" "emails" {
   for_each = toset(var.verified_email_identities)
   email    = each.value
+}
+
+# ------------------------------------------------------------------------------
+# 6. SES Configuration Set & SNS Bounce/Complaint Event Tracking
+# ------------------------------------------------------------------------------
+
+resource "aws_ses_configuration_set" "this" {
+  count = var.enable_configuration_set ? 1 : 0
+  name  = "${var.project_name}-${var.environment}-email-config-set"
+
+  reputation_metrics_enabled = true
+  sending_enabled            = true
+}
+
+resource "aws_sns_topic" "ses_events" {
+  count = var.enable_configuration_set && var.enable_sns_event_destination ? 1 : 0
+  name  = "${var.project_name}-${var.environment}-ses-events-topic"
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-${var.environment}-ses-events"
+  })
+}
+
+resource "aws_ses_event_destination" "sns" {
+  count                  = var.enable_configuration_set && var.enable_sns_event_destination ? 1 : 0
+  name                   = "${var.project_name}-${var.environment}-sns-event-destination"
+  configuration_set_name = aws_ses_configuration_set.this[0].name
+  enabled                = true
+  matching_types         = ["bounce", "complaint", "reject"]
+
+  sns_destination {
+    topic_arn = aws_sns_topic.ses_events[0].arn
+  }
 }
