@@ -11,7 +11,7 @@ AWS_REGION="${AWS_REGION:-eu-west-2}"
 AWS_PROFILE="${AWS_PROFILE:-tom}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TERRAFORM_DIR="$SCRIPT_DIR/../terraform/environments/$ENV"
+TERRAFORM_DIR="$SCRIPT_DIR/../environments/$ENV"
 SECRET_NAME="/$ENV/tavonzaai/backend"
 
 echo "========================================================"

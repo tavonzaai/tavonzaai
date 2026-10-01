@@ -1,5 +1,6 @@
-# Route 53 Alias Record: Root Domain (example.com)
+# Route 53 Alias Record: Root Domain (example.com) - only created when customer_subdomain is empty
 resource "aws_route53_record" "root" {
+  count           = var.customer_subdomain == "" ? 1 : 0
   allow_overwrite = true
   zone_id         = var.route53_zone_id
   name            = var.domain_name
@@ -83,11 +84,27 @@ resource "aws_route53_record" "admin" {
   }
 }
 
-# Route 53 Alias Record: WWW Subdomain (www.example.com)
+# Route 53 Alias Record: WWW Subdomain (www.example.com) - only created when customer_subdomain is empty
 resource "aws_route53_record" "www" {
+  count           = var.customer_subdomain == "" ? 1 : 0
   allow_overwrite = true
   zone_id         = var.route53_zone_id
   name            = "www.${var.domain_name}"
+  type            = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Route 53 Alias Record: Customer Subdomain (e.g. prod.example.com) - created when customer_subdomain is set
+resource "aws_route53_record" "customer" {
+  count           = var.customer_subdomain != "" ? 1 : 0
+  allow_overwrite = true
+  zone_id         = var.route53_zone_id
+  name            = "${var.customer_subdomain}.${var.domain_name}"
   type            = "A"
 
   alias {

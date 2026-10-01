@@ -43,3 +43,18 @@ output "ses_smtp_user_arn" {
   description = "ARN of the IAM user created for SES SMTP"
   value       = var.create_smtp_user ? aws_iam_user.ses_smtp[0].arn : null
 }
+
+output "configuration_set_name" {
+  description = "Name of the SES Configuration Set"
+  value       = var.enable_configuration_set ? aws_ses_configuration_set.this[0].name : null
+}
+
+output "sns_events_topic_arn" {
+  description = "ARN of the SNS topic receiving bounce and complaint notifications"
+  value       = var.enable_configuration_set && var.enable_sns_event_destination ? aws_sns_topic.ses_events[0].arn : null
+}
+
+output "verified_email_identities" {
+  description = "Map of verified email identities and their ARNs"
+  value       = { for k, v in aws_ses_email_identity.emails : k => v.arn }
+}

@@ -12,5 +12,10 @@
   "devDependencies": {
     "@types/node": "^20.12.7",
     "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.1144.0",
+    "bullmq": "^6.3.11",
+    "ioredis": "^6.0.0"
   }
 }

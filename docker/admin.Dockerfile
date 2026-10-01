@@ -11,7 +11,7 @@ COPY packages/ ./packages/
 COPY frontend/admin/ ./frontend/admin/
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @frontend/admin build
+RUN npx turbo run build --filter=@frontend/admin...
 
 FROM base AS runner
 WORKDIR /app
