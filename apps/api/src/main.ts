@@ -35,6 +35,7 @@ async function bootstrap() {
     .addTag("Waiter | Tables", "View and manage table assignments for the waiter's shift")
     .addTag("Waiter | Orders", "Accept, reject, serve, and create orders at assigned tables")
     .addTag("Waiter | Alerts", "View, acknowledge, and resolve customer alerts")
+    .addTag("System | Mailer", "Diagnostic, testing, and queue tools for AWS SES and email verification")
     // Future groups (uncomment as implemented):
     // .addTag("Kitchen | Tickets", "Kitchen ticket management and preparation workflow")
     // .addTag("Cashier | Payments","Payment processing and session closure")
