@@ -208,7 +208,22 @@ module "ecs" {
       target_group_arn = module.alb.backend_target_group_arn
       environment = [
         { name = "NODE_ENV", value = "production" },
-        { name = "PORT", value = tostring(var.backend_port) }
+        { name = "PORT", value = tostring(var.backend_port) },
+        { name = "API_PORT", value = tostring(var.backend_port) }
+      ]
+      secrets = [
+        {
+          name      = "DATABASE_URL"
+          valueFrom = "${module.secrets_manager.secret_arn}:DATABASE_URL::"
+        },
+        {
+          name      = "REDIS_URL"
+          valueFrom = "${module.secrets_manager.secret_arn}:REDIS_URL::"
+        },
+        {
+          name      = "JWT_SECRET"
+          valueFrom = "${module.secrets_manager.secret_arn}:JWT_SECRET::"
+        }
       ]
     }
     customer = {
