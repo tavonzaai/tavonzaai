@@ -10,7 +10,7 @@ public_subnet_cidrs      = ["10.2.1.0/24", "10.2.2.0/24"]
 private_app_subnet_cidrs = ["10.2.10.0/24", "10.2.11.0/24"]
 private_db_subnet_cidrs  = ["10.2.20.0/24", "10.2.21.0/24"]
 enable_nat_gateway       = true
-single_nat_gateway       = false # Multi-AZ NAT Gateway for live production HA
+single_nat_gateway       = true # Single NAT Gateway
 
 # Domain & DNS Configuration (Actual Live: No prefix)
 domain_name        = "tavonza.com"
@@ -78,7 +78,7 @@ rds_backup_retention_period    = 1
 rds_auto_minor_version_upgrade = true
 rds_apply_immediately          = false
 rds_storage_encrypted          = true
-rds_multi_az                   = true
+rds_multi_az                   = false
 
 # ElastiCache Redis / Valkey Settings
 elasticache_cache_name               = "tavonzaai-live-cache"
@@ -102,3 +102,6 @@ ecr_repository_names = [
 alb_ingress_cidr_blocks = [
   "0.0.0.0/0"
 ]
+
+# GitHub Actions OIDC Provider (Already exists in AWS Account)
+create_github_oidc_provider = false
