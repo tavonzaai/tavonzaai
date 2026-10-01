@@ -40,7 +40,7 @@ resource "aws_lb_target_group" "backend" {
 }
 
 resource "aws_lb_target_group_attachment" "backend" {
-  count            = var.target_type == "instance" && var.backend_instance_id != null ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.backend.arn
   target_id        = var.backend_instance_id
   port             = var.backend_port
@@ -72,7 +72,7 @@ resource "aws_lb_target_group" "ai" {
 }
 
 resource "aws_lb_target_group_attachment" "ai" {
-  count            = var.target_type == "instance" && (var.ai_instance_id != null || var.backend_instance_id != null) ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.ai.arn
   target_id        = coalesce(var.ai_instance_id, var.backend_instance_id)
   port             = var.ai_port
@@ -104,7 +104,7 @@ resource "aws_lb_target_group" "nextjs" {
 }
 
 resource "aws_lb_target_group_attachment" "nextjs" {
-  count            = var.target_type == "instance" && var.frontend_instance_id != null ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.nextjs.arn
   target_id        = var.frontend_instance_id
   port             = var.nextjs_port
@@ -136,7 +136,7 @@ resource "aws_lb_target_group" "kitchen" {
 }
 
 resource "aws_lb_target_group_attachment" "kitchen" {
-  count            = var.target_type == "instance" && (var.kitchen_instance_id != null || var.frontend_instance_id != null) ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.kitchen.arn
   target_id        = coalesce(var.kitchen_instance_id, var.frontend_instance_id)
   port             = var.kitchen_port
@@ -168,7 +168,7 @@ resource "aws_lb_target_group" "cashier" {
 }
 
 resource "aws_lb_target_group_attachment" "cashier" {
-  count            = var.target_type == "instance" && (var.cashier_instance_id != null || var.frontend_instance_id != null) ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.cashier.arn
   target_id        = coalesce(var.cashier_instance_id, var.frontend_instance_id)
   port             = var.cashier_port
@@ -200,7 +200,7 @@ resource "aws_lb_target_group" "admin" {
 }
 
 resource "aws_lb_target_group_attachment" "admin" {
-  count            = var.target_type == "instance" && var.frontend_instance_id != null ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.admin.arn
   target_id        = var.frontend_instance_id
   port             = var.admin_port
@@ -362,7 +362,7 @@ resource "aws_lb_listener_rule" "admin" {
   tags = var.tags
 }
 
-# Rule 6: Customer Root Domain -> Next.js Target Group (example.com, www.example.com)
+# Rule 6: Customer Domain -> Next.js Target Group (root domain/www, or dedicated subdomain e.g. prod.example.com)
 resource "aws_lb_listener_rule" "customer" {
   listener_arn = local.active_listener_arn
   priority     = 40
@@ -374,7 +374,9 @@ resource "aws_lb_listener_rule" "customer" {
 
   condition {
     host_header {
-      values = [
+      values = var.customer_subdomain != "" ? [
+        "${var.customer_subdomain}.${var.domain_name}"
+        ] : [
         var.domain_name,
         "www.${var.domain_name}"
       ]

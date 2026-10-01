@@ -63,6 +63,12 @@ variable "domain_name" {
   type        = string
 }
 
+variable "customer_subdomain" {
+  description = "Subdomain prefix for Customer frontend (e.g. prod). If empty, routes to apex domain and www."
+  type        = string
+  default     = ""
+}
+
 variable "api_subdomain" {
   description = "Subdomain prefix for backend API"
   type        = string
@@ -156,6 +162,12 @@ variable "ses_create_smtp_user" {
   description = "Whether to create an IAM user with credentials for sending email via SES SMTP"
   type        = bool
   default     = true
+}
+
+variable "ses_verified_email_identities" {
+  description = "List of individual email addresses to verify in SES (allows sending in SES Sandbox before domain verification)"
+  type        = list(string)
+  default     = []
 }
 
 # Application Ports & Health Checks
@@ -393,7 +405,7 @@ variable "elasticache_snapshot_retention_limit" {
 variable "ecr_repository_names" {
   description = "List of microservices/applications to create dedicated ECR repositories for"
   type        = list(string)
-  default     = ["backend", "frontend", "ai", "kitchen", "cashier", "admin-dashboard"]
+  default     = ["backend", "frontend", "ai", "kitchen", "cashier", "admin-dashboard", "worker"]
 }
 
 variable "ecr_image_tag_mutability" {

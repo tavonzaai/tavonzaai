@@ -1,6 +1,6 @@
 output "root_fqdn" {
   description = "FQDN of the root domain record (Customer frontend)"
-  value       = aws_route53_record.root.fqdn
+  value       = length(aws_route53_record.root) > 0 ? aws_route53_record.root[0].fqdn : null
 }
 
 output "api_fqdn" {
@@ -30,7 +30,12 @@ output "admin_fqdn" {
 
 output "www_fqdn" {
   description = "FQDN of the WWW subdomain record"
-  value       = aws_route53_record.www.fqdn
+  value       = length(aws_route53_record.www) > 0 ? aws_route53_record.www[0].fqdn : null
+}
+
+output "customer_fqdn" {
+  description = "FQDN of the Customer frontend record (subdomain or root)"
+  value       = length(aws_route53_record.customer) > 0 ? aws_route53_record.customer[0].fqdn : (length(aws_route53_record.root) > 0 ? aws_route53_record.root[0].fqdn : null)
 }
 
 

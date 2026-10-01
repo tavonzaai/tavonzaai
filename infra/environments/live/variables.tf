@@ -5,7 +5,7 @@ variable "aws_region" {
 }
 
 variable "aws_profile" {
-  description = "AWS CLI profile name (optional)"
+  description = "AWS CLI profile name (optional, leave empty for STS credentials)"
   type        = string
 }
 
@@ -16,33 +16,34 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Environment name (dev, staging, prod)"
+  description = "Environment name (e.g. live)"
   type        = string
+  default     = "live"
 }
 
 # VPC Configuration
 variable "vpc_cidr" {
   description = "CIDR block for the custom VPC"
   type        = string
-  default     = "10.1.0.0/16"
+  default     = "10.2.0.0/16"
 }
 
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets (ALB & NAT Gateways)"
   type        = list(string)
-  default     = ["10.1.1.0/24", "10.1.2.0/24"]
+  default     = ["10.2.1.0/24", "10.2.2.0/24"]
 }
 
 variable "private_app_subnet_cidrs" {
   description = "CIDR blocks for private app subnets (EC2 Instances)"
   type        = list(string)
-  default     = ["10.1.10.0/24", "10.1.11.0/24"]
+  default     = ["10.2.10.0/24", "10.2.11.0/24"]
 }
 
 variable "private_db_subnet_cidrs" {
   description = "CIDR blocks for isolated private database subnets (RDS & ElastiCache)"
   type        = list(string)
-  default     = ["10.1.20.0/24", "10.1.21.0/24"]
+  default     = ["10.2.20.0/24", "10.2.21.0/24"]
 }
 
 variable "enable_nat_gateway" {
@@ -52,15 +53,21 @@ variable "enable_nat_gateway" {
 }
 
 variable "single_nat_gateway" {
-  description = "Set to true to share a single NAT Gateway across all AZs (cost-effective for dev)"
+  description = "Set to true to share a single NAT Gateway across all AZs (cost-effective), or false for 1 per AZ (high availability)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 # Domain and DNS Configuration
 variable "domain_name" {
-  description = "Primary hosted zone domain name (e.g. example.com or tavonzaai.co.uk)"
+  description = "Primary hosted zone domain name (e.g. tavonza.com)"
   type        = string
+}
+
+variable "customer_subdomain" {
+  description = "Subdomain prefix for Customer frontend (e.g. prod). If empty, routes to apex domain and www."
+  type        = string
+  default     = ""
 }
 
 variable "api_subdomain" {
@@ -94,9 +101,9 @@ variable "admin_subdomain" {
 }
 
 variable "enable_https" {
-  description = "Whether to enable HTTPS with ACM certificate validation. Set to false if domain is not yet purchased or pointed to Route 53."
+  description = "Whether to configure HTTPS with ACM certificate validation in Route 53"
   type        = bool
-  default     = false
+  default     = true
 }
 
 # Custom DNS Records
@@ -119,7 +126,6 @@ variable "extra_cname_records" {
   }))
   default = {}
 }
-
 
 # AWS SES (Simple Email Service) Configuration
 variable "enable_ses" {
@@ -159,7 +165,7 @@ variable "ses_create_smtp_user" {
 }
 
 variable "ses_verified_email_identities" {
-  description = "List of individual email addresses to verify in SES for testing in sandbox mode without domain ownership"
+  description = "List of individual email addresses to verify in SES (allows sending in SES Sandbox before domain verification)"
   type        = list(string)
   default     = []
 }
@@ -237,140 +243,40 @@ variable "admin_health_check_path" {
   default     = "/"
 }
 
-# EC2 Compute Configuration (Legacy / Optional)
+# EC2 Compute Configuration
 variable "backend_instance_type" {
   description = "EC2 instance type for Backend host"
   type        = string
-  default     = "t3.small"
 }
 
 variable "frontend_instance_type" {
   description = "EC2 instance type for Frontend host"
   type        = string
-  default     = "t3.small"
 }
 
 variable "backend_ami_id" {
   description = "Custom AMI ID for Backend EC2 (leave empty to use Debian 13)"
   type        = string
-  default     = ""
 }
 
 variable "frontend_ami_id" {
   description = "Custom AMI ID for Frontend EC2 (leave empty to use Debian 13)"
   type        = string
-  default     = ""
 }
 
 variable "ssh_key_name" {
   description = "Optional EC2 SSH Key Pair name (SSM Session Manager is the primary access method)"
   type        = string
-  default     = ""
 }
 
 variable "backend_root_volume_size" {
   description = "Backend EC2 root EBS volume size in GB"
   type        = number
-  default     = 20
 }
 
 variable "frontend_root_volume_size" {
   description = "Frontend EC2 root EBS volume size in GB"
   type        = number
-  default     = 20
-}
-
-# ==============================================================================
-# Amazon ECS Container Configuration
-# ==============================================================================
-variable "ecs_use_fargate_spot" {
-  description = "Whether to use Fargate Spot for cost optimization (70% savings, recommended for dev)"
-  type        = bool
-  default     = true
-}
-
-variable "ecs_enable_container_insights" {
-  description = "Whether to enable CloudWatch Container Insights on ECS cluster"
-  type        = bool
-  default     = false
-}
-
-variable "ecs_log_retention_days" {
-  description = "Log retention period in days for ECS service CloudWatch log groups"
-  type        = number
-  default     = 7
-}
-
-variable "backend_container_image" {
-  description = "Container image for Backend API (defaults to ECR repository latest image)"
-  type        = string
-  default     = ""
-}
-
-variable "frontend_container_image" {
-  description = "Container image for Frontend Next.js app (defaults to ECR repository latest image)"
-  type        = string
-  default     = ""
-}
-
-variable "admin_container_image" {
-  description = "Container image for React Admin app (defaults to ECR repository latest image)"
-  type        = string
-  default     = ""
-}
-
-variable "backend_task_cpu" {
-  description = "CPU units for Backend task (256 = 0.25 vCPU)"
-  type        = number
-  default     = 256
-}
-
-variable "backend_task_memory" {
-  description = "Memory for Backend task in MB (512 = 0.5 GB)"
-  type        = number
-  default     = 512
-}
-
-variable "backend_desired_count" {
-  description = "Desired number of running Backend task containers"
-  type        = number
-  default     = 1
-}
-
-variable "frontend_task_cpu" {
-  description = "CPU units for Frontend task"
-  type        = number
-  default     = 256
-}
-
-variable "frontend_task_memory" {
-  description = "Memory for Frontend task in MB"
-  type        = number
-  default     = 512
-}
-
-variable "frontend_desired_count" {
-  description = "Desired number of running Frontend task containers"
-  type        = number
-  default     = 1
-}
-
-variable "admin_task_cpu" {
-  description = "CPU units for Admin dashboard task"
-  type        = number
-  default     = 256
-}
-
-variable "admin_task_memory" {
-  description = "Memory for Admin dashboard task in MB"
-  type        = number
-  default     = 512
-}
-
-variable "admin_desired_count" {
-  description = "Desired number of running Admin dashboard task containers"
-  type        = number
-  default     = 1
 }
 
 # S3 Storage Configuration
@@ -428,17 +334,17 @@ variable "rds_publicly_accessible" {
 }
 
 variable "rds_skip_final_snapshot" {
-  description = "Skip final snapshot when deleting RDS instance"
+  description = "Skip final snapshot when deleting RDS instance (false for production)"
   type        = bool
 }
 
 variable "rds_deletion_protection" {
-  description = "Enable deletion protection on RDS instance"
+  description = "Enable deletion protection on RDS instance (true for production)"
   type        = bool
 }
 
 variable "rds_backup_retention_period" {
-  description = "Backup retention period in days (0 to disable for dev)"
+  description = "Backup retention period in days (e.g. 7 days for production)"
   type        = number
 }
 
@@ -489,7 +395,7 @@ variable "elasticache_max_ecpu_per_second" {
 }
 
 variable "elasticache_snapshot_retention_limit" {
-  description = "Number of days to retain snapshots. 0 = disabled (good for dev)"
+  description = "Number of days to retain snapshots"
   type        = number
 }
 
@@ -499,7 +405,7 @@ variable "elasticache_snapshot_retention_limit" {
 variable "ecr_repository_names" {
   description = "List of microservices/applications to create dedicated ECR repositories for"
   type        = list(string)
-  default     = ["backend", "frontend", "ai", "kitchen", "cashier", "admin-dashboard"]
+  default     = ["backend", "frontend", "ai", "kitchen", "cashier", "admin-dashboard", "worker"]
 }
 
 variable "ecr_image_tag_mutability" {
@@ -517,7 +423,7 @@ variable "ecr_scan_on_push" {
 variable "ecr_force_delete" {
   description = "Allow forced deletion of ECR repositories containing images upon terraform destroy"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "ecr_untagged_image_expiry_days" {
@@ -548,15 +454,15 @@ variable "github_repository" {
 }
 
 variable "github_branches" {
-  description = "GitHub branches allowed to push to ECR (e.g. ['main', 'dev'] or ['*'])"
+  description = "GitHub branches allowed to push to ECR (e.g. ['main'] or ['*'])"
   type        = list(string)
-  default     = ["main", "dev"]
+  default     = ["main"]
 }
 
 variable "create_github_oidc_provider" {
   description = "Whether to create the GitHub OIDC provider in the AWS account (set false if already exists)"
   type        = bool
-  default     = true
+  default     = false # Already created by prod / dev
 }
 
 # ==============================================================================
@@ -565,5 +471,5 @@ variable "create_github_oidc_provider" {
 variable "alb_ingress_cidr_blocks" {
   description = "Allowed CIDR blocks for ALB HTTP/HTTPS ingress"
   type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
-

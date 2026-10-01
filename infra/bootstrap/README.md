@@ -61,14 +61,14 @@ s3_state_bucket_names = {
 Once the bootstrap resources exist in your AWS account, you can initialize and deploy either environment:
 
 ```bash
-# Production
-cd ../environments/prod
+# Live (Production - main branch: *.tavonza.com)
+cd ../environments/live
 terraform init
 terraform plan
 terraform apply
 
-# Development
-cd ../environments/dev
+# Prod (Testable - prod branch: prod-*.tavonza.com)
+cd ../environments/prod
 terraform init
 terraform plan
 terraform apply

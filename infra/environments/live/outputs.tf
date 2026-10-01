@@ -1,6 +1,4 @@
-# ==============================================================================
 # Networking Outputs
-# ==============================================================================
 output "vpc_id" {
   description = "ID of the custom 3-tier VPC"
   value       = module.vpc.vpc_id
@@ -31,9 +29,7 @@ output "nat_gateway_public_ips" {
   value       = module.vpc.nat_gateway_public_ips
 }
 
-# ==============================================================================
 # Load Balancer & Routing Outputs
-# ==============================================================================
 output "alb_dns_name" {
   description = "Public DNS name of the Application Load Balancer"
   value       = module.alb.alb_dns_name
@@ -50,10 +46,10 @@ output "acm_certificate_arn" {
 }
 
 output "application_urls" {
-  description = "Public application endpoints (ALB HTTP endpoints if enable_https is false, Route 53 HTTPS if true)"
+  description = "Public application endpoints (HTTPS via Route 53 or HTTP via ALB)"
   value = {
-    customer     = var.enable_https ? "https://${module.route53.root_fqdn}" : "http://${module.alb.alb_dns_name}"
-    customer_www = var.enable_https ? "https://${module.route53.www_fqdn}" : "http://${module.alb.alb_dns_name}"
+    customer     = var.enable_https ? "https://${coalesce(module.route53.customer_fqdn, module.alb.alb_dns_name)}" : "http://${module.alb.alb_dns_name}"
+    customer_www = var.enable_https && module.route53.www_fqdn != null ? "https://${module.route53.www_fqdn}" : null
     api          = var.enable_https ? "https://${module.route53.api_fqdn}" : "http://${module.alb.alb_dns_name}/api"
     ai           = var.enable_https ? "https://${module.route53.ai_fqdn}" : "http://${module.alb.alb_dns_name}/ai"
     kitchen      = var.enable_https ? "https://${module.route53.kitchen_fqdn}" : "http://${module.alb.alb_dns_name}/kitchen"
@@ -68,57 +64,32 @@ output "route53_zone_id" {
 }
 
 output "route53_name_servers" {
-  description = "Route 53 Public Hosted Zone Name Servers (Configure these at your domain registrar)"
+  description = "Route 53 Public Hosted Zone Name Servers"
   value       = data.aws_route53_zone.primary.name_servers
 }
 
-
-# ==============================================================================
-# Amazon ECS Container Outputs
-# ==============================================================================
-output "ecs_cluster_id" {
-  description = "ID of the ECS cluster"
-  value       = module.ecs.cluster_id
+# Compute EC2 Outputs
+output "backend_instance_id" {
+  description = "EC2 Instance ID of the Backend host"
+  value       = module.backend_ec2.instance_id
 }
 
-output "ecs_cluster_name" {
-  description = "Name of the ECS cluster"
-  value       = module.ecs.cluster_name
+output "backend_private_ip" {
+  description = "Private IP address of the Backend EC2 instance"
+  value       = module.backend_ec2.private_ip
 }
 
-output "ecs_cluster_arn" {
-  description = "ARN of the ECS cluster"
-  value       = module.ecs.cluster_arn
+output "frontend_instance_id" {
+  description = "EC2 Instance ID of the Frontend host"
+  value       = module.frontend_ec2.instance_id
 }
 
-output "ecs_service_names" {
-  description = "Map of ECS service names"
-  value       = module.ecs.service_names
+output "frontend_private_ip" {
+  description = "Private IP address of the Frontend EC2 instance"
+  value       = module.frontend_ec2.private_ip
 }
 
-output "ecs_service_arns" {
-  description = "Map of ECS service ARNs"
-  value       = module.ecs.service_arns
-}
-
-output "ecs_task_execution_role_arn" {
-  description = "ARN of the ECS Task Execution IAM Role"
-  value       = module.ecs.execution_role_arn
-}
-
-output "ecs_task_role_arn" {
-  description = "ARN of the ECS Task IAM Role"
-  value       = module.ecs.task_role_arn
-}
-
-output "ecs_security_group_id" {
-  description = "Security Group ID associated with the ECS tasks"
-  value       = module.security_groups.ecs_security_group_id
-}
-
-# ==============================================================================
 # Database & Cache Outputs
-# ==============================================================================
 output "rds_endpoint" {
   description = "PostgreSQL RDS connection endpoint (hostname:port)"
   value       = module.rds_postgres.database_endpoint
@@ -149,9 +120,7 @@ output "elasticache_port" {
   value       = module.elasticache.valkey_port
 }
 
-# ==============================================================================
 # Storage & Secrets Outputs
-# ==============================================================================
 output "s3_bucket_name" {
   description = "Name of the private S3 bucket"
   value       = module.s3.bucket_name
@@ -182,9 +151,7 @@ output "ec2_admin_secret_arn" {
   value       = module.ec2_admin_secret.secret_arn
 }
 
-# ==============================================================================
 # ECR & CI/CD Outputs
-# ==============================================================================
 output "ecr_repository_urls" {
   description = "Map of microservice names to their ECR repository URLs"
   value       = module.ecr.repository_urls
@@ -220,11 +187,6 @@ output "ecr_cashier_repository_url" {
   value       = module.ecr.cashier_repository_url
 }
 
-output "ecr_admin_repository_url" {
-  description = "ECR repository URL for admin dashboard Docker images"
-  value       = module.ecr.admin_repository_url
-}
-
 output "alb_target_group_arns" {
   description = "ARNs for all service target groups attached to the ALB"
   value = {
@@ -242,9 +204,7 @@ output "github_actions_ecr_role_arn" {
   value       = module.iam.github_actions_ecr_role_arn
 }
 
-# ==============================================================================
-# AWS SES (Simple Email Service) Outputs
-# ==============================================================================
+# AWS SES Outputs
 output "ses_domain_identity_arn" {
   description = "ARN of the SES domain identity"
   value       = var.enable_ses ? module.ses[0].domain_identity_arn : null
@@ -279,5 +239,20 @@ output "ses_smtp_password_v4" {
   description = "AWS SES SMTP password (SigV4)"
   value       = var.enable_ses ? module.ses[0].ses_smtp_password_v4 : null
   sensitive   = true
+}
+
+output "ses_configuration_set_name" {
+  description = "Name of the SES Configuration Set"
+  value       = var.enable_ses ? module.ses[0].configuration_set_name : null
+}
+
+output "ses_sns_events_topic_arn" {
+  description = "ARN of the SNS topic receiving bounce and complaint notifications"
+  value       = var.enable_ses ? module.ses[0].sns_events_topic_arn : null
+}
+
+output "ses_verified_email_identities" {
+  description = "Map of verified email identities in SES"
+  value       = var.enable_ses ? module.ses[0].verified_email_identities : {}
 }
 
