@@ -1,0 +1,299 @@
+name: Deploy (Prod Environment)
+
+# Automatically fires ONLY when code is merged / pushed to the 'prod' branch.
+# Deploys to the dedicated testable 'prod' environment (prod-*.tavonza.com).
+
+on:
+  push:
+    branches:
+      - prod
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy (all, backend, frontend, admin)"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - backend
+          - frontend
+          - admin
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2
+  ENVIRONMENT: prod
+  BACKEND_INSTANCE_NAME: tavonzaai-prod-backend
+  FRONTEND_INSTANCE_NAME: tavonzaai-prod-frontend
+
+jobs:
+  # ─── 1. Security Scan Gate ──────────────────────────────────────────────────
+  security-scan:
+    name: Security & Root Scan
+    uses: ./.github/workflows/security-scan.yml
+
+  # ─── 2. Detect Changes ──────────────────────────────────────────────────────
+  detect-changes:
+    name: Detect Changed Microservices
+    needs: [security-scan]
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      admin: ${{ steps.filter.outputs.admin }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Path Filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'apps/api/**'
+              - 'packages/**'
+              - 'docker/api.Dockerfile'
+            frontend:
+              - 'frontend/customer/**'
+              - 'packages/**'
+              - 'docker/frontend.Dockerfile'
+            admin:
+              - 'frontend/admin/**'
+              - 'packages/**'
+              - 'docker/admin.Dockerfile'
+
+  # ─── 3. Build & Deploy Backend API ──────────────────────────────────────────
+  deploy-backend:
+    name: Deploy Backend API (prod-api.tavonza.com)
+    needs: [detect-changes]
+    if: |
+      github.event_name == 'push' && (needs.detect-changes.outputs.backend == 'true') ||
+      github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'backend')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/api.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-backend:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Backend EC2 via AWS SSM
+        run: |
+          echo "Finding running backend instance tagged Name=${{ env.BACKEND_INSTANCE_NAME }}..."
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ env.BACKEND_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text)
+
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
+            echo "Error: Backend EC2 instance not found or not in running state."
+            exit 1
+          fi
+
+          echo "Target Instance ID: $INSTANCE_ID"
+          echo "Triggering SSM Run Command for container deployment..."
+
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          IMAGE="${REGISTRY}/tavonzaai-prod-backend:latest"
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy tavonzaai-prod-backend container" \
+            --parameters "{\"commands\":[
+              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY\",
+              \"docker pull $IMAGE\",
+              \"docker stop tavonzaai-backend 2>/dev/null || true\",
+              \"docker rm tavonzaai-backend 2>/dev/null || true\",
+              \"docker run -d --name tavonzaai-backend --restart always -p 5000:5000 -e NODE_ENV=production -e PORT=5000 $IMAGE\"
+            ]}" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "Command sent successfully (CommandId: $COMMAND_ID). Waiting for completion..."
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --region ${{ env.AWS_REGION }}
+          echo "Backend deployment completed successfully!"
+
+  # ─── 4. Build & Deploy Customer Frontend ────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Customer Frontend (prod.tavonza.com)
+    needs: [detect-changes]
+    if: |
+      github.event_name == 'push' && (needs.detect-changes.outputs.frontend == 'true') ||
+      github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'frontend')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/frontend.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-frontend:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Frontend EC2 via AWS SSM
+        run: |
+          echo "Finding running frontend instance tagged Name=${{ env.FRONTEND_INSTANCE_NAME }}..."
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ env.FRONTEND_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text)
+
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
+            echo "Error: Frontend EC2 instance not found or not in running state."
+            exit 1
+          fi
+
+          echo "Target Instance ID: $INSTANCE_ID"
+          echo "Triggering SSM Run Command for container deployment..."
+
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          IMAGE="${REGISTRY}/tavonzaai-prod-frontend:latest"
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy tavonzaai-prod-frontend container" \
+            --parameters "{\"commands\":[
+              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY\",
+              \"docker pull $IMAGE\",
+              \"docker stop tavonzaai-customer 2>/dev/null || true\",
+              \"docker rm tavonzaai-customer 2>/dev/null || true\",
+              \"docker run -d --name tavonzaai-customer --restart always -p 3000:3000 -e NODE_ENV=production -e PORT=3000 $IMAGE\"
+            ]}" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "Command sent successfully (CommandId: $COMMAND_ID). Waiting for completion..."
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --region ${{ env.AWS_REGION }}
+          echo "Customer frontend deployment completed successfully!"
+
+  # ─── 5. Build & Deploy Admin Dashboard ──────────────────────────────────────
+  deploy-admin:
+    name: Deploy Admin Dashboard (prod-admin.tavonza.com)
+    needs: [detect-changes]
+    if: |
+      github.event_name == 'push' && (needs.detect-changes.outputs.admin == 'true') ||
+      github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'admin')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Admin Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/admin.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-admin-dashboard:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-admin-dashboard:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Frontend EC2 via AWS SSM
+        run: |
+          echo "Finding running frontend instance tagged Name=${{ env.FRONTEND_INSTANCE_NAME }}..."
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${{ env.FRONTEND_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text)
+
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
+            echo "Error: Frontend EC2 instance not found or not in running state."
+            exit 1
+          fi
+
+          echo "Target Instance ID: $INSTANCE_ID"
+          echo "Triggering SSM Run Command for container deployment..."
+
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          IMAGE="${REGISTRY}/tavonzaai-prod-admin-dashboard:latest"
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy tavonzaai-prod-admin container" \
+            --parameters "{\"commands\":[
+              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY\",
+              \"docker pull $IMAGE\",
+              \"docker stop tavonzaai-admin 2>/dev/null || true\",
+              \"docker rm tavonzaai-admin 2>/dev/null || true\",
+              \"docker run -d --name tavonzaai-admin --restart always -p 3043:3043 -e NODE_ENV=production -e PORT=3043 $IMAGE\"
+            ]}" \
+            --region ${{ env.AWS_REGION }} \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "Command sent successfully (CommandId: $COMMAND_ID). Waiting for completion..."
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --region ${{ env.AWS_REGION }}
+          echo "Admin dashboard deployment completed successfully!"
