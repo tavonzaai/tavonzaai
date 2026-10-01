@@ -107,7 +107,9 @@ ecr_repository_names = [
   "ai",             # Python FastAPI AI service (ai.tavonza.com)
   "kitchen",        # Kitchen Next.js Frontend (kitchen.tavonza.com)
   "cashier",        # Cashier Next.js Frontend (cashier.tavonza.com)
-  "admin-dashboard" # Admin React Dashboard (admin.tavonza.com)
+  "admin-dashboard",# Admin React Dashboard (admin.tavonza.com)
+  "branch-manager", # Branch Manager Frontend (branch-manager.tavonza.com)
+  "waiter"          # Waiter Next.js Frontend (waiter.tavonza.com)
 ]
 
 # ALB Ingress Access (Default: Open to public Internet for tavonza.com)

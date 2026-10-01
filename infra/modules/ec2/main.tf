@@ -1,5 +1,5 @@
 resource "aws_instance" "this" {
-  ami           = var.ami_id != "" ? var.ami_id : data.aws_ami.debian.id
+  ami           = var.ami_id != "" ? var.ami_id : data.aws_ami.ubuntu.id
   instance_type = var.instance_type
   subnet_id     = var.subnet_id
 
@@ -8,7 +8,7 @@ resource "aws_instance" "this" {
   key_name               = var.key_name
 
   user_data                   = var.user_data
-  user_data_replace_on_change = false
+  user_data_replace_on_change = true
 
   monitoring = var.enable_monitoring
 
@@ -35,11 +35,4 @@ resource "aws_instance" "this" {
   tags = merge(var.tags, {
     Name = var.instance_name
   })
-
-  lifecycle {
-    prevent_destroy = true
-    ignore_changes = [
-      ami,
-    ]
-  }
 }
