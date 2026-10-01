@@ -51,8 +51,9 @@ jobs:
       admin: ${{ steps.filter.outputs.admin }}
       kitchen: ${{ steps.filter.outputs.kitchen }}
       cashier: ${{ steps.filter.outputs.cashier }}
-      branch-manager: ${{ steps.filter.outputs.branch-manager }}
+      branch_manager: ${{ steps.filter.outputs.branch_manager }}
       waiter: ${{ steps.filter.outputs.waiter }}
+      any_frontend: ${{ steps.check-frontend.outputs.any }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -82,7 +83,7 @@ jobs:
               - 'frontend/cashier/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
-            branch-manager:
+            branch_manager:
               - 'frontend/branch-manager/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
@@ -90,6 +91,20 @@ jobs:
               - 'frontend/waiter/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
+
+      - name: Check any frontend changed
+        id: check-frontend
+        run: |
+          if [ "${{ steps.filter.outputs.customer }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.admin }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.kitchen }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.cashier }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.branch_manager }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.waiter }}" = "true" ]; then
+            echo "any=true" >> $GITHUB_OUTPUT
+          else
+            echo "any=false" >> $GITHUB_OUTPUT
+          fi
 
   # ─── 3. Build & Deploy Backend API ──────────────────────────────────────────
   deploy-backend:
@@ -207,14 +222,47 @@ jobs:
             container: tavonzaai-waiter
             subdomain: "waiter.tavonza.com"
     if: |
-      (github.event_name == 'push' && (needs.detect-changes.outputs[matrix.app] == 'true')) ||
-      (github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == matrix.app))
+      github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.any_frontend == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Check if this frontend app should be deployed
+        id: check
+        env:
+          APP: ${{ matrix.app }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SERVICE: ${{ inputs.service }}
+          CUSTOMER_CHANGED: ${{ needs.detect-changes.outputs.customer }}
+          ADMIN_CHANGED: ${{ needs.detect-changes.outputs.admin }}
+          KITCHEN_CHANGED: ${{ needs.detect-changes.outputs.kitchen }}
+          CASHIER_CHANGED: ${{ needs.detect-changes.outputs.cashier }}
+          BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.branch_manager }}
+          WAITER_CHANGED: ${{ needs.detect-changes.outputs.waiter }}
+        run: |
+          SHOULD_DEPLOY="false"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ]; then
+              SHOULD_DEPLOY="true"
+            fi
+          else
+            case "$APP" in
+              customer) [ "$CUSTOMER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              admin) [ "$ADMIN_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              kitchen) [ "$KITCHEN_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              cashier) [ "$CASHIER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              branch-manager) [ "$BRANCH_MANAGER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              waiter) [ "$WAITER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+            esac
+          fi
+          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+          echo "App: $APP | Should Deploy: $SHOULD_DEPLOY"
+
       - name: Checkout Code
+        if: steps.check.outputs.should_deploy == 'true'
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
+        if: steps.check.outputs.should_deploy == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -222,13 +270,16 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: steps.check.outputs.should_deploy == 'true'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set up Docker Buildx
+        if: steps.check.outputs.should_deploy == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Build and Push Docker Image
+        if: steps.check.outputs.should_deploy == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -244,6 +295,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Deploy Container to Frontend EC2 via AWS SSM
+        if: steps.check.outputs.should_deploy == 'true'
         run: |
           echo "Finding running frontend instance tagged Name=${{ env.FRONTEND_INSTANCE_NAME }}..."
           INSTANCE_ID=$(aws ec2 describe-instances \
