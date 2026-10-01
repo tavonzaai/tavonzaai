@@ -285,11 +285,11 @@ resource "aws_ecs_service" "services" {
     }
   }
 
-  enable_execute_command = true
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 200
+  health_check_grace_period_seconds  = each.value.target_group_arn != null ? 60 : null
 
-  lifecycle {
-    ignore_changes = [task_definition]
-  }
+  enable_execute_command = true
 
   tags = merge(var.tags, {
     Name    = "${var.project_name}-${var.environment}-${each.key}-service"
