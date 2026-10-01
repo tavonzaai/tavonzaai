@@ -56,6 +56,9 @@ export class AuthTokensDto {
 
 export class MessageResponseDto {
   @ApiProperty() message!: string;
+
+  @ApiProperty({ required: false, example: '48291', description: 'Generated 5-digit OTP code (only displayed in development for easy Swagger testing)' })
+  devOtp?: string;
 }
 
 // ─── Register Response ────────────────────────────────────────────────
@@ -66,5 +69,9 @@ export class RegisterResponseDto {
 
   @ApiProperty({ example: 'customer@example.com' })
   email!: string;
+
+  @ApiProperty({ required: false, example: '48291', description: 'Generated 5-digit OTP code (only displayed in development for easy Swagger testing)' })
+  devOtp?: string;
 }
+
 

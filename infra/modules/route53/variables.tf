@@ -8,6 +8,12 @@ variable "domain_name" {
   type        = string
 }
 
+variable "customer_subdomain" {
+  description = "Subdomain prefix for Customer frontend (e.g. prod). If empty, manages root and www."
+  type        = string
+  default     = ""
+}
+
 variable "api_subdomain" {
   description = "Subdomain prefix for API (e.g. api)"
   type        = string

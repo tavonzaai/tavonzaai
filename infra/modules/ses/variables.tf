@@ -56,6 +56,18 @@ variable "smtp_user_name" {
   default     = ""
 }
 
+variable "enable_configuration_set" {
+  description = "Whether to create an SES Configuration Set with reputation tracking"
+  type        = bool
+  default     = true
+}
+
+variable "enable_sns_event_destination" {
+  description = "Whether to create an SNS topic for SES bounce and complaint notifications"
+  type        = bool
+  default     = true
+}
+
 variable "project_name" {
   description = "Project name identifier"
   type        = string

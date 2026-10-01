@@ -1,4 +1,4 @@
 aws_region   = "eu-west-1"
 aws_profile  = "profile_name"
 project_name = "nameoftheproject"
-environments = ["prod", "dev"]
+environments = ["prod", "live"]
