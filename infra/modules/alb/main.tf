@@ -16,7 +16,7 @@ resource "aws_lb" "this" {
 
 # 1. Backend API Target Group
 resource "aws_lb_target_group" "backend" {
-  name        = "${var.project_name}-${var.environment}-be-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}be-tg"
   port        = var.backend_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -34,6 +34,10 @@ resource "aws_lb_target_group" "backend" {
     matcher             = "200-399"
   }
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(var.tags, {
     Name = "${var.project_name}-${var.environment}-be-tg"
   })
@@ -48,7 +52,7 @@ resource "aws_lb_target_group_attachment" "backend" {
 
 # 2. AI Target Group
 resource "aws_lb_target_group" "ai" {
-  name        = "${var.project_name}-${var.environment}-ai-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}ai-tg"
   port        = var.ai_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -66,6 +70,10 @@ resource "aws_lb_target_group" "ai" {
     matcher             = "200-399"
   }
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(var.tags, {
     Name = "${var.project_name}-${var.environment}-ai-tg"
   })
@@ -80,7 +88,7 @@ resource "aws_lb_target_group_attachment" "ai" {
 
 # 3. Next.js Customer Frontend Target Group
 resource "aws_lb_target_group" "nextjs" {
-  name        = "${var.project_name}-${var.environment}-next-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}next-tg"
   port        = var.nextjs_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -98,6 +106,10 @@ resource "aws_lb_target_group" "nextjs" {
     matcher             = "200-399"
   }
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(var.tags, {
     Name = "${var.project_name}-${var.environment}-next-tg"
   })
@@ -112,7 +124,7 @@ resource "aws_lb_target_group_attachment" "nextjs" {
 
 # 4. Kitchen Frontend Target Group
 resource "aws_lb_target_group" "kitchen" {
-  name        = "${var.project_name}-${var.environment}-kit-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}kit-tg"
   port        = var.kitchen_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -130,6 +142,10 @@ resource "aws_lb_target_group" "kitchen" {
     matcher             = "200-399"
   }
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(var.tags, {
     Name = "${var.project_name}-${var.environment}-kit-tg"
   })
@@ -144,7 +160,7 @@ resource "aws_lb_target_group_attachment" "kitchen" {
 
 # 5. Cashier Frontend Target Group
 resource "aws_lb_target_group" "cashier" {
-  name        = "${var.project_name}-${var.environment}-cash-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}cash-tg"
   port        = var.cashier_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -162,6 +178,10 @@ resource "aws_lb_target_group" "cashier" {
     matcher             = "200-399"
   }
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(var.tags, {
     Name = "${var.project_name}-${var.environment}-cash-tg"
   })
@@ -176,7 +196,7 @@ resource "aws_lb_target_group_attachment" "cashier" {
 
 # 6. React Admin Dashboard Target Group
 resource "aws_lb_target_group" "admin" {
-  name        = "${var.project_name}-${var.environment}-admin-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}admin-tg"
   port        = var.admin_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -192,6 +212,10 @@ resource "aws_lb_target_group" "admin" {
     healthy_threshold   = 3
     unhealthy_threshold = 3
     matcher             = "200-399"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(var.tags, {

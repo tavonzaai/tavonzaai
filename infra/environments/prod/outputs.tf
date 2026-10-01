@@ -68,25 +68,25 @@ output "route53_name_servers" {
   value       = aws_route53_zone.primary.name_servers
 }
 
-# Compute EC2 Outputs
-output "backend_instance_id" {
-  description = "EC2 Instance ID of the Backend host"
-  value       = module.backend_ec2.instance_id
+# Compute ECS Outputs
+output "ecs_cluster_id" {
+  description = "ID of the ECS cluster"
+  value       = module.ecs.cluster_id
 }
 
-output "backend_private_ip" {
-  description = "Private IP address of the Backend EC2 instance"
-  value       = module.backend_ec2.private_ip
+output "ecs_cluster_name" {
+  description = "Name of the ECS cluster"
+  value       = module.ecs.cluster_name
 }
 
-output "frontend_instance_id" {
-  description = "EC2 Instance ID of the Frontend host"
-  value       = module.frontend_ec2.instance_id
+output "ecs_cluster_arn" {
+  description = "ARN of the ECS cluster"
+  value       = module.ecs.cluster_arn
 }
 
-output "frontend_private_ip" {
-  description = "Private IP address of the Frontend EC2 instance"
-  value       = module.frontend_ec2.private_ip
+output "ecs_service_names" {
+  description = "Map of ECS service names"
+  value       = module.ecs.service_names
 }
 
 # Database & Cache Outputs

@@ -3,38 +3,33 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
   secret_name = var.secret_name != "" ? var.secret_name : "/${var.environment}/${var.project_name}/backend"
 
-  # User data script to install AWS SSM Agent, Docker, and Docker Compose Plugin on Debian 13
+  # User data script for Ubuntu 24.04 LTS (SSM Agent is pre-installed)
   ec2_bootstrap_user_data = <<-EOF
     #!/bin/bash
-    set -euo pipefail
+    set -x
+    exec > /var/log/user-data.log 2>&1
 
-    # Update system packages
-    sudo apt-get update -y
-    sudo apt-get install -y ca-certificates curl gnupg wget python3 awscli
+    # Force apt IPv4 in IPv4 VPC
+    echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
 
-    # 1. Install AWS Systems Manager (SSM) Agent
-    mkdir -p /tmp/ssm
-    wget -q https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb -O /tmp/ssm/amazon-ssm-agent.deb
-    sudo dpkg -i /tmp/ssm/amazon-ssm-agent.deb
-    sudo systemctl enable amazon-ssm-agent
-    sudo systemctl start amazon-ssm-agent
-    rm -rf /tmp/ssm
+    # Update system packages and install Docker
+    apt-get update -y
+    apt-get install -y ca-certificates curl gnupg docker.io docker-compose-v2
+    snap install aws-cli --classic || true
 
-    # 2. Install Docker & Docker Compose Plugin
-    sudo install -m 0755 -d /etc/apt/keyrings
-    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    # Enable and start Docker service
+    systemctl enable docker
+    systemctl start docker
 
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    
-    sudo apt-get update -y
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    sudo groupadd -f docker
-    sudo usermod -aG docker admin 2>/dev/null || true
-    sudo usermod -aG docker debian 2>/dev/null || true
-    sudo usermod -aG docker ubuntu 2>/dev/null || true
-    sudo usermod -aG docker ssm-user 2>/dev/null || true
-    EOF
+    # Ensure docker group access for ubuntu and ssm-user
+    groupadd -f docker
+    usermod -aG docker ubuntu 2>/dev/null || true
+    usermod -aG docker ssm-user 2>/dev/null || true
+
+    # Ensure Amazon SSM Agent service is enabled and started
+    systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || systemctl enable amazon-ssm-agent || true
+    systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || systemctl restart amazon-ssm-agent || true
+  EOF
 }
 
 # 1. Custom 3-Tier Multi-AZ VPC Module

@@ -3,38 +3,33 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
   secret_name = var.secret_name != "" ? var.secret_name : "/${var.environment}/${var.project_name}/backend"
 
-  # User data script to install AWS SSM Agent, Docker, and Docker Compose Plugin on Debian 13
+  # User data script for Ubuntu 24.04 LTS (SSM Agent is pre-installed)
   ec2_bootstrap_user_data = <<-EOF
     #!/bin/bash
-    set -euo pipefail
+    set -x
+    exec > /var/log/user-data.log 2>&1
 
-    # Update system packages
-    sudo apt-get update -y
-    sudo apt-get install -y ca-certificates curl gnupg wget python3 awscli
+    # Force apt IPv4 in IPv4 VPC
+    echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
 
-    # 1. Install AWS Systems Manager (SSM) Agent
-    mkdir -p /tmp/ssm
-    wget -q https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb -O /tmp/ssm/amazon-ssm-agent.deb
-    sudo dpkg -i /tmp/ssm/amazon-ssm-agent.deb
-    sudo systemctl enable amazon-ssm-agent
-    sudo systemctl start amazon-ssm-agent
-    rm -rf /tmp/ssm
+    # Update system packages and install Docker
+    apt-get update -y
+    apt-get install -y ca-certificates curl gnupg docker.io docker-compose-v2
+    snap install aws-cli --classic || true
 
-    # 2. Install Docker & Docker Compose Plugin
-    sudo install -m 0755 -d /etc/apt/keyrings
-    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    # Enable and start Docker service
+    systemctl enable docker
+    systemctl start docker
 
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    
-    sudo apt-get update -y
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    sudo groupadd -f docker
-    sudo usermod -aG docker admin 2>/dev/null || true
-    sudo usermod -aG docker debian 2>/dev/null || true
-    sudo usermod -aG docker ubuntu 2>/dev/null || true
-    sudo usermod -aG docker ssm-user 2>/dev/null || true
-    EOF
+    # Ensure docker group access for ubuntu and ssm-user
+    groupadd -f docker
+    usermod -aG docker ubuntu 2>/dev/null || true
+    usermod -aG docker ssm-user 2>/dev/null || true
+
+    # Ensure Amazon SSM Agent service is enabled and started
+    systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || systemctl enable amazon-ssm-agent || true
+    systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || systemctl restart amazon-ssm-agent || true
+  EOF
 }
 
 # 1. Custom 3-Tier Multi-AZ VPC Module
@@ -183,34 +178,92 @@ module "elasticache" {
   environment              = var.environment
 }
 
-# 8. Backend EC2 Instance Module (Deployed into Private App Subnet)
-module "backend_ec2" {
-  source = "../../modules/ec2"
+# 8. ECS Cluster and Services Module (Serverless Fargate Spot Containers)
+module "ecs" {
+  source = "../../modules/ecs"
 
-  instance_name        = "${local.name_prefix}-backend"
-  ami_id               = var.backend_ami_id
-  instance_type        = var.backend_instance_type
-  subnet_id            = module.vpc.private_app_subnet_ids[0]
-  security_group_ids   = [module.security_groups.backend_security_group_id]
-  iam_instance_profile = module.iam.backend_instance_profile_name
-  key_name             = var.ssh_key_name
-  root_volume_size     = var.backend_root_volume_size
-  user_data            = local.ec2_bootstrap_user_data
-}
+  project_name                  = var.project_name
+  environment                   = var.environment
+  vpc_id                        = module.vpc.vpc_id
+  subnet_ids                    = module.vpc.private_app_subnet_ids
+  security_group_ids            = [module.security_groups.ecs_security_group_id]
+  aws_region                    = var.aws_region
+  use_fargate_spot              = true
+  enable_container_insights     = false
+  log_retention_days            = 7
+  assign_public_ip              = false
+  enable_secrets_manager_access = true
+  secrets_manager_arn           = module.secrets_manager.secret_arn
+  enable_s3_access              = true
+  s3_bucket_arn                 = module.s3.bucket_arn
 
-# 9. Frontend EC2 Instance Module (Hosts Next.js & React Admin in Private App Subnet)
-module "frontend_ec2" {
-  source = "../../modules/ec2"
-
-  instance_name        = "${local.name_prefix}-frontend"
-  ami_id               = var.frontend_ami_id
-  instance_type        = var.frontend_instance_type
-  subnet_id            = module.vpc.private_app_subnet_ids[0]
-  security_group_ids   = [module.security_groups.frontend_security_group_id]
-  iam_instance_profile = module.iam.frontend_instance_profile_name
-  key_name             = var.ssh_key_name
-  root_volume_size     = var.frontend_root_volume_size
-  user_data            = local.ec2_bootstrap_user_data
+  services = {
+    backend = {
+      name             = "tavonzaai-prod-backend"
+      container_image  = "${module.ecr.repository_urls["backend"]}:latest"
+      container_port   = var.backend_port
+      cpu              = 256
+      memory           = 512
+      desired_count    = 1
+      target_group_arn = module.alb.backend_target_group_arn
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "PORT", value = tostring(var.backend_port) }
+      ]
+    }
+    customer = {
+      name             = "tavonzaai-prod-customer"
+      container_image  = "${module.ecr.repository_urls["frontend"]}:latest"
+      container_port   = var.nextjs_port
+      cpu              = 256
+      memory           = 512
+      desired_count    = 1
+      target_group_arn = module.alb.customer_target_group_arn
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "PORT", value = tostring(var.nextjs_port) }
+      ]
+    }
+    admin = {
+      name             = "tavonzaai-prod-admin"
+      container_image  = "${module.ecr.repository_urls["admin-dashboard"]}:latest"
+      container_port   = var.admin_port
+      cpu              = 256
+      memory           = 512
+      desired_count    = 1
+      target_group_arn = module.alb.admin_target_group_arn
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "PORT", value = tostring(var.admin_port) }
+      ]
+    }
+    kitchen = {
+      name             = "tavonzaai-prod-kitchen"
+      container_image  = "${module.ecr.repository_urls["kitchen"]}:latest"
+      container_port   = var.kitchen_port
+      cpu              = 256
+      memory           = 512
+      desired_count    = 1
+      target_group_arn = module.alb.kitchen_target_group_arn
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "PORT", value = tostring(var.kitchen_port) }
+      ]
+    }
+    cashier = {
+      name             = "tavonzaai-prod-cashier"
+      container_image  = "${module.ecr.repository_urls["cashier"]}:latest"
+      container_port   = var.cashier_port
+      cpu              = 256
+      memory           = 512
+      desired_count    = 1
+      target_group_arn = module.alb.cashier_target_group_arn
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "PORT", value = tostring(var.cashier_port) }
+      ]
+    }
+  }
 }
 
 # 10. ACM Certificate Module (DNS Validated)
@@ -241,9 +294,9 @@ module "alb" {
   kitchen_subdomain    = var.kitchen_subdomain
   cashier_subdomain    = var.cashier_subdomain
   admin_subdomain      = var.admin_subdomain
-  target_type          = "instance"
-  backend_instance_id  = module.backend_ec2.instance_id
-  frontend_instance_id = module.frontend_ec2.instance_id
+  target_type          = "ip"
+  backend_instance_id  = null
+  frontend_instance_id = null
 
   backend_port              = var.backend_port
   nextjs_port               = var.nextjs_port

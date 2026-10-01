@@ -95,7 +95,9 @@ ecr_repository_names = [
   "ai",
   "kitchen",
   "cashier",
-  "admin-dashboard"
+  "admin-dashboard",
+  "branch-manager",
+  "waiter"
 ]
 
 # ALB Ingress Access (Public Internet)
