@@ -192,12 +192,22 @@ elif [[ -n "${AWS_PROFILE:-}" ]]; then
   AWS_CLI_ARGS+=(--profile "$AWS_PROFILE")
 fi
 
+# Keys that should NEVER be synced to AWS (local dev only)
+BLOCKLIST_KEYS=(
+  "NODE_ENV"
+  "LOG_LEVEL"
+  "DEBUG"
+  "npm_package_version"
+)
+
 # Parse .env file to clean JSON using Node.js
 PARSED_LOCAL_JSON=$(node -e '
 const fs = require("fs");
 const file = process.argv[1];
+const blocklist = new Set(process.argv[2] ? process.argv[2].split(",") : []);
 const content = fs.readFileSync(file, "utf8");
 const env = {};
+const skipped = [];
 for (const line of content.split(/\r?\n/)) {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith("#")) continue;
@@ -205,6 +215,14 @@ for (const line of content.split(/\r?\n/)) {
   if (match) {
     let key = match[1].trim();
     let val = match[2].trim();
+    // Skip blocklisted keys
+    if (blocklist.has(key)) { skipped.push(key); continue; }
+    // Warn about obvious localhost values
+    if (val.includes("localhost") || val.includes("127.0.0.1")) {
+      process.stderr.write(`  ⚠️  SKIPPED (localhost detected): ${key}\n`);
+      skipped.push(key);
+      continue;
+    }
     if ((val.startsWith("\"") && val.endsWith("\"")) || (val.startsWith("\x27") && val.endsWith("\x27"))) {
       val = val.slice(1, -1);
     }
@@ -213,8 +231,9 @@ for (const line of content.split(/\r?\n/)) {
     env[key] = val;
   }
 }
+if (skipped.length) process.stderr.write(`  ℹ️  Skipped keys: ${skipped.join(", ")}\n`);
 console.log(JSON.stringify(env));
-' "$ENV_FILE")
+' "$ENV_FILE" "$(IFS=,; echo "${BLOCKLIST_KEYS[*]}")")
 
 KEY_COUNT=$(node -e 'console.log(Object.keys(JSON.parse(process.argv[1])).length)' "$PARSED_LOCAL_JSON")
 echo -e "\n${GREEN}✓ Parsed ${KEY_COUNT} variables from ${ENV_FILE}${NC}"
@@ -275,6 +294,7 @@ RESULT=$(aws secretsmanager put-secret-value \
   --output json)
 
 VERSION_ID=$(echo "$RESULT" | node -e '
+  const fs = require("fs");
   const stdin = fs.readFileSync(0, "utf-8");
   try {
     const data = JSON.parse(stdin);

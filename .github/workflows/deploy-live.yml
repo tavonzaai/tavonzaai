@@ -1,7 +1,7 @@
 name: Deploy (Live Production Environment)
 
-# Automatically fires ONLY when code is merged / pushed to the 'main' branch.
-# Deploys to the actual production live environment (*.tavonza.com).
+# Fires when code is merged/pushed to 'main'.
+# Finds EC2 instances by tag, pulls the new Docker image, and restarts containers.
 
 on:
   push:
@@ -30,36 +30,24 @@ permissions:
 
 env:
   AWS_REGION: eu-west-2
-  ENVIRONMENT: live
-  BACKEND_INSTANCE_NAME: tavonzaai-live-backend
-  FRONTEND_INSTANCE_NAME: tavonzaai-live-frontend
+  ECR_REGISTRY: 558567543994.dkr.ecr.eu-west-2.amazonaws.com
 
 jobs:
-  # ─── 1. Security Scan Gate ──────────────────────────────────────────────────
-  security-scan:
-    name: Security & Root Scan
-    uses: ./.github/workflows/security-scan.yml
-
-  # ─── 2. Detect Changes ──────────────────────────────────────────────────────
+  # ─── 1. Detect Changes ──────────────────────────────────────────────────────
   detect-changes:
-    name: Detect Changed Microservices
-    needs: [security-scan]
+    name: Detect Changed Services
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      customer: ${{ steps.filter.outputs.customer }}
-      admin: ${{ steps.filter.outputs.admin }}
-      kitchen: ${{ steps.filter.outputs.kitchen }}
-      cashier: ${{ steps.filter.outputs.cashier }}
+      backend:      ${{ steps.filter.outputs.backend }}
+      customer:     ${{ steps.filter.outputs.customer }}
+      admin:        ${{ steps.filter.outputs.admin }}
+      kitchen:      ${{ steps.filter.outputs.kitchen }}
+      cashier:      ${{ steps.filter.outputs.cashier }}
       branch_manager: ${{ steps.filter.outputs.branch_manager }}
-      waiter: ${{ steps.filter.outputs.waiter }}
-      any_frontend: ${{ steps.check-frontend.outputs.any }}
+      waiter:       ${{ steps.filter.outputs.waiter }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Path Filter
-        uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
@@ -92,31 +80,16 @@ jobs:
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
 
-      - name: Check any frontend changed
-        id: check-frontend
-        run: |
-          if [ "${{ steps.filter.outputs.customer }}" = "true" ] || \
-             [ "${{ steps.filter.outputs.admin }}" = "true" ] || \
-             [ "${{ steps.filter.outputs.kitchen }}" = "true" ] || \
-             [ "${{ steps.filter.outputs.cashier }}" = "true" ] || \
-             [ "${{ steps.filter.outputs.branch_manager }}" = "true" ] || \
-             [ "${{ steps.filter.outputs.waiter }}" = "true" ]; then
-            echo "any=true" >> $GITHUB_OUTPUT
-          else
-            echo "any=false" >> $GITHUB_OUTPUT
-          fi
-
-  # ─── 3. Build & Deploy Backend API ──────────────────────────────────────────
+  # ─── 2. Deploy Backend ──────────────────────────────────────────────────────
   deploy-backend:
-    name: Deploy Backend API (api.tavonza.com)
+    name: Deploy Backend (api.tavonza.com)
     needs: [detect-changes]
     if: |
-      (github.event_name == 'push' && (needs.detect-changes.outputs.backend == 'true')) ||
+      (github.event_name == 'push' && needs.detect-changes.outputs.backend == 'true') ||
       (github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'backend'))
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -125,146 +98,119 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and Push Backend Image
+      - name: Build & Push Backend Image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: docker/api.Dockerfile
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-live-backend:${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-live-backend:latest
+            ${{ env.ECR_REGISTRY }}/tavonzaai-live-backend:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/tavonzaai-live-backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to Backend EC2 via AWS SSM
+      - name: Deploy to EC2 via SSM
         run: |
-          echo "Finding running backend instance tagged Name=${{ env.BACKEND_INSTANCE_NAME }}..."
           INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=${{ env.BACKEND_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Name,Values=tavonzaai-live-backend" "Name=instance-state-name,Values=running" \
             --region ${{ env.AWS_REGION }} \
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text)
 
-          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
-            echo "Error: Backend EC2 instance not found or not in running state."
-            exit 1
-          fi
-
-          echo "Target Instance ID: $INSTANCE_ID"
-          echo "Triggering SSM Run Command for container deployment..."
-
-          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
-          IMAGE="${REGISTRY}/tavonzaai-live-backend:latest"
+          echo "Instance: $INSTANCE_ID"
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy tavonzaai-live-backend container" \
-            --parameters "{\"commands\":[
-              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY\",
-              \"docker pull $IMAGE\",
-              \"mkdir -p /opt/tavonzaai\",
-              \"aws secretsmanager get-secret-value --secret-id /live/tavonzaai/backend --region ${{ env.AWS_REGION }} --query SecretString --output text | jq -r 'to_entries | .[] | \\\"\\(.key)=\\(.value)\\\"' > /opt/tavonzaai/backend.env\",
-              \"echo 'PORT=5000' >> /opt/tavonzaai/backend.env\",
-              \"echo 'API_PORT=5000' >> /opt/tavonzaai/backend.env\",
-              \"echo 'NODE_ENV=production' >> /opt/tavonzaai/backend.env\",
-              \"docker stop tavonzaai-backend 2>/dev/null || true\",
-              \"docker rm tavonzaai-backend 2>/dev/null || true\",
-              \"docker run -d --name tavonzaai-backend --restart always --env-file /opt/tavonzaai/backend.env -p 5000:5000 $IMAGE\"
-            ]}" \
             --region ${{ env.AWS_REGION }} \
-            --query "Command.CommandId" \
-            --output text)
+            --parameters 'commands=[
+              "aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 558567543994.dkr.ecr.eu-west-2.amazonaws.com",
+              "docker pull 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-backend:latest",
+              "docker stop tavonzaai-backend 2>/dev/null || true",
+              "docker rm tavonzaai-backend 2>/dev/null || true",
+              "docker run -d --name tavonzaai-backend --restart always --env-file /opt/tavonzaai/backend.env -p 5000:5000 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-backend:latest"
+            ]' \
+            --query "Command.CommandId" --output text)
 
-          echo "Command sent successfully (CommandId: $COMMAND_ID). Waiting for completion..."
-          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --region ${{ env.AWS_REGION }}
-          echo "Backend deployment completed successfully!"
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Backend deployed!"
 
-  # ─── 4. Build & Deploy Frontend Applications ────────────────────────────────
-  deploy-frontend-apps:
+  # ─── 3. Deploy Frontend Apps ─────────────────────────────────────────────────
+  deploy-frontend:
     name: Deploy Frontend (${{ matrix.app }})
     needs: [detect-changes]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - app: customer
             ecr_name: frontend
-            port: 3000
             container: tavonzaai-customer
-            subdomain: "tavonza.com"
+            port: 3000
+            changed_key: customer
           - app: admin
             ecr_name: admin-dashboard
-            port: 3043
             container: tavonzaai-admin
-            subdomain: "admin.tavonza.com"
+            port: 3043
+            changed_key: admin
           - app: kitchen
             ecr_name: kitchen
-            port: 3105
             container: tavonzaai-kitchen
-            subdomain: "kitchen.tavonza.com"
+            port: 3105
+            changed_key: kitchen
           - app: cashier
             ecr_name: cashier
-            port: 3104
             container: tavonzaai-cashier
-            subdomain: "cashier.tavonza.com"
+            port: 3104
+            changed_key: cashier
           - app: branch-manager
             ecr_name: branch-manager
-            port: 3103
             container: tavonzaai-branch-manager
-            subdomain: "branch-manager.tavonza.com"
+            port: 3103
+            changed_key: branch_manager
           - app: waiter
             ecr_name: waiter
-            port: 3101
             container: tavonzaai-waiter
-            subdomain: "waiter.tavonza.com"
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      needs.detect-changes.outputs.any_frontend == 'true'
-    runs-on: ubuntu-latest
+            port: 3101
+            changed_key: waiter
     steps:
-      - name: Check if this frontend app should be deployed
+      - name: Check if deploy needed
         id: check
         env:
-          APP: ${{ matrix.app }}
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_SERVICE: ${{ inputs.service }}
+          APP:              ${{ matrix.app }}
+          CHANGED_KEY:      ${{ matrix.changed_key }}
+          EVENT_NAME:       ${{ github.event_name }}
+          INPUT_SERVICE:    ${{ inputs.service }}
           CUSTOMER_CHANGED: ${{ needs.detect-changes.outputs.customer }}
-          ADMIN_CHANGED: ${{ needs.detect-changes.outputs.admin }}
-          KITCHEN_CHANGED: ${{ needs.detect-changes.outputs.kitchen }}
-          CASHIER_CHANGED: ${{ needs.detect-changes.outputs.cashier }}
+          ADMIN_CHANGED:    ${{ needs.detect-changes.outputs.admin }}
+          KITCHEN_CHANGED:  ${{ needs.detect-changes.outputs.kitchen }}
+          CASHIER_CHANGED:  ${{ needs.detect-changes.outputs.cashier }}
           BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.branch_manager }}
-          WAITER_CHANGED: ${{ needs.detect-changes.outputs.waiter }}
+          WAITER_CHANGED:   ${{ needs.detect-changes.outputs.waiter }}
         run: |
           SHOULD_DEPLOY="false"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ]; then
-              SHOULD_DEPLOY="true"
-            fi
+            [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ] && SHOULD_DEPLOY="true"
           else
             case "$APP" in
-              customer) [ "$CUSTOMER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              admin) [ "$ADMIN_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              kitchen) [ "$KITCHEN_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              cashier) [ "$CASHIER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              customer)       [ "$CUSTOMER_CHANGED"       = "true" ] && SHOULD_DEPLOY="true" ;;
+              admin)          [ "$ADMIN_CHANGED"          = "true" ] && SHOULD_DEPLOY="true" ;;
+              kitchen)        [ "$KITCHEN_CHANGED"        = "true" ] && SHOULD_DEPLOY="true" ;;
+              cashier)        [ "$CASHIER_CHANGED"        = "true" ] && SHOULD_DEPLOY="true" ;;
               branch-manager) [ "$BRANCH_MANAGER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              waiter) [ "$WAITER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              waiter)         [ "$WAITER_CHANGED"         = "true" ] && SHOULD_DEPLOY="true" ;;
             esac
           fi
           echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
-          echo "App: $APP | Should Deploy: $SHOULD_DEPLOY"
+          echo "$APP → deploy: $SHOULD_DEPLOY"
 
-      - name: Checkout Code
+      - uses: actions/checkout@v4
         if: steps.check.outputs.should_deploy == 'true'
-        uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
         if: steps.check.outputs.should_deploy == 'true'
@@ -274,16 +220,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        if: steps.check.outputs.should_deploy == 'true'
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set up Docker Buildx
-        if: steps.check.outputs.should_deploy == 'true'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and Push Docker Image
+      - name: Build & Push Image
         if: steps.check.outputs.should_deploy == 'true'
         uses: docker/build-push-action@v5
         with:
@@ -294,47 +231,41 @@ jobs:
             APP_PORT=${{ matrix.port }}
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-live-${{ matrix.ecr_name }}:${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-live-${{ matrix.ecr_name }}:latest
+            ${{ env.ECR_REGISTRY }}/tavonzaai-live-${{ matrix.ecr_name }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/tavonzaai-live-${{ matrix.ecr_name }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy Container to Frontend EC2 via AWS SSM
+      - name: Deploy to EC2 via SSM
         if: steps.check.outputs.should_deploy == 'true'
+        env:
+          IMAGE: ${{ env.ECR_REGISTRY }}/tavonzaai-live-${{ matrix.ecr_name }}:latest
+          CONTAINER: ${{ matrix.container }}
+          PORT: ${{ matrix.port }}
         run: |
-          echo "Finding running frontend instance tagged Name=${{ env.FRONTEND_INSTANCE_NAME }}..."
           INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=${{ env.FRONTEND_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Name,Values=tavonzaai-live-frontend" "Name=instance-state-name,Values=running" \
             --region ${{ env.AWS_REGION }} \
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text)
 
-          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
-            echo "Error: Frontend EC2 instance not found or not in running state."
-            exit 1
-          fi
-
-          echo "Target Instance ID: $INSTANCE_ID"
-          echo "Deploying ${{ matrix.app }} container to port ${{ matrix.port }}..."
-
-          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
-          IMAGE="${REGISTRY}/tavonzaai-live-${{ matrix.ecr_name }}:latest"
+          echo "Instance: $INSTANCE_ID  App: ${{ matrix.app }}  Port: $PORT"
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy ${{ matrix.container }} container" \
-            --parameters "{\"commands\":[
-              \"aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY\",
-              \"docker pull $IMAGE\",
-              \"docker stop ${{ matrix.container }} 2>/dev/null || true\",
-              \"docker rm ${{ matrix.container }} 2>/dev/null || true\",
-              \"docker run -d --name ${{ matrix.container }} --restart always -p ${{ matrix.port }}:${{ matrix.port }} -e NODE_ENV=production -e PORT=${{ matrix.port }} $IMAGE\"
-            ]}" \
             --region ${{ env.AWS_REGION }} \
-            --query "Command.CommandId" \
-            --output text)
+            --parameters "commands=[
+              \"aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 558567543994.dkr.ecr.eu-west-2.amazonaws.com\",
+              \"docker pull $IMAGE\",
+              \"docker stop $CONTAINER 2>/dev/null || true\",
+              \"docker rm $CONTAINER 2>/dev/null || true\",
+              \"docker run -d --name $CONTAINER --restart always -e NODE_ENV=production -e PORT=$PORT -p $PORT:$PORT $IMAGE\"
+            ]" \
+            --query "Command.CommandId" --output text)
 
-          echo "Command sent successfully (CommandId: $COMMAND_ID). Waiting for completion..."
-          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --region ${{ env.AWS_REGION }}
-          echo "${{ matrix.app }} deployed successfully on port ${{ matrix.port }} (${{ matrix.subdomain }})!"
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ ${{ matrix.app }} deployed on port $PORT!"
