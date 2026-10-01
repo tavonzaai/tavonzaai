@@ -362,7 +362,7 @@ resource "aws_lb_listener_rule" "admin" {
   tags = var.tags
 }
 
-# Rule 6: Customer Root Domain -> Next.js Target Group (example.com, www.example.com)
+# Rule 6: Customer Domain -> Next.js Target Group (root domain/www, or dedicated subdomain e.g. prod.example.com)
 resource "aws_lb_listener_rule" "customer" {
   listener_arn = local.active_listener_arn
   priority     = 40
@@ -374,7 +374,9 @@ resource "aws_lb_listener_rule" "customer" {
 
   condition {
     host_header {
-      values = [
+      values = var.customer_subdomain != "" ? [
+        "${var.customer_subdomain}.${var.domain_name}"
+        ] : [
         var.domain_name,
         "www.${var.domain_name}"
       ]

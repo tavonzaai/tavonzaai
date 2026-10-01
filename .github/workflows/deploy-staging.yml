@@ -1,8 +1,8 @@
-name: Deploy (Pre-Production)
+name: Deploy (Prod Environment - Testable)
 
 # Triggers automatically when code is merged into the 'prod' branch.
-# This deploys to the pre-production environment — fully battle-tested
-# before promotion to the real production (main) branch.
+# This deploys to the testable prod environment (prod-*.tavonza.com)
+# before promotion to the live environment ('main' branch).
 
 on:
   push:

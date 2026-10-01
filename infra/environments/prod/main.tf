@@ -235,6 +235,7 @@ module "alb" {
   enable_https         = var.enable_https
   certificate_arn      = var.enable_https && length(module.acm) > 0 ? module.acm[0].certificate_arn : null
   domain_name          = var.domain_name
+  customer_subdomain   = var.customer_subdomain
   api_subdomain        = var.api_subdomain
   ai_subdomain         = var.ai_subdomain
   kitchen_subdomain    = var.kitchen_subdomain
@@ -264,6 +265,7 @@ module "route53" {
 
   route53_zone_id     = aws_route53_zone.primary.zone_id
   domain_name         = var.domain_name
+  customer_subdomain  = var.customer_subdomain
   api_subdomain       = var.api_subdomain
   ai_subdomain        = var.ai_subdomain
   kitchen_subdomain   = var.kitchen_subdomain
@@ -280,15 +282,16 @@ module "ses" {
   count  = var.enable_ses ? 1 : 0
   source = "../../modules/ses"
 
-  domain_name         = var.domain_name
-  route53_zone_id     = aws_route53_zone.primary.zone_id
-  enable_mail_from    = var.ses_enable_mail_from
-  mail_from_subdomain = var.ses_mail_from_subdomain
-  enable_dmarc        = var.ses_enable_dmarc
-  dmarc_policy        = var.ses_dmarc_policy
-  create_smtp_user    = var.ses_create_smtp_user
-  project_name        = var.project_name
-  environment         = var.environment
+  domain_name               = var.domain_name
+  route53_zone_id           = aws_route53_zone.primary.zone_id
+  enable_mail_from          = var.ses_enable_mail_from
+  mail_from_subdomain       = var.ses_mail_from_subdomain
+  enable_dmarc              = var.ses_enable_dmarc
+  dmarc_policy              = var.ses_dmarc_policy
+  create_smtp_user          = var.ses_create_smtp_user
+  verified_email_identities = var.ses_verified_email_identities
+  project_name              = var.project_name
+  environment               = var.environment
   tags = {
     Project     = var.project_name
     Environment = var.environment

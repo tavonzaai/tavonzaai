@@ -1,8 +1,8 @@
-name: Deploy (Production)
+name: Deploy (Live Environment)
 
 # Triggers automatically when code is merged into the 'main' branch.
-# 'main' is the live production branch — only battle-tested code from
-# 'prod' should ever be promoted here.
+# 'main' is the actual live environment without prefixes (*.tavonza.com).
+# Only battle-tested code from 'prod' is promoted here.
 
 on:
   push:

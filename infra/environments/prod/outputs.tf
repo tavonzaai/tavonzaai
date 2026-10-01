@@ -48,8 +48,8 @@ output "acm_certificate_arn" {
 output "application_urls" {
   description = "Public application endpoints (HTTPS via Route 53 or HTTP via ALB)"
   value = {
-    customer     = var.enable_https ? "https://${module.route53.root_fqdn}" : "http://${module.alb.alb_dns_name}"
-    customer_www = var.enable_https ? "https://${module.route53.www_fqdn}" : "http://${module.alb.alb_dns_name}"
+    customer     = var.enable_https ? "https://${coalesce(module.route53.customer_fqdn, module.alb.alb_dns_name)}" : "http://${module.alb.alb_dns_name}"
+    customer_www = var.enable_https && module.route53.www_fqdn != null ? "https://${module.route53.www_fqdn}" : null
     api          = var.enable_https ? "https://${module.route53.api_fqdn}" : "http://${module.alb.alb_dns_name}/api"
     ai           = var.enable_https ? "https://${module.route53.ai_fqdn}" : "http://${module.alb.alb_dns_name}/ai"
     kitchen      = var.enable_https ? "https://${module.route53.kitchen_fqdn}" : "http://${module.alb.alb_dns_name}/kitchen"
@@ -242,4 +242,20 @@ output "ses_smtp_password_v4" {
   value       = var.enable_ses ? module.ses[0].ses_smtp_password_v4 : null
   sensitive   = true
 }
+
+output "ses_configuration_set_name" {
+  description = "Name of the SES Configuration Set"
+  value       = var.enable_ses ? module.ses[0].configuration_set_name : null
+}
+
+output "ses_sns_events_topic_arn" {
+  description = "ARN of the SNS topic receiving bounce and complaint notifications"
+  value       = var.enable_ses ? module.ses[0].sns_events_topic_arn : null
+}
+
+output "ses_verified_email_identities" {
+  description = "Map of verified email identities in SES"
+  value       = var.enable_ses ? module.ses[0].verified_email_identities : {}
+}
+
 
