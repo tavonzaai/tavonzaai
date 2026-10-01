@@ -51,10 +51,10 @@ CREATE TABLE IF NOT EXISTS "customer_alerts" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "orders" ADD COLUMN "placed_by_waiter_id" uuid;--> statement-breakpoint
-ALTER TABLE "orders" ADD COLUMN "customer_auto_created" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "orders" ADD COLUMN "rejection_reason" text;--> statement-breakpoint
-ALTER TABLE "users" ADD COLUMN "is_phone_verified" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "placed_by_waiter_id" uuid;--> statement-breakpoint
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "customer_auto_created" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "rejection_reason" text;--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_phone_verified" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "branch_staff_assignments" ADD CONSTRAINT "branch_staff_assignments_staff_profile_id_staff_profiles_id_fk" FOREIGN KEY ("staff_profile_id") REFERENCES "public"."staff_profiles"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
