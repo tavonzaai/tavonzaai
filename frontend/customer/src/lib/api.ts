@@ -10,10 +10,18 @@ import type { Meta } from "./types";
  * customer's token is never exposed to client JavaScript and no CORS is involved.
  */
 
-const API_BASE_URL =
-  process.env["NEXT_PUBLIC_API_URL"] ??
-  process.env["API_BASE_URL"] ??
-  "http://localhost:7777/api/v1";
+function getCleanApiBaseUrl(): string {
+  let url = (
+    process.env["NEXT_PUBLIC_API_URL"] ??
+    process.env["NEXT_PUBLIC_API_BASE_URL"] ??
+    process.env["API_BASE_URL"] ??
+    "https://prod-api.tavonza.com"
+  ).trim();
+  url = url.replace(/\/docs(-json)?\/?$/, "").replace(/\/$/, "");
+  return url || "https://prod-api.tavonza.com";
+}
+
+const API_BASE_URL = getCleanApiBaseUrl();
 
 export interface BackendFieldError {
   path: string;
@@ -46,8 +54,8 @@ export class ApiError extends Error {
 }
 
 interface Envelope<T> {
-  success: boolean;
-  message: string;
+  success?: boolean;
+  message?: string;
   meta?: Meta | null;
   data?: T | null;
   errorMessages?: BackendFieldError[];
@@ -73,32 +81,48 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
       ? explicitToken
       : (await cookies()).get(CUSTOMER_COOKIE)?.value;
 
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(`${API_BASE_URL}${cleanPath}`, {
       ...init,
       headers: {
         Accept: "application/json",
+        "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
       cache: "no-store",
     });
-  } catch {
-    throw new ApiError(0, "Cannot reach the Tavonza API. Is the backend running on port 7777?");
+  } catch (err: any) {
+    throw new ApiError(0, err?.message || "Cannot reach the Tavonza API server.");
   }
 
-  const body = (await response.json().catch(() => null)) as Envelope<T> | null;
+  const rawJson = (await response.json().catch(() => null)) as any;
 
-  if (!response.ok || !body?.success) {
+  if (!response.ok) {
+    let errorMsg = `Request failed with status ${response.status}`;
+    if (rawJson?.message) {
+      errorMsg = Array.isArray(rawJson.message) ? rawJson.message.join(". ") : rawJson.message;
+    } else if (rawJson?.error) {
+      errorMsg = rawJson.error;
+    }
     throw new ApiError(
       response.status,
-      body?.message ?? `Request failed with status ${response.status}`,
-      body?.errorMessages ?? [],
+      errorMsg,
+      rawJson?.errorMessages ?? [],
     );
   }
 
-  return { data: body.data as T, meta: body.meta ?? null, message: body.message };
+  const dataPayload = (rawJson && typeof rawJson === "object" && "data" in rawJson)
+    ? rawJson.data
+    : rawJson;
+
+  return {
+    data: dataPayload as T,
+    meta: rawJson?.meta ?? null,
+    message: rawJson?.message ?? "Success",
+  };
 }
 
 type QueryValue = string | number | boolean | undefined | null;

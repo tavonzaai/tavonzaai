@@ -6,8 +6,6 @@ import ForgotPasswordView from './ForgotPasswordView';
 import OtpVerificationView from './OtpVerificationView';
 import ResetPasswordView from './ResetPasswordView';
 import CreateAccountView from './CreateAccountView';
-import { CheckCircle2, Sparkles, ArrowRight } from 'lucide-react';
-
 import AuthDesktopLayout from './AuthDesktopLayout';
 
 export type AuthScreen =
@@ -27,19 +25,39 @@ interface AuthFlowProps {
 export default function AuthFlow({
   initialScreen = 'login',
   onAuthComplete,
-  onBackToLanding,
 }: AuthFlowProps) {
   const [currentScreen, setCurrentScreen] = useState<AuthScreen>(initialScreen);
   const [userEmail, setUserEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [otpType, setOtpType] = useState<'email_verification' | 'password_reset'>('email_verification');
 
   return (
     <AuthDesktopLayout>
       {currentScreen === 'login' && (
         <LoginView
+          initialEmail={userEmail}
           onLoginSuccess={onAuthComplete}
           onForgotPassword={() => setCurrentScreen('forgot-password')}
           onCreateAccount={() => setCurrentScreen('create-account')}
+          onNavigateToVerify={(email) => {
+            setUserEmail(email);
+            setOtpType('email_verification');
+            setCurrentScreen('verify-otp');
+          }}
+        />
+      )}
+
+      {currentScreen === 'create-account' && (
+        <CreateAccountView
+          onAccountCreated={(createdEmail) => {
+            if (createdEmail) setUserEmail(createdEmail);
+            setOtpType('email_verification');
+            setCurrentScreen('verify-otp');
+          }}
+          onGoBackToLogin={(email) => {
+            if (email) setUserEmail(email);
+            setCurrentScreen('login');
+          }}
         />
       )}
 
@@ -47,6 +65,7 @@ export default function AuthFlow({
         <ForgotPasswordView
           onRequestCode={(email) => {
             setUserEmail(email);
+            setOtpType('password_reset');
             setCurrentScreen('verify-otp');
           }}
           onBackToLogin={() => setCurrentScreen('login')}
@@ -55,13 +74,18 @@ export default function AuthFlow({
 
       {currentScreen === 'verify-otp' && (
         <OtpVerificationView
+          email={userEmail}
+          type={otpType}
           onVerifySuccess={(code) => {
-            // The API only checks the code when the new password is submitted,
-            // so it is carried forward rather than verified here.
-            setOtpCode(code);
-            setCurrentScreen('reset-password');
+            if (otpType === 'password_reset') {
+              setOtpCode(code);
+              setCurrentScreen('reset-password');
+            } else {
+              // Email verification complete -> prompt to login
+              setCurrentScreen('login');
+            }
           }}
-          onBack={() => setCurrentScreen('forgot-password')}
+          onBack={() => setCurrentScreen(otpType === 'password_reset' ? 'forgot-password' : 'create-account')}
         />
       )}
 
@@ -69,18 +93,10 @@ export default function AuthFlow({
         <ResetPasswordView
           email={userEmail}
           otp={otpCode}
-          onComplete={onAuthComplete}
+          onComplete={() => setCurrentScreen('login')}
           onBack={() => setCurrentScreen('verify-otp')}
-        />
-      )}
-
-      {currentScreen === 'create-account' && (
-        <CreateAccountView
-          onAccountCreated={onAuthComplete}
-          onGoBackToLogin={() => setCurrentScreen('login')}
         />
       )}
     </AuthDesktopLayout>
   );
 }
-
