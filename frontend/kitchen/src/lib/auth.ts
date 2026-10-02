@@ -67,7 +67,12 @@ export function getKitchenProfile(): KitchenUser | null {
  * Log in the chef/kitchen staff, establishing strictly Cookies session (NO LOCALSTORAGE)
  */
 export function loginKitchenSession(customUser?: Partial<KitchenUser>): KitchenUser {
-  const token = `ktc_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const existingToken = getCookie(KITCHEN_TOKEN_KEY);
+  // Keep existing JWT access token if set by rawAuthApi.login, otherwise generate demo token
+  const token = (existingToken && !existingToken.startsWith('ktc_tok_'))
+    ? existingToken
+    : `ktc_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
   const user: KitchenUser = {
     ...DEMO_KITCHEN_USER,
     ...customUser,

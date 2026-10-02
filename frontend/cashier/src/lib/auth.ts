@@ -12,6 +12,11 @@ export interface CashierUser {
   role: string;
   station: string;
   shiftStartedAt?: string;
+  assignments?: Array<{
+    id?: string;
+    role: string;
+    branch?: { id: string; name: string };
+  }>;
 }
 
 export const DEMO_CASHIER_USER: CashierUser = {
@@ -20,6 +25,13 @@ export const DEMO_CASHIER_USER: CashierUser = {
   email: 'cashier@tavonza.demo',
   role: 'CASHIER',
   station: 'Terminal #1 (Main Cashier)',
+  assignments: [
+    {
+      id: 'asg-1',
+      role: 'CASHIER',
+      branch: { id: 'br-1', name: 'Terminal #1 (Main Cashier)' },
+    },
+  ],
 };
 
 /**
@@ -55,7 +67,12 @@ export function getCashierProfile(): CashierUser {
  * Log in the cashier, establishing strictly Cookies session (NO LOCALSTORAGE)
  */
 export function loginCashierSession(customUser?: Partial<CashierUser>): CashierUser {
-  const token = `csh_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const existingToken = getCookie(CASHIER_TOKEN_KEY) || getCookie('access_token');
+  // Keep existing JWT access token if set by rawAuthApi.login, otherwise generate demo token
+  const token = (existingToken && !existingToken.startsWith('csh_tok_'))
+    ? existingToken
+    : `csh_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
   const user: CashierUser = {
     ...DEMO_CASHIER_USER,
     ...customUser,
