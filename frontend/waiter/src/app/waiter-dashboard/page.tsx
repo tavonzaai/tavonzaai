@@ -18,5 +18,6 @@ export default async function WaiterDashboardIndexPage({
   if (tab) {
     return <WaiterDashboard initialNav={tab} />;
   }
-  redirect('/waiter-dashboard/dashboard');
+  redirect('/new-waiter-dashboard');
+  // redirect('/waiter-dashboard/dashboard');
 }

@@ -10,7 +10,8 @@ import { isRoleAllowedForWaiter } from '@/redux/ReduxProvider';
 
 function LoginContent() {
   const router = useRouter();
-  const returnUrl = '/waiter-dashboard/dashboard';
+  const returnUrl = '/new-waiter-dashboard/dashboard';
+  // const returnUrl = '/waiter-dashboard/dashboard';
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
 
   // Check if session exists in Redux state or in cookies

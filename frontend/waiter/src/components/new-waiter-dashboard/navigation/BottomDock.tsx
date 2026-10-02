@@ -1,0 +1,318 @@
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
+import { useRouter, usePathname } from 'next/navigation';
+import { LayoutGrid, Home, UtensilsCrossed, Bell, User } from 'lucide-react';
+
+interface BottomDockProps {
+  activeTab?: 'floor' | 'home' | 'order' | 'orders' | 'jarvis' | 'alert' | 'alerts' | 'profile';
+  onNavigateTab?: (tab: string) => void;
+  showFloorLabel?: boolean;
+  forceVisible?: boolean;
+}
+
+export default function BottomDock({
+  activeTab,
+  onNavigateTab,
+  showFloorLabel = true,
+  forceVisible = false,
+}: BottomDockProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(true);
+
+  // Automatically derive active tab from URL route if not explicitly supplied
+  const derivedTab = (() => {
+    if (activeTab) return activeTab;
+    if (!pathname) return 'floor';
+    if (pathname.includes('/orders')) return 'order';
+    if (pathname.includes('/jarvis')) return 'jarvis';
+    if (pathname.includes('/alert')) return 'alert';
+    if (pathname.includes('/profile')) return 'profile';
+    if (pathname.includes('/floor')) return 'floor';
+    return 'floor';
+  })();
+
+  const isFloorActive = derivedTab === 'floor' || derivedTab === 'home';
+  const isOrderActive = derivedTab === 'order' || derivedTab === 'orders';
+  const isJarvisActive = derivedTab === 'jarvis';
+  const isAlertActive = derivedTab === 'alert' || derivedTab === 'alerts';
+  const isProfileActive = derivedTab === 'profile';
+
+  useEffect(() => {
+    setIsVisible(true);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (forceVisible) {
+      setIsVisible(true);
+      return;
+    }
+
+    const scrollContainer = document.getElementById('new-waiter-scroll-container');
+    let lastScrollY = scrollContainer
+      ? scrollContainer.scrollTop
+      : window.scrollY || document.documentElement.scrollTop;
+    let ticking = false;
+
+    // 1. Scroll listener (fires for container or window)
+    const handleScroll = (e: Event) => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          let currentY = 0;
+          const target = e.target;
+          if (target === document || target === window) {
+            currentY = window.scrollY || document.documentElement.scrollTop;
+          } else if (target instanceof HTMLElement) {
+            currentY = target.scrollTop;
+          } else if (scrollContainer) {
+            currentY = scrollContainer.scrollTop;
+          }
+
+          const delta = currentY - lastScrollY;
+
+          // If at the top of content (within 25px), always keep dock visible
+          if (currentY <= 25) {
+            setIsVisible(true);
+          } else if (delta > 6) {
+            // Scrolling down (reading content downwards) -> smoothly hide dock to bottom
+            setIsVisible(false);
+          } else if (delta < -6) {
+            // Scrolling up (moving back to top) -> smoothly reveal dock from bottom
+            setIsVisible(true);
+          }
+
+          lastScrollY = currentY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    // 2. Mouse wheel / trackpad listener (instant response)
+    const handleWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) < 4) return;
+      if (e.deltaY > 6) {
+        setIsVisible(false);
+      } else if (e.deltaY < -6) {
+        setIsVisible(true);
+      }
+    };
+
+    // 3. Mobile touch gesture listener
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches && e.touches[0]) {
+        touchStartY = e.touches[0].clientY;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!e.touches || !e.touches[0]) return;
+      const currentY = e.touches[0].clientY;
+      const delta = touchStartY - currentY;
+      if (delta > 8) {
+        // Finger swiped up = scrolled down -> hide dock
+        setIsVisible(false);
+      } else if (delta < -8) {
+        // Finger swiped down = scrolled up -> show dock
+        setIsVisible(true);
+      }
+      touchStartY = currentY;
+    };
+
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    window.addEventListener('wheel', handleWheel, { passive: true });
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+
+    return () => {
+      if (scrollContainer) {
+        scrollContainer.removeEventListener('scroll', handleScroll);
+      }
+      document.removeEventListener('scroll', handleScroll, { capture: true });
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [forceVisible, pathname]);
+
+  const handleNav = (tab: string, path: string) => {
+    if (onNavigateTab) {
+      onNavigateTab(tab);
+    } else {
+      router.push(path);
+    }
+  };
+
+  return (
+    <>
+      {/* Subtle hover/touch activation strip at bottom so user can always reveal dock */}
+      {!isVisible && (
+        <div
+          onMouseEnter={() => setIsVisible(true)}
+          onTouchStart={() => setIsVisible(true)}
+          className="absolute bottom-0 left-0 right-0 h-6 z-30 pointer-events-auto cursor-pointer"
+        />
+      )}
+
+      <div
+        ref={dockRef}
+        className={`w-full h-24 bg-black/85 backdrop-blur-xl border-t border-white/10 shadow-[0px_-10px_30px_rgba(0,0,0,0.8)] flex flex-col justify-between px-3 pt-2 pb-2 absolute bottom-0 left-0 right-0 z-40 select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
+          isVisible
+            ? 'translate-y-0 opacity-100 pointer-events-auto'
+            : 'translate-y-[140%] opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="flex items-center justify-around w-full">
+          {/* 1. Floor (matching Figma with 4-square LayoutGrid icon) */}
+          <button
+            onClick={() => handleNav('floor', '/new-waiter-dashboard/floor')}
+            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition group"
+          >
+            {showFloorLabel ? (
+              <LayoutGrid
+                className={`w-5 h-5 transition ${
+                  isFloorActive
+                    ? 'text-yellow-400 stroke-[2.2]'
+                    : 'text-neutral-400 group-hover:text-white'
+                }`}
+              />
+            ) : (
+              <Home
+                className={`w-5 h-5 transition ${
+                  isFloorActive
+                    ? 'text-yellow-400 stroke-[2.2]'
+                    : 'text-slate-500 group-hover:text-white'
+                }`}
+              />
+            )}
+            <span
+              className={`text-[10px] font-medium font-['Inter'] ${
+                isFloorActive
+                  ? 'text-yellow-400 font-semibold underline decoration-yellow-400'
+                  : 'text-neutral-400'
+              }`}
+            >
+              {showFloorLabel ? 'Floor' : 'Home'}
+            </span>
+          </button>
+
+          {/* 2. Order */}
+          <button
+            onClick={() => handleNav('order', '/new-waiter-dashboard/orders')}
+            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition group"
+          >
+            <UtensilsCrossed
+              className={`w-5 h-5 transition ${
+                isOrderActive
+                  ? 'text-yellow-400 stroke-[2.2]'
+                  : 'text-neutral-400 group-hover:text-white'
+              }`}
+            />
+            <span
+              className={`text-[10px] font-medium font-['Inter'] ${
+                isOrderActive
+                  ? 'text-yellow-400 font-semibold underline decoration-yellow-400'
+                  : 'text-neutral-400'
+              }`}
+            >
+              Order
+            </span>
+          </button>
+
+          {/* 3. JARVIS Center AI Button */}
+          <button
+            onClick={() => handleNav('jarvis', '/new-waiter-dashboard/jarvis')}
+            className="flex flex-col items-center justify-center -mt-6 cursor-pointer group"
+          >
+            <div
+              className={`w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center transition group-hover:scale-105 active:scale-95 overflow-hidden ${
+                isJarvisActive
+                  ? 'border-2 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)] ring-2 ring-yellow-400/30'
+                  : 'border-2 border-neutral-500 shadow-[0_0_15px_rgba(0,0,0,0.6)]'
+              }`}
+            >
+              <div className="relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center">
+                <Image
+                  src="/images/jarvis-robot.jpg"
+                  alt="JARVIS"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            </div>
+            <span
+              className={`text-[10px] font-medium font-['Inter'] mt-1 ${
+                isJarvisActive
+                  ? 'text-yellow-400 font-semibold underline decoration-yellow-400'
+                  : 'text-violet-100/60'
+              }`}
+            >
+              JARVIS
+            </span>
+          </button>
+
+          {/* 4. Alert */}
+          <button
+            onClick={() => handleNav('alert', '/new-waiter-dashboard/alerts')}
+            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition group relative"
+          >
+            <div className="relative">
+              <Bell
+                className={`w-5 h-5 transition ${
+                  isAlertActive
+                    ? 'text-yellow-400 stroke-[2.2]'
+                    : 'text-neutral-400 group-hover:text-white'
+                }`}
+              />
+              <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center absolute -top-1 -right-2 text-white text-[9px] font-bold">
+                2
+              </div>
+            </div>
+            <span
+              className={`text-[10px] font-medium font-['Inter'] ${
+                isAlertActive
+                  ? 'text-yellow-400 font-semibold underline decoration-yellow-400'
+                  : 'text-neutral-400'
+              }`}
+            >
+              Alert
+            </span>
+          </button>
+
+          {/* 5. Profile */}
+          <button
+            onClick={() => handleNav('profile', '/new-waiter-dashboard/profile')}
+            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition group"
+          >
+            <User
+              className={`w-5 h-5 transition ${
+                isProfileActive
+                  ? 'text-yellow-400 stroke-[2.2]'
+                  : 'text-violet-100/60 group-hover:text-white'
+              }`}
+            />
+            <span
+              className={`text-[10px] font-medium font-['Inter'] ${
+                isProfileActive
+                  ? 'text-yellow-400 font-semibold underline decoration-yellow-400'
+                  : 'text-violet-100/60'
+              }`}
+            >
+              Profile
+            </span>
+          </button>
+        </div>
+
+        {/* iPhone Bottom Home Indicator Bar */}
+        <div className="w-16 h-0.5 bg-stone-300 rounded-[38px] mx-auto mt-2" />
+      </div>
+    </>
+  );
+}
