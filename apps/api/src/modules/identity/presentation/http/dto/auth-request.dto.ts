@@ -105,3 +105,21 @@ export class ResetPasswordDto {
   @IsNotEmpty()
   newPassword!: string;
 }
+
+// ─── Resend OTP ────────────────────────────────────────────────────────
+
+export class ResendOtpDto {
+  @ApiProperty({ example: 'john@example.com', description: 'User email address' })
+  @IsString()
+  @IsNotEmpty()
+  email!: string;
+
+  @ApiProperty({
+    enum: ['email_verification', 'phone_verification', 'password_reset'],
+    example: 'email_verification',
+    description: 'Type of OTP code to regenerate and resend',
+  })
+  @IsIn(['email_verification', 'phone_verification', 'password_reset'])
+  type!: 'email_verification' | 'phone_verification' | 'password_reset';
+}
+

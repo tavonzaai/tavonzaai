@@ -33,15 +33,32 @@ export type DrizzleDatabase = NodePgDatabase<typeof schema>;
  * Called once during module initialization.
  */
 export function createDrizzleDatabase(connectionString: string): DrizzleDatabase {
-  const isRds = connectionString.includes('rds.amazonaws.com');
-  const useSsl =
-    process.env.DATABASE_SSL === 'true' ||
-    connectionString.includes('sslmode=require') ||
-    connectionString.includes('ssl=true') ||
-    isRds;
+  let cleanUrl = connectionString;
+  let useSsl = false;
+
+  try {
+    const parsed = new URL(connectionString);
+    const isRds = parsed.hostname.includes('rds.amazonaws.com');
+    const sslParam = parsed.searchParams.get('ssl');
+    const sslMode = parsed.searchParams.get('sslmode');
+
+    useSsl =
+      process.env.DATABASE_SSL === 'true' ||
+      sslParam === 'true' ||
+      (sslMode !== null && sslMode !== 'disable') ||
+      isRds;
+
+    if (useSsl) {
+      parsed.searchParams.delete('ssl');
+      parsed.searchParams.delete('sslmode');
+      cleanUrl = parsed.toString();
+    }
+  } catch {
+    useSsl = connectionString.includes('rds.amazonaws.com');
+  }
 
   const pool = new Pool({
-    connectionString,
+    connectionString: cleanUrl,
     ssl: useSsl ? { rejectUnauthorized: false } : undefined,
   });
   return drizzle(pool, { schema });

@@ -1,6 +1,7 @@
 /**
  * @tavonza/observability
- * Structured logging, metrics, tracing, and audit telemetry
+ * Structured logging, metrics, tracing, and audit telemetry.
  */
 
-export {};
+export { AppLogger, formatDuration } from './logger.js';
+export type { LogLevel, LogRecord } from './logger.js';

@@ -11,7 +11,7 @@ COPY packages/ ./packages/
 COPY frontend/customer/ ./frontend/customer/
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @frontend/customer build
+RUN npx turbo run build --filter=@frontend/customer...
 
 FROM base AS runner
 WORKDIR /app

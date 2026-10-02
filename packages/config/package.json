@@ -9,7 +9,21 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
+  "peerDependencies": {
+    "@nestjs/common": ">=10.0.0",
+    "@nestjs/swagger": ">=7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@nestjs/common": {
+      "optional": true
+    },
+    "@nestjs/swagger": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@nestjs/common": "^10.3.8",
+    "@nestjs/swagger": "^7.4.2",
     "@types/node": "^20.12.7",
     "typescript": "^5.4.5"
   }

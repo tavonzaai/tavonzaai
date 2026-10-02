@@ -40,6 +40,12 @@ variable "domain_name" {
   type        = string
 }
 
+variable "customer_subdomain" {
+  description = "Subdomain prefix for Customer frontend (e.g. prod). If empty, ALB listens on root domain and www."
+  type        = string
+  default     = ""
+}
+
 variable "api_subdomain" {
   description = "Subdomain prefix for API (e.g. api)"
   type        = string

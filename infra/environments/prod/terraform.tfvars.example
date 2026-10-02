@@ -12,14 +12,15 @@ private_db_subnet_cidrs  = ["10.0.20.0/24", "10.0.21.0/24"]
 enable_nat_gateway       = true
 single_nat_gateway       = true # Set to false for Multi-AZ NAT Gateway high-availability
 
-# Domain & DNS Configuration
-domain_name       = "tavonza.com"
-api_subdomain     = "api"
-ai_subdomain      = "ai"
-kitchen_subdomain = "kitchen"
-cashier_subdomain = "cashier"
-admin_subdomain   = "admin"
-enable_https      = true
+# Domain & DNS Configuration (Testable Version: prod- prefix)
+domain_name        = "tavonza.com"
+customer_subdomain = "prod"
+api_subdomain      = "prod-api"
+ai_subdomain       = "prod-ai"
+kitchen_subdomain  = "prod-kitchen"
+cashier_subdomain  = "prod-cashier"
+admin_subdomain    = "prod-admin"
+enable_https       = true
 
 # Custom DNS Records
 extra_txt_records   = {}
@@ -29,7 +30,7 @@ extra_cname_records = {}
 # AWS Simple Email Service (SES) Configuration
 enable_ses              = true
 ses_enable_mail_from    = true
-ses_mail_from_subdomain = "mail"
+ses_mail_from_subdomain = "prod-mail"
 ses_enable_dmarc        = true
 ses_dmarc_policy        = "v=DMARC1; p=none; sp=none; aspf=r; adkim=r;"
 ses_create_smtp_user    = true

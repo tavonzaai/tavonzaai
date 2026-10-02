@@ -3,38 +3,33 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
   secret_name = var.secret_name != "" ? var.secret_name : "/${var.environment}/${var.project_name}/backend"
 
-  # User data script to install AWS SSM Agent, Docker, and Docker Compose Plugin on Debian 13
+  # User data script for Ubuntu 24.04 LTS (SSM Agent is pre-installed)
   ec2_bootstrap_user_data = <<-EOF
     #!/bin/bash
-    set -euo pipefail
+    set -x
+    exec > /var/log/user-data.log 2>&1
 
-    # Update system packages
-    sudo apt-get update -y
-    sudo apt-get install -y ca-certificates curl gnupg wget python3 awscli
+    # Force apt IPv4 in IPv4 VPC
+    echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
 
-    # 1. Install AWS Systems Manager (SSM) Agent
-    mkdir -p /tmp/ssm
-    wget -q https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb -O /tmp/ssm/amazon-ssm-agent.deb
-    sudo dpkg -i /tmp/ssm/amazon-ssm-agent.deb
-    sudo systemctl enable amazon-ssm-agent
-    sudo systemctl start amazon-ssm-agent
-    rm -rf /tmp/ssm
+    # Update system packages and install Docker
+    apt-get update -y
+    apt-get install -y ca-certificates curl gnupg docker.io docker-compose-v2
+    snap install aws-cli --classic || true
 
-    # 2. Install Docker & Docker Compose Plugin
-    sudo install -m 0755 -d /etc/apt/keyrings
-    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    # Enable and start Docker service
+    systemctl enable docker
+    systemctl start docker
 
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    
-    sudo apt-get update -y
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    sudo groupadd -f docker
-    sudo usermod -aG docker admin 2>/dev/null || true
-    sudo usermod -aG docker debian 2>/dev/null || true
-    sudo usermod -aG docker ubuntu 2>/dev/null || true
-    sudo usermod -aG docker ssm-user 2>/dev/null || true
-    EOF
+    # Ensure docker group access for ubuntu and ssm-user
+    groupadd -f docker
+    usermod -aG docker ubuntu 2>/dev/null || true
+    usermod -aG docker ssm-user 2>/dev/null || true
+
+    # Ensure Amazon SSM Agent service is enabled and started
+    systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || systemctl enable amazon-ssm-agent || true
+    systemctl restart snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || systemctl restart amazon-ssm-agent || true
+  EOF
 }
 
 # 1. Custom 3-Tier Multi-AZ VPC Module
@@ -103,7 +98,7 @@ module "secrets_manager" {
     JWT_SECRET           = ""
     REDIS_URL            = "redis://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
     THIRD_PARTY_API_KEYS = ""
-    SMTP_HOST            = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.eu-west-2.amazonaws.com"
+    SMTP_HOST            = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.${var.aws_region}.amazonaws.com"
     SMTP_PORT            = "587"
     SMTP_USER            = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
     SMTP_PASS            = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_password_v4 : ""
@@ -135,7 +130,7 @@ module "iam" {
   enable_ec2_admin_secret_access = true
   ec2_admin_secret_arn           = module.ec2_admin_secret.secret_arn
   ecr_repository_arns            = module.ecr.repository_arns_list
-  enable_ses_access              = false # Backend uses SMTP credentials managed in Secrets Manager, redundant IAM policy disabled
+  enable_ses_access              = false
   ses_domain_identity_arn        = var.enable_ses && length(module.ses) > 0 ? module.ses[0].domain_identity_arn : ""
   enable_github_actions_role     = var.enable_github_actions_ecr_role
   github_repository              = var.github_repository
@@ -143,8 +138,7 @@ module "iam" {
   create_github_oidc_provider    = var.create_github_oidc_provider
 }
 
-
-# 6. RDS PostgreSQL Database Module
+# 7. RDS PostgreSQL Database Module
 module "rds_postgres" {
   source = "../../modules/rds-postgres"
 
@@ -168,7 +162,7 @@ module "rds_postgres" {
   multi_az                   = var.rds_multi_az
 }
 
-# 7. ElastiCache Redis / Valkey Module
+# 8. ElastiCache Redis / Valkey Module
 module "elasticache" {
   source = "../../modules/elasticache"
 
@@ -183,7 +177,37 @@ module "elasticache" {
   environment              = var.environment
 }
 
-# 8. ACM Certificate Module (DNS Validated)
+# 9. Backend EC2 Instance Module (Deployed into Private App Subnet)
+module "backend_ec2" {
+  source = "../../modules/ec2"
+
+  instance_name        = "${local.name_prefix}-backend"
+  ami_id               = var.backend_ami_id
+  instance_type        = var.backend_instance_type
+  subnet_id            = module.vpc.private_app_subnet_ids[0]
+  security_group_ids   = [module.security_groups.backend_security_group_id]
+  iam_instance_profile = module.iam.backend_instance_profile_name
+  key_name             = var.ssh_key_name
+  root_volume_size     = var.backend_root_volume_size
+  user_data            = local.ec2_bootstrap_user_data
+}
+
+# 10. Frontend EC2 Instance Module (Hosts Next.js & React Admin in Private App Subnet)
+module "frontend_ec2" {
+  source = "../../modules/ec2"
+
+  instance_name        = "${local.name_prefix}-frontend"
+  ami_id               = var.frontend_ami_id
+  instance_type        = var.frontend_instance_type
+  subnet_id            = module.vpc.private_app_subnet_ids[0]
+  security_group_ids   = [module.security_groups.frontend_security_group_id]
+  iam_instance_profile = module.iam.frontend_instance_profile_name
+  key_name             = var.ssh_key_name
+  root_volume_size     = var.frontend_root_volume_size
+  user_data            = local.ec2_bootstrap_user_data
+}
+
+# 11. ACM Certificate Module (DNS Validated)
 module "acm" {
   count  = var.enable_https ? 1 : 0
   source = "../../modules/acm"
@@ -193,24 +217,27 @@ module "acm" {
   route53_zone_id           = data.aws_route53_zone.primary.zone_id
 }
 
-# 9. Application Load Balancer Module (Deployed into Public Subnets)
+# 12. Application Load Balancer Module (Deployed into Public Subnets)
 module "alb" {
   source = "../../modules/alb"
 
-  project_name       = var.project_name
-  environment        = var.environment
-  vpc_id             = module.vpc.vpc_id
-  subnet_ids         = module.vpc.public_subnet_ids
-  security_group_ids = [module.security_groups.alb_security_group_id]
-  enable_https       = var.enable_https
-  certificate_arn    = var.enable_https && length(module.acm) > 0 ? module.acm[0].certificate_arn : null
-  domain_name        = var.domain_name
-  api_subdomain      = var.api_subdomain
-  ai_subdomain       = var.ai_subdomain
-  kitchen_subdomain  = var.kitchen_subdomain
-  cashier_subdomain  = var.cashier_subdomain
-  admin_subdomain    = var.admin_subdomain
-  target_type        = "ip"
+  project_name         = var.project_name
+  environment          = var.environment
+  vpc_id               = module.vpc.vpc_id
+  subnet_ids           = module.vpc.public_subnet_ids
+  security_group_ids   = [module.security_groups.alb_security_group_id]
+  enable_https         = var.enable_https
+  certificate_arn      = var.enable_https && length(module.acm) > 0 ? module.acm[0].certificate_arn : null
+  domain_name          = var.domain_name
+  customer_subdomain   = var.customer_subdomain
+  api_subdomain        = var.api_subdomain
+  ai_subdomain         = var.ai_subdomain
+  kitchen_subdomain    = var.kitchen_subdomain
+  cashier_subdomain    = var.cashier_subdomain
+  admin_subdomain      = var.admin_subdomain
+  target_type          = "instance"
+  backend_instance_id  = module.backend_ec2.instance_id
+  frontend_instance_id = module.frontend_ec2.instance_id
 
   backend_port              = var.backend_port
   nextjs_port               = var.nextjs_port
@@ -226,80 +253,13 @@ module "alb" {
   admin_health_check_path   = var.admin_health_check_path
 }
 
-# 10. Amazon Elastic Container Service (ECS) Fargate Cluster & Microservices
-module "ecs" {
-  source = "../../modules/ecs"
-
-  project_name              = var.project_name
-  environment               = var.environment
-  vpc_id                    = module.vpc.vpc_id
-  subnet_ids                = module.vpc.private_app_subnet_ids
-  security_group_ids        = [module.security_groups.ecs_security_group_id]
-  aws_region                = var.aws_region
-  use_fargate_spot          = var.ecs_use_fargate_spot
-  enable_container_insights = var.ecs_enable_container_insights
-  log_retention_days        = var.ecs_log_retention_days
-  secrets_manager_arn       = module.secrets_manager.secret_arn
-  s3_bucket_arn             = module.s3.bucket_arn
-
-  services = {
-    backend = {
-      name             = "backend"
-      container_image  = var.backend_container_image != "" ? var.backend_container_image : "${module.ecr.repository_urls["backend"]}:latest"
-      container_port   = var.backend_port
-      cpu              = var.backend_task_cpu
-      memory           = var.backend_task_memory
-      desired_count    = var.backend_desired_count
-      target_group_arn = module.alb.backend_target_group_arn
-      environment = [
-        { name = "NODE_ENV", value = "development" },
-        { name = "PORT", value = tostring(var.backend_port) }
-      ]
-      secrets = [
-        { name = "DATABASE_URL", valueFrom = "${module.secrets_manager.secret_arn}:DATABASE_URL::" },
-        { name = "REDIS_URL", valueFrom = "${module.secrets_manager.secret_arn}:REDIS_URL::" },
-        { name = "JWT_SECRET", valueFrom = "${module.secrets_manager.secret_arn}:JWT_SECRET::" }
-      ]
-    }
-    frontend = {
-      name             = "frontend"
-      container_image  = var.frontend_container_image != "" ? var.frontend_container_image : "${module.ecr.repository_urls["frontend"]}:latest"
-      container_port   = var.nextjs_port
-      cpu              = var.frontend_task_cpu
-      memory           = var.frontend_task_memory
-      desired_count    = var.frontend_desired_count
-      target_group_arn = module.alb.nextjs_target_group_arn
-      environment = [
-        { name = "NODE_ENV", value = "development" },
-        { name = "PORT", value = tostring(var.nextjs_port) },
-        { name = "NEXT_PUBLIC_API_URL", value = var.enable_https ? "https://${var.api_subdomain}.${var.domain_name}" : "http://${module.alb.alb_dns_name}/api" }
-      ]
-      secrets = []
-    }
-    admin = {
-      name             = "admin"
-      container_image  = var.admin_container_image != "" ? var.admin_container_image : "${module.ecr.repository_urls["admin-dashboard"]}:latest"
-      container_port   = var.admin_port
-      cpu              = var.admin_task_cpu
-      memory           = var.admin_task_memory
-      desired_count    = var.admin_desired_count
-      target_group_arn = module.alb.admin_target_group_arn
-      environment = [
-        { name = "NODE_ENV", value = "development" },
-        { name = "PORT", value = tostring(var.admin_port) },
-        { name = "NEXT_PUBLIC_API_URL", value = var.enable_https ? "https://${var.api_subdomain}.${var.domain_name}" : "http://${module.alb.alb_dns_name}/api" }
-      ]
-      secrets = []
-    }
-  }
-}
-
-# 12. Route 53 DNS Alias Records Module
+# 13. Route 53 DNS Alias Records Module
 module "route53" {
   source = "../../modules/route53"
 
   route53_zone_id     = data.aws_route53_zone.primary.zone_id
   domain_name         = var.domain_name
+  customer_subdomain  = var.customer_subdomain
   api_subdomain       = var.api_subdomain
   ai_subdomain        = var.ai_subdomain
   kitchen_subdomain   = var.kitchen_subdomain
@@ -311,7 +271,7 @@ module "route53" {
   extra_cname_records = var.extra_cname_records
 }
 
-# 13. AWS Simple Email Service (SES) Module
+# 14. AWS Simple Email Service (SES) Module
 module "ses" {
   count  = var.enable_ses ? 1 : 0
   source = "../../modules/ses"
@@ -332,4 +292,3 @@ module "ses" {
     ManagedBy   = "Terraform"
   }
 }
-
