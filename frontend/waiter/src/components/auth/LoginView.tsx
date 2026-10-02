@@ -28,15 +28,26 @@ export default function LoginView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleCompleteSession = (name: string, userEmail: string, role = 'WAITER') => {
-    const logged = loginWaiterSession({ name, email: userEmail, role });
+  const handleCompleteSession = (
+    name: string,
+    userEmail: string,
+    role = 'WAITER',
+    profile?: any
+  ) => {
+    const logged = loginWaiterSession({
+      id: profile?.id,
+      name,
+      email: userEmail,
+      role,
+      assignments: profile?.assignments,
+    });
     dispatch(
       setUser({
         id: logged.id,
         name: logged.name,
         email: logged.email,
         role: logged.role,
-        assignments: [
+        assignments: logged.assignments || [
           {
             id: 'asg-wtr-1',
             role: 'WAITER',
@@ -75,7 +86,8 @@ export default function LoginView({
       handleCompleteSession(
         userName,
         email.trim(),
-        userRole
+        userRole,
+        userProfile
       );
     } catch {
       // Offline / demo fallback - only if waiter demo

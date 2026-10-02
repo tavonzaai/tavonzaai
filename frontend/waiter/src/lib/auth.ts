@@ -66,7 +66,12 @@ export function getWaiterProfile(): WaiterUser | null {
  * Log in the waiter, establishing strictly Cookies session (NO LOCALSTORAGE)
  */
 export function loginWaiterSession(customUser?: Partial<WaiterUser>): WaiterUser {
-  const token = `wtr_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const existingToken = getCookie(WAITER_TOKEN_KEY);
+  // Keep existing JWT access token if set by rawAuthApi.login, otherwise generate demo token
+  const token = (existingToken && !existingToken.startsWith('wtr_tok_'))
+    ? existingToken
+    : `wtr_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
   const user: WaiterUser = {
     ...DEMO_WAITER_USER,
     ...customUser,

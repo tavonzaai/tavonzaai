@@ -28,15 +28,26 @@ export default function LoginView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleCompleteSession = (name: string, userEmail: string, role = 'KITCHEN') => {
-    const logged = loginKitchenSession({ name, email: userEmail, role });
+  const handleCompleteSession = (
+    name: string,
+    userEmail: string,
+    role = 'KITCHEN',
+    profile?: any
+  ) => {
+    const logged = loginKitchenSession({
+      id: profile?.id,
+      name,
+      email: userEmail,
+      role,
+      assignments: profile?.assignments,
+    });
     dispatch(
       setUser({
         id: logged.id,
         name: logged.name,
         email: logged.email,
         role: logged.role,
-        assignments: [
+        assignments: logged.assignments || [
           {
             id: 'asg-ktc-1',
             role: 'KITCHEN',
@@ -75,7 +86,8 @@ export default function LoginView({
       handleCompleteSession(
         userName,
         email.trim(),
-        userProfile?.role || 'KITCHEN'
+        userProfile?.role || 'KITCHEN',
+        userProfile
       );
     } catch (err: any) {
       setError(

@@ -7,6 +7,7 @@ import { useAppDispatch } from '@/redux/store';
 import { loginUser } from '@/redux/features/authApi';
 import { setUser } from '@/redux/slices/authSlice';
 import { loginCashierSession } from '@/lib/auth';
+import { removeAuthToken } from '@/redux/api/baseApi';
 import { toast } from 'sonner';
 
 interface LoginViewProps {
@@ -25,15 +26,26 @@ export default function LoginView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleCompleteSession = (name: string, userEmail: string, role = 'CASHIER') => {
-    const logged = loginCashierSession({ name, email: userEmail, role });
+  const handleCompleteSession = (
+    name: string,
+    userEmail: string,
+    role = 'CASHIER',
+    profile?: any
+  ) => {
+    const logged = loginCashierSession({
+      id: profile?.id,
+      name,
+      email: userEmail,
+      role,
+      assignments: profile?.assignments,
+    });
     dispatch(
       setUser({
         id: logged.id,
         name: logged.name,
         email: logged.email,
         role: logged.role,
-        assignments: [
+        assignments: logged.assignments || [
           {
             id: 'asg-1',
             role: 'CASHIER',
@@ -54,6 +66,18 @@ export default function LoginView({
     try {
       const res: any = await dispatch(loginUser({ email: email.trim(), password })).unwrap();
       const userProfile = res?.user || res;
+
+      const roleUpper = String(userProfile?.role || '').toUpperCase();
+      const isCashier =
+        roleUpper === 'CASHIER' ||
+        userProfile?.assignments?.some((a: any) => String(a.role || '').toUpperCase() === 'CASHIER');
+
+      if (!isCashier) {
+        removeAuthToken();
+        setError('Access denied. Only Cashier accounts are authorized for this terminal.');
+        return;
+      }
+
       const userName =
         userProfile?.name ||
         `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() ||
@@ -64,14 +88,19 @@ export default function LoginView({
       handleCompleteSession(
         userName,
         email.trim(),
-        userRole
+        userRole,
+        userProfile
       );
     } catch {
-      handleCompleteSession(
-        email.includes('cashier') ? 'Nobin Mille' : (email.split('@')[0] || 'Cashier'),
-        email.trim(),
-        'CASHIER'
-      );
+      if (email.toLowerCase().includes('cashier')) {
+        handleCompleteSession(
+          'Nobin Mille',
+          email.trim(),
+          'CASHIER'
+        );
+      } else {
+        setError('Invalid credentials or unauthorized cashier access.');
+      }
     } finally {
       setIsSubmitting(false);
     }
