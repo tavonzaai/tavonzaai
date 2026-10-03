@@ -1,22 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Paperclip, Send, Eye, Lightbulb, Mic, Sparkles, CheckCircle2 } from 'lucide-react';
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
 import { toast } from 'sonner';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { sendChatMessage } from '@/redux/features/chatApi';
+import { addUserMessage, addJarvisMessage, clearChat } from '@/redux/slices/chatSlice';
+import FormattedMessage from '@/components/chat/FormattedMessage';
 
 interface JarvisCopilotViewProps {
   onNavigateTab?: (tab: string) => void;
   isStandaloneRoute?: boolean;
-}
-
-interface ChatMessage {
-  id: string;
-  sender: 'user' | 'jarvis';
-  text: string;
 }
 
 export default function JarvisCopilotView({
@@ -24,13 +22,16 @@ export default function JarvisCopilotView({
   isStandaloneRoute = false,
 }: JarvisCopilotViewProps) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const { messages, isTyping } = useAppSelector((state) => state.chat);
+
   const [activeFilter, setActiveFilter] = useState<'All' | 'Upsell' | 'Needs Attention' | 'Regulars'>('All');
   const [inputMessage, setInputMessage] = useState('');
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { id: '1', sender: 'user', text: 'Hello!' },
-    { id: '2', sender: 'jarvis', text: 'Hello Alex! How Can I help you today?' },
-  ]);
-  const [isTyping, setIsTyping] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
 
   // Recommendations data matching Figma
   const recommendations = [
@@ -77,49 +78,40 @@ export default function JarvisCopilotView({
     return true;
   });
 
-  const handleSendMessage = (e?: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent, customText?: string) => {
     if (e) e.preventDefault();
-    if (!inputMessage.trim()) return;
+    const userText = (customText !== undefined ? customText : inputMessage).trim();
+    if (!userText) return;
 
-    const userText = inputMessage.trim();
-    const newMsg: ChatMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: userText,
-    };
+    if (customText === undefined) setInputMessage('');
 
-    setChatMessages((prev) => [...prev, newMsg]);
-    setInputMessage('');
-    setIsTyping(true);
+    // Dispatch user message to Redux
+    dispatch(addUserMessage({ text: userText }));
 
-    // AI intelligent waiter floor response
-    setTimeout(() => {
-      let reply = "I've logged this. Kitchen is on schedule and Table 02 is ready for drink refills.";
-      const lower = userText.toLowerCase();
-      if (lower.includes('table') || lower.includes('status')) {
-        reply = 'Table 01 & 03 are occupied. Table 02 just received their main courses.';
-      } else if (lower.includes('burger') || lower.includes('menu') || lower.includes('special')) {
-        reply = 'Today’s recommended upsell is the Potato Corn Burger with Truffle Aioli.';
-      } else if (lower.includes('bill') || lower.includes('check')) {
-        reply = 'Table 04 requested their invoice. Pre-bill printout is ready at station.';
-      }
-
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          sender: 'jarvis',
-          text: reply,
-        },
-      ]);
-      setIsTyping(false);
-    }, 700);
+    // Dispatch live AI chat request
+    try {
+      await dispatch(
+        sendChatMessage({
+          message: userText,
+          tableNumber: 'floor_service',
+          sessionId: 'waiter_floor_copilot',
+        })
+      ).unwrap();
+    } catch (err: any) {
+      console.warn('JARVIS floor call error:', err);
+      dispatch(
+        addJarvisMessage({
+          text: `Station update for "${userText}": Kitchen is on schedule and Table 02 is ready for drink refills. (Live service note: Ensure AI service is running on port 8000).`,
+        })
+      );
+    }
   };
 
   const handleActionClick = (rec: (typeof recommendations)[0]) => {
     toast.success(`${rec.actionLabel} dispatched for ${rec.table}!`, {
       description: rec.text,
     });
+    handleSendMessage(undefined, `Status check on ${rec.table} regarding: ${rec.text}`);
   };
 
   const { inShell } = useNewWaiterShell();
@@ -256,20 +248,24 @@ export default function JarvisCopilotView({
           <div className="px-5 pt-3 pb-2 flex flex-col gap-3">
             <div className="w-full p-3.5 bg-stone-950 rounded-xl border border-white/10 flex flex-col gap-3">
               {/* Chat Messages */}
-              <div className="flex flex-col gap-3 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-                {chatMessages.map((msg) => (
+              <div className="flex flex-col gap-3 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                {messages.map((msg) => (
                   <div
                     key={msg.id}
                     className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`px-4 py-2.5 rounded-tr-[10px] rounded-bl-[10px] text-sm leading-5 max-w-[85%] border ${
+                      className={`px-4 py-2.5 rounded-tr-[10px] rounded-bl-[10px] text-sm leading-5 max-w-[88%] border ${
                         msg.sender === 'user'
                           ? 'bg-stone-900 border-neutral-700 text-white font-semibold'
                           : 'bg-yellow-950/70 border-yellow-800/40 text-stone-100 font-normal'
                       }`}
                     >
-                      {msg.text}
+                      {msg.sender === 'jarvis' ? (
+                        <FormattedMessage content={msg.text} />
+                      ) : (
+                        msg.text
+                      )}
                     </div>
                   </div>
                 ))}
@@ -280,11 +276,12 @@ export default function JarvisCopilotView({
                     </div>
                   </div>
                 )}
+                <div ref={chatBottomRef} />
               </div>
 
               {/* Chat Input Field with Attachment and Send button */}
               <form
-                onSubmit={handleSendMessage}
+                onSubmit={(e) => handleSendMessage(e)}
                 className="w-full p-2.5 bg-neutral-800 rounded-[20px] outline outline-1 outline-offset-[-1px] outline-yellow-950/60 flex items-center justify-between gap-2"
               >
                 <input
