@@ -41,7 +41,9 @@ data "aws_iam_policy_document" "backend_s3" {
     actions = [
       "s3:GetObject",
       "s3:PutObject",
-      "s3:DeleteObject"
+      "s3:DeleteObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts"
     ]
     resources = ["${var.s3_bucket_arn}/*"]
   }
