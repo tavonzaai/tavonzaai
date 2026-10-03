@@ -16,7 +16,7 @@ import {
   UtensilsCrossed,
   Loader2,
 } from 'lucide-react';
-import { getAuthToken } from '@/redux/api/baseApi';
+import { rawChatApi } from '@/redux/features/chatApi';
 import FormattedMessage from '@/components/chat/FormattedMessage';
 
 interface JarvisChatViewProps {
@@ -125,26 +125,10 @@ export default function JarvisChatView({
     setIsLoading(true);
 
     try {
-      const token = getAuthToken() || 'dev-guest-token';
-      const aiBaseUrl = process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:8000';
-
-      const res = await fetch(`${aiBaseUrl}/ai/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          message: userMessage,
-          session_id: 'customer_guest_chat',
-        }),
+      const data = await rawChatApi.sendChatMessage({
+        message: userMessage,
+        sessionId: 'customer_guest_chat',
       });
-
-      if (!res.ok) {
-        throw new Error(`AI error ${res.status}`);
-      }
-
-      const data = await res.json();
       const reply = data.reply || "I don't have an answer for that right now.";
       setChatLog((prev) => [...prev, { sender: 'jarvis', text: reply }]);
     } catch (err) {

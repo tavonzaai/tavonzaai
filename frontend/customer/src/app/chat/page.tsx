@@ -15,33 +15,16 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
-import { getAuthToken } from '@/redux/api/baseApi';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { sendChatMessage } from '@/redux/features/chatApi';
+import {
+  addUserMessage,
+  addAiMessage,
+  setShowWaiterAlert,
+  clearChat,
+  ChatMessage as Message,
+} from '@/redux/slices/chatSlice';
 import FormattedMessage from '@/components/chat/FormattedMessage';
-
-interface Message {
-  id: string;
-  sender: 'user' | 'ai';
-  text: string;
-  timestamp: string;
-  dishes?: {
-    id: string;
-    name: string;
-    price: number;
-    image: string;
-    description: string;
-    tags?: string[];
-  }[];
-  callWaiter?: boolean;
-}
-
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: 'msg-1',
-    sender: 'ai',
-    text: "👋 Hi there! I'm your Tavonza AI Dining Concierge. I can recommend dishes, verify ingredients & allergies, recommend drink pairings, or assist your table. How can I help you today?",
-    timestamp: 'Just now',
-  },
-];
 
 const SUGGESTION_CHIPS = [
   { label: '⭐ Best-selling dishes', query: 'What are your best-selling dishes?' },
@@ -59,10 +42,11 @@ function ChatContent() {
   const activeTable = searchParams.get('table') || tableNumber || 'Table 8';
   const initialQuery = searchParams.get('query') || '';
 
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  // Redux state & dispatcher
+  const dispatch = useAppDispatch();
+  const { messages, isTyping, showWaiterAlert } = useAppSelector((state) => state.chat);
+
   const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [showWaiterAlert, setShowWaiterAlert] = useState(false);
   const [addedItemIds, setAddedItemIds] = useState<Record<string, boolean>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -93,52 +77,22 @@ function ChatContent() {
     const content = (textToSend !== undefined ? textToSend : inputText).trim();
     if (!content) return;
 
-    const userMsg: Message = {
-      id: `user-${Date.now()}`,
-      sender: 'user',
-      text: content,
-      timestamp: getTimeString(),
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
+    // 1. Dispatch user message to Redux
+    dispatch(addUserMessage({ text: content, timestamp: getTimeString() }));
     if (textToSend === undefined) setInputText('');
-    setIsTyping(true);
 
+    // 2. Dispatch AI chat request through Redux Thunk (No raw API/fetch in page)
     try {
-      const token = getAuthToken() || 'dev-guest-token';
-      const aiBaseUrl = process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:8000';
-
-      const res = await fetch(`${aiBaseUrl}/ai/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      await dispatch(
+        sendChatMessage({
           message: content,
-          session_id: `customer_${activeTable.replace(/\s+/g, '_').toLowerCase()}`,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`AI HTTP status ${res.status}`);
-      }
-
-      const data = await res.json();
-      const reply = data.reply;
-
-      const aiMsg: Message = {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: reply,
-        timestamp: getTimeString(),
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+          tableNumber: activeTable,
+          sessionId: `customer_${activeTable.replace(/\s+/g, '_').toLowerCase()}`,
+        })
+      ).unwrap();
     } catch (err) {
       console.warn('Live AI service call failed, using local concierge fallback:', err);
       generateAiResponse(content);
-    } finally {
-      setIsTyping(false);
     }
   };
 
@@ -147,89 +101,87 @@ function ChatContent() {
     const timestamp = getTimeString();
 
     if (q.includes('call') || q.includes('waiter') || q.includes('server') || q.includes('help')) {
-      setShowWaiterAlert(true);
-      setTimeout(() => setShowWaiterAlert(false), 4000);
+      dispatch(setShowWaiterAlert(true));
+      setTimeout(() => dispatch(setShowWaiterAlert(false)), 4000);
 
-      const aiMsg: Message = {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: `🛎️ I have notified your server for **${activeTable}**. A waiter will be at your table shortly! Is there anything else you'd like while you wait?`,
-        timestamp,
-        callWaiter: true,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      dispatch(
+        addAiMessage({
+          text: `🛎️ I have notified your server for **${activeTable}**. A waiter will be at your table shortly! Is there anything else you'd like while you wait?`,
+          timestamp,
+          callWaiter: true,
+        })
+      );
       return;
     }
 
     if (q.includes('best') || q.includes('popular') || q.includes('recommend') || q.includes('burger')) {
-      const aiMsg: Message = {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: "Here are our top chef recommendations loved by our guests today! Both are prepared fresh to order:",
-        timestamp,
-        dishes: [
-          {
-            id: 'potato-corn-burger-1',
-            name: 'Potato Corn Burger',
-            price: 26.0,
-            image: '/images/burger.jpg',
-            description: 'Crispy seasoned potato patty, sweet grilled corn relish, and smoked cheddar sauce on a brioche bun.',
-            tags: ['Chef Special', 'Top Seller'],
-          },
-          {
-            id: 'seabass-special-1',
-            name: 'Pan-Seared Sea Bass',
-            price: 34.0,
-            image: '/images/seabass.jpg',
-            description: 'Line-caught sea bass with braised garden carrots, fennel crisp, and citrus herb reduction.',
-            tags: ['Gluten-Free', 'High Protein'],
-          },
-        ],
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      dispatch(
+        addAiMessage({
+          text: 'Here are our top chef recommendations loved by our guests today! Both are prepared fresh to order:',
+          timestamp,
+          dishes: [
+            {
+              id: 'potato-corn-burger-1',
+              name: 'Potato Corn Burger',
+              price: 26.0,
+              image: '/images/burger.jpg',
+              description:
+                'Crispy seasoned potato patty, sweet grilled corn relish, and smoked cheddar sauce on a brioche bun.',
+              tags: ['Chef Special', 'Top Seller'],
+            },
+            {
+              id: 'seabass-special-1',
+              name: 'Pan-Seared Sea Bass',
+              price: 34.0,
+              image: '/images/seabass.jpg',
+              description:
+                'Line-caught sea bass with braised garden carrots, fennel crisp, and citrus herb reduction.',
+              tags: ['Gluten-Free', 'High Protein'],
+            },
+          ],
+        })
+      );
       return;
     }
 
     if (q.includes('veg') || q.includes('keto') || q.includes('healthy') || q.includes('salad')) {
-      const aiMsg: Message = {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: "🌱 Here are our organic, keto-friendly and vegetarian options made with farm-to-table ingredients:",
-        timestamp,
-        dishes: [
-          {
-            id: 'arancini-truffle-1',
-            name: 'Arancini al Tartufo',
-            price: 30.5,
-            image: '/images/slide1.jpg',
-            description: 'Crisp black truffle risotto croquettes with aged parmesan and warm roasted garlic aioli.',
-            tags: ['Vegetarian', 'Organic'],
-          },
-        ],
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      dispatch(
+        addAiMessage({
+          text: '🌱 Here are our organic, keto-friendly and vegetarian options made with farm-to-table ingredients:',
+          timestamp,
+          dishes: [
+            {
+              id: 'arancini-truffle-1',
+              name: 'Arancini al Tartufo',
+              price: 30.5,
+              image: '/images/slide1.jpg',
+              description:
+                'Crisp black truffle risotto croquettes with aged parmesan and warm roasted garlic aioli.',
+              tags: ['Vegetarian', 'Organic'],
+            },
+          ],
+        })
+      );
       return;
     }
 
     if (q.includes('wine') || q.includes('drink') || q.includes('cocktail')) {
-      const aiMsg: Message = {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: "🍷 **Sommelier Pairing Recommendations:**\n\n• **For Burgers & Red Meat:** 2021 Tuscan Chianti Classico Riserva — rich blackberry & oak notes.\n• **For Seafood & Light Bites:** 2022 Oaked Chardonnay or Crisp Pinot Grigio.\n\nWould you like me to add a glass or bottle to your table order?",
-        timestamp,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      dispatch(
+        addAiMessage({
+          text: "🍷 **Sommelier Pairing Recommendations:**\n\n• **For Burgers & Red Meat:** 2021 Tuscan Chianti Classico Riserva — rich blackberry & oak notes.\n• **For Seafood & Light Bites:** 2022 Oaked Chardonnay or Crisp Pinot Grigio.\n\nWould you like me to add a glass or bottle to your table order?",
+          timestamp,
+        })
+      );
       return;
     }
 
-    // Default friendly assistant reply
-    const aiMsg: Message = {
-      id: `ai-${Date.now()}`,
-      sender: 'ai',
-      text: `Got it! I've noted that for **${activeTable}**. You can explore our complete menu, customize toppings, or let me know if you have specific dietary requests like nut-free or dairy-free.`,
-      timestamp,
-    };
-    setMessages((prev) => [...prev, aiMsg]);
+    // Default friendly assistant reply dispatched through Redux
+    dispatch(
+      addAiMessage({
+        text: `Got it! I've noted that for **${activeTable}**. You can explore our complete menu, customize toppings, or let me know if you have specific dietary requests like nut-free or dairy-free.`,
+        timestamp,
+      })
+    );
   };
 
   const handleQuickAdd = (dish: NonNullable<Message['dishes']>[0]) => {
@@ -250,7 +202,7 @@ function ChatContent() {
   };
 
   const handleClearChat = () => {
-    setMessages(INITIAL_MESSAGES);
+    dispatch(clearChat());
   };
 
   return (
@@ -330,7 +282,7 @@ function ChatContent() {
               <span className="truncate">Server alerted for {activeTable}. They are on their way!</span>
             </div>
             <button
-              onClick={() => setShowWaiterAlert(false)}
+              onClick={() => dispatch(setShowWaiterAlert(false))}
               className="text-black font-bold px-1 shrink-0 cursor-pointer"
             >
               ✕
