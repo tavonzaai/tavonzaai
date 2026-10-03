@@ -160,14 +160,126 @@ class InternalClient:
         )
 
     def _mock_tool_result(self, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
-        fixtures: dict[str, Any] = {
-            "get_menu": {
-                "items": [
-                    {"name": "Wagyu Burger", "price": 18.5, "category": "Mains"},
-                    {"name": "Caesar Salad", "price": 9.0, "category": "Starters"},
-                    {"name": "Craft IPA", "price": 7.0, "category": "Drinks"},
+        if tool_name == "get_menu":
+            all_items: list[dict[str, Any]] = [
+                {
+                    "name": "Classic Wagyu Smash",
+                    "price": 26.50,
+                    "category": "Mains",
+                    "dietary": ["high_protein"],
+                    "allergens": ["gluten", "dairy"],
+                    "description": "Double American wagyu beef patties, aged cheddar, smoked bacon jam, brioche bun.",
+                    "pairing": "2021 Tuscan Chianti Classico Riserva or Craft IPA",
+                },
+                {
+                    "name": "Pan-Seared Line-Caught Seabass",
+                    "price": 34.00,
+                    "category": "Mains",
+                    "dietary": ["keto", "gluten_free", "high_protein"],
+                    "allergens": ["fish"],
+                    "description": "Crispy skin sea bass, braised baby carrots, fennel crisp, herb citrus reduction.",
+                    "pairing": "2022 Oaked Chardonnay or Crisp Pinot Grigio",
+                },
+                {
+                    "name": "Grilled Prime Ribeye (300g)",
+                    "price": 38.00,
+                    "category": "Mains",
+                    "dietary": ["keto", "gluten_free", "high_protein", "halal"],
+                    "allergens": [],
+                    "description": "Prime Black Angus ribeye with roasted rosemary garlic butter and red wine jus.",
+                    "pairing": "2021 Tuscan Chianti Classico Riserva",
+                },
+                {
+                    "name": "Wild Mushroom Truffle Risotto",
+                    "price": 24.00,
+                    "category": "Mains",
+                    "dietary": ["vegetarian", "gluten_free"],
+                    "allergens": ["dairy"],
+                    "description": "Carnaroli rice, wild forest porcini, white truffle oil, shaved pecorino.",
+                    "pairing": "Light Pinot Noir",
+                },
+                {
+                    "name": "Arancini al Tartufo",
+                    "price": 14.50,
+                    "category": "Starters",
+                    "dietary": ["vegetarian", "organic"],
+                    "allergens": ["gluten", "dairy"],
+                    "description": "Crispy black truffle risotto croquettes, aged parmesan, roasted garlic aioli.",
+                    "pairing": "Sparkling Prosecco Superiore",
+                },
+                {
+                    "name": "Organic Garden Caesar",
+                    "price": 11.00,
+                    "category": "Starters",
+                    "dietary": ["vegetarian", "organic"],
+                    "allergens": ["dairy", "gluten", "eggs"],
+                    "description": "Crisp baby gem lettuce, sourdough croutons, shaved parmesan, garlic emulsion.",
+                    "pairing": "Sauvignon Blanc",
+                },
+                {
+                    "name": "Flourless Dark Chocolate Torte",
+                    "price": 10.00,
+                    "category": "Desserts",
+                    "dietary": ["vegetarian", "gluten_free"],
+                    "allergens": ["dairy", "eggs"],
+                    "description": "70% Valrhona dark chocolate cake, espresso mascarpone, raspberry coulis.",
+                    "pairing": "Espresso or Vintage Port",
+                },
+                {
+                    "name": "2021 Tuscan Chianti Classico Riserva",
+                    "price": 14.00,
+                    "category": "Wines",
+                    "dietary": ["vegan", "gluten_free"],
+                    "allergens": ["sulfites"],
+                    "description": "Full-bodied dry red with wild blackberry, dark cherry, and cedar oak notes.",
+                },
+                {
+                    "name": "2022 Oaked Chardonnay",
+                    "price": 12.00,
+                    "category": "Wines",
+                    "dietary": ["vegan", "gluten_free"],
+                    "allergens": ["sulfites"],
+                    "description": "Creamy white wine with notes of green apple, toasted brioche, and vanilla.",
+                },
+                {
+                    "name": "Citrus Botanical Craft IPA",
+                    "price": 8.00,
+                    "category": "Drinks",
+                    "dietary": ["vegan"],
+                    "allergens": ["gluten"],
+                    "description": "Locally brewed hazy IPA with passionfruit, citrus zest, and mosaic hops.",
+                },
+            ]
+
+            filtered = all_items
+            cat = str(args.get("category") or "").strip().lower()
+            if cat and cat != "all":
+                filtered = [it for it in filtered if str(it.get("category", "")).lower() == cat]
+
+            diet = str(args.get("dietary_preference") or "").strip().lower().replace("-", "_")
+            if diet:
+                filtered = [it for it in filtered if isinstance(it.get("dietary"), list) and diet in it["dietary"]]
+
+            raw_exclude = args.get("exclude_allergens") or []
+            exclude_allergens = [str(a).lower().strip() for a in raw_exclude if isinstance(a, str)]
+            if exclude_allergens:
+                filtered = [
+                    it for it in filtered
+                    if isinstance(it.get("allergens"), list)
+                    and not any(allg in it["allergens"] for allg in exclude_allergens)
                 ]
-            },
+
+            max_p = args.get("max_price")
+            if max_p is not None:
+                try:
+                    price_limit = float(max_p)
+                    filtered = [it for it in filtered if float(it.get("price", 0.0)) <= price_limit]
+                except (ValueError, TypeError):
+                    pass
+
+            return {"ok": True, "data": {"items": filtered, "total_count": len(filtered)}}
+
+        fixtures: dict[str, Any] = {
             "get_table_status": {"table_id": args.get("table_id"), "status": "OCCUPIED"},
             "get_order_status": {"order_id": args.get("order_id"), "status": "PREPARING"},
             "get_kitchen_queue": {

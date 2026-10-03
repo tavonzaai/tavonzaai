@@ -11,8 +11,30 @@ TOOLS: dict[str, dict] = {
             "type": "function",
             "function": {
                 "name": "get_menu",
-                "description": "Get the current branch menu (items, prices, categories).",
-                "parameters": {"type": "object", "properties": {}, "required": []},
+                "description": "Get the restaurant menu with dish ingredients, prices, dietary tags, allergens, and pairing recommendations. Supports filtering by category, dietary preferences, excluded allergens, and price ceiling.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "category": {
+                            "type": ["string", "null"],
+                            "description": "Filter by menu section: 'Mains', 'Starters', 'Desserts', 'Drinks', 'Wines', or null for all.",
+                        },
+                        "dietary_preference": {
+                            "type": ["string", "null"],
+                            "description": "Filter by diet: 'keto', 'vegan', 'vegetarian', 'gluten_free', 'halal', or null for all.",
+                        },
+                        "exclude_allergens": {
+                            "type": ["array", "null"],
+                            "items": {"type": "string"},
+                            "description": "List of allergens to strictly exclude, e.g. ['nuts', 'dairy', 'gluten', 'shellfish', 'eggs'].",
+                        },
+                        "max_price": {
+                            "type": ["number", "null"],
+                            "description": "Optional maximum price filter.",
+                        },
+                    },
+                    "required": [],
+                },
             },
         },
     },
