@@ -90,3 +90,10 @@ class ConversationStore:
             self._redis = None
             self._local.setdefault(session_id, []).append(message)
             self._local[session_id] = self._local[session_id][-MAX_TURNS:]
+
+    async def aclose(self) -> None:
+        if self._redis is not None:
+            try:
+                await self._redis.aclose()
+            except Exception as exc:
+                logger.warning("Error closing Redis client: %s", exc)

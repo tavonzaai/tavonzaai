@@ -7,6 +7,7 @@ from groq import (
     APITimeoutError,
     AsyncGroq,
     InternalServerError,
+    NotFoundError,
     RateLimitError,
 )
 
@@ -83,7 +84,7 @@ class GroqProvider(ModelProvider):
                         )
 
                 return {"role": "assistant", "content": choice.content, "tool_calls": tool_calls}
-            except (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError) as exc:
+            except (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError, NotFoundError) as exc:
                 logger.warning("Groq model %s error (%s): %s. Trying fallback...", model_name, type(exc).__name__, exc)
                 last_exc = exc
                 continue

@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # --- Model provider: Groq ---
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
 
     # --- Alternative Model Providers ---
     openai_api_key: str = ""
