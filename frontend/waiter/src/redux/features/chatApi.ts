@@ -65,6 +65,68 @@ export const rawChatApi = {
       data: data.data,
     };
   },
+
+  /**
+   * Transcribe recorded audio using Whisper Cloud STT
+   * POST /ai/voice/transcribe
+   */
+  transcribeAudio: async (audioBlob: Blob): Promise<string> => {
+    const token = getAuthToken() || 'dev-waiter-token';
+    const aiBaseUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
+      'http://localhost:8000';
+    const cleanBaseUrl = String(aiBaseUrl).trim().replace(/\/$/, '');
+
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'recording.webm');
+
+    const res = await fetch(`${cleanBaseUrl}/ai/voice/transcribe`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      throw new Error(`Voice transcription failed (${res.status}): ${errorText || res.statusText}`);
+    }
+
+    const data = await res.json();
+    return data.text || '';
+  },
+
+  /**
+   * Synthesize natural neural speech for JARVIS responses
+   * POST /ai/voice/synthesize
+   */
+  fetchVoiceAudioBlob: async (text: string, persona: string = 'uk_jarvis'): Promise<Blob> => {
+    const token = getAuthToken() || 'dev-waiter-token';
+    const aiBaseUrl =
+      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
+      'http://localhost:8000';
+    const cleanBaseUrl = String(aiBaseUrl).trim().replace(/\/$/, '');
+
+    const res = await fetch(`${cleanBaseUrl}/ai/voice/synthesize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        text: text.slice(0, 950),
+        persona,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      throw new Error(`Voice synthesis failed (${res.status}): ${errorText || res.statusText}`);
+    }
+
+    return await res.blob();
+  },
 };
 
 // ─────────────────────────────────────────

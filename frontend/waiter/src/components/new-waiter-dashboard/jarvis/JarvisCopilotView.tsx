@@ -3,7 +3,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Paperclip, Send, Eye, Lightbulb, Mic, Sparkles, CheckCircle2 } from 'lucide-react';
+import {
+  Paperclip,
+  Send,
+  Eye,
+  Lightbulb,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  Sparkles,
+  CheckCircle2,
+} from 'lucide-react';
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
 import { toast } from 'sonner';
@@ -11,6 +22,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { sendChatMessage } from '@/redux/features/chatApi';
 import { addUserMessage, addJarvisMessage, clearChat } from '@/redux/slices/chatSlice';
 import FormattedMessage from '@/components/chat/FormattedMessage';
+import { useJarvisVoice } from '@/hooks/useJarvisVoice';
 
 interface JarvisCopilotViewProps {
   onNavigateTab?: (tab: string) => void;
@@ -28,6 +40,24 @@ export default function JarvisCopilotView({
   const [activeFilter, setActiveFilter] = useState<'All' | 'Upsell' | 'Needs Attention' | 'Regulars'>('All');
   const [inputMessage, setInputMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Initialize JARVIS Voice Engine
+  const {
+    isListening,
+    isSpeaking,
+    transcript,
+    isMuted,
+    startListening,
+    stopListening,
+    toggleListening,
+    speakText,
+    stopSpeaking,
+    toggleMute,
+  } = useJarvisVoice({
+    onTranscriptComplete: (finalText) => {
+      handleSendMessage(undefined, finalText, true);
+    },
+  });
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -78,7 +108,11 @@ export default function JarvisCopilotView({
     return true;
   });
 
-  const handleSendMessage = async (e?: React.FormEvent, customText?: string) => {
+  const handleSendMessage = async (
+    e?: React.FormEvent,
+    customText?: string,
+    speakResponse: boolean = false
+  ) => {
     if (e) e.preventDefault();
     const userText = (customText !== undefined ? customText : inputMessage).trim();
     if (!userText) return;
@@ -90,20 +124,28 @@ export default function JarvisCopilotView({
 
     // Dispatch live AI chat request
     try {
-      await dispatch(
+      const res = await dispatch(
         sendChatMessage({
           message: userText,
           tableNumber: 'floor_service',
           sessionId: 'waiter_floor_copilot',
         })
       ).unwrap();
+
+      if (speakResponse && res?.reply) {
+        speakText(res.reply);
+      }
     } catch (err: any) {
       console.warn('JARVIS floor call error:', err);
+      const fallbackText = `Station update for "${userText}": Kitchen is on schedule and Table 02 is ready for drink refills. (Live service note: Ensure AI service is running on port 8000).`;
       dispatch(
         addJarvisMessage({
-          text: `Station update for "${userText}": Kitchen is on schedule and Table 02 is ready for drink refills. (Live service note: Ensure AI service is running on port 8000).`,
+          text: fallbackText,
         })
       );
+      if (speakResponse) {
+        speakText(fallbackText);
+      }
     }
   };
 
@@ -140,21 +182,106 @@ export default function JarvisCopilotView({
               </div>
             </div>
 
-            {/* Voice Audio Waveform Button */}
-            <button
-              onClick={() => toast.info('Voice Copilot listening...')}
-              className="w-10 h-10 bg-gray-900 hover:bg-gray-800 rounded-lg outline outline-1 outline-offset-[-1px] outline-slate-800 flex items-center justify-center transition cursor-pointer group"
-              title="Voice Copilot"
-            >
-              <div className="flex items-center gap-[2.5px] h-4">
-                <div className="w-[2px] h-2 bg-yellow-400 rounded-full animate-pulse" />
-                <div className="w-[2px] h-3 bg-yellow-400 rounded-full animate-pulse delay-75" />
-                <div className="w-[2px] h-4 bg-yellow-400 rounded-full animate-pulse delay-150" />
-                <div className="w-[2px] h-2.5 bg-yellow-400 rounded-full animate-pulse delay-100" />
-                <div className="w-[2px] h-1.5 bg-yellow-400 rounded-full" />
-              </div>
-            </button>
+            {/* Voice Audio Controls */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={toggleMute}
+                className={`p-2 rounded-lg transition cursor-pointer text-xs ${
+                  isMuted ? 'text-zinc-500 hover:text-zinc-300' : 'text-amber-400 hover:text-amber-300'
+                }`}
+                title={isMuted ? 'Unmute AI voice' : 'Mute AI voice'}
+              >
+                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={`w-10 h-10 rounded-lg outline flex items-center justify-center transition cursor-pointer group ${
+                  isListening
+                    ? 'bg-red-950/80 outline-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)] ring-2 ring-red-500/50'
+                    : isSpeaking
+                    ? 'bg-amber-950/80 outline-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.5)] ring-2 ring-amber-400/40'
+                    : 'bg-gray-900 hover:bg-gray-800 outline-slate-800'
+                }`}
+                title={
+                  isListening
+                    ? 'Listening... (Click to stop)'
+                    : isSpeaking
+                    ? 'JARVIS is speaking (Click to mute)'
+                    : 'Start Voice Copilot'
+                }
+              >
+                {isListening ? (
+                  <div className="flex items-center gap-[2.5px] h-4">
+                    <div className="w-[3px] h-3 bg-red-400 rounded-full animate-bounce" />
+                    <div className="w-[3px] h-5 bg-red-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                    <div className="w-[3px] h-2.5 bg-red-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                    <div className="w-[3px] h-4 bg-red-400 rounded-full animate-bounce [animation-delay:450ms]" />
+                  </div>
+                ) : isSpeaking ? (
+                  <div className="flex items-center gap-[2.5px] h-4">
+                    <div className="w-[2.5px] h-2 bg-yellow-400 rounded-full animate-pulse" />
+                    <div className="w-[2.5px] h-4 bg-yellow-400 rounded-full animate-pulse [animation-delay:100ms]" />
+                    <div className="w-[2.5px] h-3 bg-yellow-400 rounded-full animate-pulse [animation-delay:200ms]" />
+                    <div className="w-[2.5px] h-1.5 bg-yellow-400 rounded-full" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-[2.5px] h-4">
+                    <div className="w-[2px] h-2 bg-yellow-400 rounded-full animate-pulse" />
+                    <div className="w-[2px] h-3 bg-yellow-400 rounded-full animate-pulse delay-75" />
+                    <div className="w-[2px] h-4 bg-yellow-400 rounded-full animate-pulse delay-150" />
+                    <div className="w-[2px] h-2.5 bg-yellow-400 rounded-full animate-pulse delay-100" />
+                    <div className="w-[2px] h-1.5 bg-yellow-400 rounded-full" />
+                  </div>
+                )}
+              </button>
+            </div>
           </div>
+
+          {/* Live Listening Banner */}
+          {isListening && (
+            <div className="mx-5 p-3 bg-red-950/40 border border-red-500/40 rounded-xl flex items-center justify-between gap-3 shadow-lg shadow-red-950/50 animate-fadeIn">
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] font-semibold text-red-400 uppercase tracking-wider">
+                    Voice Copilot Listening
+                  </span>
+                  <p className="text-xs text-white truncate italic font-['Inter']">
+                    {transcript || 'Listening to your speech... Speak now'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={stopListening}
+                className="px-2.5 py-1 bg-red-600/30 hover:bg-red-600/50 border border-red-500/50 rounded-lg text-xs font-medium text-red-200 transition shrink-0 cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          )}
+
+          {/* JARVIS Speaking Banner */}
+          {isSpeaking && (
+            <div className="mx-5 p-2.5 bg-amber-950/40 border border-amber-500/40 rounded-xl flex items-center justify-between gap-3 shadow-lg shadow-amber-950/40 animate-fadeIn">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <Volume2 className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+                <span className="text-xs text-amber-300 font-medium font-['Inter'] truncate">
+                  JARVIS speaking audio response...
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={stopSpeaking}
+                className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-[11px] font-medium text-amber-200 transition shrink-0 cursor-pointer"
+              >
+                Mute
+              </button>
+            </div>
+          )}
 
           {/* Hero Greeting Section: Robot Mascot + Speech Bubble */}
           <div className="px-5 py-3 flex items-center gap-3">
@@ -262,7 +389,20 @@ export default function JarvisCopilotView({
                       }`}
                     >
                       {msg.sender === 'jarvis' ? (
-                        <FormattedMessage content={msg.text} />
+                        <>
+                          <FormattedMessage content={msg.text} />
+                          <div className="mt-2 pt-1 border-t border-yellow-800/30 flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={() => isSpeaking ? stopSpeaking() : speakText(msg.text)}
+                              className="text-[11px] text-yellow-400/80 hover:text-yellow-300 flex items-center gap-1 transition cursor-pointer"
+                              title={isSpeaking ? "Stop speaking" : "Listen to response"}
+                            >
+                              <Volume2 className="w-3.5 h-3.5" />
+                              <span>{isSpeaking ? "Stop" : "Listen"}</span>
+                            </button>
+                          </div>
+                        </>
                       ) : (
                         msg.text
                       )}
@@ -279,7 +419,7 @@ export default function JarvisCopilotView({
                 <div ref={chatBottomRef} />
               </div>
 
-              {/* Chat Input Field with Attachment and Send button */}
+              {/* Chat Input Field with Attachment, Mic, and Send button */}
               <form
                 onSubmit={(e) => handleSendMessage(e)}
                 className="w-full p-2.5 bg-neutral-800 rounded-[20px] outline outline-1 outline-offset-[-1px] outline-yellow-950/60 flex items-center justify-between gap-2"
@@ -288,11 +428,24 @@ export default function JarvisCopilotView({
                   type="text"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="Ask anything ..."
+                  placeholder={isListening ? "Listening to your voice..." : "Ask anything ..."}
                   className="flex-1 bg-transparent px-2 text-sm text-white placeholder:text-zinc-400 font-['Inter'] focus:outline-none"
                 />
 
                 <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    className={`p-1.5 rounded-lg transition cursor-pointer ${
+                      isListening
+                        ? 'text-red-400 bg-red-950/60 animate-pulse ring-1 ring-red-500/50'
+                        : 'text-zinc-400 hover:text-white hover:bg-neutral-700'
+                    }`}
+                    title={isListening ? 'Stop listening' : 'Speak to JARVIS'}
+                  >
+                    <Mic className="w-4 h-4" />
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => toast.info('File attachment uploaded to copilot context')}
