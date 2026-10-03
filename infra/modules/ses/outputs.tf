@@ -39,6 +39,12 @@ output "ses_smtp_password_v4" {
   sensitive   = true
 }
 
+output "ses_smtp_raw_secret_key" {
+  description = "Raw IAM secret access key for SES SMTP user — used as AWS_SECRET_ACCESS_KEY for SES SDK"
+  value       = var.create_smtp_user ? aws_iam_access_key.ses_smtp[0].secret : null
+  sensitive   = true
+}
+
 output "ses_smtp_user_arn" {
   description = "ARN of the IAM user created for SES SMTP"
   value       = var.create_smtp_user ? aws_iam_user.ses_smtp[0].arn : null
