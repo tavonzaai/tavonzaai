@@ -93,23 +93,23 @@ module "secrets_manager" {
   secret_name = local.secret_name
   description = "Application secrets for ${local.name_prefix}"
   initial_secret_keys = {
-    DATABASE_URL              = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
-    DATABASE_PASSWORD         = var.rds_db_password
-    JWT_SECRET                = ""
-    JWT_REFRESH_SECRET        = ""
-    REDIS_URL                 = "rediss://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
-    THIRD_PARTY_API_KEYS      = ""
-    SMTP_HOST                 = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.eu-west-2.amazonaws.com"
-    SMTP_PORT                 = "587"
-    SMTP_USER                 = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
-    SMTP_PASS                 = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_password_v4 : ""
-    SMTP_FROM                 = "noreply@${var.domain_name}"
-    SMTP_SECURE               = "false"
-    MAIL_FROM_ADDRESS         = "noreply@${var.domain_name}"
-    SES_CONFIGURATION_SET     = var.enable_ses && length(module.ses) > 0 ? module.ses[0].configuration_set_name : ""
-    AWS_ACCESS_KEY_ID         = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
-    AWS_SECRET_ACCESS_KEY     = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_raw_secret_key : ""
-    COMPANY_NAME              = "tavonzaai"
+    DATABASE_URL          = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
+    DATABASE_PASSWORD     = var.rds_db_password
+    JWT_SECRET            = ""
+    JWT_REFRESH_SECRET    = ""
+    REDIS_URL             = "rediss://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
+    THIRD_PARTY_API_KEYS  = ""
+    SMTP_HOST             = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.eu-west-2.amazonaws.com"
+    SMTP_PORT             = "587"
+    SMTP_USER             = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
+    SMTP_PASS             = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_password_v4 : ""
+    SMTP_FROM             = "noreply@${var.domain_name}"
+    SMTP_SECURE           = "false"
+    MAIL_FROM_ADDRESS     = "noreply@${var.domain_name}"
+    SES_CONFIGURATION_SET = var.enable_ses && length(module.ses) > 0 ? module.ses[0].configuration_set_name : ""
+    AWS_ACCESS_KEY_ID     = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
+    AWS_SECRET_ACCESS_KEY = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_raw_secret_key : ""
+    COMPANY_NAME          = "tavonzaai"
   }
 }
 
@@ -187,20 +187,21 @@ module "elasticache" {
 module "ecs" {
   source = "../../modules/ecs"
 
-  project_name                  = var.project_name
-  environment                   = var.environment
-  vpc_id                        = module.vpc.vpc_id
-  subnet_ids                    = module.vpc.private_app_subnet_ids
-  security_group_ids            = [module.security_groups.ecs_security_group_id]
-  aws_region                    = var.aws_region
-  use_fargate_spot              = true
-  enable_container_insights     = false
-  log_retention_days            = 7
-  assign_public_ip              = false
-  enable_secrets_manager_access = true
-  secrets_manager_arn           = module.secrets_manager.secret_arn
-  enable_s3_access              = true
-  s3_bucket_arn                 = module.s3.bucket_arn
+  project_name                      = var.project_name
+  environment                       = var.environment
+  vpc_id                            = module.vpc.vpc_id
+  subnet_ids                        = module.vpc.private_app_subnet_ids
+  security_group_ids                = [module.security_groups.ecs_security_group_id]
+  aws_region                        = var.aws_region
+  use_fargate_spot                  = true
+  enable_container_insights         = false
+  log_retention_days                = 7
+  assign_public_ip                  = false
+  enable_secrets_manager_access     = true
+  secrets_manager_arn               = module.secrets_manager.secret_arn
+  enable_s3_access                  = true
+  s3_bucket_arn                     = module.s3.bucket_arn
+  health_check_grace_period_seconds = var.ecs_health_check_grace_period_seconds
 
   services = {
     backend = {
@@ -212,10 +213,10 @@ module "ecs" {
       desired_count    = 1
       target_group_arn = module.alb.backend_target_group_arn
       environment = [
-        { name = "NODE_ENV",    value = "production" },
-        { name = "PORT",        value = tostring(var.backend_port) },
-        { name = "API_PORT",    value = tostring(var.backend_port) },
-        { name = "AWS_REGION",  value = var.aws_region }
+        { name = "NODE_ENV", value = "production" },
+        { name = "PORT", value = tostring(var.backend_port) },
+        { name = "API_PORT", value = tostring(var.backend_port) },
+        { name = "AWS_REGION", value = var.aws_region }
       ]
       secrets = [
         {
@@ -309,13 +310,13 @@ module "ecs" {
       ]
     }
     worker = {
-      name             = "tavonzaai-prod-worker"
-      container_image  = "${module.ecr.repository_urls["worker"]}:latest"
-      cpu              = 256
-      memory           = 512
-      desired_count    = 1
+      name            = "tavonzaai-prod-worker"
+      container_image = "${module.ecr.repository_urls["worker"]}:latest"
+      cpu             = 256
+      memory          = 512
+      desired_count   = 1
       environment = [
-        { name = "NODE_ENV",   value = "production" },
+        { name = "NODE_ENV", value = "production" },
         { name = "AWS_REGION", value = var.aws_region }
       ]
       secrets = [
@@ -392,18 +393,22 @@ module "alb" {
   backend_instance_id  = null
   frontend_instance_id = null
 
-  backend_port              = var.backend_port
-  nextjs_port               = var.nextjs_port
-  ai_port                   = var.ai_port
-  kitchen_port              = var.kitchen_port
-  cashier_port              = var.cashier_port
-  admin_port                = var.admin_port
-  backend_health_check_path = var.backend_health_check_path
-  nextjs_health_check_path  = var.nextjs_health_check_path
-  ai_health_check_path      = var.ai_health_check_path
-  kitchen_health_check_path = var.kitchen_health_check_path
-  cashier_health_check_path = var.cashier_health_check_path
-  admin_health_check_path   = var.admin_health_check_path
+  backend_port                     = var.backend_port
+  nextjs_port                      = var.nextjs_port
+  ai_port                          = var.ai_port
+  kitchen_port                     = var.kitchen_port
+  cashier_port                     = var.cashier_port
+  admin_port                       = var.admin_port
+  backend_health_check_path        = var.backend_health_check_path
+  nextjs_health_check_path         = var.nextjs_health_check_path
+  ai_health_check_path             = var.ai_health_check_path
+  kitchen_health_check_path        = var.kitchen_health_check_path
+  cashier_health_check_path        = var.cashier_health_check_path
+  admin_health_check_path          = var.admin_health_check_path
+  health_check_interval            = var.health_check_interval
+  health_check_timeout             = var.health_check_timeout
+  health_check_healthy_threshold   = var.health_check_healthy_threshold
+  health_check_unhealthy_threshold = var.health_check_unhealthy_threshold
 }
 
 # 12. Route 53 DNS Alias Records Module
