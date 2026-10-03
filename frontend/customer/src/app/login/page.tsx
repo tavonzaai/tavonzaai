@@ -5,12 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import LoginView from '@/components/auth/LoginView';
 import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { getMe } from '@/redux/features/authApi';
 import { setCookie } from '@/redux/api/baseApi';
 
 function LoginContent() {
   const router = useRouter();
-  const dispatch = useAppDispatch();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const table = searchParams.get('table');
@@ -48,12 +46,18 @@ function LoginContent() {
     );
   }
 
+  const handleNavigateToVerify = (email: string) => {
+    const tableParam = table ? `&table=${encodeURIComponent(table)}` : '';
+    router.push(`/verify-otp?email=${encodeURIComponent(email)}&type=email_verification${tableParam}`);
+  };
+
   return (
     <AuthDesktopLayout>
       <LoginView
         onLoginSuccess={() => router.push(`/menu${forwardParam}`)}
         onForgotPassword={() => router.push(`/forgot-password${forwardParam}`)}
         onCreateAccount={() => router.push(`/register${forwardParam}`)}
+        onNavigateToVerify={handleNavigateToVerify}
       />
     </AuthDesktopLayout>
   );
@@ -72,5 +76,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-
-

@@ -12,6 +12,7 @@ class ActorContext(BaseModel):
     actor_type: Literal["USER", "AI_AGENT", "SYSTEM", "INTEGRATION"]
     acting_user_id: str | None = None
     ai_agent_id: str | None = None
+    role: str | None = None
     organization_id: str
     restaurant_id: str | None = None
     branch_id: str

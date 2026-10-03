@@ -69,7 +69,8 @@ class ConversationStore:
             if raw:
                 return json.loads(raw)[-MAX_TURNS:]
         except Exception as exc:
-            logger.warning("Redis get failed for %s: %s", session_id, exc)
+            logger.warning("Redis get failed for %s: %s — falling back to in-memory store", session_id, exc)
+            self._redis = None
         return list(self._local.get(session_id, []))
 
     async def append_async(self, session_id: str, message: dict[str, Any]) -> None:
@@ -85,6 +86,14 @@ class ConversationStore:
             history = history[-MAX_TURNS:]
             await self._redis.set(key, json.dumps(history), ex=SESSION_TTL_SECONDS)
         except Exception as exc:
-            logger.warning("Redis append failed for %s: %s — using in-memory", session_id, exc)
+            logger.warning("Redis append failed for %s: %s — falling back to in-memory store", session_id, exc)
+            self._redis = None
             self._local.setdefault(session_id, []).append(message)
             self._local[session_id] = self._local[session_id][-MAX_TURNS:]
+
+    async def aclose(self) -> None:
+        if self._redis is not None:
+            try:
+                await self._redis.aclose()
+            except Exception as exc:
+                logger.warning("Error closing Redis client: %s", exc)

@@ -8,6 +8,7 @@ import { setCookie } from '@/redux/api/baseApi';
 import CreateAccountView from '@/components/auth/CreateAccountView';
 import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 import BottomNav from '@/components/dashboard/BottomNav';
+import JarvisChatView from '@/components/dashboard/JarvisChatView';
  
 function LandingPageContent() {
   const router = useRouter();
@@ -55,14 +56,31 @@ function LandingPageContent() {
     );
   }
 
+  const handleAccountCreated = (email?: string) => {
+    const tableParamQuery = tableParam ? `&table=${encodeURIComponent(tableParam)}` : '';
+    const emailParam = email ? `email=${encodeURIComponent(email)}&` : '';
+    router.push(`/verify-otp?${emailParam}type=email_verification${tableParamQuery}`);
+  };
+
+  const handleGoBackToLogin = (email?: string) => {
+    const emailQuery = email ? `email=${encodeURIComponent(email)}` : '';
+    let target = `/login${forwardParam}`;
+    if (emailQuery) {
+      target += target.includes('?') ? `&${emailQuery}` : `?${emailQuery}`;
+    }
+    router.push(target);
+  };
+
   // Not authenticated: render create account form directly
   return (
     <AuthDesktopLayout>
       <CreateAccountView
-        onAccountCreated={() => router.push(`/welcome${forwardParam}`)}
-        onGoBackToLogin={() => router.push(`/login${forwardParam}`)}
+        onAccountCreated={handleAccountCreated}
+        onGoBackToLogin={handleGoBackToLogin}
       />
-      
+      {/* <div className="">
+        <JarvisChatView />
+      </div> */}
     </AuthDesktopLayout>
   );
 }
