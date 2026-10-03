@@ -1,0 +1,31 @@
+export const navToRoute: Record<string, string> = {
+  'Dashboard': '/cashier-dashboard/dashboard',
+  'Table View': '/cashier-dashboard/table-view',
+  'POS': '/cashier-dashboard/pos',
+  'Create Order': '/cashier-dashboard/create-order',
+  'Bill Queue': '/cashier-dashboard/bill-queue',
+  'Orders': '/cashier-dashboard/orders',
+  'Payments': '/cashier-dashboard/payments',
+  'Transactions': '/cashier-dashboard/transactions',
+  'Customers': '/cashier-dashboard/customers',
+  'Loyalty': '/cashier-dashboard/loyalty',
+  'Shift Report': '/cashier-dashboard/shift-report',
+  'AI Insights': '/cashier-dashboard/ai-insights',
+  'Settings': '/cashier-dashboard/settings',
+};
+
+export const routeToNav: Record<string, string> = {
+  'dashboard': 'Dashboard',
+  'table-view': 'Table View',
+  'pos': 'POS',
+  'create-order': 'Create Order',
+  'bill-queue': 'Bill Queue',
+  'orders': 'Orders',
+  'payments': 'Payments',
+  'transactions': 'Transactions',
+  'customers': 'Customers',
+  'loyalty': 'Loyalty',
+  'shift-report': 'Shift Report',
+  'ai-insights': 'AI Insights',
+  'settings': 'Settings',
+};
