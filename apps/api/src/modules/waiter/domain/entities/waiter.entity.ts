@@ -7,11 +7,11 @@ export type StaffStatus = 'active' | 'suspended' | 'offboarded';
 export interface StaffProfile {
   id: string;
   userId: string;
-  organizationId: string;
-  restaurantId: string;
+  organizationId?: string;
+  restaurantId?: string;
   employeeCode?: string | null;
-  jobTitle: string;
-  status: StaffStatus;
+  jobTitle?: string;
+  status?: StaffStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,10 +19,13 @@ export interface StaffProfile {
 export interface BranchStaffAssignment {
   id: string;
   branchId: string;
-  staffProfileId: string;
-  assignedById: string;
+  staffId: string;
+  staffProfileId?: string;
+  assignedById?: string;
+  role: string;
+  permissions?: string[];
   isActive: boolean;
-  assignedAt: Date;
+  assignedAt?: Date;
   revokedAt?: Date | null;
   createdAt: Date;
 }
@@ -33,9 +36,11 @@ export interface WaiterTableAssignment {
   waiterId: string;
   tableId: string;
   assignedById: string;
-  shiftDate: string; // ISO date string YYYY-MM-DD
+  sessionStart: Date;
+  sessionEnd: Date;
+  shiftDate?: string;
   isActive: boolean;
-  assignedAt: Date;
+  assignedAt?: Date;
   releasedAt?: Date | null;
   createdAt: Date;
 }

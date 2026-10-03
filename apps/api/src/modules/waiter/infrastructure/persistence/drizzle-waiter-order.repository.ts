@@ -4,14 +4,11 @@
 
 import { Injectable, Inject } from '@nestjs/common';
 import { eq, and, inArray } from 'drizzle-orm';
-import { DRIZZLE } from '@tavonza/database';
-import { orders, orderItems } from '@tavonza/database';
-
-type DrizzleDb = any;
+import { DRIZZLE, type DrizzleDatabase, orders, orderItems } from '@tavonza/database';
 
 @Injectable()
 export class DrizzleWaiterOrderRepository {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
+  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDatabase) {}
 
   async findPendingOrdersForTables(tableIds: string[]): Promise<any[]> {
     if (tableIds.length === 0) return [];
@@ -21,10 +18,10 @@ export class DrizzleWaiterOrderRepository {
       .where(
         and(
           inArray(orders.tableId, tableIds),
-          eq(orders.status, 'SUBMITTED'),
+          eq(orders.status, 'PENDING'),
         ),
       )
-      .orderBy(orders.submittedAt);
+      .orderBy(orders.createdAt);
   }
 
   async findActiveOrdersForTables(tableIds: string[]): Promise<any[]> {
@@ -35,19 +32,19 @@ export class DrizzleWaiterOrderRepository {
       .where(
         and(
           inArray(orders.tableId, tableIds),
-          inArray(orders.status, ['ACCEPTED', 'KITCHEN_QUEUE', 'PREPARING', 'READY']),
+          inArray(orders.status, ['CONFIRMED', 'PREPARING', 'READY']),
         ),
       )
       .orderBy(orders.acceptedAt);
   }
 
   async findOrderById(orderId: string): Promise<any | null> {
-    const result = await this.db
+    const [row] = await this.db
       .select()
       .from(orders)
       .where(eq(orders.id, orderId))
       .limit(1);
-    return result[0] ?? null;
+    return row ?? null;
   }
 
   async findOrderItemsByOrderId(orderId: string): Promise<any[]> {
@@ -57,23 +54,32 @@ export class DrizzleWaiterOrderRepository {
       .where(eq(orderItems.orderId, orderId));
   }
 
-  async acceptOrder(orderId: string): Promise<void> {
+  async acceptOrder(orderId: string, staffId?: string): Promise<void> {
     await this.db
       .update(orders)
       .set({
-        status: 'ACCEPTED',
+        status: 'CONFIRMED',
+        acceptedById: staffId ?? null,
         acceptedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(orders.id, orderId));
   }
 
-  async rejectOrder(orderId: string, reason: string): Promise<void> {
+  async rejectOrder(
+    orderId: string,
+    reason: string,
+    reasonCode?: string,
+    staffId?: string,
+  ): Promise<void> {
     await this.db
       .update(orders)
       .set({
         status: 'REJECTED',
         rejectionReason: reason,
+        rejectionReasonCode: (reasonCode as any) ?? 'OTHER',
+        rejectedById: staffId ?? null,
+        rejectedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(orders.id, orderId));
@@ -84,7 +90,6 @@ export class DrizzleWaiterOrderRepository {
       .update(orders)
       .set({
         status: 'SERVED',
-        servedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(orders.id, orderId));
@@ -96,62 +101,62 @@ export class DrizzleWaiterOrderRepository {
     tableId: string;
     tableSessionId: string;
     waiterId: string;
-    subtotal: string;
-    serviceChargeRate: string;
-    serviceCharge: string;
-    taxRate: string;
-    tax: string;
-    total: string;
-    customerAutoCreated: boolean;
+    subtotal: string | number;
+    serviceChargeRate?: string | number;
+    serviceCharge?: string | number;
+    taxRate?: string | number;
+    tax?: string | number;
+    total: string | number;
   }): Promise<any> {
-    const result = await this.db
+    const subtotal = Number(data.subtotal);
+    const serviceCharge = Number(data.serviceCharge ?? 0);
+    const tax = Number(data.tax ?? 0);
+    const totalAmount = Number(data.total);
+
+    const [result] = await this.db
       .insert(orders)
       .values({
         orderNumber: data.orderNumber,
         branchId: data.branchId,
         tableId: data.tableId,
         tableSessionId: data.tableSessionId,
-        status: 'SUBMITTED', // Waiter-placed orders go straight to SUBMITTED
-        subtotal: data.subtotal,
-        serviceChargeRate: data.serviceChargeRate,
-        serviceCharge: data.serviceCharge,
-        taxRate: data.taxRate,
-        tax: data.tax,
-        total: data.total,
-        placedByWaiterId: data.waiterId,
-        customerAutoCreated: data.customerAutoCreated,
-        submittedAt: new Date(),
+        status: 'CONFIRMED',
+        subtotal,
+        serviceCharge,
+        taxAmount: tax,
+        totalAmount,
+        placedByStaffId: data.waiterId,
+        acceptedById: data.waiterId,
+        acceptedAt: new Date(),
       })
       .returning();
-    return result[0];
+
+    return result;
   }
 
   async insertOrderItems(items: Array<{
     orderId: string;
     menuItemId: string;
     name: string;
-    unitPrice: string;
+    unitPrice: string | number;
     quantity: number;
-    specialInstructions?: string;
-    addOns?: Array<{ name: string; price: number }>;
-    addOnsTotal: string;
-    lineTotal: string;
+    stationType?: 'KITCHEN' | 'BAR';
   }>): Promise<any[]> {
     if (items.length === 0) return [];
-    const result = await this.db
+    return this.db
       .insert(orderItems)
-      .values(items.map((item) => ({
-        orderId: item.orderId,
-        menuItemId: item.menuItemId,
-        name: item.name,
-        unitPrice: item.unitPrice,
-        quantity: item.quantity,
-        specialInstructions: item.specialInstructions ?? null,
-        addOns: item.addOns ?? null,
-        addOnsTotal: item.addOnsTotal,
-        lineTotal: item.lineTotal,
-      })))
+      .values(
+        items.map((item) => ({
+          orderId: item.orderId,
+          productId: item.menuItemId,
+          productNameSnapshot: item.name,
+          unitPrice: Number(item.unitPrice),
+          quantity: item.quantity,
+          subtotal: Number(item.unitPrice) * item.quantity,
+          stationType: (item.stationType ?? 'KITCHEN') as 'KITCHEN' | 'BAR',
+          status: 'PENDING' as const,
+        })),
+      )
       .returning();
-    return result;
   }
 }

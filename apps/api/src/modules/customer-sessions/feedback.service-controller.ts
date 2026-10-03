@@ -1,10 +1,5 @@
 // ============================================================================
-// Feedback Service + Controller
-// ============================================================================
-//
-// Figma Screens:
-//   "Feedback / How Was Your Experience?" → POST /feedback
-//   "Thank You — Your feedback was Successfully." → response
+// Feedback Service & Controller
 // ============================================================================
 
 import {
@@ -15,6 +10,7 @@ import {
   Param,
   HttpCode,
   HttpStatus,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,16 +21,29 @@ import {
 } from '@nestjs/swagger';
 import { Injectable, Inject } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { DRIZZLE } from '@tavonza/database';
-import { feedback } from '@tavonza/database';
+import { DRIZZLE, type DrizzleDatabase, orderReviews, orders } from '@tavonza/database';
 
-type DrizzleDb = any;
+// ── DTOs ──────────────────────────────────────────────────────────────
+
+class SubmitFeedbackDto {
+  @ApiProperty({ description: 'Order this feedback belongs to' })
+  orderId!: string;
+
+  @ApiProperty({ description: 'Star rating 1-5', example: 5 })
+  rating!: number;
+
+  @ApiProperty({ required: false, description: 'Text comment', example: 'Amazing food!' })
+  comment?: string;
+
+  @ApiProperty({ required: false })
+  customerId?: string;
+}
 
 // ── Service ───────────────────────────────────────────────────────────
 
 @Injectable()
 export class FeedbackService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
+  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDatabase) {}
 
   /**
    * POST /feedback
@@ -43,25 +52,40 @@ export class FeedbackService {
    */
   async submitFeedback(data: {
     orderId: string;
-    rating: string;
+    rating: number;
     comment?: string;
-    tableSessionId?: string;
-    customerSessionId?: string;
-    userId?: string;
+    customerId?: string;
   }) {
-    const result = await this.db
-      .insert(feedback)
+    let customerId = data.customerId;
+
+    if (!customerId) {
+      const [order] = await this.db
+        .select({ customerId: orders.customerId })
+        .from(orders)
+        .where(eq(orders.id, data.orderId))
+        .limit(1);
+
+      if (!order) {
+        throw new NotFoundException(`Order ${data.orderId} not found`);
+      }
+      customerId = order.customerId ?? undefined;
+    }
+
+    if (!customerId) {
+      throw new NotFoundException('Customer ID associated with order not found');
+    }
+
+    const [result] = await this.db
+      .insert(orderReviews)
       .values({
         orderId: data.orderId,
-        tableSessionId: data.tableSessionId ?? null,
-        customerSessionId: data.customerSessionId ?? null,
-        userId: data.userId ?? null,
-        rating: data.rating,
+        customerId,
+        rating: Math.min(5, Math.max(1, Number(data.rating))),
         comment: data.comment ?? null,
       })
       .returning();
 
-    return result[0];
+    return result;
   }
 
   /**
@@ -69,33 +93,14 @@ export class FeedbackService {
    * Get feedback for an order
    */
   async getFeedbackByOrder(orderId: string) {
-    const result = await this.db
+    const [result] = await this.db
       .select()
-      .from(feedback)
-      .where(eq(feedback.orderId, orderId))
+      .from(orderReviews)
+      .where(eq(orderReviews.orderId, orderId))
       .limit(1);
 
-    return result[0] ?? null;
+    return result ?? null;
   }
-}
-
-// ── DTOs ──────────────────────────────────────────────────────────────
-
-class SubmitFeedbackDto {
-  @ApiProperty({ description: 'Order this feedback belongs to' })
-  orderId!: string;
-
-  @ApiProperty({ description: 'Star rating 1-5', example: '5' })
-  rating!: string;
-
-  @ApiProperty({ required: false, description: 'Text comment', example: 'Amazing food!' })
-  comment?: string;
-
-  @ApiProperty({ required: false })
-  tableSessionId?: string;
-
-  @ApiProperty({ required: false })
-  customerSessionId?: string;
 }
 
 // ── Controller ────────────────────────────────────────────────────────

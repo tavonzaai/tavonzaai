@@ -34,7 +34,8 @@ import type {
   CreateOrderOnBehalfDto,
   CreateAlertDto,
 } from '../../presentation/http/dto/waiter-request.dto';
-import { RoleLabel, ScopeType } from '@tavonza/authorization';
+import { GlobalRole } from '@tavonza/authorization';
+import { OutboxService } from '@tavonza/database';
 
 @Injectable()
 export class WaiterService {
@@ -43,6 +44,7 @@ export class WaiterService {
     private readonly orderRepo: DrizzleWaiterOrderRepository,
     private readonly alertRepo: DrizzleAlertRepository,
     private readonly userRepo: DrizzleUserRepository,
+    private readonly outboxService: OutboxService,
   ) {}
 
   // ── Slice 2: Assigned Tables ────────────────────────────────────────
@@ -54,18 +56,19 @@ export class WaiterService {
     const isAssigned = await this.waiterRepo.isStaffAssignedToBranch(profile.id, branchId);
     if (!isAssigned) throw new ForbiddenException('You are not assigned to this branch');
 
-    const today = new Date().toISOString().split('T')[0] as string;
-    return this.waiterRepo.findActiveTableAssignmentsForWaiter(waiterId, branchId, today);
+    return this.waiterRepo.findActiveTableAssignmentsForWaiter(waiterId, branchId);
   }
 
   async assignTable(dto: AssignTableDto, assignedById: string): Promise<any> {
-    const today = (new Date().toISOString().split('T')[0]) as string;
+    const start = new Date();
+    const end = new Date(Date.now() + 8 * 60 * 60 * 1000);
     return this.waiterRepo.assignTable({
       branchId: dto.branchId,
       waiterId: dto.waiterId,
       tableId: dto.tableId,
       assignedById,
-      shiftDate: today,
+      sessionStart: start,
+      sessionEnd: end,
     });
   }
 
@@ -85,6 +88,22 @@ export class WaiterService {
     }
 
     await this.orderRepo.acceptOrder(orderId);
+
+    await this.outboxService.publishEvent({
+      aggregateType: 'ORDER',
+      aggregateId: order.id,
+      eventType: 'OrderAccepted',
+      branchId: order.branchId,
+      payload: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        branchId: order.branchId,
+        tableId: order.tableId,
+        tableSessionId: order.tableSessionId,
+        acceptedById: waiterId,
+        acceptedAt: new Date().toISOString(),
+      },
+    });
   }
 
   // ── Slice 3: Reject Order ───────────────────────────────────────────
@@ -101,7 +120,25 @@ export class WaiterService {
       );
     }
 
-    await this.orderRepo.rejectOrder(dto.orderId, dto.reason);
+    const reasonCode = dto.rejectionReasonCode ?? dto.reasonCode ?? 'OTHER';
+    await this.orderRepo.rejectOrder(dto.orderId, dto.reason, reasonCode, waiterId);
+
+    await this.outboxService.publishEvent({
+      aggregateType: 'ORDER',
+      aggregateId: order.id,
+      eventType: 'OrderRejected',
+      branchId: order.branchId,
+      payload: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        branchId: order.branchId,
+        tableSessionId: order.tableSessionId,
+        rejectedById: waiterId,
+        rejectionReasonCode: reasonCode,
+        rejectionReason: dto.reason,
+        rejectedAt: new Date().toISOString(),
+      },
+    });
   }
 
   // ── Slice 4: Serve Order ────────────────────────────────────────────
@@ -119,6 +156,21 @@ export class WaiterService {
     }
 
     await this.orderRepo.markServed(orderId);
+
+    await this.outboxService.publishEvent({
+      aggregateType: 'ORDER',
+      aggregateId: order.id,
+      eventType: 'OrderServed',
+      branchId: order.branchId,
+      payload: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        branchId: order.branchId,
+        tableSessionId: order.tableSessionId,
+        servedById: waiterId,
+        servedAt: new Date().toISOString(),
+      },
+    });
   }
 
   // ── Slice 5: Create Order on Behalf of Customer ─────────────────────
@@ -139,12 +191,9 @@ export class WaiterService {
       customer = await this.userRepo.create({
         email: isEmail ? dto.customerIdentifier.toLowerCase() : `guest_${Date.now()}@tavonza.local`,
         passwordHash,
-        firstName: 'Guest',
-        lastName: '',
-        phone: isEmail ? undefined : dto.customerIdentifier,
-        role: RoleLabel.CUSTOMER,
-        permissions: [],
-        scopes: [{ type: ScopeType.SESSION }],
+        name: 'Guest',
+        contactNo: isEmail ? undefined : dto.customerIdentifier,
+        role: GlobalRole.CUSTOMER,
       });
       customerAutoCreated = true;
 
@@ -179,7 +228,6 @@ export class WaiterService {
       taxRate: taxRate.toFixed(2),
       tax: tax.toFixed(2),
       total: total.toFixed(2),
-      customerAutoCreated,
     });
 
     await this.orderRepo.insertOrderItems(
@@ -197,6 +245,32 @@ export class WaiterService {
         lineTotal: (parseFloat(item.unitPrice) * item.quantity).toFixed(2),
       })),
     );
+
+    await this.outboxService.publishEvent({
+      aggregateType: 'ORDER',
+      aggregateId: order.id,
+      eventType: 'OrderSubmitted',
+      branchId: dto.branchId,
+      payload: {
+        orderId: order.id,
+        orderNumber,
+        branchId: dto.branchId,
+        tableId: dto.tableId,
+        tableLabel: 'Table',
+        tableSessionId: dto.tableSessionId,
+        itemsCount: dto.items.length,
+        subtotal,
+        totalAmount: total,
+        items: dto.items.map((i: any) => ({
+          id: i.menuItemId,
+          productName: i.name,
+          quantity: i.quantity,
+          stationType: 'KITCHEN',
+          specialInstructions: i.specialInstructions,
+        })),
+        occurredAt: new Date().toISOString(),
+      },
+    });
 
     return {
       order,
@@ -238,7 +312,46 @@ export class WaiterService {
     if (dto.type === 'custom' && !dto.message) {
       throw new BadRequestException('A message is required for custom alerts');
     }
-    return this.alertRepo.create(dto as any);
+    const alert = await this.alertRepo.create(dto as any);
+
+    await this.outboxService.publishEvent({
+      aggregateType: 'ALERT',
+      aggregateId: alert.id,
+      eventType: 'WaiterCallAlert',
+      branchId: alert.branchId,
+      payload: {
+        alertId: alert.id,
+        branchId: alert.branchId,
+        tableId: alert.tableId,
+        tableLabel: 'Table',
+        tableSessionId: alert.tableSessionId,
+        type: (dto.type === 'call_waiter' ? 'CALL_WAITER' : dto.type === 'request_bill' || dto.type === 'bill' ? 'REQUEST_BILL' : dto.type === 'water' ? 'WATER_REFILL' : 'CUSTOM') as any,
+        message: alert.message,
+        status: 'PENDING',
+        createdAt: alert.createdAt.toISOString(),
+      },
+    });
+
+    if (dto.type === 'request_bill') {
+      await this.waiterRepo.updateTableStatus(dto.tableId, 'PAYMENT_PENDING');
+      await this.outboxService.publishEvent({
+        aggregateType: 'TABLE',
+        aggregateId: dto.tableId,
+        eventType: 'TableStatusChanged',
+        branchId: dto.branchId,
+        payload: {
+          tableId: dto.tableId,
+          tableLabel: 'Table',
+          branchId: dto.branchId,
+          serviceStatus: 'PAYMENT_PENDING',
+          operationalFlag: 'NORMAL',
+          activeSessionId: dto.tableSessionId,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    return alert;
   }
 
   async getMyAlerts(waiterId: string, branchId: string): Promise<any[]> {
@@ -259,6 +372,19 @@ export class WaiterService {
       throw new BadRequestException('Alert is already resolved');
     }
     await this.alertRepo.acknowledge(alertId, waiterId);
+
+    await this.outboxService.publishEvent({
+      aggregateType: 'ALERT',
+      aggregateId: alertId,
+      eventType: 'AlertAcknowledged',
+      branchId: alert.branchId,
+      payload: {
+        alertId,
+        branchId: alert.branchId,
+        acknowledgedById: waiterId,
+        acknowledgedAt: new Date().toISOString(),
+      },
+    });
   }
 
   async resolveAlert(alertId: string, _waiterId: string): Promise<void> {
@@ -273,11 +399,9 @@ export class WaiterService {
   // ── Internal Helpers ────────────────────────────────────────────────
 
   private async getMyTableIds(waiterId: string, branchId: string): Promise<string[]> {
-    const today = new Date().toISOString().split('T')[0];
     const assignments = await this.waiterRepo.findActiveTableAssignmentsForWaiter(
       waiterId,
       branchId,
-      today,
     );
     return assignments.map((a) => a.tableId);
   }
