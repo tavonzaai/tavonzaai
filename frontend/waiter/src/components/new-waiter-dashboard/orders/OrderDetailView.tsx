@@ -65,8 +65,6 @@ export default function OrderDetailView({
   const [item1Checked, setItem1Checked] = useState(true);
   const [item2Checked, setItem2Checked] = useState(false);
 
-  // Live time
-  const [liveTime] = useState('9:41');
 
   // Add-on card state
   const [addonAccepted, setAddonAccepted] = useState(false);
@@ -569,27 +567,6 @@ export default function OrderDetailView({
         
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto pb-28 custom-scrollbar relative">
-          
-          {/* iOS Top Status Bar (9:41) */}
-          <div className="w-full h-14 px-6 flex items-center justify-between z-30 select-none text-white font-['SF_Pro',-apple-system,sans-serif] shrink-0 sticky top-0 bg-black/90 backdrop-blur-md border-b border-white/5">
-            <span className="text-[15px] font-semibold tracking-tight">{liveTime}</span>
-            <div className="w-20 h-4 bg-black/50 rounded-full blur-[1px] hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <div className="flex items-end gap-0.5 h-3">
-                <div className="w-[3px] h-[4px] bg-white rounded-xs" />
-                <div className="w-[3px] h-[6px] bg-white rounded-xs" />
-                <div className="w-[3px] h-[8px] bg-white rounded-xs" />
-                <div className="w-[3px] h-[10px] bg-white rounded-xs" />
-              </div>
-              <div className="flex items-center gap-0.5">
-                <div className="w-[22px] h-[11px] rounded-[3px] border border-white/80 p-[1.5px] flex items-center">
-                  <div className="w-full h-full bg-white rounded-[1.5px]" />
-                </div>
-                <div className="w-[1.5px] h-[4px] bg-white/80 rounded-r-[1px]" />
-              </div>
-            </div>
-          </div>
-
           {detailContent}
         </div>
 

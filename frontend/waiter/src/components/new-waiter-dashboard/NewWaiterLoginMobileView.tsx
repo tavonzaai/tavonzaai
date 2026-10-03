@@ -8,7 +8,6 @@ import {
   EyeOff,
   Loader2,
   AlertCircle,
-  Wifi,
   Sparkles,
   ArrowRight,
   ShieldCheck,
@@ -22,44 +21,6 @@ import { loginWaiterSession, isWaiterAuthenticated, getStoredWaiterUser } from '
 import { isRoleAllowedForWaiter } from '@/redux/ReduxProvider';
 import { removeAuthToken } from '@/redux/api/baseApi';
 import { toast } from 'sonner';
-
-/**
- * 📱 Pixel-Perfect iOS Mobile Status Bar
- * Displays live time, signal bars, Wi-Fi icon, and battery indicator.
- */
-function MobileStatusBar({ currentTime = '9:41' }: { currentTime?: string }) {
-  return (
-    <div className="w-full h-14 px-6 flex items-center justify-between z-20 select-none text-white font-['SF_Pro',-apple-system,sans-serif] shrink-0">
-      {/* Time */}
-      <span className="text-[15px] font-semibold tracking-tight">{currentTime}</span>
-
-      {/* Dynamic Island / Top Center Spacer */}
-      <div className="w-20 h-4 bg-black/40 rounded-full blur-[1px] hidden sm:block" />
-
-      {/* Status Icons: Cellular, Wi-Fi, Battery */}
-      <div className="flex items-center gap-2">
-        {/* Cellular Signal Bars */}
-        <div className="flex items-end gap-0.5 h-3">
-          <div className="w-[3px] h-[4px] bg-white rounded-xs" />
-          <div className="w-[3px] h-[6px] bg-white rounded-xs" />
-          <div className="w-[3px] h-[8px] bg-white rounded-xs" />
-          <div className="w-[3px] h-[10px] bg-white rounded-xs" />
-        </div>
-
-        {/* Wi-Fi Icon */}
-        <Wifi className="w-3.5 h-3.5 stroke-[2.5]" />
-
-        {/* Battery Icon */}
-        <div className="flex items-center gap-0.5">
-          <div className="w-[22px] h-[11px] rounded-[3px] border border-white/80 p-[1.5px] flex items-center">
-            <div className="w-full h-full bg-white rounded-[1.5px]" />
-          </div>
-          <div className="w-[1.5px] h-[4px] bg-white/80 rounded-r-[1px]" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function NewWaiterLoginMobileView({
   targetRedirect = '/new-waiter-dashboard',
@@ -81,20 +42,6 @@ export default function NewWaiterLoginMobileView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Live time for status bar
-  const [liveTime, setLiveTime] = useState('9:41');
-
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setLiveTime(
-        now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: false })
-      );
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Check if session already exists
   const activeUser = user || (typeof document !== 'undefined' ? getStoredWaiterUser() : null);
@@ -243,11 +190,8 @@ export default function NewWaiterLoginMobileView({
           <div className="w-80 h-96 left-[30px] top-[227px] absolute bg-amber-500/5 rounded-full blur-[100px]" />
         </div>
 
-        {/* 1. iOS Status Bar */}
-        <MobileStatusBar currentTime={liveTime} />
-
-        {/* 2. Dynamic Screen Content: Splash vs Login */}
-        <div className="flex-1 flex flex-col justify-center items-center relative z-10 w-full px-6">
+        {/* Dynamic Screen Content: Splash vs Login */}
+        <div className="flex-1 flex flex-col justify-center items-center relative z-10 w-full px-6 pt-6">
           {/* ──────────────── SCREEN 1: SPLASH SCREEN ──────────────── */}
           {viewMode === 'splash' && (
             <div className="w-full flex flex-col items-center justify-center my-auto transition-all duration-500 animate-fadeIn">

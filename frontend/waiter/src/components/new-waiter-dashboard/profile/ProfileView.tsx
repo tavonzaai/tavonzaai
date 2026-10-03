@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   Calendar,
   Sparkles,
+  Pencil,
+  X,
 } from 'lucide-react';
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
@@ -36,6 +38,17 @@ export default function ProfileView({
   const { user } = useAppSelector((state) => state.auth);
 
   const [isClockedOut, setIsClockedOut] = useState(false);
+
+  // Dynamic Work Information state
+  const [workInfo, setWorkInfo] = useState({
+    role: 'Waiter',
+    assignedTables: '01, 02, 03, 04, 05',
+    branch: 'Main Branch',
+  });
+
+  // Modal State
+  const [isEditWorkModalOpen, setIsEditWorkModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState(workInfo);
 
   const waiterName = user?.name || user?.firstName || 'John Doe';
   const waiterEmail = user?.email || 'm.chen@tavonza-waiter.com';
@@ -160,13 +173,27 @@ export default function ProfileView({
               </div>
             </div>
 
-            {/* Work Information Card matching Figma Snippet 4 */}
+            {/* Work Information Card with Interactive Edit Button */}
             <div className="w-full bg-stone-950 rounded-[8px] outline outline-1 outline-offset-[-1px] outline-zinc-900 overflow-hidden shadow-sm">
               <div className="w-full px-3 py-2 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center">
-                <span className="text-white text-sm font-medium font-['Inter']">
-                  Work Information
-                </span>
-                <Briefcase className="w-4 h-4 text-orange-200" />
+                <div className="flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-orange-200" />
+                  <span className="text-white text-sm font-medium font-['Inter']">
+                    Work Information
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditForm(workInfo);
+                    setIsEditWorkModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 hover:border-yellow-400/50 rounded-[6px] text-xs font-medium transition cursor-pointer active:scale-95 group shadow-xs"
+                  title="Edit Work Information"
+                >
+                  <Pencil className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  <span>Edit</span>
+                </button>
               </div>
 
               <div className="p-3 flex flex-col gap-2.5">
@@ -174,7 +201,7 @@ export default function ProfileView({
                   <span className="text-stone-300 text-xs font-normal">Role</span>
                   <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
-                      Waiter
+                      {workInfo.role}
                     </span>
                   </div>
                 </div>
@@ -183,7 +210,7 @@ export default function ProfileView({
                   <span className="text-stone-300 text-xs font-normal">Assigned Tables</span>
                   <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
-                      01, 02, 03, 04, 05
+                      {workInfo.assignedTables}
                     </span>
                   </div>
                 </div>
@@ -192,7 +219,7 @@ export default function ProfileView({
                   <span className="text-stone-300 text-xs font-normal">Branch</span>
                   <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
-                      Main Branch
+                      {workInfo.branch}
                     </span>
                   </div>
                 </div>
@@ -368,17 +395,165 @@ export default function ProfileView({
     </div>
   );
 
+  // Edit Work Information Modal
+  const editModalContent = isEditWorkModalOpen && (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={() => setIsEditWorkModalOpen(false)}
+    >
+      <div
+        className="w-full max-w-[390px] bg-neutral-900 border border-white/10 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-white relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center text-yellow-400">
+              <Briefcase className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-white text-sm font-semibold">Edit Work Information</h3>
+              <p className="text-neutral-400 text-[11px]">Update your station, role, and branch</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditWorkModalOpen(false)}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Form Fields */}
+        <div className="flex flex-col gap-3.5">
+          {/* 1. Staff Role */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-300">Staff Role</label>
+            <select
+              value={editForm.role}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, role: e.target.value }))}
+              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition cursor-pointer"
+            >
+              <option value="Waiter">Waiter</option>
+              <option value="Head Waiter">Head Waiter</option>
+              <option value="Bartender">Bartender</option>
+              <option value="Floor Lead">Floor Lead</option>
+              <option value="Server">Server</option>
+            </select>
+          </div>
+
+          {/* 2. Assigned Tables */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between items-center">
+              <label className="text-xs font-medium text-stone-300">Assigned Tables</label>
+              <span className="text-[10px] text-neutral-400">Toggle or type comma-separated</span>
+            </div>
+            <input
+              type="text"
+              value={editForm.assignedTables}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, assignedTables: e.target.value }))}
+              placeholder="e.g. 01, 02, 03, 04, 05"
+              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+            />
+            {/* Quick table toggle chips */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              {['01', '02', '03', '04', '05', '06', '07', '08'].map((tbl) => {
+                const isSelected = editForm.assignedTables
+                  .split(',')
+                  .map((t) => t.trim())
+                  .includes(tbl);
+                return (
+                  <button
+                    key={tbl}
+                    type="button"
+                    onClick={() => {
+                      const current = editForm.assignedTables
+                        .split(',')
+                        .map((t) => t.trim())
+                        .filter(Boolean);
+                      const next = isSelected
+                        ? current.filter((t) => t !== tbl)
+                        : [...current, tbl].sort();
+                      setEditForm((prev) => ({
+                        ...prev,
+                        assignedTables: next.join(', '),
+                      }));
+                    }}
+                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-yellow-400 text-black font-semibold shadow-xs'
+                        : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                    }`}
+                  >
+                    T-{tbl}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 3. Branch */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-300">Assigned Branch</label>
+            <select
+              value={editForm.branch}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, branch: e.target.value }))}
+              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition cursor-pointer"
+            >
+              <option value="Main Branch">Main Branch</option>
+              <option value="Downtown Rooftop">Downtown Rooftop</option>
+              <option value="Westside Lounge">Westside Lounge</option>
+              <option value="Seaside Terrace">Seaside Terrace</option>
+              <option value="VIP Garden">VIP Garden</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => setIsEditWorkModalOpen(false)}
+            className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!editForm.role.trim() || !editForm.branch.trim()) {
+                toast.error('Role and Branch cannot be empty');
+                return;
+              }
+              setWorkInfo(editForm);
+              setIsEditWorkModalOpen(false);
+              toast.success('Work information updated successfully!', {
+                description: `Assigned to ${editForm.branch} (${editForm.role})`,
+              });
+            }}
+            className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (inShell) {
-    return profileContent;
+    return (
+      <>
+        {profileContent}
+        {editModalContent}
+      </>
+    );
   }
 
   return (
     <div className="w-full min-h-screen bg-neutral-950 flex flex-col items-center justify-start p-0 sm:p-4 md:p-6 font-sans selection:bg-amber-400 selection:text-black">
       <div className="w-full max-w-[420px] min-h-screen sm:min-h-[868px] sm:max-h-[94vh] sm:rounded-[36px] bg-black relative flex flex-col justify-between overflow-hidden sm:border sm:border-white/10 sm:shadow-[0_0_50px_rgba(0,0,0,0.9)]">
         <div className="flex-1 overflow-y-auto pb-28 custom-scrollbar relative">
-          <div className="w-full h-14 px-6 flex items-center justify-between z-30 select-none text-white font-['SF_Pro',-apple-system,sans-serif] shrink-0 sticky top-0 bg-black/90 backdrop-blur-md border-b border-white/5">
-            <span className="text-[15px] font-semibold tracking-tight">9:41</span>
-          </div>
           {profileContent}
         </div>
         <BottomDock
@@ -387,6 +562,7 @@ export default function ProfileView({
           showFloorLabel={true}
         />
       </div>
+      {editModalContent}
     </div>
   );
 }

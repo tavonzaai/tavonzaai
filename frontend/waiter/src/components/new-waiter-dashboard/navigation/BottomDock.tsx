@@ -73,15 +73,12 @@ export default function BottomDock({
 
           const delta = currentY - lastScrollY;
 
-          // If at the top of content (within 25px), always keep dock visible
-          if (currentY <= 25) {
+          if (delta > 4) {
+            // Scrolling down -> smoothly show dock
             setIsVisible(true);
-          } else if (delta > 6) {
-            // Scrolling down (reading content downwards) -> smoothly hide dock to bottom
+          } else if (delta < -4) {
+            // Scrolling above (up) -> smoothly hide dock
             setIsVisible(false);
-          } else if (delta < -6) {
-            // Scrolling up (moving back to top) -> smoothly reveal dock from bottom
-            setIsVisible(true);
           }
 
           lastScrollY = currentY;
@@ -93,11 +90,13 @@ export default function BottomDock({
 
     // 2. Mouse wheel / trackpad listener (instant response)
     const handleWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) < 4) return;
-      if (e.deltaY > 6) {
-        setIsVisible(false);
-      } else if (e.deltaY < -6) {
+      if (Math.abs(e.deltaY) < 3) return;
+      if (e.deltaY > 3) {
+        // Scrolling down -> show dock
         setIsVisible(true);
+      } else if (e.deltaY < -3) {
+        // Scrolling above (up) -> hide dock
+        setIsVisible(false);
       }
     };
 
@@ -113,14 +112,15 @@ export default function BottomDock({
       if (!e.touches || !e.touches[0]) return;
       const currentY = e.touches[0].clientY;
       const delta = touchStartY - currentY;
-      if (delta > 8) {
-        // Finger swiped up = scrolled down -> hide dock
-        setIsVisible(false);
-      } else if (delta < -8) {
-        // Finger swiped down = scrolled up -> show dock
+      if (delta > 6) {
+        // Finger swiped up = scrolled down -> show dock
         setIsVisible(true);
+        touchStartY = currentY;
+      } else if (delta < -6) {
+        // Finger swiped down = scrolled above (up) -> hide dock
+        setIsVisible(false);
+        touchStartY = currentY;
       }
-      touchStartY = currentY;
     };
 
     if (scrollContainer) {
@@ -157,6 +157,7 @@ export default function BottomDock({
         <div
           onMouseEnter={() => setIsVisible(true)}
           onTouchStart={() => setIsVisible(true)}
+          onClick={() => setIsVisible(true)}
           className="absolute bottom-0 left-0 right-0 h-6 z-30 pointer-events-auto cursor-pointer"
         />
       )}
@@ -173,11 +174,11 @@ export default function BottomDock({
           {/* 1. Floor (matching Figma with 4-square LayoutGrid icon) */}
           <button
             onClick={() => handleNav('floor', '/new-waiter-dashboard/floor')}
-            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition group"
+            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition-transform duration-150 active:scale-90 group"
           >
             {showFloorLabel ? (
               <LayoutGrid
-                className={`w-5 h-5 transition ${
+                className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${
                   isFloorActive
                     ? 'text-yellow-400 stroke-[2.2]'
                     : 'text-neutral-400 group-hover:text-white'
@@ -185,7 +186,7 @@ export default function BottomDock({
               />
             ) : (
               <Home
-                className={`w-5 h-5 transition ${
+                className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${
                   isFloorActive
                     ? 'text-yellow-400 stroke-[2.2]'
                     : 'text-slate-500 group-hover:text-white'
@@ -206,10 +207,10 @@ export default function BottomDock({
           {/* 2. Order */}
           <button
             onClick={() => handleNav('order', '/new-waiter-dashboard/orders')}
-            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition group"
+            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition-transform duration-150 active:scale-90 group"
           >
             <UtensilsCrossed
-              className={`w-5 h-5 transition ${
+              className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${
                 isOrderActive
                   ? 'text-yellow-400 stroke-[2.2]'
                   : 'text-neutral-400 group-hover:text-white'
@@ -229,10 +230,10 @@ export default function BottomDock({
           {/* 3. JARVIS Center AI Button */}
           <button
             onClick={() => handleNav('jarvis', '/new-waiter-dashboard/jarvis')}
-            className="flex flex-col items-center justify-center -mt-6 cursor-pointer group"
+            className="flex flex-col items-center justify-center -mt-6 cursor-pointer group transition-transform duration-150 active:scale-95"
           >
             <div
-              className={`w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center transition group-hover:scale-105 active:scale-95 overflow-hidden ${
+              className={`w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-active:scale-95 overflow-hidden ${
                 isJarvisActive
                   ? 'border-2 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)] ring-2 ring-yellow-400/30'
                   : 'border-2 border-neutral-500 shadow-[0_0_15px_rgba(0,0,0,0.6)]'
@@ -261,17 +262,17 @@ export default function BottomDock({
           {/* 4. Alert */}
           <button
             onClick={() => handleNav('alert', '/new-waiter-dashboard/alerts')}
-            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition group relative"
+            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition-transform duration-150 active:scale-90 group relative"
           >
             <div className="relative">
               <Bell
-                className={`w-5 h-5 transition ${
+                className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${
                   isAlertActive
                     ? 'text-yellow-400 stroke-[2.2]'
                     : 'text-neutral-400 group-hover:text-white'
                 }`}
               />
-              <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center absolute -top-1 -right-2 text-white text-[9px] font-bold">
+              <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center absolute -top-1 -right-2 text-white text-[9px] font-bold animate-pulse shadow-sm">
                 2
               </div>
             </div>
@@ -289,10 +290,10 @@ export default function BottomDock({
           {/* 5. Profile */}
           <button
             onClick={() => handleNav('profile', '/new-waiter-dashboard/profile')}
-            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition group"
+            className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition-transform duration-150 active:scale-90 group"
           >
             <User
-              className={`w-5 h-5 transition ${
+              className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${
                 isProfileActive
                   ? 'text-yellow-400 stroke-[2.2]'
                   : 'text-violet-100/60 group-hover:text-white'

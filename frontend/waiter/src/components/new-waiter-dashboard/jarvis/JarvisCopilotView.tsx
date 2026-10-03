@@ -327,9 +327,6 @@ export default function JarvisCopilotView({
     <div className="w-full min-h-screen bg-neutral-950 flex flex-col items-center justify-start p-0 sm:p-4 md:p-6 font-sans selection:bg-amber-400 selection:text-black">
       <div className="w-full max-w-[420px] min-h-screen sm:min-h-[868px] sm:max-h-[94vh] sm:rounded-[36px] bg-black relative flex flex-col justify-between overflow-hidden sm:border sm:border-white/10 sm:shadow-[0_0_50px_rgba(0,0,0,0.9)]">
         <div className="flex-1 overflow-y-auto pb-28 custom-scrollbar relative">
-          <div className="w-full h-14 px-6 flex items-center justify-between z-30 select-none text-white font-['SF_Pro',-apple-system,sans-serif] shrink-0 sticky top-0 bg-black/90 backdrop-blur-md border-b border-white/5">
-            <span className="text-[15px] font-semibold tracking-tight">9:41</span>
-          </div>
           {jarvisContent}
         </div>
         <BottomDock
