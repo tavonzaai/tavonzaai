@@ -5,6 +5,7 @@ import userReducer from './slices/userSlice';
 import menuCategoryReducer from './slices/menuCategorySlice';
 import menuItemReducer from './slices/menuItemSlice';
 import chatReducer from './slices/chatSlice';
+import sessionReducer from './slices/sessionSlice';
 
 export const store = configureStore({
   reducer: {
@@ -13,6 +14,7 @@ export const store = configureStore({
     menuCategories: menuCategoryReducer,
     menuItems: menuItemReducer,
     chat: chatReducer,
+    session: sessionReducer,
   },
   devTools: process.env.NODE_ENV !== 'production',
 });
