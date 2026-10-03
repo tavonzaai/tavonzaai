@@ -1,10 +1,19 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import { Toaster } from 'sonner';
+import ReduxProvider from '@/redux/ReduxProvider';
 
 export const metadata: Metadata = {
-  title: 'Waiter Floor App | Tavonza AI',
-  description: 'Floor waiter dashboard for live tables, guest requests, and order lifecycle handoffs.',
+  title: 'Waiter Command Center | Tavonza AI Hospitality',
+  description: 'Floor station terminal, live tables, guest requests, orders, and AI copilot.',
+  icons: {
+    icon: [
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({
@@ -13,8 +22,13 @@ export default function RootLayout({
   children: ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className="dark">
+      <body className="bg-black text-white antialiased min-h-screen">
+        <ReduxProvider>
+          {children}
+        </ReduxProvider>
+        <Toaster richColors position="top-right" theme="dark" />
+      </body>
     </html>
   );
 }

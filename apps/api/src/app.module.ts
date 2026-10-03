@@ -19,6 +19,7 @@ import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { ShiftsModule } from "./modules/shifts/shifts.module";
 import { InventoryModule } from "./modules/inventory/inventory.module";
 import { AiModule } from "./modules/ai/ai.module";
+import { ApiStorageModule } from "./modules/storage/storage.module";
 
 import { AppController } from "./app.controller";
 
@@ -26,6 +27,7 @@ import { AppController } from "./app.controller";
   imports: [
     // Infrastructure — must be first (provides Drizzle DB globally)
     DatabaseModule,
+    ApiStorageModule,
 
     IdentityModule,
     AuthorizationModule,

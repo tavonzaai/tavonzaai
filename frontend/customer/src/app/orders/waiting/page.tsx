@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, AlertCircle, ChefHat } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
+import { getApiBaseUrl } from '@/redux/api/baseApi';
 
 function WaitingContent() {
   const router = useRouter();
@@ -33,7 +34,7 @@ function WaitingContent() {
     let isMounted = true;
     const checkStatus = async () => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7777/api/v1';
+        const apiUrl = getApiBaseUrl();
         const res = await fetch(`${apiUrl}/orders/${orderId}`);
         if (!res.ok) return;
         const data = await res.json();

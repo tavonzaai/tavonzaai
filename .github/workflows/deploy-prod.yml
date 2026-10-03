@@ -17,6 +17,7 @@ on:
         options:
           - all
           - backend
+          - worker
           - customer
           - admin
           - kitchen
@@ -64,8 +65,10 @@ jobs:
           filters: |
             backend:
               - 'apps/api/**'
+              - 'apps/worker/**'
               - 'packages/**'
               - 'docker/api.Dockerfile'
+              - 'docker/worker.Dockerfile'
             customer:
               - 'frontend/customer/**'
               - 'packages/**'
@@ -153,7 +156,54 @@ jobs:
             --region ${{ env.AWS_REGION }}
           echo "ECS service update triggered successfully!"
 
-  # ─── 4. Build & Deploy Frontend Applications to ECS ─────────────────────────
+  # ─── 4. Build & Deploy Worker to ECS ───────────────────────────────────────
+  deploy-worker:
+    name: Deploy Worker (email/outbox/notifications)
+    needs: [detect-changes]
+    if: |
+      (github.event_name == 'push' && needs.detect-changes.outputs.backend == 'true') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'worker'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Worker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/worker.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-worker:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-worker:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update ECS Service (Rolling Deployment)
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service tavonzaai-prod-worker \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Worker deployed!"
+
+  # ─── 5. Build & Deploy Frontend Applications to ECS ─────────────────────────
   deploy-frontend-apps:
     name: Deploy Frontend (${{ matrix.app }})
     needs: [detect-changes]
