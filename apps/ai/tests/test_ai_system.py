@@ -117,6 +117,32 @@ class TestToolRegistry:
     def test_get_tool_unknown_returns_none(self):
         from src.tools.registry.registry import get_tool
         assert get_tool("drop_database") is None
+    def test_get_menu_schema_has_optional_filters(self):
+        from src.tools.registry.registry import get_tool
+        t = get_tool("get_menu")
+        params = t["schema"]["function"]["parameters"]
+        assert params["required"] == []
+        assert "category" in params["properties"]
+        assert "dietary_preference" in params["properties"]
+        assert "exclude_allergens" in params["properties"]
+        assert "max_price" in params["properties"]
+    def test_mock_get_menu_dietary_filtering(self):
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        res = c._mock_tool_result("get_menu", {"dietary_preference": "keto"})
+        items = res["data"]["items"]
+        assert len(items) > 0
+        for item in items:
+            assert "keto" in [d.lower() for d in item.get("dietary", [])]
+    def test_mock_get_menu_exclude_allergens(self):
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        res = c._mock_tool_result("get_menu", {"exclude_allergens": "dairy,gluten"})
+        items = res["data"]["items"]
+        assert len(items) > 0
+        for item in items:
+            assert "dairy" not in item.get("allergens", [])
+            assert "gluten" not in item.get("allergens", [])
 
 # --- 5. CONVERSATION STORE ---
 class TestConversationStore:

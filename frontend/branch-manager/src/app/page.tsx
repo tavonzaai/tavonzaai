@@ -1,8 +1,18 @@
-export default function BranchManagerHomePage() {
-  return (
-    <main style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
-      <h1>Branch Management Console</h1>
-      <p>Operations, shift management, branch tables, and local inventory.</p>
-    </main>
-  );
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
+
+export default function RootPage() {
+  const cookieStore = cookies();
+  const token =
+    cookieStore.get('branch_manager_token') ||
+    cookieStore.get('access_token') ||
+    cookieStore.get('branch_manager_user');
+
+  if (token?.value) {
+    redirect('/branch-manager-dashboard/dashboard');
+  } else {
+    redirect('/login');
+  }
 }

@@ -1,20 +1,42 @@
 'use client';
 
-import React from 'react';
-import { useRouter } from 'next/navigation';
+import React, { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ForgotPasswordView from '@/components/auth/ForgotPasswordView';
 import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const table = searchParams.get('table');
+
+  const forwardParam = table ? `?table=${encodeURIComponent(table)}` : '';
+
+  const handleRequestCode = (email: string) => {
+    const tableParam = table ? `&table=${encodeURIComponent(table)}` : '';
+    router.push(`/verify-otp?email=${encodeURIComponent(email)}&type=password_reset${tableParam}`);
+  };
 
   return (
     <AuthDesktopLayout>
       <ForgotPasswordView
-        onRequestCode={() => router.push('/verify-otp')}
-        onBackToLogin={() => router.push('/login')}
+        onRequestCode={handleRequestCode}
+        onBackToLogin={() => router.push(`/login${forwardParam}`)}
       />
     </AuthDesktopLayout>
   );
 }
 
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full min-h-screen bg-black flex items-center justify-center text-white">
+          <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <ForgotPasswordContent />
+    </Suspense>
+  );
+}

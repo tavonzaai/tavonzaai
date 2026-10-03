@@ -236,10 +236,10 @@ class InternalClient:
         if tool_name == "get_menu":
             all_items: list[dict[str, Any]] = [
                 {
-                    "name": "Classic Wagyu Smash",
+                    "name": "Classic Wagyu Smash Burger",
                     "price": 26.50,
                     "category": "Mains",
-                    "dietary": ["high_protein"],
+                    "dietary": ["high_protein", "high-protein"],
                     "allergens": ["gluten", "dairy"],
                     "description": "Double American wagyu beef patties, aged cheddar, smoked bacon jam, brioche bun.",
                     "pairing": "2021 Tuscan Chianti Classico Riserva or Craft IPA",
@@ -248,7 +248,7 @@ class InternalClient:
                     "name": "Pan-Seared Line-Caught Seabass",
                     "price": 34.00,
                     "category": "Mains",
-                    "dietary": ["keto", "gluten_free", "high_protein"],
+                    "dietary": ["keto", "gluten_free", "gluten-free", "high_protein", "high-protein", "organic"],
                     "allergens": ["fish"],
                     "description": "Crispy skin sea bass, braised baby carrots, fennel crisp, herb citrus reduction.",
                     "pairing": "2022 Oaked Chardonnay or Crisp Pinot Grigio",
@@ -257,7 +257,7 @@ class InternalClient:
                     "name": "Grilled Prime Ribeye (300g)",
                     "price": 38.00,
                     "category": "Mains",
-                    "dietary": ["keto", "gluten_free", "high_protein", "halal"],
+                    "dietary": ["keto", "gluten_free", "gluten-free", "high_protein", "high-protein", "halal"],
                     "allergens": [],
                     "description": "Prime Black Angus ribeye with roasted rosemary garlic butter and red wine jus.",
                     "pairing": "2021 Tuscan Chianti Classico Riserva",
@@ -266,7 +266,7 @@ class InternalClient:
                     "name": "Wild Mushroom Truffle Risotto",
                     "price": 24.00,
                     "category": "Mains",
-                    "dietary": ["vegetarian", "gluten_free"],
+                    "dietary": ["vegetarian", "gluten_free", "gluten-free"],
                     "allergens": ["dairy"],
                     "description": "Carnaroli rice, wild forest porcini, white truffle oil, shaved pecorino.",
                     "pairing": "Light Pinot Noir",
@@ -281,7 +281,7 @@ class InternalClient:
                     "pairing": "Sparkling Prosecco Superiore",
                 },
                 {
-                    "name": "Organic Garden Caesar",
+                    "name": "Organic Garden Caesar Salad",
                     "price": 11.00,
                     "category": "Starters",
                     "dietary": ["vegetarian", "organic"],
@@ -293,7 +293,7 @@ class InternalClient:
                     "name": "Flourless Dark Chocolate Torte",
                     "price": 10.00,
                     "category": "Desserts",
-                    "dietary": ["vegetarian", "gluten_free"],
+                    "dietary": ["vegetarian", "gluten_free", "gluten-free"],
                     "allergens": ["dairy", "eggs"],
                     "description": "70% Valrhona dark chocolate cake, espresso mascarpone, raspberry coulis.",
                     "pairing": "Espresso or Vintage Port",
@@ -302,7 +302,7 @@ class InternalClient:
                     "name": "2021 Tuscan Chianti Classico Riserva",
                     "price": 14.00,
                     "category": "Wines",
-                    "dietary": ["vegan", "gluten_free"],
+                    "dietary": ["vegan", "gluten_free", "gluten-free"],
                     "allergens": ["sulfites"],
                     "description": "Full-bodied dry red with wild blackberry, dark cherry, and cedar oak notes.",
                 },
@@ -310,7 +310,7 @@ class InternalClient:
                     "name": "2022 Oaked Chardonnay",
                     "price": 12.00,
                     "category": "Wines",
-                    "dietary": ["vegan", "gluten_free"],
+                    "dietary": ["vegan", "gluten_free", "gluten-free"],
                     "allergens": ["sulfites"],
                     "description": "Creamy white wine with notes of green apple, toasted brioche, and vanilla.",
                 },
@@ -327,14 +327,22 @@ class InternalClient:
             filtered = all_items
             cat = str(args.get("category") or "").strip().lower()
             if cat and cat != "all":
-                filtered = [it for it in filtered if str(it.get("category", "")).lower() == cat]
+                filtered = [it for it in filtered if cat in str(it.get("category", "")).lower()]
 
             diet = str(args.get("dietary_preference") or "").strip().lower().replace("-", "_")
             if diet:
-                filtered = [it for it in filtered if isinstance(it.get("dietary"), list) and diet in it["dietary"]]
+                filtered = [
+                    it for it in filtered
+                    if any(diet in str(d).lower().replace("-", "_") for d in (it.get("dietary") or []))
+                ]
 
-            raw_exclude = args.get("exclude_allergens") or []
-            exclude_allergens = [str(a).lower().strip() for a in raw_exclude if isinstance(a, str)]
+            raw_exclude = args.get("exclude_allergens")
+            exclude_allergens = []
+            if isinstance(raw_exclude, list):
+                exclude_allergens = [str(a).lower().strip() for a in raw_exclude if isinstance(a, str)]
+            elif isinstance(raw_exclude, str) and raw_exclude.strip():
+                exclude_allergens = [a.strip().lower() for a in raw_exclude.split(",") if a.strip()]
+
             if exclude_allergens:
                 filtered = [
                     it for it in filtered
