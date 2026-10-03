@@ -308,6 +308,55 @@ module "ecs" {
         { name = "PORT", value = tostring(var.cashier_port) }
       ]
     }
+    worker = {
+      name             = "tavonzaai-prod-worker"
+      container_image  = "${module.ecr.repository_urls["worker"]}:latest"
+      cpu              = 256
+      memory           = 512
+      desired_count    = 1
+      environment = [
+        { name = "NODE_ENV",   value = "production" },
+        { name = "AWS_REGION", value = var.aws_region }
+      ]
+      secrets = [
+        {
+          name      = "DATABASE_URL"
+          valueFrom = "${module.secrets_manager.secret_arn}:DATABASE_URL::"
+        },
+        {
+          name      = "REDIS_URL"
+          valueFrom = "${module.secrets_manager.secret_arn}:REDIS_URL::"
+        },
+        {
+          name      = "JWT_SECRET"
+          valueFrom = "${module.secrets_manager.secret_arn}:JWT_SECRET::"
+        },
+        {
+          name      = "JWT_REFRESH_SECRET"
+          valueFrom = "${module.secrets_manager.secret_arn}:JWT_REFRESH_SECRET::"
+        },
+        {
+          name      = "AWS_ACCESS_KEY_ID"
+          valueFrom = "${module.secrets_manager.secret_arn}:AWS_ACCESS_KEY_ID::"
+        },
+        {
+          name      = "AWS_SECRET_ACCESS_KEY"
+          valueFrom = "${module.secrets_manager.secret_arn}:AWS_SECRET_ACCESS_KEY::"
+        },
+        {
+          name      = "SMTP_FROM"
+          valueFrom = "${module.secrets_manager.secret_arn}:SMTP_FROM::"
+        },
+        {
+          name      = "MAIL_FROM_ADDRESS"
+          valueFrom = "${module.secrets_manager.secret_arn}:MAIL_FROM_ADDRESS::"
+        },
+        {
+          name      = "SES_CONFIGURATION_SET"
+          valueFrom = "${module.secrets_manager.secret_arn}:SES_CONFIGURATION_SET::"
+        }
+      ]
+    }
   }
 }
 
