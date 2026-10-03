@@ -14,7 +14,10 @@ import {
   Flame,
   CheckCircle2,
   UtensilsCrossed,
+  Loader2,
 } from 'lucide-react';
+import { getAuthToken } from '@/redux/api/baseApi';
+import FormattedMessage from '@/components/chat/FormattedMessage';
 
 interface JarvisChatViewProps {
   onReserveClick?: () => void;
@@ -35,6 +38,7 @@ export default function JarvisChatView({
   const [chatLog, setChatLog] = useState<{ sender: 'user' | 'jarvis'; text: string }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +46,7 @@ export default function JarvisChatView({
     if (chatLog.length > 0) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chatLog]);
+  }, [chatLog, isLoading]);
 
   const showNav = isNavVisible && !isFocused;
 
@@ -112,18 +116,49 @@ export default function JarvisChatView({
     },
   ];
 
-  const handleSendPrompt = (text: string) => {
-    if (!text.trim()) return;
-    setActivePreset(text);
-    setChatLog((prev) => [
-      ...prev,
-      { sender: 'user', text },
-      {
-        sender: 'jarvis',
-        text: `JARVIS AI recommendation prepared for "${text}". Your dietary preferences (Keto & Organic) have been pre-synced.`,
-      },
-    ]);
+  const handleSendPrompt = async (text: string) => {
+    if (!text.trim() || isLoading) return;
+    const userMessage = text.trim();
+    setActivePreset(userMessage);
     setJarvisQuery('');
+    setChatLog((prev) => [...prev, { sender: 'user', text: userMessage }]);
+    setIsLoading(true);
+
+    try {
+      const token = getAuthToken() || 'dev-guest-token';
+      const aiBaseUrl = process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:8000';
+
+      const res = await fetch(`${aiBaseUrl}/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          session_id: 'customer_guest_chat',
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`AI error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const reply = data.reply || "I don't have an answer for that right now.";
+      setChatLog((prev) => [...prev, { sender: 'jarvis', text: reply }]);
+    } catch (err) {
+      console.warn('Live AI service call failed or unavailable:', err);
+      setChatLog((prev) => [
+        ...prev,
+        {
+          sender: 'jarvis',
+          text: `JARVIS AI recommendation prepared for "${userMessage}". Your dietary preferences have been noted. (Note: Ensure Tavonza AI service is running on port 8000 for live responses).`,
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -198,11 +233,10 @@ export default function JarvisChatView({
               <button
                 key={idx}
                 onClick={() => handleSendPrompt(presetText)}
-                className={`px-4 py-2 rounded-full text-xs font-medium font-['DM_Sans'] transition text-left border ${
-                  activePreset === presetText
+                className={`px-4 py-2 rounded-full text-xs font-medium font-['DM_Sans'] transition text-left border ${activePreset === presetText
                     ? 'bg-amber-500 text-black border-amber-500 font-semibold shadow-md shadow-amber-500/20'
                     : 'bg-neutral-900 border-neutral-700/80 text-white hover:bg-neutral-800'
-                }`}
+                  }`}
               >
                 {presetText}
               </button>
@@ -224,11 +258,10 @@ export default function JarvisChatView({
               <button
                 key={idx}
                 onClick={() => setSelectedCategory(cat.name)}
-                className={`w-20 h-24 rounded-2xl border flex flex-col items-center justify-center gap-2 shrink-0 transition ${
-                  selectedCategory === cat.name
+                className={`w-20 h-24 rounded-2xl border flex flex-col items-center justify-center gap-2 shrink-0 transition ${selectedCategory === cat.name
                     ? 'bg-yellow-400/20 border-yellow-400 text-white shadow-lg shadow-yellow-500/10'
                     : 'bg-neutral-900 border-white/10 text-neutral-300 hover:border-white/20'
-                }`}
+                  }`}
               >
                 <span className="text-2xl">{cat.icon}</span>
                 <span className="text-xs font-medium font-['Inter']">{cat.name}</span>
@@ -328,18 +361,27 @@ export default function JarvisChatView({
               {chatLog.map((msg, i) => (
                 <div
                   key={i}
-                  className={`p-3 rounded-xl text-xs max-w-[85%] ${
-                    msg.sender === 'user'
+                  className={`p-3 rounded-xl text-xs max-w-[85%] ${msg.sender === 'user'
                       ? 'bg-yellow-400/20 text-yellow-300 font-medium self-end border border-yellow-400/20'
                       : 'bg-black/60 text-neutral-200 self-start border border-white/10'
-                  }`}
+                    }`}
                 >
                   <span className="font-semibold block mb-1 text-[10px] text-neutral-400 uppercase tracking-wider">
                     {msg.sender === 'user' ? 'You' : 'JARVIS AI'}
                   </span>
-                  <p className="leading-relaxed font-['Inter']">{msg.text}</p>
+                  {msg.sender === 'user' ? (
+                    <p className="leading-relaxed font-['Inter']">{msg.text}</p>
+                  ) : (
+                    <FormattedMessage content={msg.text} />
+                  )}
                 </div>
               ))}
+              {isLoading && (
+                <div className="p-3 rounded-xl text-xs max-w-[85%] bg-black/60 text-neutral-200 self-start border border-white/10 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                  <span className="text-neutral-400 text-xs italic font-['Inter']">Jarvis is thinking...</span>
+                </div>
+              )}
               <div ref={chatEndRef} />
             </div>
           </div>
@@ -348,9 +390,8 @@ export default function JarvisChatView({
 
       {/* 6. Chat Input Bar (Floating above BottomNav, drops to screen bottom when focused/typing or scrolling down) */}
       <div
-        className={`w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto fixed left-0 right-0 px-4 pb-2 z-40 transition-all duration-300 ease-in-out ${
-          showNav ? 'bottom-[84px]' : 'bottom-3'
-        }`}
+        className={`w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto fixed left-0 right-0 px-4 pb-2 z-40 transition-all duration-300 ease-in-out ${showNav ? 'bottom-[84px]' : 'bottom-3'
+          }`}
       >
         <div className="w-full bg-neutral-900/95 border border-white/10 rounded-2xl p-3 flex items-center justify-between shadow-2xl backdrop-blur-xl">
           <input
@@ -379,10 +420,18 @@ export default function JarvisChatView({
             </button>
             <button
               type="button"
+              disabled={isLoading}
               onClick={() => handleSendPrompt(jarvisQuery || "What's your best-selling dish?")}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-amber-500 hover:bg-amber-400 flex items-center justify-center text-black font-bold shadow-md shadow-amber-500/20 transition active:scale-95"
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-black font-bold shadow-md transition active:scale-95 ${isLoading
+                  ? 'bg-neutral-700 cursor-not-allowed opacity-80'
+                  : 'bg-amber-500 hover:bg-amber-400 shadow-amber-500/20'
+                }`}
             >
-              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-black fill-black stroke-none" />
+              {isLoading ? (
+                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin text-neutral-300" />
+              ) : (
+                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-black fill-black stroke-none" />
+              )}
             </button>
           </div>
         </div>

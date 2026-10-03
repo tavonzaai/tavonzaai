@@ -160,14 +160,79 @@ class InternalClient:
         )
 
     def _mock_tool_result(self, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
-        fixtures: dict[str, Any] = {
-            "get_menu": {
-                "items": [
-                    {"name": "Wagyu Burger", "price": 18.5, "category": "Mains"},
-                    {"name": "Caesar Salad", "price": 9.0, "category": "Starters"},
-                    {"name": "Craft IPA", "price": 7.0, "category": "Drinks"},
+        if tool_name == "get_menu":
+            all_items: list[dict[str, Any]] = [
+                {
+                    "name": "Classic Wagyu Smash Burger",
+                    "price": 18.5,
+                    "category": "Burgers",
+                    "dietary": ["high-protein"],
+                    "allergens": ["gluten", "dairy"],
+                    "description": "Double beef patty, aged cheddar, brioche bun.",
+                },
+                {
+                    "name": "Pan-Seared Line-Caught Seabass",
+                    "price": 28.0,
+                    "category": "Mains",
+                    "dietary": ["keto", "gluten-free", "high-protein", "organic"],
+                    "allergens": ["fish"],
+                    "description": "Crispy skin sea bass, braised carrots, herb reduction.",
+                },
+                {
+                    "name": "Caesar Salad",
+                    "price": 9.0,
+                    "category": "Starters",
+                    "dietary": ["vegetarian"],
+                    "allergens": ["dairy"],
+                    "description": "Romaine lettuce, parmesan, garlic croutons.",
+                },
+                {
+                    "name": "Avocado Green Salad Bowl",
+                    "price": 14.0,
+                    "category": "Starters",
+                    "dietary": ["vegan", "gluten-free", "organic", "keto"],
+                    "allergens": [],
+                    "description": "Fresh avocado, mixed baby greens, citrus vinaigrette.",
+                },
+                {
+                    "name": "Craft IPA",
+                    "price": 7.0,
+                    "category": "Drinks",
+                    "dietary": ["vegan"],
+                    "allergens": ["gluten"],
+                    "description": "Locally brewed citrus hoppy IPA.",
+                },
+            ]
+
+            category = str(args.get("category") or "").strip().lower()
+            diet = str(args.get("dietary_preference") or "").strip().lower()
+            exclude_raw = str(args.get("exclude_allergens") or "").strip().lower()
+            exclude_allergens = [a.strip() for a in exclude_raw.split(",") if a.strip()]
+            max_price = args.get("max_price")
+
+            filtered: list[dict[str, Any]] = all_items
+            if category:
+                filtered = [i for i in filtered if category in str(i.get("category", "")).lower()]
+            if diet:
+                filtered = [
+                    i for i in filtered
+                    if any(diet in str(d).lower() for d in (i.get("dietary") or []))
                 ]
-            },
+            if exclude_allergens:
+                filtered = [
+                    i for i in filtered
+                    if not any(al in [str(a).lower() for a in (i.get("allergens") or [])] for al in exclude_allergens)
+                ]
+            if max_price is not None:
+                try:
+                    p = float(max_price)
+                    filtered = [i for i in filtered if float(i.get("price", 0.0)) <= p]
+                except (ValueError, TypeError):
+                    pass
+
+            return {"ok": True, "data": {"items": filtered if filtered else []}}
+
+        fixtures: dict[str, Any] = {
             "get_table_status": {"table_id": args.get("table_id"), "status": "OCCUPIED"},
             "get_order_status": {"order_id": args.get("order_id"), "status": "PREPARING"},
             "get_kitchen_queue": {
