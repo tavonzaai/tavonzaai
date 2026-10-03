@@ -111,7 +111,8 @@ data "aws_iam_policy_document" "backend_ses" {
     ]
     resources = var.ses_domain_identity_arn != "" ? [
       var.ses_domain_identity_arn,
-      "${var.ses_domain_identity_arn}/*"
+      "${var.ses_domain_identity_arn}/*",
+      "arn:aws:ses:*:*:configuration-set/*"
     ] : ["*"]
   }
 }
