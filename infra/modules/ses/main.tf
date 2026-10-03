@@ -105,10 +105,15 @@ data "aws_iam_policy_document" "ses_send_email" {
       "ses:SendEmail",
       "ses:SendRawEmail"
     ]
-    resources = [
-      aws_ses_domain_identity.domain.arn,
-      "${aws_ses_domain_identity.domain.arn}/*"
-    ]
+    resources = compact(concat(
+      [
+        aws_ses_domain_identity.domain.arn,
+        "${aws_ses_domain_identity.domain.arn}/*"
+      ],
+      var.enable_configuration_set ? [
+        aws_ses_configuration_set.this[0].arn
+      ] : []
+    ))
   }
 }
 
