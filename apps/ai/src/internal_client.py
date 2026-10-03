@@ -204,7 +204,7 @@ class InternalClient:
                 resource_scope={"role": "KITCHEN"},
             )
 
-        if any(k in token_lower for k in ("admin", "manager", "owner")):
+        if any(k in token_lower for k in ("admin", "owner", "super", "system", "internal")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="manager-admin",
@@ -216,16 +216,17 @@ class InternalClient:
                 resource_scope={"role": "ADMIN"},
             )
 
-        # 3. Default fallback for internal dev agent or unspecified tokens
+        # 3. Default fallback: Enforce least privilege for floor staff / waiters
+        # (Does NOT grant inventory.read or reports.read)
         return ActorContext(
-            actor_type="AI_AGENT",
-            acting_user_id="dev-user-1",
+            actor_type="USER",
+            acting_user_id="waiter-staff",
             ai_agent_id=settings.ai_agent_default_id,
             organization_id="org_dev",
             restaurant_id="rest_dev",
             branch_id="branch_dev",
-            permissions=["orders.read", "tables.read", "menu.read", "items.write", "reports.read", "payments.read", "payments.write", "inventory.read"],
-            resource_scope={"tables": ["T1", "T2", "T5"]},
+            permissions=["menu.read", "tables.read", "orders.read", "payments.read"],
+            resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
         )
 
     def _mock_tool_result(self, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
