@@ -60,6 +60,13 @@ cashier_health_check_path = "/"
 admin_port              = 3043
 admin_health_check_path = "/"
 
+# Health Check Timings (AWS ALB enforces maximum interval of 300 seconds / 5 minutes)
+health_check_interval                 = 300
+health_check_timeout                  = 5
+health_check_healthy_threshold        = 2
+health_check_unhealthy_threshold      = 3
+ecs_health_check_grace_period_seconds = 600
+
 # EC2 Compute Settings (Rightsized for Cost Optimization)
 backend_instance_type     = "t3.small"
 frontend_instance_type    = "t3.small"
@@ -102,15 +109,15 @@ elasticache_snapshot_retention_limit = 1
 
 # Elastic Container Registry (ECR) Repositories
 ecr_repository_names = [
-  "backend",        # NestJS API (api.tavonza.com)
-  "frontend",       # Customer Next.js Frontend (tavonza.com)
-  "ai",             # Python FastAPI AI service (ai.tavonza.com)
-  "kitchen",        # Kitchen Next.js Frontend (kitchen.tavonza.com)
-  "cashier",        # Cashier Next.js Frontend (cashier.tavonza.com)
-  "admin-dashboard",# Admin React Dashboard (admin.tavonza.com)
-  "branch-manager", # Branch Manager Frontend (branch-manager.tavonza.com)
-  "waiter",         # Waiter Next.js Frontend (waiter.tavonza.com)
-  "worker"          # Background FIFO Queue Worker
+  "backend",         # NestJS API (api.tavonza.com)
+  "frontend",        # Customer Next.js Frontend (tavonza.com)
+  "ai",              # Python FastAPI AI service (ai.tavonza.com)
+  "kitchen",         # Kitchen Next.js Frontend (kitchen.tavonza.com)
+  "cashier",         # Cashier Next.js Frontend (cashier.tavonza.com)
+  "admin-dashboard", # Admin React Dashboard (admin.tavonza.com)
+  "branch-manager",  # Branch Manager Frontend (branch-manager.tavonza.com)
+  "waiter",          # Waiter Next.js Frontend (waiter.tavonza.com)
+  "worker"           # Background FIFO Queue Worker
 ]
 
 # ALB Ingress Access (Default: Open to public Internet for tavonza.com)
