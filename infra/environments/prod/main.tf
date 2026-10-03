@@ -110,6 +110,8 @@ module "secrets_manager" {
     AWS_ACCESS_KEY_ID     = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
     AWS_SECRET_ACCESS_KEY = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_raw_secret_key : ""
     COMPANY_NAME          = "tavonzaai"
+    S3_BUCKET_NAME        = var.s3_bucket_name
+    AWS_S3_BUCKET         = var.s3_bucket_name
   }
 }
 
@@ -216,7 +218,9 @@ module "ecs" {
         { name = "NODE_ENV", value = "production" },
         { name = "PORT", value = tostring(var.backend_port) },
         { name = "API_PORT", value = tostring(var.backend_port) },
-        { name = "AWS_REGION", value = var.aws_region }
+        { name = "AWS_REGION", value = var.aws_region },
+        { name = "S3_BUCKET_NAME", value = var.s3_bucket_name },
+        { name = "AWS_S3_BUCKET", value = var.s3_bucket_name }
       ]
       secrets = [
         {
