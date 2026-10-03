@@ -93,18 +93,23 @@ module "secrets_manager" {
   secret_name = local.secret_name
   description = "Application secrets for ${local.name_prefix}"
   initial_secret_keys = {
-    DATABASE_URL         = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
-    DATABASE_PASSWORD    = var.rds_db_password
-    JWT_SECRET           = ""
-    REDIS_URL            = "redis://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
-    THIRD_PARTY_API_KEYS = ""
-    SMTP_HOST            = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.eu-west-2.amazonaws.com"
-    SMTP_PORT            = "587"
-    SMTP_USER            = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
-    SMTP_PASS            = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_password_v4 : ""
-    SMTP_FROM            = "noreply@${var.domain_name}"
-    SMTP_SECURE          = "false"
-    COMPANY_NAME         = "tavonzaai"
+    DATABASE_URL              = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
+    DATABASE_PASSWORD         = var.rds_db_password
+    JWT_SECRET                = ""
+    JWT_REFRESH_SECRET        = ""
+    REDIS_URL                 = "rediss://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
+    THIRD_PARTY_API_KEYS      = ""
+    SMTP_HOST                 = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.eu-west-2.amazonaws.com"
+    SMTP_PORT                 = "587"
+    SMTP_USER                 = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
+    SMTP_PASS                 = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_password_v4 : ""
+    SMTP_FROM                 = "noreply@${var.domain_name}"
+    SMTP_SECURE               = "false"
+    MAIL_FROM_ADDRESS         = "noreply@${var.domain_name}"
+    SES_CONFIGURATION_SET     = var.enable_ses && length(module.ses) > 0 ? module.ses[0].configuration_set_name : ""
+    AWS_ACCESS_KEY_ID         = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
+    AWS_SECRET_ACCESS_KEY     = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_raw_secret_key : ""
+    COMPANY_NAME              = "tavonzaai"
   }
 }
 
@@ -130,7 +135,7 @@ module "iam" {
   enable_ec2_admin_secret_access = true
   ec2_admin_secret_arn           = module.ec2_admin_secret.secret_arn
   ecr_repository_arns            = module.ecr.repository_arns_list
-  enable_ses_access              = false # Backend uses SMTP credentials managed in Secrets Manager, redundant IAM policy disabled
+  enable_ses_access              = true # ECS task role must have SES SendEmail permission for SDK-based dispatch
   ses_domain_identity_arn        = var.enable_ses && length(module.ses) > 0 ? module.ses[0].domain_identity_arn : ""
   enable_github_actions_role     = var.enable_github_actions_ecr_role
   github_repository              = var.github_repository
@@ -207,9 +212,10 @@ module "ecs" {
       desired_count    = 1
       target_group_arn = module.alb.backend_target_group_arn
       environment = [
-        { name = "NODE_ENV", value = "production" },
-        { name = "PORT", value = tostring(var.backend_port) },
-        { name = "API_PORT", value = tostring(var.backend_port) }
+        { name = "NODE_ENV",    value = "production" },
+        { name = "PORT",        value = tostring(var.backend_port) },
+        { name = "API_PORT",    value = tostring(var.backend_port) },
+        { name = "AWS_REGION",  value = var.aws_region }
       ]
       secrets = [
         {
@@ -223,6 +229,30 @@ module "ecs" {
         {
           name      = "JWT_SECRET"
           valueFrom = "${module.secrets_manager.secret_arn}:JWT_SECRET::"
+        },
+        {
+          name      = "JWT_REFRESH_SECRET"
+          valueFrom = "${module.secrets_manager.secret_arn}:JWT_REFRESH_SECRET::"
+        },
+        {
+          name      = "AWS_ACCESS_KEY_ID"
+          valueFrom = "${module.secrets_manager.secret_arn}:AWS_ACCESS_KEY_ID::"
+        },
+        {
+          name      = "AWS_SECRET_ACCESS_KEY"
+          valueFrom = "${module.secrets_manager.secret_arn}:AWS_SECRET_ACCESS_KEY::"
+        },
+        {
+          name      = "SMTP_FROM"
+          valueFrom = "${module.secrets_manager.secret_arn}:SMTP_FROM::"
+        },
+        {
+          name      = "MAIL_FROM_ADDRESS"
+          valueFrom = "${module.secrets_manager.secret_arn}:MAIL_FROM_ADDRESS::"
+        },
+        {
+          name      = "SES_CONFIGURATION_SET"
+          valueFrom = "${module.secrets_manager.secret_arn}:SES_CONFIGURATION_SET::"
         }
       ]
     }

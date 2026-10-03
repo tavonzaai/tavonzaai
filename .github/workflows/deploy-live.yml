@@ -17,6 +17,7 @@ on:
         options:
           - all
           - backend
+          - worker
           - customer
           - admin
           - kitchen
@@ -53,8 +54,10 @@ jobs:
           filters: |
             backend:
               - 'apps/api/**'
+              - 'apps/worker/**'
               - 'packages/**'
               - 'docker/api.Dockerfile'
+              - 'docker/worker.Dockerfile'
             customer:
               - 'frontend/customer/**'
               - 'packages/**'
@@ -150,7 +153,7 @@ jobs:
     if: |
       always() &&
       ((github.event_name == 'push' && needs.detect-changes.outputs.backend == 'true') ||
-      (github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'backend')))
+      (github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'backend' || inputs.service == 'worker')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,5 +1,9 @@
-import { SESv2Client, SendEmailCommand, SendEmailCommandInput } from '@aws-sdk/client-sesv2';
-import { EmailJobPayload } from './types.js';
+import {
+  SESv2Client,
+  SendEmailCommand,
+  SendEmailCommandInput,
+} from "@aws-sdk/client-sesv2";
+import { EmailJobPayload } from "./types.js";
 
 export interface SESDispatcherConfig {
   region?: string;
@@ -14,22 +18,31 @@ export class SESEmailDispatcher {
   private isDryRun: boolean;
 
   constructor(config?: SESDispatcherConfig) {
-    const region = config?.region || process.env.AWS_REGION || 'eu-west-2';
+    const region = config?.region || process.env.AWS_REGION || "eu-west-2";
     this.defaultFrom =
       config?.defaultFrom ||
       process.env.SMTP_FROM ||
       process.env.MAIL_FROM_ADDRESS ||
-      'noreply@tavonza.com';
+      "noreply@tavonza.com";
     this.configurationSetName =
       config?.configurationSetName || process.env.SES_CONFIGURATION_SET;
 
     // Detect if we should dry-run (e.g. local dev without real AWS credentials)
-    const hasStaticCreds = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
-    const isLocalDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+    const hasStaticCreds = !!(
+      process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+    );
+    const isLocalDev =
+      process.env.NODE_ENV === "development" || !process.env.NODE_ENV;
 
-    if (isLocalDev && !hasStaticCreds && !process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI) {
+    if (
+      isLocalDev &&
+      !hasStaticCreds &&
+      !process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
+    ) {
       this.isDryRun = true;
-      console.log('ℹ️ [SESEmailDispatcher] No AWS credentials detected in development. Running in DRY-RUN mode (mock).');
+      console.log(
+        "ℹ️ [SESEmailDispatcher] No AWS credentials detected in development. Running in DRY-RUN mode (mock).",
+      );
     } else {
       this.isDryRun = false;
       this.client = new SESv2Client({
@@ -48,7 +61,9 @@ export class SESEmailDispatcher {
   /**
    * Dispatches an email job via AWS SES v2.
    */
-  async send(payload: EmailJobPayload): Promise<{ success: boolean; messageId?: string }> {
+  async send(
+    payload: EmailJobPayload,
+  ): Promise<{ success: boolean; messageId?: string }> {
     const recipients = Array.isArray(payload.to) ? payload.to : [payload.to];
     const fromAddress = payload.from || this.defaultFrom;
 
@@ -73,17 +88,17 @@ export class SESEmailDispatcher {
         Simple: {
           Subject: {
             Data: payload.subject,
-            Charset: 'UTF-8',
+            Charset: "UTF-8",
           },
           Body: {
             Html: {
               Data: payload.html,
-              Charset: 'UTF-8',
+              Charset: "UTF-8",
             },
             ...(payload.text && {
               Text: {
                 Data: payload.text,
-                Charset: 'UTF-8',
+                Charset: "UTF-8",
               },
             }),
           },
@@ -97,16 +112,20 @@ export class SESEmailDispatcher {
     }
 
     if (payload.tags) {
-      commandInput.EmailTags = Object.entries(payload.tags).map(([Name, Value]) => ({
-        Name,
-        Value,
-      }));
+      commandInput.EmailTags = Object.entries(payload.tags).map(
+        ([Name, Value]) => ({
+          Name,
+          Value,
+        }),
+      );
     }
 
     const command = new SendEmailCommand(commandInput);
     const response = await this.client.send(command);
 
-    console.log(`[SESEmailDispatcher] Email sent to ${recipients.join(', ')} (Message ID: ${response.MessageId})`);
+    console.log(
+      `[SESEmailDispatcher] Email sent to ${recipients.join(", ")} (Message ID: ${response.MessageId})`,
+    );
 
     return {
       success: true,
