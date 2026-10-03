@@ -1,0 +1,316 @@
+name: Deploy (Prod Environment - ECS Fargate)
+
+# Automatically fires ONLY when code is merged / pushed to the 'prod' branch.
+# Deploys containerized services to Amazon ECS (Fargate Spot) in the 'prod' environment (prod-*.tavonza.com).
+
+on:
+  push:
+    branches:
+      - prod
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - backend
+          - worker
+          - customer
+          - admin
+          - kitchen
+          - cashier
+          - branch-manager
+          - waiter
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2
+  ENVIRONMENT: prod
+  ECS_CLUSTER: tavonzaai-prod-cluster
+
+jobs:
+  # ─── 1. Security Scan Gate ──────────────────────────────────────────────────
+  security-scan:
+    name: Security & Root Scan
+    uses: ./.github/workflows/security-scan.yml
+
+  # ─── 2. Detect Changes ──────────────────────────────────────────────────────
+  detect-changes:
+    name: Detect Changed Microservices
+    needs: [security-scan]
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      customer: ${{ steps.filter.outputs.customer }}
+      admin: ${{ steps.filter.outputs.admin }}
+      kitchen: ${{ steps.filter.outputs.kitchen }}
+      cashier: ${{ steps.filter.outputs.cashier }}
+      branch_manager: ${{ steps.filter.outputs.branch_manager }}
+      waiter: ${{ steps.filter.outputs.waiter }}
+      any_frontend: ${{ steps.check-frontend.outputs.any }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Path Filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'apps/api/**'
+              - 'apps/worker/**'
+              - 'packages/**'
+              - 'docker/api.Dockerfile'
+              - 'docker/worker.Dockerfile'
+            customer:
+              - 'frontend/customer/**'
+              - 'packages/**'
+              - 'docker/frontend*.Dockerfile'
+            admin:
+              - 'frontend/admin/**'
+              - 'packages/**'
+              - 'docker/frontend*.Dockerfile'
+            kitchen:
+              - 'frontend/kitchen/**'
+              - 'packages/**'
+              - 'docker/frontend*.Dockerfile'
+            cashier:
+              - 'frontend/cashier/**'
+              - 'packages/**'
+              - 'docker/frontend*.Dockerfile'
+            branch_manager:
+              - 'frontend/branch-manager/**'
+              - 'packages/**'
+              - 'docker/frontend*.Dockerfile'
+            waiter:
+              - 'frontend/waiter/**'
+              - 'packages/**'
+              - 'docker/frontend*.Dockerfile'
+
+      - name: Check any frontend changed
+        id: check-frontend
+        run: |
+          if [ "${{ steps.filter.outputs.customer }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.admin }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.kitchen }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.cashier }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.branch_manager }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.waiter }}" = "true" ]; then
+            echo "any=true" >> $GITHUB_OUTPUT
+          else
+            echo "any=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ─── 3. Build & Deploy Backend API to ECS ───────────────────────────────────
+  deploy-backend:
+    name: Deploy Backend API (prod-api.tavonza.com)
+    needs: [detect-changes]
+    if: |
+      (github.event_name == 'push' && (needs.detect-changes.outputs.backend == 'true')) ||
+      (github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'backend'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/api.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-backend:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update ECS Service (Rolling Deployment)
+        run: |
+          echo "Triggering zero-downtime rolling deployment on ECS for tavonzaai-prod-backend..."
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service tavonzaai-prod-backend \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          echo "ECS service update triggered successfully!"
+
+  # ─── 4. Build & Deploy Worker to ECS ───────────────────────────────────────
+  deploy-worker:
+    name: Deploy Worker (email/outbox/notifications)
+    needs: [detect-changes]
+    if: |
+      (github.event_name == 'push' && needs.detect-changes.outputs.backend == 'true') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.service == 'all' || inputs.service == 'worker'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Worker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/worker.Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-worker:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-worker:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update ECS Service (Rolling Deployment)
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service tavonzaai-prod-worker \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Worker deployed!"
+
+  # ─── 5. Build & Deploy Frontend Applications to ECS ─────────────────────────
+  deploy-frontend-apps:
+    name: Deploy Frontend (${{ matrix.app }})
+    needs: [detect-changes]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: customer
+            ecr_name: frontend
+            ecs_service: tavonzaai-prod-customer
+            port: 3000
+            subdomain: "prod.tavonza.com"
+          - app: admin
+            ecr_name: admin-dashboard
+            ecs_service: tavonzaai-prod-admin
+            port: 3043
+            subdomain: "prod-admin.tavonza.com"
+          - app: kitchen
+            ecr_name: kitchen
+            ecs_service: tavonzaai-prod-kitchen
+            port: 3105
+            subdomain: "prod-kitchen.tavonza.com"
+          - app: cashier
+            ecr_name: cashier
+            ecs_service: tavonzaai-prod-cashier
+            port: 3104
+            subdomain: "prod-cashier.tavonza.com"
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.any_frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if this frontend app should be deployed
+        id: check
+        env:
+          APP: ${{ matrix.app }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SERVICE: ${{ inputs.service }}
+          CUSTOMER_CHANGED: ${{ needs.detect-changes.outputs.customer }}
+          ADMIN_CHANGED: ${{ needs.detect-changes.outputs.admin }}
+          KITCHEN_CHANGED: ${{ needs.detect-changes.outputs.kitchen }}
+          CASHIER_CHANGED: ${{ needs.detect-changes.outputs.cashier }}
+          BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.branch_manager }}
+          WAITER_CHANGED: ${{ needs.detect-changes.outputs.waiter }}
+        run: |
+          SHOULD_DEPLOY="false"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ]; then
+              SHOULD_DEPLOY="true"
+            fi
+          else
+            case "$APP" in
+              customer) [ "$CUSTOMER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              admin) [ "$ADMIN_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              kitchen) [ "$KITCHEN_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              cashier) [ "$CASHIER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              branch-manager) [ "$BRANCH_MANAGER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              waiter) [ "$WAITER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+            esac
+          fi
+          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+          echo "App: $APP | Should Deploy: $SHOULD_DEPLOY"
+
+      - name: Checkout Code
+        if: steps.check.outputs.should_deploy == 'true'
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        if: steps.check.outputs.should_deploy == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: steps.check.outputs.should_deploy == 'true'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.should_deploy == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Docker Image
+        if: steps.check.outputs.should_deploy == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/frontend-app.Dockerfile
+          build-args: |
+            APP_NAME=${{ matrix.app }}
+            APP_PORT=${{ matrix.port }}
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-${{ matrix.ecr_name }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/tavonzaai-prod-${{ matrix.ecr_name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update ECS Service (Rolling Deployment)
+        if: steps.check.outputs.should_deploy == 'true'
+        run: |
+          echo "Triggering zero-downtime rolling deployment on ECS for ${{ matrix.ecs_service }}..."
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ matrix.ecs_service }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          echo "${{ matrix.app }} deployed on ECS (${{ matrix.subdomain }})!"

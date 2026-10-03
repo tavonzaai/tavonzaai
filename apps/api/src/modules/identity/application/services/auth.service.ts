@@ -22,6 +22,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { RoleLabel, ScopeType, resolvePermissions } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
+import { MailService } from '../../../notifications/application/mail.service';
 import type { User } from '../../domain/entities/user.entity';
 import type {
   RegisterDto,
@@ -40,6 +41,7 @@ export class AuthService {
   constructor(
     private readonly userRepo: DrizzleUserRepository,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
   ) {}
 
   // ── Register ───────────────────────────────────────────────────────────
@@ -68,12 +70,13 @@ export class AuthService {
       scopes: [{ type: ScopeType.SESSION }],
     });
 
-    // Send OTP for email verification (logged to console until SES/SMTP is configured)
-    await this.generateAndSendOtp(user.id, 'email_verification');
+    // Send OTP for email verification via MailService / SES
+    const devOtp = await this.generateAndSendOtp(user, 'email_verification');
 
     return {
       message: 'Account created successfully. Please verify your email with the OTP code sent to your email.',
       email: user.email,
+      devOtp: process.env.NODE_ENV !== 'production' ? devOtp : undefined,
     };
   }
 
@@ -159,12 +162,13 @@ export class AuthService {
 
   // ── Forgot Password ────────────────────────────────────────────────────
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
+  async forgotPassword(dto: ForgotPasswordDto): Promise<string | undefined> {
     const user = await this.userRepo.findByEmailOrPhone(dto.email);
-    // Always return success to prevent enumeration
-    if (!user) return;
+    // Always return to prevent enumeration
+    if (!user) return undefined;
 
-    await this.generateAndSendOtp(user.id, 'password_reset');
+    const devOtp = await this.generateAndSendOtp(user, 'password_reset');
+    return process.env.NODE_ENV !== 'production' ? devOtp : undefined;
   }
 
   // ── Reset Password ─────────────────────────────────────────────────────
@@ -200,11 +204,12 @@ export class AuthService {
   async resendOtp(
     identifier: string,
     type: 'email_verification' | 'phone_verification' | 'password_reset',
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     const user = await this.userRepo.findByEmailOrPhone(identifier);
-    if (!user) return; // Prevent enumeration
+    if (!user) return undefined; // Prevent enumeration
 
-    await this.generateAndSendOtp(user.id, type);
+    const devOtp = await this.generateAndSendOtp(user, type);
+    return process.env.NODE_ENV !== 'production' ? devOtp : undefined;
   }
 
   // ── Internal Helpers ───────────────────────────────────────────────────
@@ -242,7 +247,7 @@ export class AuthService {
   }
 
   private async generateAndSendOtp(
-    userId: string,
+    user: User,
     type: 'email_verification' | 'phone_verification' | 'password_reset',
   ): Promise<string> {
     // Generate 5-digit code (matches Figma Verify screen)
@@ -250,12 +255,13 @@ export class AuthService {
     const codeHash = await argon2.hash(code);
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    await this.userRepo.createOtp({ userId, code: codeHash, type, expiresAt });
+    await this.userRepo.createOtp({ userId: user.id, code: codeHash, type, expiresAt });
 
-    // TODO: Wire up email service to send the OTP code
-    // In development, log to console
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DEV OTP] userId=${userId} type=${type} code=${code}`);
+    // Send corresponding email via MailService (dispatches to SES / Redis FIFO Queue)
+    if (type === 'email_verification') {
+      await this.mailService.sendVerificationCode(user.email, user.firstName, code);
+    } else if (type === 'password_reset') {
+      await this.mailService.sendPasswordResetCode(user.email, user.firstName, code);
     }
 
     return code;

@@ -16,7 +16,7 @@ resource "aws_lb" "this" {
 
 # 1. Backend API Target Group
 resource "aws_lb_target_group" "backend" {
-  name        = "${var.project_name}-${var.environment}-be-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}be-tg"
   port        = var.backend_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -24,14 +24,18 @@ resource "aws_lb_target_group" "backend" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.backend_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(var.tags, {
@@ -40,7 +44,7 @@ resource "aws_lb_target_group" "backend" {
 }
 
 resource "aws_lb_target_group_attachment" "backend" {
-  count            = var.target_type == "instance" && var.backend_instance_id != null ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.backend.arn
   target_id        = var.backend_instance_id
   port             = var.backend_port
@@ -48,7 +52,7 @@ resource "aws_lb_target_group_attachment" "backend" {
 
 # 2. AI Target Group
 resource "aws_lb_target_group" "ai" {
-  name        = "${var.project_name}-${var.environment}-ai-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}ai-tg"
   port        = var.ai_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -56,14 +60,18 @@ resource "aws_lb_target_group" "ai" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.ai_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(var.tags, {
@@ -72,7 +80,7 @@ resource "aws_lb_target_group" "ai" {
 }
 
 resource "aws_lb_target_group_attachment" "ai" {
-  count            = var.target_type == "instance" && (var.ai_instance_id != null || var.backend_instance_id != null) ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.ai.arn
   target_id        = coalesce(var.ai_instance_id, var.backend_instance_id)
   port             = var.ai_port
@@ -80,7 +88,7 @@ resource "aws_lb_target_group_attachment" "ai" {
 
 # 3. Next.js Customer Frontend Target Group
 resource "aws_lb_target_group" "nextjs" {
-  name        = "${var.project_name}-${var.environment}-next-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}next-tg"
   port        = var.nextjs_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -88,14 +96,18 @@ resource "aws_lb_target_group" "nextjs" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.nextjs_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(var.tags, {
@@ -104,7 +116,7 @@ resource "aws_lb_target_group" "nextjs" {
 }
 
 resource "aws_lb_target_group_attachment" "nextjs" {
-  count            = var.target_type == "instance" && var.frontend_instance_id != null ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.nextjs.arn
   target_id        = var.frontend_instance_id
   port             = var.nextjs_port
@@ -112,7 +124,7 @@ resource "aws_lb_target_group_attachment" "nextjs" {
 
 # 4. Kitchen Frontend Target Group
 resource "aws_lb_target_group" "kitchen" {
-  name        = "${var.project_name}-${var.environment}-kit-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}kit-tg"
   port        = var.kitchen_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -120,14 +132,18 @@ resource "aws_lb_target_group" "kitchen" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.kitchen_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(var.tags, {
@@ -136,7 +152,7 @@ resource "aws_lb_target_group" "kitchen" {
 }
 
 resource "aws_lb_target_group_attachment" "kitchen" {
-  count            = var.target_type == "instance" && (var.kitchen_instance_id != null || var.frontend_instance_id != null) ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.kitchen.arn
   target_id        = coalesce(var.kitchen_instance_id, var.frontend_instance_id)
   port             = var.kitchen_port
@@ -144,7 +160,7 @@ resource "aws_lb_target_group_attachment" "kitchen" {
 
 # 5. Cashier Frontend Target Group
 resource "aws_lb_target_group" "cashier" {
-  name        = "${var.project_name}-${var.environment}-cash-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}cash-tg"
   port        = var.cashier_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -152,14 +168,18 @@ resource "aws_lb_target_group" "cashier" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.cashier_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(var.tags, {
@@ -168,7 +188,7 @@ resource "aws_lb_target_group" "cashier" {
 }
 
 resource "aws_lb_target_group_attachment" "cashier" {
-  count            = var.target_type == "instance" && (var.cashier_instance_id != null || var.frontend_instance_id != null) ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.cashier.arn
   target_id        = coalesce(var.cashier_instance_id, var.frontend_instance_id)
   port             = var.cashier_port
@@ -176,7 +196,7 @@ resource "aws_lb_target_group_attachment" "cashier" {
 
 # 6. React Admin Dashboard Target Group
 resource "aws_lb_target_group" "admin" {
-  name        = "${var.project_name}-${var.environment}-admin-tg"
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}admin-tg"
   port        = var.admin_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -184,14 +204,18 @@ resource "aws_lb_target_group" "admin" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.admin_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(var.tags, {
@@ -200,7 +224,7 @@ resource "aws_lb_target_group" "admin" {
 }
 
 resource "aws_lb_target_group_attachment" "admin" {
-  count            = var.target_type == "instance" && var.frontend_instance_id != null ? 1 : 0
+  count            = var.target_type == "instance" ? 1 : 0
   target_group_arn = aws_lb_target_group.admin.arn
   target_id        = var.frontend_instance_id
   port             = var.admin_port
@@ -362,7 +386,7 @@ resource "aws_lb_listener_rule" "admin" {
   tags = var.tags
 }
 
-# Rule 6: Customer Root Domain -> Next.js Target Group (example.com, www.example.com)
+# Rule 6: Customer Domain -> Next.js Target Group (root domain/www, or dedicated subdomain e.g. prod.example.com)
 resource "aws_lb_listener_rule" "customer" {
   listener_arn = local.active_listener_arn
   priority     = 40
@@ -374,7 +398,9 @@ resource "aws_lb_listener_rule" "customer" {
 
   condition {
     host_header {
-      values = [
+      values = var.customer_subdomain != "" ? [
+        "${var.customer_subdomain}.${var.domain_name}"
+        ] : [
         var.domain_name,
         "www.${var.domain_name}"
       ]

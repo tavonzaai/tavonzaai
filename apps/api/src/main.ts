@@ -1,59 +1,57 @@
 import { NestFactory } from "@nestjs/core";
-import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { ValidationPipe } from "@nestjs/common";
+import { getCorsConfig, setupSwagger } from "@tavonza/config";
+import { AppLogger } from "@tavonza/observability";
 import { AppModule } from "./app.module";
+import { HttpLoggerInterceptor } from "./common/interceptors/http-logger.interceptor";
+import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const logger = new AppLogger('Bootstrap');
 
-  // ── Global Pipes ─────────────────────────────────────────────────────────
+  const app = await NestFactory.create(AppModule, {
+    // Disable NestJS's default logger — we use our own structured one
+    logger: false,
+  });
+
+  // ── Global Exception Filter ────────────────────────────────────────────────
+  // Must be registered before interceptors so it catches everything
+  app.useGlobalFilters(new AllExceptionsFilter());
+
+  // ── Global HTTP Logger ─────────────────────────────────────────────────────
+  // Logs every request: method, path, status, duration, IP
+  app.useGlobalInterceptors(new HttpLoggerInterceptor());
+
+  // ── CORS Configuration ─────────────────────────────────────────────────────
+  app.enableCors(getCorsConfig());
+
+  // ── Global Pipes ───────────────────────────────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,       // strip unknown props
+      whitelist: true,
       forbidNonWhitelisted: true,
-      transform: true,       // auto-cast types (e.g. string → number)
+      transform: true,
     }),
   );
 
-  // ── Swagger / OpenAPI ────────────────────────────────────────────────────
-  const config = new DocumentBuilder()
-    .setTitle("Tavonza AI API")
-    .setDescription("Interactive API documentation for the Tavonza AI platform")
-    .setVersion("0.1.0")
-    .addBearerAuth(
-      { type: "http", scheme: "bearer", bearerFormat: "JWT" },
-      "access-token",
-    )
-    // ── Tag Groups (prefix = "Actor | Domain") ────────────────────────────
-    .addTag("Customer | Auth", "Account registration, login, OTP verification, and password reset for customers")
-    .addTag("Customer | Sessions", "Table QR scanning, guest joining, and order modes")
-    .addTag("Customer | Menus", "Menu categories, items, and add-ons")
-    .addTag("Customer | Orders", "Cart management, checkout, and order tracking")
-    .addTag("Customer | Payments", "Payment methods, checkout, and receipts")
-    .addTag("Customer | Feedback", "Customer ratings, tips, and reviews")
-    .addTag("Customer | Alerts", "Send alerts to your waiter (call_waiter, request_bill, need_help, custom)")
-    .addTag("Waiter | Tables", "View and manage table assignments for the waiter's shift")
-    .addTag("Waiter | Orders", "Accept, reject, serve, and create orders at assigned tables")
-    .addTag("Waiter | Alerts", "View, acknowledge, and resolve customer alerts")
-    // Future groups (uncomment as implemented):
-    // .addTag("Kitchen | Tickets", "Kitchen ticket management and preparation workflow")
-    // .addTag("Cashier | Payments","Payment processing and session closure")
-    // .addTag("Manager | Branch",  "Branch, menu, staff, and reporting management")
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("docs", app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-    },
-    customSiteTitle: "Tavonza AI – API Docs",
-  });
-  // ────────────────────────────────────────────────────────────────────────
+  // ── Swagger / OpenAPI ──────────────────────────────────────────────────────
+  setupSwagger(app);
 
   const port = process.env.API_PORT || process.env.PORT || 3000;
+  const env  = process.env.NODE_ENV || 'development';
+
   await app.listen(port);
-  console.log(`API server listening on port ${port}`);
-  console.log(`Swagger UI available at http://localhost:${port}/docs`);
+
+  logger.info(`API server started`, {
+    port,
+    env,
+    swagger: `http://localhost:${port}/docs`,
+    pid: process.pid,
+  });
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  const logger = new AppLogger('Bootstrap');
+  logger.error('Fatal error during startup', { error: err?.message, stack: err?.stack });
+  process.exit(1);
+});

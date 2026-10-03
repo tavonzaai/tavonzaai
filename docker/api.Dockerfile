@@ -3,6 +3,7 @@ RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
 WORKDIR /app
 
 FROM base AS builder
+RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json tsconfig.json ./
@@ -10,7 +11,7 @@ COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @tavonza/api build
+RUN npx turbo run build --filter=@tavonza/api...
 
 FROM node:20-alpine AS runner
 WORKDIR /app

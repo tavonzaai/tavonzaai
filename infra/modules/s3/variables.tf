@@ -25,3 +25,28 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_cors" {
+  description = "Whether to configure CORS on the bucket for direct browser uploads"
+  type        = bool
+  default     = true
+}
+
+variable "cors_allowed_headers" {
+  description = "Allowed headers for S3 CORS"
+  type        = list(string)
+  default     = ["*"]
+}
+
+variable "cors_allowed_methods" {
+  description = "Allowed HTTP methods for S3 CORS"
+  type        = list(string)
+  default     = ["GET", "PUT", "POST", "DELETE", "HEAD"]
+}
+
+variable "cors_allowed_origins" {
+  description = "Allowed origins for S3 CORS"
+  type        = list(string)
+  default     = ["*"]
+}
+

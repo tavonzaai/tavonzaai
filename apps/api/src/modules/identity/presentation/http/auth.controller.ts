@@ -41,6 +41,7 @@ import {
   VerifyOtpDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  ResendOtpDto,
 } from './dto/auth-request.dto';
 import { AuthTokensDto, UserProfileDto, MessageResponseDto, RegisterResponseDto } from './dto/auth-response.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
@@ -150,8 +151,11 @@ export class AuthController {
   @ApiOperation({ summary: '[Customer] Send password reset OTP to email' })
   @ApiOkResponse({ type: MessageResponseDto })
   async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<MessageResponseDto> {
-    await this.authService.forgotPassword(dto);
-    return { message: 'If an account exists, a reset code has been sent to your email' };
+    const devOtp = await this.authService.forgotPassword(dto);
+    return {
+      message: 'If an account exists, a reset code has been sent to your email',
+      devOtp,
+    };
   }
 
   /**
@@ -176,10 +180,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '[Customer] Resend OTP verification code' })
   @ApiOkResponse({ type: MessageResponseDto })
-  async resendOtp(
-    @Body() body: { email: string; type: 'email_verification' | 'phone_verification' | 'password_reset' },
-  ): Promise<MessageResponseDto> {
-    await this.authService.resendOtp(body.email, body.type);
-    return { message: 'If an account exists, a new code has been sent' };
+  async resendOtp(@Body() dto: ResendOtpDto): Promise<MessageResponseDto> {
+    const devOtp = await this.authService.resendOtp(dto.email, dto.type);
+    return {
+      message: 'If an account exists, a new code has been sent',
+      devOtp,
+    };
   }
 }

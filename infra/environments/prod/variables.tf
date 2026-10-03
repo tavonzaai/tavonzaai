@@ -63,6 +63,12 @@ variable "domain_name" {
   type        = string
 }
 
+variable "customer_subdomain" {
+  description = "Subdomain prefix for Customer frontend (e.g. prod). If empty, routes to apex domain and www."
+  type        = string
+  default     = ""
+}
+
 variable "api_subdomain" {
   description = "Subdomain prefix for backend API"
   type        = string
@@ -158,6 +164,12 @@ variable "ses_create_smtp_user" {
   default     = true
 }
 
+variable "ses_verified_email_identities" {
+  description = "List of individual email addresses to verify in SES (allows sending in SES Sandbox before domain verification)"
+  type        = list(string)
+  default     = []
+}
+
 # Application Ports & Health Checks
 variable "backend_port" {
   description = "Port the backend Docker container listens on"
@@ -229,6 +241,36 @@ variable "admin_health_check_path" {
   description = "Health check HTTP endpoint for Admin dashboard service"
   type        = string
   default     = "/"
+}
+
+variable "health_check_interval" {
+  description = "Approximate amount of time, in seconds, between health checks of an individual target (AWS ALB range: 5-300 seconds)"
+  type        = number
+  default     = 300
+}
+
+variable "health_check_timeout" {
+  description = "Amount of time, in seconds, during which no response means a failed health check (must be less than interval)"
+  type        = number
+  default     = 5
+}
+
+variable "health_check_healthy_threshold" {
+  description = "Number of consecutive health check successes required before considering an unhealthy target healthy (2-10)"
+  type        = number
+  default     = 2
+}
+
+variable "health_check_unhealthy_threshold" {
+  description = "Number of consecutive health check failures required before considering a target unhealthy (2-10)"
+  type        = number
+  default     = 3
+}
+
+variable "ecs_health_check_grace_period_seconds" {
+  description = "Grace period (in seconds) for load balancer health checks on newly started ECS tasks"
+  type        = number
+  default     = 600
 }
 
 # EC2 Compute Configuration
@@ -393,7 +435,7 @@ variable "elasticache_snapshot_retention_limit" {
 variable "ecr_repository_names" {
   description = "List of microservices/applications to create dedicated ECR repositories for"
   type        = list(string)
-  default     = ["backend", "frontend", "ai", "kitchen", "cashier", "admin-dashboard"]
+  default     = ["backend", "frontend", "ai", "kitchen", "cashier", "admin-dashboard", "worker"]
 }
 
 variable "ecr_image_tag_mutability" {
