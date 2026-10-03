@@ -65,8 +65,10 @@ jobs:
           filters: |
             backend:
               - 'apps/api/**'
+              - 'apps/worker/**'
               - 'packages/**'
               - 'docker/api.Dockerfile'
+              - 'docker/worker.Dockerfile'
             customer:
               - 'frontend/customer/**'
               - 'packages/**'
