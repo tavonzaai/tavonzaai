@@ -17,11 +17,11 @@ TOOLS: dict[str, dict] = {
                     "properties": {
                         "category": {
                             "type": ["string", "null"],
-                            "description": "Filter by menu section: 'Mains', 'Starters', 'Desserts', 'Drinks', 'Wines', or null for all.",
+                            "description": "Filter by menu section or category: 'Mains', 'Starters', 'Desserts', 'Drinks', 'Wines', 'Burgers', 'Pizza', or null for all.",
                         },
                         "dietary_preference": {
                             "type": ["string", "null"],
-                            "description": "Filter by diet: 'keto', 'vegan', 'vegetarian', 'gluten_free', 'halal', or null for all.",
+                            "description": "Filter by diet: 'keto', 'vegan', 'vegetarian', 'gluten_free', 'halal', 'high_protein', or null for all.",
                         },
                         "exclude_allergens": {
                             "type": ["array", "null"],
@@ -30,7 +30,7 @@ TOOLS: dict[str, dict] = {
                         },
                         "max_price": {
                             "type": ["number", "null"],
-                            "description": "Optional maximum price filter.",
+                            "description": "Optional maximum item price budget limit.",
                         },
                     },
                     "required": [],

@@ -1,8 +1,7 @@
-export default function AdminHomePage() {
-  return (
-    <main style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
-      <h1>Administration Console</h1>
-      <p>Tenant, restaurant, branch, and menu management.</p>
-    </main>
-  );
+import { redirect } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
+
+export default function RootPage() {
+  redirect('/login');
 }

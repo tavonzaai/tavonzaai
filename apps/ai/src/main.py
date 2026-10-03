@@ -55,17 +55,33 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 
-allowed_origins = (
-    settings.allowed_origins.split(",")
-    if settings.allowed_origins and settings.allowed_origins != "*"
-    else ["*"]
-)
+raw_origins = [
+    origin.strip()
+    for origin in settings.allowed_origins.split(",")
+    if origin.strip()
+] if settings.allowed_origins and settings.allowed_origins != "*" else ["*"]
+
+if settings.environment == "dev" and raw_origins != ["*"]:
+    dev_origins = {
+        "http://localhost:3000",
+        "http://localhost:3100",
+        "http://localhost:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3100",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
+    }
+    allowed_origins = list(set(raw_origins) | dev_origins)
+else:
+    allowed_origins = raw_origins
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
