@@ -13,6 +13,7 @@ import httpx
 
 from src.config import settings
 from src.models import ActorContext
+from src.policies.roles import resolve_role_permissions
 
 logger = logging.getLogger(__name__)
 
@@ -135,27 +136,99 @@ class InternalClient:
                     padding = "=" * (4 - len(parts[1]) % 4)
                     payload_bytes = base64.urlsafe_b64decode(parts[1] + padding)
                     payload = json.loads(payload_bytes.decode("utf-8"))
+                    role = payload.get("role")
+                    permissions = payload.get("permissions") or resolve_role_permissions(role)
                     return ActorContext(
                         actor_type=payload.get("actor_type", "USER"),
                         acting_user_id=str(payload.get("acting_user_id") or payload.get("sub", "dev-user-1")),
                         ai_agent_id=payload.get("ai_agent_id", settings.ai_agent_default_id),
+                        role=role,
                         organization_id=str(payload.get("organization_id", "org_dev")),
                         restaurant_id=str(payload.get("restaurant_id", "rest_dev")),
                         branch_id=str(payload.get("branch_id", "branch_dev")),
-                        permissions=payload.get("permissions") or ["orders.read", "tables.read", "menu.read"],
+                        permissions=permissions,
                         resource_scope=payload.get("resource_scope", {}),
                     )
             except Exception:
                 pass
 
+        token_lower = (user_token or "").lower()
+        if "customer" in token_lower or "guest" in token_lower:
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="cust-dev-01",
+                role="customer",
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=resolve_role_permissions("customer"),
+                resource_scope={"table_code": "T1", "table_session_id": "ts_dev_1"},
+            )
+        if "waiter" in token_lower:
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="waiter-dev-01",
+                role="waiter",
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=resolve_role_permissions("waiter"),
+                resource_scope={"tables": ["T1", "T2", "T5"]},
+            )
+        if "kitchen" in token_lower or "chef" in token_lower:
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="chef-dev-01",
+                role="kitchen",
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=resolve_role_permissions("kitchen"),
+                resource_scope={"stations": ["grill", "cold", "fryer"]},
+            )
+        if "cashier" in token_lower:
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="cashier-dev-01",
+                role="cashier",
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=resolve_role_permissions("cashier"),
+                resource_scope={},
+            )
+        if "manager" in token_lower:
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="manager-dev-01",
+                role="manager",
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=resolve_role_permissions("manager"),
+                resource_scope={},
+            )
+        if "owner" in token_lower or "admin" in token_lower:
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="owner-dev-01",
+                role="owner",
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=["*"],
+                resource_scope={},
+            )
+
         return ActorContext(
             actor_type="AI_AGENT",
             acting_user_id="dev-user-1",
             ai_agent_id=settings.ai_agent_default_id,
+            role="manager",
             organization_id="org_dev",
             restaurant_id="rest_dev",
             branch_id="branch_dev",
-            permissions=["orders.read", "tables.read", "menu.read", "items.write", "reports.read", "payments.read", "payments.write", "inventory.read"],
+            permissions=resolve_role_permissions("manager"),
             resource_scope={"tables": ["T1", "T2", "T5"]},
         )
 

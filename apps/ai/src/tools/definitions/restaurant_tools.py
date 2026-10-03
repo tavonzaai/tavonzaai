@@ -76,7 +76,7 @@ TOOLS: dict[str, dict] = {
         },
     },
     "get_kitchen_queue": {
-        "required_permission": "orders.read",
+        "required_permission": "kitchen.read",
         "risk_tier": "read_only",
         "schema": {
             "type": "function",
