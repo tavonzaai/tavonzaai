@@ -128,6 +128,9 @@ class InternalClient:
         import base64
         import json
 
+        token_lower = (user_token or "").lower()
+
+        # 1. JWT Token Parsing
         if user_token and "." in user_token:
             try:
                 parts = user_token.split(".")
@@ -135,6 +138,22 @@ class InternalClient:
                     padding = "=" * (4 - len(parts[1]) % 4)
                     payload_bytes = base64.urlsafe_b64decode(parts[1] + padding)
                     payload = json.loads(payload_bytes.decode("utf-8"))
+
+                    # Resolve permissions based on explicit permissions or role
+                    role = str(payload.get("role", "")).upper()
+                    if payload.get("permissions"):
+                        perms = payload["permissions"]
+                    elif role in ("SUPER_ADMIN", "ADMIN", "RESTAURANT_OWNER"):
+                        perms = ["*"]
+                    elif role in ("WAITER", "STAFF"):
+                        perms = ["menu.read", "tables.read", "orders.read", "payments.read"]
+                    elif role == "KITCHEN":
+                        perms = ["orders.read", "inventory.read"]
+                    elif role == "CUSTOMER":
+                        perms = ["menu.read", "orders.read"]
+                    else:
+                        perms = ["orders.read", "tables.read", "menu.read"]
+
                     return ActorContext(
                         actor_type=payload.get("actor_type", "USER"),
                         acting_user_id=str(payload.get("acting_user_id") or payload.get("sub", "dev-user-1")),
@@ -142,12 +161,62 @@ class InternalClient:
                         organization_id=str(payload.get("organization_id", "org_dev")),
                         restaurant_id=str(payload.get("restaurant_id", "rest_dev")),
                         branch_id=str(payload.get("branch_id", "branch_dev")),
-                        permissions=payload.get("permissions") or ["orders.read", "tables.read", "menu.read"],
+                        permissions=perms,
                         resource_scope=payload.get("resource_scope", {}),
                     )
             except Exception:
                 pass
 
+        # 2. Named Dev Token Role Mapping (dev-guest-token, waiter-token, etc.)
+        if any(k in token_lower for k in ("guest", "customer")):
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="customer-guest",
+                ai_agent_id=settings.ai_agent_default_id,
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=["menu.read", "orders.read"],
+                resource_scope={"role": "CUSTOMER"},
+            )
+
+        if any(k in token_lower for k in ("waiter", "server")):
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="waiter-staff",
+                ai_agent_id=settings.ai_agent_default_id,
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=["menu.read", "tables.read", "orders.read", "payments.read"],
+                resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
+            )
+
+        if any(k in token_lower for k in ("kitchen", "chef")):
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="kitchen-staff",
+                ai_agent_id=settings.ai_agent_default_id,
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=["orders.read", "inventory.read"],
+                resource_scope={"role": "KITCHEN"},
+            )
+
+        if any(k in token_lower for k in ("admin", "manager", "owner")):
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="manager-admin",
+                ai_agent_id=settings.ai_agent_default_id,
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=["*"],
+                resource_scope={"role": "ADMIN"},
+            )
+
+        # 3. Default fallback for internal dev agent or unspecified tokens
         return ActorContext(
             actor_type="AI_AGENT",
             acting_user_id="dev-user-1",

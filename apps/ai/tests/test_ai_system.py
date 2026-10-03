@@ -245,6 +245,31 @@ class TestInternalClientMock:
         assert isinstance(a, ActorContext)
         await c.aclose()
     @pytest.mark.asyncio
+    async def test_resolve_guest_token_has_guest_permissions(self):
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        guest = await c.resolve_actor("dev-guest-token")
+        assert guest.permissions == ["menu.read", "orders.read"]
+        assert "inventory.read" not in guest.permissions
+        assert "reports.read" not in guest.permissions
+        await c.aclose()
+    @pytest.mark.asyncio
+    async def test_resolve_jwt_role_customer(self):
+        import base64
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        token = f"hdr.{base64.urlsafe_b64encode(b'{\"role\":\"CUSTOMER\"}').decode()}.sig"
+        customer = await c.resolve_actor(token)
+        assert customer.permissions == ["menu.read", "orders.read"]
+        await c.aclose()
+    @pytest.mark.asyncio
+    async def test_resolve_admin_token(self):
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        admin = await c.resolve_actor("dev-admin-token")
+        assert admin.permissions == ["*"]
+        await c.aclose()
+    @pytest.mark.asyncio
     async def test_execute_tool_get_menu(self):
         from src.internal_client import InternalClient
         from src.models import ActorContext
