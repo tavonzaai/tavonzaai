@@ -15,6 +15,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
+import { getAuthToken } from '@/redux/api/baseApi';
+import FormattedMessage from '@/components/chat/FormattedMessage';
 
 interface Message {
   id: string;
@@ -87,7 +89,7 @@ function ChatContent() {
     return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
     const content = (textToSend !== undefined ? textToSend : inputText).trim();
     if (!content) return;
 
@@ -102,11 +104,42 @@ function ChatContent() {
     if (textToSend === undefined) setInputText('');
     setIsTyping(true);
 
-    // AI Response generation logic
-    setTimeout(() => {
+    try {
+      const token = getAuthToken() || 'dev-guest-token';
+      const aiBaseUrl = process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:8000';
+
+      const res = await fetch(`${aiBaseUrl}/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: content,
+          session_id: `customer_${activeTable.replace(/\s+/g, '_').toLowerCase()}`,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`AI HTTP status ${res.status}`);
+      }
+
+      const data = await res.json();
+      const reply = data.reply;
+
+      const aiMsg: Message = {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        text: reply,
+        timestamp: getTimeString(),
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
+      console.warn('Live AI service call failed, using local concierge fallback:', err);
       generateAiResponse(content);
+    } finally {
       setIsTyping(false);
-    }, 900);
+    }
   };
 
   const generateAiResponse = (userQuery: string) => {
@@ -353,7 +386,7 @@ function ChatContent() {
               {/* Message Bubble + Inner Content */}
               <div className="flex-1 min-w-0 max-w-full flex flex-col gap-1">
                 <div className="w-full min-w-0 max-w-full p-3 sm:p-3.5 text-xs sm:text-sm leading-relaxed bg-neutral-900 border border-neutral-800 text-neutral-100 rounded-2xl rounded-tl-xs shadow-md font-inter overflow-hidden break-words">
-                  <p className="whitespace-pre-line break-words">{msg.text}</p>
+                  <FormattedMessage content={msg.text} />
 
                   {/* Interactive Recommended Dish Cards in message */}
                   {msg.dishes && msg.dishes.length > 0 && (
