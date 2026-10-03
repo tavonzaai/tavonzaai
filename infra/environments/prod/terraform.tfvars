@@ -109,7 +109,8 @@ ecr_repository_names = [
   "cashier",        # Cashier Next.js Frontend (cashier.tavonza.com)
   "admin-dashboard",# Admin React Dashboard (admin.tavonza.com)
   "branch-manager", # Branch Manager Frontend (branch-manager.tavonza.com)
-  "waiter"          # Waiter Next.js Frontend (waiter.tavonza.com)
+  "waiter",         # Waiter Next.js Frontend (waiter.tavonza.com)
+  "worker"          # Background FIFO Queue Worker
 ]
 
 # ALB Ingress Access (Default: Open to public Internet for tavonza.com)
