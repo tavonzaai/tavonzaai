@@ -30,7 +30,7 @@ extra_cname_records = {}
 # AWS Simple Email Service (SES) Configuration
 enable_ses              = true
 ses_enable_mail_from    = true
-ses_mail_from_subdomain = "prod-mail"
+ses_mail_from_subdomain = "mail"
 ses_enable_dmarc        = true
 ses_dmarc_policy        = "v=DMARC1; p=none; sp=none; aspf=r; adkim=r;"
 ses_create_smtp_user    = true
