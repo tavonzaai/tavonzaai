@@ -39,13 +39,13 @@ jobs:
     name: Detect Changed Services
     runs-on: ubuntu-latest
     outputs:
-      backend:      ${{ steps.filter.outputs.backend }}
-      customer:     ${{ steps.filter.outputs.customer }}
-      admin:        ${{ steps.filter.outputs.admin }}
-      kitchen:      ${{ steps.filter.outputs.kitchen }}
-      cashier:      ${{ steps.filter.outputs.cashier }}
+      backend: ${{ steps.filter.outputs.backend }}
+      customer: ${{ steps.filter.outputs.customer }}
+      admin: ${{ steps.filter.outputs.admin }}
+      kitchen: ${{ steps.filter.outputs.kitchen }}
+      cashier: ${{ steps.filter.outputs.cashier }}
       branch_manager: ${{ steps.filter.outputs.branch_manager }}
-      waiter:       ${{ steps.filter.outputs.waiter }}
+      waiter: ${{ steps.filter.outputs.waiter }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -100,7 +100,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -256,16 +255,16 @@ jobs:
       - name: Check if deploy needed
         id: check
         env:
-          APP:              ${{ matrix.app }}
-          CHANGED_KEY:      ${{ matrix.changed_key }}
-          EVENT_NAME:       ${{ github.event_name }}
-          INPUT_SERVICE:    ${{ inputs.service }}
+          APP: ${{ matrix.app }}
+          CHANGED_KEY: ${{ matrix.changed_key }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SERVICE: ${{ inputs.service }}
           CUSTOMER_CHANGED: ${{ needs.detect-changes.outputs.customer }}
-          ADMIN_CHANGED:    ${{ needs.detect-changes.outputs.admin }}
-          KITCHEN_CHANGED:  ${{ needs.detect-changes.outputs.kitchen }}
-          CASHIER_CHANGED:  ${{ needs.detect-changes.outputs.cashier }}
+          ADMIN_CHANGED: ${{ needs.detect-changes.outputs.admin }}
+          KITCHEN_CHANGED: ${{ needs.detect-changes.outputs.kitchen }}
+          CASHIER_CHANGED: ${{ needs.detect-changes.outputs.cashier }}
           BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.branch_manager }}
-          WAITER_CHANGED:   ${{ needs.detect-changes.outputs.waiter }}
+          WAITER_CHANGED: ${{ needs.detect-changes.outputs.waiter }}
         run: |
           SHOULD_DEPLOY="false"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
