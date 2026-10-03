@@ -168,7 +168,9 @@ class InternalClient:
                     "category": "Burgers",
                     "dietary": ["high-protein"],
                     "allergens": ["gluten", "dairy"],
-                    "description": "Double beef patty, aged cheddar, brioche bun.",
+                    "description": "Double beef patty, aged cheddar, brioche bun. #1 top-selling guest favorite.",
+                    "tags": ["top-seller", "bestseller", "popular"],
+                    "is_bestseller": True,
                 },
                 {
                     "name": "Pan-Seared Line-Caught Seabass",
@@ -176,7 +178,9 @@ class InternalClient:
                     "category": "Mains",
                     "dietary": ["keto", "gluten-free", "high-protein", "organic"],
                     "allergens": ["fish"],
-                    "description": "Crispy skin sea bass, braised carrots, herb reduction.",
+                    "description": "Crispy skin sea bass, braised carrots, herb reduction. Chef signature top-seller.",
+                    "tags": ["top-seller", "bestseller", "chef-special"],
+                    "is_bestseller": True,
                 },
                 {
                     "name": "Caesar Salad",
@@ -185,6 +189,8 @@ class InternalClient:
                     "dietary": ["vegetarian"],
                     "allergens": ["dairy"],
                     "description": "Romaine lettuce, parmesan, garlic croutons.",
+                    "tags": ["starter", "classic"],
+                    "is_bestseller": False,
                 },
                 {
                     "name": "Avocado Green Salad Bowl",
@@ -193,6 +199,8 @@ class InternalClient:
                     "dietary": ["vegan", "gluten-free", "organic", "keto"],
                     "allergens": [],
                     "description": "Fresh avocado, mixed baby greens, citrus vinaigrette.",
+                    "tags": ["popular", "healthy", "vegan"],
+                    "is_bestseller": False,
                 },
                 {
                     "name": "Craft IPA",
@@ -200,7 +208,9 @@ class InternalClient:
                     "category": "Drinks",
                     "dietary": ["vegan"],
                     "allergens": ["gluten"],
-                    "description": "Locally brewed citrus hoppy IPA.",
+                    "description": "Locally brewed citrus hoppy IPA. Best-selling beverage.",
+                    "tags": ["bestseller", "drink"],
+                    "is_bestseller": True,
                 },
             ]
 
