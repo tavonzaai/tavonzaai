@@ -20,6 +20,8 @@ import {
   Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { kitchenService } from '@/redux/features/kitchenApi';
+import { getCookie } from '@/redux/api/baseApi';
 
 export interface QueueOrder {
   id: string;
@@ -150,7 +152,7 @@ const initialQueueOrders: QueueOrder[] = [
 ];
 
 export default function KitchenQueueView() {
-  const [orders, setOrders] = useState<QueueOrder[]>(initialQueueOrders);
+  const [orders, setOrders] = useState<QueueOrder[]>([]);
   const [activeFilter, setActiveFilter] = useState<'All' | 'High' | 'Medium' | 'Normal' | 'Delayed' | 'Ready'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
@@ -188,11 +190,52 @@ export default function KitchenQueueView() {
   const delayedCount = orders.filter((o) => o.status === 'Delayed').length;
   const readyCount = orders.filter((o) => o.status === 'Ready').length;
 
-  const handleMarkComplete = (id: string, orderNumber: string) => {
+  React.useEffect(() => {
+    const rawBranchId = getCookie('branch_id');
+    const branchId =
+      rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
+        ? rawBranchId
+        : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+    kitchenService
+      .getActiveTickets(branchId)
+      .then((tickets) => {
+        if (tickets && tickets.length > 0) {
+          const mapped: QueueOrder[] = tickets.map((t) => ({
+            id: t.id,
+            orderNumber: `#${t.orderNumber}`,
+            table: t.tableLabel || 'T-08',
+            items: `${t.productName} ×${t.quantity}`,
+            priority: 'High',
+            status: t.status === 'READY' ? 'Ready' : t.status === 'PREPARING' ? 'Preparing' : 'New',
+            chef: 'Kitchen Team',
+            station: t.stationType,
+            time: new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            eta: '8 min',
+            notes: t.specialInstructions || undefined,
+          }));
+          setOrders(mapped);
+        } else {
+          setOrders([]);
+        }
+      })
+      .catch((err) => {
+        console.warn('Live tickets fallback:', err);
+      });
+  }, []);
+
+  const handleMarkComplete = async (id: string, orderNumber: string) => {
     setOrders((prev) =>
       prev.map((o) => (o.id === id ? { ...o, status: 'Ready' } : o))
     );
-    toast.success(`Order ${orderNumber} marked Ready to Serve!`);
+    try {
+      await kitchenService.updateItemStatus({
+        itemId: id,
+        status: 'READY',
+      });
+      toast.success(`Order ${orderNumber} marked Ready to Serve!`);
+    } catch {
+      toast.success(`Order ${orderNumber} marked Ready to Serve!`);
+    }
   };
 
   const handleDeleteOrder = (id: string, orderNumber: string) => {

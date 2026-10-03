@@ -25,8 +25,9 @@ import {
   Settings,
 } from "lucide-react";
 import { toast } from "sonner";
-import { INITIAL_ORDERS, KITCHEN_STATIONS, INITIAL_INVENTORY, RECIPES, SHIFT_STATS, FLAG_REASONS } from "./data";
+import { KITCHEN_STATIONS, INITIAL_INVENTORY, RECIPES, SHIFT_STATS, FLAG_REASONS } from "./data";
 import { KitchenOrder, OrderStatus } from "./types";
+import { kitchenService, getActiveBranchId } from "@/redux/features/kitchenApi";
 
 export interface KitchenDashboardViewProps {
   initialNav?: string;
@@ -56,12 +57,69 @@ const getInitialNav = (initialNav?: string): string => {
 export default function KitchenDashboardView({ initialNav = "Dashboard" }: KitchenDashboardViewProps) {
   const [activeNav, setActiveNav] = useState<string>(() => getInitialNav(initialNav));
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  const [orders, setOrders] = useState<KitchenOrder[]>(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<KitchenOrder[]>([]);
   const [selectedStation, setSelectedStation] = useState<string>("Grill Station");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeTabFilter, setActiveTabFilter] = useState<string>("ALL");
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [stationDropdownOpen, setStationDropdownOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadKitchenData = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const rawOrders = await kitchenService.getOrders(branchId);
+        if (mounted && Array.isArray(rawOrders)) {
+          const mapped: KitchenOrder[] = rawOrders
+            .filter(
+              (o: any) =>
+                o.status === "ACCEPTED" ||
+                o.status === "PREPARING" ||
+                o.status === "READY_TO_SERVE"
+            )
+            .map((o: any) => {
+              let status: OrderStatus = "NEW";
+              if (o.status === "PREPARING") status = "PREPARING";
+              else if (o.status === "READY_TO_SERVE") status = "READY";
+
+              const createdDate = new Date(o.createdAt);
+              const elapsed = !isNaN(createdDate.getTime())
+                ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 60000))
+                : 0;
+
+              return {
+                id: o.orderId || o.id,
+                orderNumber: o.orderNumber,
+                table: o.tableLabel || (o.tableId ? `Table` : "Takeaway"),
+                orderType: "DINE_IN",
+                waiter: o.waiterName || "Staff Assigned",
+                status,
+                timeElapsedMinutes: elapsed,
+                station: "Grill Station",
+                createdAt: o.createdAt,
+                items: (o.items || []).map((it: any, idx: number) => ({
+                  id: it.id || `item-${idx}`,
+                  name: it.name,
+                  quantity: it.quantity,
+                  options: it.notes ? [it.notes] : [],
+                  isCompleted: status === "READY",
+                })),
+              };
+            });
+          setOrders(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load kitchen dashboard orders:", err);
+      }
+    };
+    loadKitchenData();
+    const interval = setInterval(loadKitchenData, 7000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Flag Issue Modal State
   const [flagModalOpen, setFlagModalOpen] = useState<boolean>(false);

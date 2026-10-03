@@ -21,17 +21,17 @@ export interface BranchManagerUser {
 }
 
 export const DEMO_BRANCH_MANAGER_USER: BranchManagerUser = {
-  id: 'bm-101',
-  name: 'Nobin Mille',
-  email: 'manager@tavonza.demo',
+  id: '45e65de4-65e0-4eef-89e9-4e256fec3870',
+  name: 'Marcus Vance',
+  email: 'manager@tavonza.ai',
   role: 'BRANCH_MANAGER',
-  branchName: 'Downtown Flagship Branch',
-  branchId: 'br-001',
+  branchName: 'Downtown HQ',
+  branchId: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27',
   assignments: [
     {
-      id: 'asg-bm-1',
+      id: '6c7dacf8-8dca-4fda-b532-5bd21d81ee7c',
       role: 'BRANCH_MANAGER',
-      branch: { id: 'br-001', name: 'Downtown Flagship Branch' },
+      branch: { id: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', name: 'Downtown HQ' },
     },
   ],
 };
@@ -75,9 +75,16 @@ export function loginManagerSession(customUser?: Partial<BranchManagerUser>): Br
       ? existingToken
       : `bm_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
+  const validBranchId =
+    customUser?.branchId &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(customUser.branchId)
+      ? customUser.branchId
+      : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+
   const user: BranchManagerUser = {
     ...DEMO_BRANCH_MANAGER_USER,
     ...customUser,
+    branchId: validBranchId,
     shiftStartedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
 
@@ -85,6 +92,8 @@ export function loginManagerSession(customUser?: Partial<BranchManagerUser>): Br
   setCookie(BRANCH_MANAGER_TOKEN_KEY, token);
   setCookie('access_token', token);
   setCookie(BRANCH_MANAGER_USER_KEY, JSON.stringify(user));
+  setCookie('tavonza_branch_id', validBranchId);
+  setCookie('branch_id', validBranchId);
 
   return user;
 }

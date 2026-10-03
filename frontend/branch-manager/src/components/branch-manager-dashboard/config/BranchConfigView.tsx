@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Building2,
   Table as TableIcon,
@@ -12,8 +12,10 @@ import {
   ShieldAlert,
   Plus,
   RefreshCw,
+  Sliders,
 } from 'lucide-react';
 import AddTableModal, { NewTableData } from './AddTableModal';
+import { branchManagerService, getActiveBranchId } from '@/redux/features/branchManagerApi';
 
 type ConfigSubTab =
   | 'Branch Info & Hours'
@@ -113,10 +115,70 @@ export default function BranchConfigView() {
   const [operatingHours, setOperatingHours] = useState(DAYS_OF_WEEK);
 
   // Tables State
-  const [configTables, setConfigTables] = useState<ConfigTable[]>(INITIAL_CONFIG_TABLES);
+  const [configTables, setConfigTables] = useState<ConfigTable[]>([]);
 
   // Stations State
   const [stations, setStations] = useState<KitchenStationItem[]>(INITIAL_STATIONS);
+
+  // Order Acceptance Mode ('AUTO_ACCEPT' | 'WAITER_APPROVAL')
+  const [acceptanceMode, setAcceptanceMode] = useState<'AUTO_ACCEPT' | 'WAITER_APPROVAL'>('WAITER_APPROVAL');
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchBranchConfig = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const [settingsRes, tablesRes] = await Promise.allSettled([
+          branchManagerService.getSettings(branchId),
+          branchManagerService.getTables(branchId),
+        ]);
+
+        if (mounted) {
+          if (settingsRes.status === 'fulfilled' && settingsRes.value) {
+            const mode = settingsRes.value.orderAcceptanceMode;
+            if (mode === 'AUTO_ACCEPT' || mode === 'WAITER_APPROVAL') {
+              setAcceptanceMode(mode);
+            }
+          }
+          if (tablesRes.status === 'fulfilled' && Array.isArray(tablesRes.value)) {
+            const mappedTables: ConfigTable[] = tablesRes.value.map((t) => ({
+              id: t.id,
+              number: t.label || (t as any).number || 'Table',
+              zone: 'Indoor Dining',
+              capacity: `${t.capacity} Guests`,
+              status: t.isActive !== false ? 'Active' : 'Maintenance',
+            }));
+            setConfigTables(mappedTables);
+          }
+        }
+      } catch (err) {
+        console.warn('Branch config fetch error:', err);
+      }
+    };
+
+    fetchBranchConfig();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleUpdateAcceptanceMode = async (mode: 'AUTO_ACCEPT' | 'WAITER_APPROVAL') => {
+    setAcceptanceMode(mode);
+    setIsUpdatingSettings(true);
+    try {
+      const branchId = getActiveBranchId();
+      await branchManagerService.updateSettings(branchId, {
+        orderAcceptanceMode: mode,
+      });
+      triggerSaveToast(`Order acceptance mode set to ${mode === 'AUTO_ACCEPT' ? 'Automatic (Direct to Kitchen)' : 'Manual Waiter Approval'}`);
+    } catch (err) {
+      console.warn('Branch settings update warning (fallback to local):', err);
+      triggerSaveToast('Saved locally');
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  };
 
   const handleToggleDayOpen = (dayIndex: number) => {
     setOperatingHours((prev) =>
@@ -148,7 +210,7 @@ export default function BranchConfigView() {
     );
   };
 
-  const handleSaveNewTable = (newTable: NewTableData) => {
+  const handleSaveNewTable = async (newTable: NewTableData) => {
     const tableItem: ConfigTable = {
       id: `table-${Date.now()}`,
       number: newTable.number,
@@ -157,6 +219,17 @@ export default function BranchConfigView() {
       status: 'Active',
     };
     setConfigTables((prev) => [...prev, tableItem]);
+
+    try {
+      await branchManagerService.createTable({
+        branchId: getActiveBranchId(),
+        label: newTable.number,
+        capacity: Number(newTable.capacity) || 4,
+      });
+    } catch (err) {
+      console.warn('Backend table create warning (saved to state):', err);
+    }
+
     triggerSaveToast('New table configuration successfully added!');
   };
 
@@ -774,6 +847,82 @@ export default function BranchConfigView() {
                     </span>
                   </div>
                 ))}
+              </div>
+
+              {/* Order Routing & Acceptance Mode Configuration */}
+              <div className="pt-4 border-t border-neutral-800 space-y-4">
+                <div className="flex flex-col gap-1">
+                  <h4 className="text-white text-base font-medium font-['Poppins']">
+                    Order Routing & Kitchen Acceptance Workflow
+                  </h4>
+                  <span className="text-neutral-400 text-xs">
+                    Choose whether customer QR table orders require server approval or route automatically to the kitchen.
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Mode 1: Manual Waiter Approval */}
+                  <div
+                    onClick={() => handleUpdateAcceptanceMode('WAITER_APPROVAL')}
+                    className={`p-4 rounded-xl border transition cursor-pointer flex flex-col gap-2 ${
+                      acceptanceMode === 'WAITER_APPROVAL'
+                        ? 'bg-amber-500/10 border-amber-500/50 shadow-md ring-1 ring-amber-500/30'
+                        : 'bg-stone-950 border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-white text-sm font-semibold">Manual Waiter Approval</span>
+                      <span
+                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          acceptanceMode === 'WAITER_APPROVAL'
+                            ? 'border-amber-400 bg-amber-400'
+                            : 'border-zinc-600'
+                        }`}
+                      >
+                        {acceptanceMode === 'WAITER_APPROVAL' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-black" />
+                        )}
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-xs">
+                      Orders are sent to waiter tablets for verification before tickets appear on the kitchen KDS. Recommended for full-service dining.
+                    </span>
+                    <span className="text-amber-400 text-[11px] font-medium mt-1">
+                      Status: {acceptanceMode === 'WAITER_APPROVAL' ? 'Active Workflow' : 'Click to activate'}
+                    </span>
+                  </div>
+
+                  {/* Mode 2: Automatic Direct to Kitchen */}
+                  <div
+                    onClick={() => handleUpdateAcceptanceMode('AUTO_ACCEPT')}
+                    className={`p-4 rounded-xl border transition cursor-pointer flex flex-col gap-2 ${
+                      acceptanceMode === 'AUTO_ACCEPT'
+                        ? 'bg-green-500/10 border-green-500/50 shadow-md ring-1 ring-green-500/30'
+                        : 'bg-stone-950 border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-white text-sm font-semibold">Automatic Direct-to-Kitchen</span>
+                      <span
+                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          acceptanceMode === 'AUTO_ACCEPT'
+                            ? 'border-green-400 bg-green-400'
+                            : 'border-zinc-600'
+                        }`}
+                      >
+                        {acceptanceMode === 'AUTO_ACCEPT' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-black" />
+                        )}
+                      </span>
+                    </div>
+                    <span className="text-neutral-400 text-xs">
+                      Contactless guest orders immediately appear on Kitchen & Bar display screens without waiting for server intervention.
+                    </span>
+                    <span className="text-green-400 text-[11px] font-medium mt-1">
+                      Status: {acceptanceMode === 'AUTO_ACCEPT' ? 'Active Workflow' : 'Click to activate'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import CashierSidebar from "./Sidebar";
-import { initialCashierOrders, initialBillQueueItems } from "./data";
 import { CashierOrder, BillQueueItem } from "./types";
+import { cashierService, getActiveBranchId } from "@/redux/features/cashierApi";
 import {
   Search,
   Clock,
@@ -35,57 +35,14 @@ export interface CashierDashboardViewProps {
   embedded?: boolean;
 }
 
-// Sample menu items for Create Order view
-const sampleMenuItems = [
-  {
-    id: "m1",
-    name: "Ribeye Steak",
-    price: 39.99,
-    currency: "£",
-    category: "Mains",
-    image: "/images/ribeye_steak.jpg",
-  },
-  {
-    id: "m2",
-    name: "Beef Stack",
-    price: 39.99,
-    currency: "£",
-    category: "Mains",
-    image: "/images/beef_stack.jpg",
-  },
-  {
-    id: "m3",
-    name: "Caesar Salad",
-    price: 14.00,
-    currency: "$",
-    category: "Starters",
-    image: "/images/ribeye_steak.jpg",
-  },
-  {
-    id: "m4",
-    name: "Potato Corn Burger",
-    price: 16.00,
-    currency: "$",
-    category: "Mains",
-    image: "/images/beef_stack.jpg",
-  },
-  {
-    id: "m5",
-    name: "Crispy Fries & Dip",
-    price: 12.30,
-    currency: "$",
-    category: "Sides",
-    image: "/images/ribeye_steak.jpg",
-  },
-  {
-    id: "m6",
-    name: "Fresh Lemonade",
-    price: 3.50,
-    currency: "$",
-    category: "Drinks",
-    image: "/images/beef_stack.jpg",
-  },
-];
+export interface CashierDashboardMenuItem {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  category: string;
+  image: string;
+}
 
 export default function CashierDashboardView({
   initialNav = "Table View",
@@ -113,33 +70,134 @@ export default function CashierDashboardView({
   }, [initialNav, getNavFromPath]);
 
   // State for Table View orders
-  const [orders, setOrders] = useState<CashierOrder[]>(initialCashierOrders);
-  const [selectedOrderId, setSelectedOrderId] = useState<string>("ord-1230");
+  const [orders, setOrders] = useState<CashierOrder[]>([]);
+  const [selectedOrderId, setSelectedOrderId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Bill Queue State
-  const [billQueueItems, _setBillQueueItems] =
-    useState<BillQueueItem[]>(initialBillQueueItems);
+  const [billQueueItems, setBillQueueItems] =
+    useState<BillQueueItem[]>([]);
   const [billSearchQuery, setBillSearchQuery] = useState<string>("");
   const [selectedBillItem, setSelectedBillItem] =
     useState<BillQueueItem | null>(null);
   const [isBillDetailModalOpen, setIsBillDetailModalOpen] =
     useState<boolean>(false);
 
+  // Menu items from API
+  const [menuItems, setMenuItems] = useState<CashierDashboardMenuItem[]>([]);
+
   // Create Order state
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [menuSearchQuery, setMenuSearchQuery] = useState<string>("");
   const [cart, setCart] = useState<
     { id: string; name: string; price: number; quantity: number }[]
-  >([
-    { id: "m3", name: "Caesar Salad", price: 14.00, quantity: 1 },
-    { id: "m2", name: "Beef Stack", price: 14.00, quantity: 1 },
-  ]);
+  >([]);
   const [orderType, setOrderType] = useState<"Dine In" | "Takeaway">("Dine In");
   const [selectedTable, setSelectedTable] = useState<string>("T-01");
-  const [customerName, setCustomerName] = useState<string>("Sarah M.");
-  const [customerPhone, setCustomerPhone] = useState<string>("+991254685");
-  const [customerEmail, setCustomerEmail] = useState<string>("Milky@mail.com");
+  const [customerName, setCustomerName] = useState<string>("Walk-in Guest");
+  const [customerPhone, setCustomerPhone] = useState<string>("");
+  const [customerEmail, setCustomerEmail] = useState<string>("");
+
+  useEffect(() => {
+    let mounted = true;
+    const loadCashierData = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const [rawOrders, rawMenu] = await Promise.all([
+          cashierService.getOrders(branchId),
+          cashierService.getMenuItems(branchId),
+        ]);
+
+        if (mounted && Array.isArray(rawMenu)) {
+          setMenuItems(
+            rawMenu.map((m: any) => ({
+              id: m.id,
+              name: m.name,
+              price: Number(m.price || 0),
+              currency: "$",
+              category: m.category?.name || "Mains",
+              image: m.imageUrl || "/images/ribeye_steak.jpg",
+            }))
+          );
+        }
+
+        if (mounted && Array.isArray(rawOrders)) {
+          const mappedOrders: CashierOrder[] = rawOrders.map((o: any) => ({
+            id: o.orderId || o.id,
+            orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
+            totalAmount: o.totalAmount || o.total || 0,
+            tableNumber: o.tableLabel || (o.tableId ? `Table` : "Takeaway"),
+            guestCount: 2,
+            waitTime: "Just now",
+            customerName: o.customerName || "Guest",
+            itemCount: o.itemCount || (o.items?.length ?? 1),
+            subtotal: (o.totalAmount || o.total || 0) * 0.9,
+            serviceCharge: (o.totalAmount || o.total || 0) * 0.05,
+            tax: (o.totalAmount || o.total || 0) * 0.05,
+            kitchenStatus:
+              o.status === "READY_TO_SERVE"
+                ? "READY_TO_SERVE"
+                : o.status === "PREPARING"
+                ? "PREPARING"
+                : "COMPLETED",
+            financeStatus:
+              o.paymentStatus === "PAID" ? "PAID_CASH" : "REQUESTING_CASH",
+            paymentDate: new Date(o.createdAt).toLocaleDateString(),
+            paymentMethod: o.paymentMethod || "Cash",
+            items: (o.items || []).map((it: any, idx: number) => ({
+              id: it.id || `item-${idx}`,
+              name: it.name,
+              price: Number(it.price || it.unitPrice || 0),
+              quantity: it.quantity || 1,
+            })),
+          }));
+
+          const mappedBills: BillQueueItem[] = rawOrders
+            .filter((o: any) => o.paymentStatus !== "PAID")
+            .map((o: any) => {
+              const total = o.totalAmount || o.total || 0;
+              const subtotal = total * 0.9;
+              const tax = total * 0.05;
+              const serviceCharge = total * 0.05;
+              const items = (o.items || []).map((it: any) => ({
+                name: it.name,
+                price: Number(it.price || it.unitPrice || 0),
+                quantity: Number(it.quantity || 1),
+              }));
+              return {
+                id: `bill-${o.orderId || o.id}`,
+                orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
+                tableNumber: o.tableLabel || "Table",
+                customerName: o.customerName || "Guest",
+                itemCount: items.length || 1,
+                paymentMethod: (o.paymentMethod === "CARD" ? "Visa Card" : "Cash") as "Visa Card" | "Cash" | "Digital Wallet",
+                status: "Pending",
+                total,
+                items,
+                subtotal,
+                tax,
+                serviceCharge,
+                time: "Just now",
+              };
+            });
+
+          setOrders(mappedOrders);
+          setBillQueueItems(mappedBills);
+          if (mappedOrders.length > 0 && !selectedOrderId) {
+            setSelectedOrderId(mappedOrders[0].id);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load cashier dashboard data:", err);
+      }
+    };
+    loadCashierData();
+    const interval = setInterval(loadCashierData, 8000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [selectedOrderId]);
   const [orderNo, setOrderNo] = useState<string>("#1230");
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
@@ -166,7 +224,7 @@ export default function CashierDashboardView({
   );
 
   // Menu filter for Create Order
-  const filteredMenuItems = sampleMenuItems.filter((item) => {
+  const filteredMenuItems = menuItems.filter((item) => {
     const matchesCategory =
       selectedCategory === "ALL" || item.category === selectedCategory;
     const matchesSearch = item.name
@@ -176,7 +234,7 @@ export default function CashierDashboardView({
   });
 
   // Cart operations
-  const addToCart = (item: (typeof sampleMenuItems)[0]) => {
+  const addToCart = (item: CashierDashboardMenuItem) => {
     setCart((prev) => {
       const existing = prev.find((i) => i.id === item.id);
       if (existing) {
@@ -745,9 +803,16 @@ export default function CashierDashboardView({
                                   type="button"
                                   onClick={() =>
                                     addToCart(
-                                      sampleMenuItems.find(
+                                      menuItems.find(
                                         (m) => m.id === cartItem.id
-                                      )!
+                                      ) || {
+                                        id: cartItem.id,
+                                        name: cartItem.name,
+                                        price: cartItem.price,
+                                        category: "Mains",
+                                        currency: "$",
+                                        image: "",
+                                      }
                                     )
                                   }
                                   className="w-5 h-5 bg-yellow-500 hover:bg-yellow-400 text-black rounded flex items-center justify-center cursor-pointer transition"

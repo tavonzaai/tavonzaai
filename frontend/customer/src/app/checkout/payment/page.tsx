@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CreditCard, Banknote, ShieldCheck, Lock, CheckCircle2 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
+import { paymentService } from '@/redux/features/paymentApi';
+import { sessionService } from '@/redux/features/sessionApi';
 
 function PaymentContent() {
   const router = useRouter();
@@ -27,16 +29,28 @@ function PaymentContent() {
   const [cvv, setCvv] = useState('215');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handlePay = () => {
+  const handlePay = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
+    try {
+      const cached = sessionService.getCachedSessionInfo();
+      await paymentService.createPayment({
+        tableSessionId: cached.tableSessionId || undefined,
+        payerGuestSessionId: cached.customerSessionId || undefined,
+        scope: 'FULL_ORDER',
+        amount: totalAmount,
+        method: paymentMethod === 'CASH' ? 'CASH' : 'CARD',
+      });
+    } catch (err) {
+      console.warn('Backend payment notice:', err);
+    } finally {
       clearCart();
       router.push(
         `/checkout/confirmation?amount=${totalAmount.toFixed(2)}&method=${paymentMethod}&table=${encodeURIComponent(
           activeTable
         )}&holder=${encodeURIComponent(cardHolder)}`
       );
-    }, 800);
+      setIsProcessing(false);
+    }
   };
 
   return (

@@ -21,21 +21,30 @@ import {
 } from '@nestjs/swagger';
 import { Injectable, Inject } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDatabase, orderReviews, orders } from '@tavonza/database';
+import { IsUUID, IsNumber, Min, Max, IsOptional, IsString } from 'class-validator';
+import { DRIZZLE, type DrizzleDatabase, orderReviews, orders, customers, users } from '@tavonza/database';
 
 // ── DTOs ──────────────────────────────────────────────────────────────
 
-class SubmitFeedbackDto {
+export class SubmitFeedbackDto {
   @ApiProperty({ description: 'Order this feedback belongs to' })
+  @IsUUID()
   orderId!: string;
 
   @ApiProperty({ description: 'Star rating 1-5', example: 5 })
+  @IsNumber()
+  @Min(1)
+  @Max(5)
   rating!: number;
 
   @ApiProperty({ required: false, description: 'Text comment', example: 'Amazing food!' })
+  @IsOptional()
+  @IsString()
   comment?: string;
 
   @ApiProperty({ required: false })
+  @IsOptional()
+  @IsUUID()
   customerId?: string;
 }
 
@@ -72,7 +81,34 @@ export class FeedbackService {
     }
 
     if (!customerId) {
-      throw new NotFoundException('Customer ID associated with order not found');
+      // Find or provision a guest customer profile
+      let [existingCustomer] = await this.db.select().from(customers).limit(1);
+      if (!existingCustomer) {
+        const [guestUser] = await this.db
+          .insert(users)
+          .values({
+            email: 'guest@tavonza.ai',
+            name: 'Table Guest',
+            role: 'CUSTOMER',
+          })
+          .returning();
+
+        if (guestUser) {
+          const [newCustomer] = await this.db
+            .insert(customers)
+            .values({
+              userId: guestUser.id,
+            })
+            .returning();
+
+          existingCustomer = newCustomer;
+        }
+      }
+      customerId = existingCustomer?.id;
+    }
+
+    if (!customerId) {
+      throw new NotFoundException('Could not resolve customer profile for review');
     }
 
     const [result] = await this.db

@@ -7,6 +7,9 @@ import {
   branchSettings,
   branchOperatingHours,
   branchHolidays,
+  staff,
+  staffAssignments,
+  users,
 } from '@tavonza/database';
 import type {
   Branch,
@@ -267,5 +270,55 @@ export class DrizzleBranchRepository {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  // ── Staff Assignments ──────────────────────────────────────────────────
+
+  async findStaffByBranchId(branchId: string) {
+    return this.db
+      .select({
+        id: staffAssignments.id,
+        staffId: staffAssignments.staffId,
+        branchId: staffAssignments.branchId,
+        role: staffAssignments.role,
+        permissions: staffAssignments.permissions,
+        isActive: staffAssignments.isActive,
+        assignedAt: staffAssignments.createdAt,
+        name: users.name,
+        email: users.email,
+        phone: users.contactNo,
+      })
+      .from(staffAssignments)
+      .innerJoin(staff, eq(staff.id, staffAssignments.staffId))
+      .innerJoin(users, eq(users.id, staff.userId))
+      .where(eq(staffAssignments.branchId, branchId));
+  }
+
+  async assignStaff(data: {
+    branchId: string;
+    staffId: string;
+    role: any;
+    permissions?: string[];
+  }) {
+    const [created] = await this.db
+      .insert(staffAssignments)
+      .values({
+        branchId: data.branchId,
+        staffId: data.staffId,
+        role: data.role,
+        permissions: data.permissions ?? [],
+      })
+      .onConflictDoUpdate({
+        target: [staffAssignments.staffId, staffAssignments.branchId],
+        set: {
+          role: data.role,
+          permissions: data.permissions ?? [],
+          isActive: true,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    return created;
   }
 }

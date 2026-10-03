@@ -42,7 +42,7 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 const VALID_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   DRAFT: ['SUBMITTED', 'CANCELLED'],
   SUBMITTED: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
-  ACCEPTED: ['KITCHEN_QUEUE', 'CANCELLED'],
+  ACCEPTED: ['KITCHEN_QUEUE', 'PREPARING', 'CANCELLED'],
   REJECTED: [], // terminal
   KITCHEN_QUEUE: ['PREPARING'],
   PREPARING: ['READY'],

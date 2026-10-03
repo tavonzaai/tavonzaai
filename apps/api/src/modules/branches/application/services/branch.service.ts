@@ -120,6 +120,21 @@ export class BranchService {
     });
   }
 
+  // ── Staff Assignments ──────────────────────────────────────────────────
+
+  async getStaffByBranch(branchId: string) {
+    return this.branchRepo.findStaffByBranchId(branchId);
+  }
+
+  async assignStaffToBranch(branchId: string, dto: { staffId: string; role: any; permissions?: string[] }) {
+    return this.branchRepo.assignStaff({
+      branchId,
+      staffId: dto.staffId,
+      role: dto.role,
+      permissions: dto.permissions,
+    });
+  }
+
   private toResponseDto(branch: Branch): BranchResponseDto {
     return {
       id: branch.id,

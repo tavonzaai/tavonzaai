@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Loader2 } from 'lucide-react';
 import { OrderItemRow } from '../types';
-import { INITIAL_ORDERS } from '../data';
+import { branchManagerService, getActiveBranchId } from '../../../redux/features/branchManagerApi';
 
 interface OrdersListViewProps {
   onSelectOrder: (orderId: string) => void;
@@ -12,10 +12,66 @@ interface OrdersListViewProps {
 export default function OrdersListView({ onSelectOrder }: OrdersListViewProps) {
   const [filter, setFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-
+  const [orders, setOrders] = useState<OrderItemRow[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const filterTabs = ['ALL', 'Active', 'Preparing', 'Ready', 'Payment Pending', 'Completed'];
 
-  const filteredOrders = INITIAL_ORDERS.filter((order) => {
+  useEffect(() => {
+    let isMounted = true;
+    async function loadOrders() {
+      try {
+        setIsLoading(true);
+        const branchId = getActiveBranchId();
+        const liveOrders = await branchManagerService.getOrders(branchId);
+        if (isMounted) {
+          if (liveOrders && liveOrders.length > 0) {
+            const mapped: OrderItemRow[] = liveOrders.map((o: any, idx: number) => {
+              const st = String(o.status || '').toUpperCase();
+              let uiStatus: OrderItemRow['status'] = 'Pending';
+              if (st === 'PREPARING') uiStatus = 'Preparing';
+              else if (st === 'READY') uiStatus = 'Ready';
+              else if (st === 'SERVED') uiStatus = 'Completed';
+              else if (st === 'PAYMENT_PENDING') uiStatus = 'Payment Pending';
+              else if (st === 'NEEDS_ATTENTION') uiStatus = 'Needs Attention';
+
+              const formattedTime = o.submittedAt
+                ? new Date(o.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Just now';
+
+              const itemsStr = o.items && o.items.length > 0
+                ? o.items.map((i: any) => `${i.quantity}x ${i.name}`).join(', ')
+                : `${o.itemCount || 1} items`;
+
+              return {
+                id: o.orderId,
+                orderNumber: o.orderNumber || `#1000${idx + 1}`,
+                waiterLocation: o.tableLabel || `Table T-${String(idx + 1).padStart(2, '0')}`,
+                items: itemsStr,
+                timeElapsed: formattedTime,
+                status: uiStatus,
+                total: `$${Number(o.total || 0).toFixed(2)}`,
+              };
+            });
+
+            setOrders(mapped);
+          } else {
+            setOrders([]);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load live orders:', err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    loadOrders();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredOrders = orders.filter((order) => {
     if (filter === 'Active') {
       if (order.status === 'Completed') return false;
     } else if (filter === 'Preparing') {

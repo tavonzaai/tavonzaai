@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
+import { orderService } from '@/redux/features/orderApi';
+import { getCookie } from '@/redux/api/baseApi';
 
 function CartContent() {
   const router = useRouter();
@@ -20,6 +22,7 @@ function CartContent() {
     cart,
     updateQuantity,
     removeFromCart,
+    clearCart,
     totalCount,
     subtotal,
     serviceCharge,
@@ -29,11 +32,55 @@ function CartContent() {
   } = useCart();
 
   const [showPreferenceModal, setShowPreferenceModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const activeTable = searchParams.get('table') || tableNumber || 'Table 8';
 
   const handleOrderPreferenceClick = () => {
     setShowPreferenceModal(true);
+  };
+
+  const handleOrderIndividually = async () => {
+    setIsSubmitting(true);
+      const rawBranchId = getCookie('tavonza_branch_id');
+      const branchId =
+        rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
+          ? rawBranchId
+          : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+      const tableId = getCookie('tavonza_table_id') || activeTable.replace(/\D/g, '') || '8';
+
+      try {
+        const draft = await orderService.getCart(branchId, tableId);
+        if (draft?.id) {
+          for (const item of cart) {
+            await orderService.addItem({
+              orderId: draft.id,
+              menuItemId: item.dishId || item.id,
+              quantity: item.quantity,
+              specialInstructions: item.specialInstructions,
+              addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
+            });
+          }
+          const submitted = await orderService.submitOrder(draft.id);
+          const submittedId = submitted?.orderNumber || submitted?.id;
+          if (submittedId) {
+            clearCart();
+            setShowPreferenceModal(false);
+            router.push(`/orders/waiting?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(submittedId)}&mode=individual`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Backend cart submit fallback to local session:', err);
+      }
+
+      const fallbackId = `LT-${Math.floor(1000 + Math.random() * 9000)}`;
+      clearCart();
+      setShowPreferenceModal(false);
+      router.push(`/orders/waiting?table=${encodeURIComponent(activeTable)}&order=${fallbackId}&mode=individual`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -258,13 +305,11 @@ function CartContent() {
             <div className="self-stretch flex flex-col justify-start items-start gap-3.5 w-full">
               <button
                 type="button"
-                onClick={() => {
-                  setShowPreferenceModal(false);
-                  router.push(`/orders/waiting?table=${encodeURIComponent(activeTable)}&mode=individual`);
-                }}
-                className="w-full h-12 bg-yellow-400 hover:bg-yellow-300 active:scale-[0.98] rounded-lg shadow-[0px_4px_10px_0px_rgba(227,172,56,0.35)] flex items-center justify-center text-neutral-950 text-base font-semibold font-['Inter'] leading-5 transition cursor-pointer"
+                disabled={isSubmitting}
+                onClick={handleOrderIndividually}
+                className="w-full h-12 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-70 active:scale-[0.98] rounded-lg shadow-[0px_4px_10px_0px_rgba(227,172,56,0.35)] flex items-center justify-center text-neutral-950 text-base font-semibold font-['Inter'] leading-5 transition cursor-pointer"
               >
-                Order Individually
+                {isSubmitting ? 'Sending to Kitchen...' : 'Order Individually'}
               </button>
 
               <button

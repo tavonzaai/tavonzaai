@@ -15,6 +15,13 @@
       "when": 1790999210649,
       "tag": "0001_big_arachne",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791026196260,
+      "tag": "0002_busy_joseph",
+      "breakpoints": true
     }
   ]
 }

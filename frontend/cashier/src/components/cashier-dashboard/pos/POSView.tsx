@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { POSCategory, POSProduct, POSCartItem, PaymentMethod } from './types';
-import { POS_PRODUCTS, INITIAL_CART_ITEMS } from './posData';
 import POSHeaderControls from './components/POSHeaderControls';
 import POSCategoryBar from './components/POSCategoryBar';
 import POSProductGrid from './components/POSProductGrid';
@@ -11,12 +10,44 @@ import ProcessPaymentModal from './components/ProcessPaymentModal';
 import PaymentCompleteModal from './components/PaymentCompleteModal';
 import SplitBillModal from './components/SplitBillModal';
 import { toast } from 'sonner';
+import { cashierService, getActiveBranchId } from '@/redux/features/cashierApi';
 
 export default function POSView() {
   const [selectedTable, setSelectedTable] = useState('T-01');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<POSCategory>('All');
-  const [cartItems, setCartItems] = useState<POSCartItem[]>(INITIAL_CART_ITEMS);
+  const [products, setProducts] = useState<POSProduct[]>([]);
+  const [cartItems, setCartItems] = useState<POSCartItem[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadMenu = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const raw = await cashierService.getMenuItems(branchId);
+        if (mounted && Array.isArray(raw)) {
+          const mapped: POSProduct[] = raw.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            category: 'Burgers',
+            categoryLabel: item.categoryName || 'Main Course',
+            price: item.price || 0,
+            image:
+              item.imageUrl ||
+              'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&q=80',
+            emoji: '🍽️',
+          }));
+          setProducts(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load POS products:', err);
+      }
+    };
+    loadMenu();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Modals state
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -26,7 +57,7 @@ export default function POSView() {
 
   // Filter products by category and search term
   const filteredProducts = useMemo(() => {
-    return POS_PRODUCTS.filter((product) => {
+    return products.filter((product) => {
       const matchesCategory =
         activeCategory === 'All' || product.category === activeCategory;
       const matchesSearch =
@@ -35,7 +66,7 @@ export default function POSView() {
         product.categoryLabel.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, searchQuery]);
+  }, [products, activeCategory, searchQuery]);
 
   // Cart operations
   const handleAddToCart = (product: POSProduct) => {

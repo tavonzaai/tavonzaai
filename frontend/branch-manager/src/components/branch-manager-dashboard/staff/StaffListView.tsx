@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight, User } from 'lucide-react';
 import { StaffCardData } from '../types';
-import { INITIAL_STAFF } from '../data';
+import { branchManagerService, getActiveBranchId } from '../../../redux/features/branchManagerApi';
 
 interface StaffListViewProps {
   onSelectStaff: (staffId: string) => void;
@@ -11,10 +11,64 @@ interface StaffListViewProps {
 
 export default function StaffListView({ onSelectStaff }: StaffListViewProps) {
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+  const [staffList, setStaffList] = useState<StaffCardData[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadStaff() {
+      try {
+        const branchId = getActiveBranchId();
+        const assignments = await branchManagerService.getStaffAssignments(branchId);
+        if (isMounted) {
+          if (assignments && assignments.length > 0) {
+            const mapped: StaffCardData[] = assignments.map((s: any) => {
+              const roleUpper = String(s.role || '').toUpperCase();
+              let roleLabel: StaffCardData['role'] = 'Waiters';
+              if (roleUpper.includes('KITCHEN') || roleUpper.includes('CHEF')) roleLabel = 'Kitchen';
+              else if (roleUpper.includes('CASHIER')) roleLabel = 'Cashiers';
+              else if (roleUpper.includes('BARTENDER')) roleLabel = 'Bartenders';
+              else if (roleUpper.includes('MANAGER')) roleLabel = 'Assistant Manager';
+
+              const clockIn = s.assignedAt
+                ? new Date(s.assignedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '09:00 AM';
+
+              return {
+                id: s.staffId || s.id,
+                name: s.name || s.staffName || 'Staff Member',
+                role: roleLabel,
+                status: s.isActive ? 'Active' : 'Break',
+                currentShift: 'Morning Shift (09:00 - 17:00)',
+                currentAssignment: roleLabel,
+                stationTables:
+                  roleLabel === 'Waiters'
+                    ? 'Tables T-01 - T-04'
+                    : roleLabel === 'Kitchen'
+                    ? 'Hot Line / Grill'
+                    : 'Main Terminal',
+                clockInTime: clockIn,
+              };
+            });
+
+            setStaffList(mapped);
+          } else {
+            setStaffList([]);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load live staff:', err);
+      }
+    }
+
+    loadStaff();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filterTabs = ['ALL', 'Waiters', 'Kitchen', 'Bartenders', 'Cashiers', 'Assistant Manager'];
 
-  const filteredStaff = INITIAL_STAFF.filter((staff) => {
+  const filteredStaff = staffList.filter((staff) => {
     if (roleFilter === 'ALL') return true;
     return staff.role === roleFilter;
   });

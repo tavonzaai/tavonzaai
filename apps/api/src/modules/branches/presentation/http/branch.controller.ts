@@ -128,4 +128,22 @@ export class BranchController {
   ) {
     return this.branchService.addHoliday(id, dto);
   }
+
+  // ── Staff ─────────────────────────────────────────────────────────────
+
+  @Get(':id/staff')
+  @ApiOperation({ summary: 'Get all staff assigned to this branch' })
+  async getStaff(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.branchService.getStaffByBranch(id);
+  }
+
+  @Post(':id/staff/assign')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Assign a staff member to this branch' })
+  async assignStaff(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: { staffId: string; role: any; permissions?: string[] },
+  ) {
+    return this.branchService.assignStaffToBranch(id, dto);
+  }
 }

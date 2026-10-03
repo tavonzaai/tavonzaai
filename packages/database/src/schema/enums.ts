@@ -106,6 +106,7 @@ export const orderRejectionReasonEnum = pgEnum('order_rejection_reason', [
 ]);
 
 export const orderStatusEnum = pgEnum('order_status', [
+  'DRAFT',
   'PENDING',
   'CONFIRMED',
   'PREPARING',

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -52,7 +52,7 @@ export class CreatePaymentDto {
   paidForGuestIds?: string[];
 
   @ApiProperty({ enum: PAYMENT_SCOPES, example: 'ORDER' })
-  @IsEnum(PAYMENT_SCOPES)
+  @IsIn(PAYMENT_SCOPES)
   scope!: PaymentScope;
 
   @ApiProperty({ description: 'Payment amount', example: 45.5 })
@@ -67,7 +67,7 @@ export class CreatePaymentDto {
   tipAmount?: number;
 
   @ApiProperty({ enum: PAYMENT_METHODS, example: 'CARD' })
-  @IsEnum(PAYMENT_METHODS)
+  @IsIn(PAYMENT_METHODS)
   method!: PaymentMethod;
 
   @ApiPropertyOptional({ description: 'Discount code applied', example: 'PROMO10' })
@@ -115,7 +115,7 @@ export class CreateSplitPaymentDto {
   payerGuestSessionId?: string;
 
   @ApiProperty({ enum: PAYMENT_METHODS, example: 'CARD' })
-  @IsEnum(PAYMENT_METHODS)
+  @IsIn(PAYMENT_METHODS)
   method!: PaymentMethod;
 
   @ApiProperty({ type: [SplitAllocationDto] })

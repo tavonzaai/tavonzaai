@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Sparkles,
@@ -16,7 +16,7 @@ import {
   Bot,
 } from 'lucide-react';
 import { MenuItem, OrderTicketItem } from '../types';
-import { initialMenuItems } from '../data';
+import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
 
 interface TakingOrderViewProps {
   tableNumber?: number;
@@ -45,29 +45,39 @@ export default function TakingOrderView({
   const [aiPrompt, setAiPrompt] = useState<string>('');
   const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
 
-  // Initial ticket items as shown in Figma screenshot ("02 items", Truffle Margherita)
-  const [ticketItems, setTicketItems] = useState<OrderTicketItem[]>([
-    {
-      id: 'ticket-1',
-      menuItemId: 'm-1',
-      name: 'Truffle Margherita',
-      price: 30.5,
-      quantity: 1,
-      allergyNote: '',
-    },
-    {
-      id: 'ticket-2',
-      menuItemId: 'm-2',
-      name: 'Burrata & Heirloom Tomatoes',
-      price: 18.5,
-      quantity: 1,
-      allergyNote: 'Gluten-Free guest: serve with GF crackers.',
-    },
-  ]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [ticketItems, setTicketItems] = useState<OrderTicketItem[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchMenu = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const items = await waiterService.getMenuItems(branchId);
+        if (mounted && Array.isArray(items)) {
+          const mapped: MenuItem[] = items.map((it: any) => ({
+            id: it.id,
+            name: it.name,
+            price: it.price || 0,
+            category: it.categoryName || 'Mains',
+            description: it.description || '',
+            dietaryTags: it.dietaryTags || [],
+            prepTimeMinutes: it.prepTimeMinutes || 15,
+            isPopular: it.isPopular,
+          }));
+          setMenuItems(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load menu items:', err);
+      }
+    };
+    fetchMenu();
+    return () => { mounted = false; };
+  }, []);
 
   // Filtered dishes
   const filteredMenuItems = useMemo(() => {
-    return initialMenuItems.filter((item) => {
+    return menuItems.filter((item) => {
       const matchesCategory = item.category === selectedCategory;
       const matchesSearch =
         !searchQuery.trim() ||
@@ -397,7 +407,7 @@ export default function TakingOrderView({
                       <span className="text-white font-bold text-xs">{item.quantity}</span>
                       <button
                         onClick={() => {
-                          const original = initialMenuItems.find((m) => m.id === item.menuItemId);
+                          const original = menuItems.find((m) => m.id === item.menuItemId);
                           if (original) handleAddItem(original);
                         }}
                         className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center"

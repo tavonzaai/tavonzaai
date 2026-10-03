@@ -1,23 +1,65 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, ChevronDown, Plus, Sparkles, SlidersHorizontal, Info, Edit3 } from 'lucide-react';
 import { MenuItem } from '../types';
-import { INITIAL_MENU_ITEMS } from '../data';
 import ManageCategoriesModal from './ManageCategoriesModal';
 import AddNewItemModal from './AddNewItemModal';
 import ItemSuccessModal from './ItemSuccessModal';
+import { branchManagerService, getActiveBranchId } from '../../../redux/features/branchManagerApi';
 
 export default function MenuView() {
-  const [items, setItems] = useState<MenuItem[]>(INITIAL_MENU_ITEMS);
-  const [categories, setCategories] = useState<string[]>([
-    'Starters',
-    'Mains - Grill',
-    'Mains - Pasta',
-    'Desserts',
-    'Beverages',
-    'Sides',
-  ]);
+  const [items, setItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<string[]>(['All Categories']);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadMenu() {
+      try {
+        const branchId = getActiveBranchId();
+        const [apiCategories, apiItems] = await Promise.all([
+          branchManagerService.getCategories(branchId).catch(() => []),
+          branchManagerService.getMenuItems(branchId).catch(() => []),
+        ]);
+
+        if (isMounted) {
+          if (apiCategories && apiCategories.length > 0) {
+            const catNames = apiCategories.map((c: any) => c.name);
+            setCategories(['All Categories', ...catNames]);
+          } else {
+            setCategories(['All Categories']);
+          }
+
+          if (apiItems && apiItems.length > 0) {
+            const mapped: MenuItem[] = apiItems.map((item: any) => ({
+              id: item.id,
+              name: item.name,
+              category: (item.categoryName as any) || 'Mains',
+              stationBadge: 'Kitchen',
+              stationBadgeColor: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+              price: `$${Number(item.price).toFixed(2)}`,
+              description: item.description || '',
+              status: item.isAvailable !== false ? 'Available' : 'Disabled',
+              availability: item.isAvailable !== false ? 'In stock' : 'Out of stock',
+              modifiersCount: 'Standard',
+              enabled: item.isAvailable !== false,
+            }));
+
+            setItems(mapped);
+          } else {
+            setItems([]);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load live menu:', err);
+      }
+    }
+
+    loadMenu();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
   const [activeCategory, setActiveCategory] = useState<string>('All Categories');
   const [stationFilter, setStationFilter] = useState('All Stations');
   const [statusFilter, setStatusFilter] = useState('All Statuses');

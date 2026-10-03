@@ -105,4 +105,27 @@ export class DrizzleUserRepository {
       .limit(1);
     return result[0] ?? null;
   }
+
+  // ── Staff Assignments ──────────────────────────────────────────────────
+
+  async findStaffAssignments(userId: string) {
+    try {
+      const results = await this.db
+        .select({
+          id: schema.staffAssignments.id,
+          branchId: schema.staffAssignments.branchId,
+          branchName: schema.branches.name,
+          role: schema.staffAssignments.role,
+          permissions: schema.staffAssignments.permissions,
+          isActive: schema.staffAssignments.isActive,
+        })
+        .from(schema.staff)
+        .innerJoin(schema.staffAssignments, eq(schema.staffAssignments.staffId, schema.staff.id))
+        .innerJoin(schema.branches, eq(schema.branches.id, schema.staffAssignments.branchId))
+        .where(and(eq(schema.staff.userId, userId), eq(schema.staffAssignments.isActive, true)));
+      return results;
+    } catch {
+      return [];
+    }
+  }
 }

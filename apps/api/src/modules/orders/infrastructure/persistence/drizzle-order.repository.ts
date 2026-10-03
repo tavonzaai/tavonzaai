@@ -9,6 +9,7 @@ import {
   type DrizzleDatabase,
   orders,
   orderItems,
+  menuItems,
 } from '@tavonza/database';
 import {
   IOrderRepository,
@@ -40,7 +41,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
         branchId: input.branchId,
         tableId: input.tableId,
         tableSessionId: input.tableSessionId ?? null,
-        status: 'PENDING',
+        status: 'DRAFT',
         subtotal: 0,
         totalAmount: 0,
       })
@@ -79,7 +80,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
         and(
           eq(orders.branchId, branchId),
           eq(orders.tableId, tableId),
-          eq(orders.status, 'PENDING'),
+          eq(orders.status, 'DRAFT'),
         ),
       )
       .limit(1);
@@ -128,15 +129,28 @@ export class DrizzleOrderRepository implements IOrderRepository {
   // ── Item Operations ─────────────────────────────────────────────────
 
   async addItem(input: AddOrderItemInput): Promise<Order> {
+    let name = input.name;
+    let unitPrice = input.unitPrice;
+    if (!name || unitPrice <= 0) {
+      const [menuItem] = await this.db
+        .select()
+        .from(menuItems)
+        .where(eq(menuItems.id, input.menuItemId));
+      if (menuItem) {
+        name = menuItem.name;
+        unitPrice = Number(menuItem.basePrice);
+      }
+    }
+
     const addOns = input.addOns ?? [];
     const addOnsTotal = addOns.reduce((sum, a) => sum + a.price, 0);
-    const lineTotal = (input.unitPrice + addOnsTotal) * input.quantity;
+    const lineTotal = (unitPrice + addOnsTotal) * input.quantity;
 
     await this.db.insert(orderItems).values({
       orderId: input.orderId,
       productId: input.menuItemId,
-      productNameSnapshot: input.name,
-      unitPrice: input.unitPrice,
+      productNameSnapshot: name || 'Dish',
+      unitPrice: unitPrice,
       quantity: input.quantity,
       subtotal: lineTotal,
       stationType: 'KITCHEN',
@@ -264,6 +278,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
   private toDbStatus(status: OrderStatus): any {
     switch (status) {
       case 'DRAFT':
+        return 'DRAFT';
       case 'SUBMITTED':
         return 'PENDING';
       case 'ACCEPTED':
@@ -286,6 +301,8 @@ export class DrizzleOrderRepository implements IOrderRepository {
 
   private fromDbStatus(status: string | null): OrderStatus {
     switch (status) {
+      case 'DRAFT':
+        return 'DRAFT';
       case 'PENDING':
         return 'SUBMITTED';
       case 'CONFIRMED':

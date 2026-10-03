@@ -91,15 +91,26 @@ export class AuthService {
   async getMe(userId: string): Promise<UserProfileDto> {
     const user = await this.userRepo.findById(userId);
     if (!user) throw new NotFoundException('User not found');
+
+    const assignments = await this.userRepo.findStaffAssignments(user.id);
+    const primaryAssignment = assignments[0];
+    const effectiveRole = primaryAssignment?.role || user.role;
+    const branchId = primaryAssignment?.branchId ?? null;
+    const branchName = primaryAssignment?.branchName ?? null;
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: effectiveRole,
+      globalRole: user.role,
+      branchId,
+      branchName,
+      assignments,
       phone: user.contactNo ?? null,
       isEmailVerified: user.isEmailVerified,
       createdAt: user.createdAt,
-    } as UserProfileDto;
+    } as any;
   }
 
   async verifyOtp(dto: VerifyOtpDto): Promise<void> {
@@ -145,10 +156,18 @@ export class AuthService {
   }
 
   private async issueTokens(user: any): Promise<AuthTokensDto> {
+    const assignments = await this.userRepo.findStaffAssignments(user.id);
+    const primaryAssignment = assignments[0];
+    const effectiveRole = primaryAssignment?.role || user.role;
+    const branchId = primaryAssignment?.branchId ?? null;
+    const branchName = primaryAssignment?.branchName ?? null;
+
     const payload = {
       sub: user.id,
       email: user.email,
-      role: user.role,
+      role: effectiveRole,
+      globalRole: user.role,
+      branchId,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -167,7 +186,11 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: effectiveRole,
+        globalRole: user.role,
+        branchId,
+        branchName,
+        assignments,
       } as any,
     };
   }

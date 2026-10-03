@@ -1,26 +1,82 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { PaymentRecord } from '../types';
-import { INITIAL_PAYMENTS, mockPaymentSummaryKpi } from '../data';
+import { branchManagerService, getActiveBranchId, LiveOrderItem } from '../../../redux/features/branchManagerApi';
 
 interface PaymentsViewProps {
   onSelectPayment: (paymentId: string) => void;
 }
 
 export default function PaymentsView({ onSelectPayment }: PaymentsViewProps) {
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('All');
   const [methodFilter, setMethodFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showMethodDropdown, setShowMethodDropdown] = useState(false);
 
-  const statusOptions = ['All', 'Preparing', 'Ready', 'Pending', 'Payment Pending', 'Needs Attention', 'Ordering'];
+  const statusOptions = ['All', 'Paid', 'Pending', 'Preparing', 'Ready'];
   const methodOptions = ['All', 'Visa Card', 'Cash', 'Digital Wallet'];
 
-  const filteredPayments = INITIAL_PAYMENTS.filter((pay) => {
-    if (statusFilter !== 'All' && pay.status !== statusFilter) return false;
+  const fetchPayments = async () => {
+    try {
+      const branchId = getActiveBranchId();
+      const liveOrders = await branchManagerService.getOrders(branchId);
+      const records: PaymentRecord[] = (Array.isArray(liveOrders) ? liveOrders : []).map((order) => {
+        let displayStatus: PaymentRecord['status'] = 'Pending';
+        if (order.paymentStatus === 'PAID') {
+          displayStatus = 'Ready';
+        } else if (order.status === 'PREPARING') {
+          displayStatus = 'Preparing';
+        } else if (order.status === 'READY_TO_SERVE') {
+          displayStatus = 'Payment Pending';
+        } else if (order.status === 'CANCELLED') {
+          displayStatus = 'Needs Attention';
+        }
+
+        return {
+          id: order.id || order.orderId || '',
+          orderNumber: order.orderNumber,
+          table: order.tableNumber || (order.tableId ? `Table` : 'Takeaway'),
+          customer: (order as any).customerName || 'Walk-in Guest',
+          amount: `$${(order.totalAmount || 0).toFixed(2)}`,
+          rawAmount: order.totalAmount || 0,
+          method: (order as any).paymentMethod || 'Visa Card',
+          status: displayStatus,
+          isPaid: order.paymentStatus === 'PAID',
+          waiter: order.waiterName || 'Staff',
+          timeAgo: 'Recently',
+        };
+      });
+      setPayments(records);
+    } catch (err) {
+      console.error('Failed to load payments:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPayments();
+    const interval = setInterval(fetchPayments, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Compute live KPI summaries from real payment records
+  const completedRecords = payments.filter((p) => (p as any).isPaid);
+  const pendingRecords = payments.filter((p) => !(p as any).isPaid);
+  const todaysTotalAmount = completedRecords.reduce((sum, p) => sum + ((p as any).rawAmount || 0), 0);
+  const pendingTotalAmount = pendingRecords.reduce((sum, p) => sum + ((p as any).rawAmount || 0), 0);
+
+  const filteredPayments = payments.filter((pay) => {
+    if (statusFilter !== 'All') {
+      if (statusFilter === 'Paid' && !(pay as any).isPaid) return false;
+      if (statusFilter === 'Pending' && (pay as any).isPaid) return false;
+      if (statusFilter !== 'Paid' && statusFilter !== 'Pending' && pay.status !== statusFilter) return false;
+    }
     if (methodFilter !== 'All' && pay.method !== methodFilter) return false;
 
     if (searchQuery.trim()) {
@@ -49,7 +105,7 @@ export default function PaymentsView({ onSelectPayment }: PaymentsViewProps) {
         return (
           <div className="px-3 py-1.5 bg-teal-500/10 rounded-md inline-flex justify-center items-center">
             <span className="text-teal-500 text-sm font-medium font-['Inter'] leading-4">
-              Ready
+              Paid / Settled
             </span>
           </div>
         );
@@ -65,7 +121,7 @@ export default function PaymentsView({ onSelectPayment }: PaymentsViewProps) {
         return (
           <div className="px-3 py-1.5 bg-orange-400/10 rounded-md inline-flex justify-center items-center">
             <span className="text-orange-400 text-sm font-medium font-['Inter'] leading-4">
-              Payment Pending
+              Awaiting Payment
             </span>
           </div>
         );
@@ -73,15 +129,7 @@ export default function PaymentsView({ onSelectPayment }: PaymentsViewProps) {
         return (
           <div className="px-3 py-1.5 bg-red-400/10 rounded-md inline-flex justify-center items-center">
             <span className="text-red-400 text-sm font-medium font-['Inter'] leading-4">
-              Needs Attention
-            </span>
-          </div>
-        );
-      case 'Ordering':
-        return (
-          <div className="px-3 py-1.5 bg-blue-400/10 rounded-md inline-flex justify-center items-center">
-            <span className="text-blue-400 text-sm font-medium font-['Inter'] leading-4">
-              Ordering
+              Cancelled / Refund
             </span>
           </div>
         );
@@ -98,7 +146,7 @@ export default function PaymentsView({ onSelectPayment }: PaymentsViewProps) {
 
   return (
     <div className="flex-1 p-6 lg:p-8 space-y-6 max-w-7xl animate-in fade-in duration-200">
-      {/* Title & Subtitle matching Figma */}
+      {/* Title & Subtitle */}
       <div className="flex flex-col gap-1.5">
         <h1 className="text-white text-3xl font-semibold font-['Inter'] leading-9">
           Branch Payment Monitoring
@@ -108,82 +156,82 @@ export default function PaymentsView({ onSelectPayment }: PaymentsViewProps) {
         </p>
       </div>
 
-      {/* 5 KPI Cards matching Figma */}
+      {/* 5 KPI Cards derived from live orders */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        {/* Card 1: Todays Payments */}
+        {/* Card 1: Today's Payments */}
         <div className="p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-300/20 flex flex-col justify-start items-start gap-3.5">
-          <div className="text-white text-sm font-semibold font-['Inter']">Todays Payments</div>
+          <div className="text-white text-sm font-semibold font-['Inter']">Settled Revenue</div>
           <div className="w-full h-px bg-neutral-800" />
           <div className="flex flex-col gap-1">
             <span className="text-white text-base font-medium font-['Inter'] leading-5">
-              {mockPaymentSummaryKpi.todaysTotal}
+              ${todaysTotalAmount.toFixed(2)}
             </span>
             <span className="text-neutral-400 text-sm font-normal font-['Inter'] leading-4">
-              {mockPaymentSummaryKpi.transactionsCount} transactions
+              {completedRecords.length} completed transactions
             </span>
           </div>
         </div>
 
         {/* Card 2: Pending */}
         <div className="p-4 bg-orange-400/10 rounded-xl outline outline-1 outline-offset-[-1px] outline-orange-400/20 flex flex-col justify-start items-start gap-3.5">
-          <div className="text-orange-400 text-sm font-semibold font-['Inter']">Pending</div>
+          <div className="text-orange-400 text-sm font-semibold font-['Inter']">Pending Balance</div>
           <div className="w-full h-px bg-neutral-800" />
           <div className="flex flex-col gap-1">
             <span className="text-orange-400 text-base font-medium font-['Inter'] leading-5">
-              {mockPaymentSummaryKpi.pendingTotal}
+              ${pendingTotalAmount.toFixed(2)}
             </span>
             <span className="text-neutral-400 text-sm font-normal font-['Inter'] leading-4">
-              {mockPaymentSummaryKpi.pendingCount} awaiting approval
+              {pendingRecords.length} open tab(s)
             </span>
           </div>
         </div>
 
         {/* Card 3: Completed */}
         <div className="p-4 bg-green-500/10 rounded-xl outline outline-1 outline-offset-[-1px] outline-green-500/20 flex flex-col justify-start items-start gap-3.5">
-          <div className="text-green-500 text-sm font-semibold font-['Inter']">Completed</div>
+          <div className="text-green-500 text-sm font-semibold font-['Inter']">Settled Tabs</div>
           <div className="w-full h-px bg-neutral-800" />
           <div className="flex flex-col gap-1">
             <span className="text-green-500 text-base font-medium font-['Inter'] leading-5">
-              {mockPaymentSummaryKpi.completedTotal}
+              {completedRecords.length}
             </span>
             <span className="text-neutral-400 text-sm font-normal font-['Inter'] leading-4">
-              {mockPaymentSummaryKpi.completedCount} settled
+              fully paid
             </span>
           </div>
         </div>
 
-        {/* Card 4: Failed */}
-        <div className="p-4 bg-red-400/10 rounded-xl outline outline-1 outline-offset-[-1px] outline-red-400/20 flex flex-col justify-start items-start gap-3.5">
-          <div className="text-red-400 text-sm font-semibold font-['Inter']">Failed</div>
+        {/* Card 4: Orders In Progress */}
+        <div className="p-4 bg-blue-400/10 rounded-xl outline outline-1 outline-offset-[-1px] outline-blue-400/20 flex flex-col justify-start items-start gap-3.5">
+          <div className="text-blue-400 text-sm font-semibold font-['Inter']">Active Orders</div>
           <div className="w-full h-px bg-neutral-800" />
           <div className="flex flex-col gap-1">
-            <span className="text-red-400 text-base font-medium font-['Inter'] leading-5">
-              {mockPaymentSummaryKpi.failedTotal}
+            <span className="text-blue-400 text-base font-medium font-['Inter'] leading-5">
+              {payments.length}
             </span>
             <span className="text-neutral-400 text-sm font-normal font-['Inter'] leading-4">
-              {mockPaymentSummaryKpi.failedCount} timed out
+              total orders today
             </span>
           </div>
         </div>
 
         {/* Card 5: Payment Methods */}
         <div className="p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-300/20 flex flex-col justify-start items-start gap-3.5">
-          <div className="text-white text-sm font-semibold font-['Inter']">Payment Methods</div>
+          <div className="text-white text-sm font-semibold font-['Inter']">Payment Channels</div>
           <div className="w-full h-px bg-neutral-800" />
           <div className="w-full flex flex-col gap-1 text-xs font-normal font-['Inter'] leading-4 text-neutral-400">
             <div className="flex justify-between items-center">
-              <span>Card Reader</span>
-              <span>0{mockPaymentSummaryKpi.cardReaderCount}</span>
+              <span>Card / Online</span>
+              <span>{payments.filter((p) => p.method.includes('Card') || p.method.includes('Wallet')).length}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span>Cash</span>
-              <span>0{mockPaymentSummaryKpi.cashCount}</span>
+              <span>Cash Tender</span>
+              <span>{payments.filter((p) => p.method.includes('Cash')).length}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filter and Search Bar matching Figma */}
+      {/* Filter and Search Bar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pt-2">
         <div className="flex flex-wrap items-center gap-3">
           {/* Payment Status Dropdown */}
@@ -270,7 +318,7 @@ export default function PaymentsView({ onSelectPayment }: PaymentsViewProps) {
         </div>
       </div>
 
-      {/* Payments Table matching Figma */}
+      {/* Payments Table */}
       <div className="w-full overflow-x-auto rounded-xl border border-zinc-800 shadow-lg bg-neutral-950/60">
         <table className="w-full text-left border-collapse min-w-[950px]">
           <thead>
@@ -286,7 +334,13 @@ export default function PaymentsView({ onSelectPayment }: PaymentsViewProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
-            {filteredPayments.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan={8} className="px-6 py-12 text-center text-neutral-500 font-['Inter']">
+                  Loading payment records...
+                </td>
+              </tr>
+            ) : filteredPayments.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-6 py-12 text-center text-neutral-500 font-['Inter']">
                   No payment records found matching your filters.
