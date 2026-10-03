@@ -29,12 +29,6 @@ class ToolExecutor:
         if tool is None:
             raise ToolExecutionError(f"Unknown tool: {tool_name}")
 
-        # Authorization check
-        try:
-            authorize_tool_call(tool, actor, tool_name)
-        except ToolAuthorizationError as exc:
-            raise ToolExecutionError(str(exc)) from exc
-
         # Strip any scope fields the LLM might have injected — scope always comes from ActorContext
         safe_args = {k: v for k, v in args.items() if k not in {"organization_id", "branch_id", "scope"}}
 
@@ -42,6 +36,19 @@ class ToolExecutor:
         scoped_table = (actor.resource_scope or {}).get("table_code")
         if scoped_table and "table_id" in safe_args:
             safe_args["table_id"] = scoped_table
+
+        # Authorization check
+        try:
+            authorize_tool_call(tool, actor, tool_name)
+        except ToolAuthorizationError as exc:
+            await write_tool_audit(
+                client=self._client,
+                actor=actor,
+                tool_name=tool_name,
+                args=safe_args,
+                result={"ok": False, "error": str(exc)},
+            )
+            raise ToolExecutionError(str(exc)) from exc
 
         # Execute through backend tool gateway
         result = await self._client.execute_tool(tool_name, safe_args, actor)

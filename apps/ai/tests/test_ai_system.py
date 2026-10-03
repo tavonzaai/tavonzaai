@@ -2,7 +2,9 @@
 Tavonza AI - Full Test Suite
 All tests use DEV_MODE_MOCK_BACKEND=true - no real network calls.
 """
-import json, os, sys
+import os
+import sys
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -31,21 +33,25 @@ class TestModels:
         assert a.actor_type == "USER"
     def test_actor_type_literal_enforced(self):
         from pydantic import ValidationError
+
         from src.models import ActorContext
         with pytest.raises(ValidationError):
             ActorContext(actor_type="HACKER", organization_id="org1", branch_id="b1")
     def test_chat_request_max_message_length(self):
         from pydantic import ValidationError
+
         from src.models import ChatRequest
         with pytest.raises(ValidationError):
             ChatRequest(session_id="s1", message="x" * 2001)
     def test_chat_request_session_id_max_length(self):
         from pydantic import ValidationError
+
         from src.models import ChatRequest
         with pytest.raises(ValidationError):
             ChatRequest(session_id="x" * 129, message="hi")
     def test_voice_request_max_length(self):
         from pydantic import ValidationError
+
         from src.models import SynthesizeVoiceRequest
         with pytest.raises(ValidationError):
             SynthesizeVoiceRequest(text="x" * 1001)
