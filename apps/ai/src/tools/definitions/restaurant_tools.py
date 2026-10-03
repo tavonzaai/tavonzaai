@@ -11,8 +11,29 @@ TOOLS: dict[str, dict] = {
             "type": "function",
             "function": {
                 "name": "get_menu",
-                "description": "Get the current branch menu (items, prices, categories).",
-                "parameters": {"type": "object", "properties": {}, "required": []},
+                "description": "Get the current branch menu with optional category, dietary, allergen, or budget filters.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "category": {
+                            "type": ["string", "null"],
+                            "description": "Optional category filter (e.g. 'Burgers', 'Starters', 'Mains', 'Drinks', 'Dessert', 'Mexican', 'Sushi', 'Pizza').",
+                        },
+                        "dietary_preference": {
+                            "type": ["string", "null"],
+                            "description": "Optional dietary filter (e.g. 'keto', 'vegan', 'vegetarian', 'gluten-free', 'organic', 'high-protein').",
+                        },
+                        "exclude_allergens": {
+                            "type": ["string", "null"],
+                            "description": "Optional allergens to exclude (e.g. 'nuts', 'dairy', 'gluten', 'shellfish').",
+                        },
+                        "max_price": {
+                            "type": ["number", "null"],
+                            "description": "Optional maximum item price budget limit.",
+                        },
+                    },
+                    "required": [],
+                },
             },
         },
     },

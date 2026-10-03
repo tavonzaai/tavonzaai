@@ -1,0 +1,15 @@
+export { default as WaiterHeader } from './WaiterHeader';
+export { default as WaiterGreeting } from './WaiterGreeting';
+export { default as AIOperationsHero } from './AIOperationsHero';
+export { default as WaiterStatCardsSection } from './WaiterStatCardsSection';
+export { default as PriorityTasksSection } from './PriorityTasksSection';
+export { default as AssignedTablesSection } from './AssignedTablesSection';
+export { default as LiveOrdersSection } from './LiveOrdersSection';
+export { default as AIRecommendationsSection } from './AIRecommendationsSection';
+export { default as LiveAlertsSection } from './LiveAlertsSection';
+export { default as GuestExperienceSection } from './GuestExperienceSection';
+export { default as CheckoutReadySection } from './CheckoutReadySection';
+export { default as WaiterQuickActionsSection } from './WaiterQuickActionsSection';
+export { default as WaiterAIModal } from './WaiterAIModal';
+export { default as VoiceActionModal } from './VoiceActionModal';
+export { default as SmartRemindersPopover } from './SmartRemindersPopover';

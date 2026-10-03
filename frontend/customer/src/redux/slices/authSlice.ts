@@ -2,30 +2,23 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import {
   loginUser,
   registerCustomer,
+  verifyOtpThunk,
+  resendOtpThunk,
+  forgotPasswordThunk,
+  resetPasswordThunk,
   getMe,
-  forgotPassword,
-  resetPassword,
-  changePassword,
   logoutUser,
+  UserProfile,
 } from '../features/authApi';
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  contactNo?: string;
-  role: string;
-  avatar?: string;
-  customer?: any;
-}
-
 export interface AuthState {
-  user: User | null;
+  user: UserProfile | null;
   isAuthenticated: boolean;
   loading: boolean;
   isInitialized: boolean;
   error: string | null;
   successMessage: string | null;
+  pendingEmail: string | null;
   forgotEmail: string | null;
   otpCode: string | null;
 }
@@ -37,6 +30,7 @@ const initialState: AuthState = {
   isInitialized: false,
   error: null,
   successMessage: null,
+  pendingEmail: null,
   forgotEmail: null,
   otpCode: null,
 };
@@ -45,7 +39,7 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    setUser: (state, action: PayloadAction<User | null>) => {
+    setUser: (state, action: PayloadAction<UserProfile | null>) => {
       state.user = action.payload;
       state.isAuthenticated = !!action.payload;
       state.isInitialized = true;
@@ -63,10 +57,13 @@ const authSlice = createSlice({
     clearSuccessMessage: (state) => {
       state.successMessage = null;
     },
-    setForgotEmail: (state, action: PayloadAction<string>) => {
+    setPendingEmail: (state, action: PayloadAction<string | null>) => {
+      state.pendingEmail = action.payload;
+    },
+    setForgotEmail: (state, action: PayloadAction<string | null>) => {
       state.forgotEmail = action.payload;
     },
-    setOtpCode: (state, action: PayloadAction<string>) => {
+    setOtpCode: (state, action: PayloadAction<string | null>) => {
       state.otpCode = action.payload;
     },
   },
@@ -76,10 +73,11 @@ const authSlice = createSlice({
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.successMessage = null;
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload.user || action.payload;
+        state.user = action.payload.user;
         state.isAuthenticated = true;
         state.isInitialized = true;
         state.error = null;
@@ -87,7 +85,10 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error =
+          typeof action.payload === 'object' && action.payload && 'message' in action.payload
+            ? (action.payload as any).message
+            : (action.payload as string);
       });
 
     // 2. Register
@@ -95,18 +96,88 @@ const authSlice = createSlice({
       .addCase(registerCustomer.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.successMessage = null;
       })
-      .addCase(registerCustomer.fulfilled, (state) => {
+      .addCase(registerCustomer.fulfilled, (state, action) => {
         state.loading = false;
         state.error = null;
-        state.successMessage = 'Account created successfully! Please login.';
+        state.pendingEmail = action.payload.email;
+        state.successMessage = action.payload.message || 'Account created! Please verify your email with the OTP code.';
       })
       .addCase(registerCustomer.rejected, (state, action) => {
+        state.loading = false;
+        state.error =
+          typeof action.payload === 'object' && action.payload && 'message' in action.payload
+            ? (action.payload as any).message
+            : (action.payload as string);
+      });
+
+    // 3. Verify OTP
+    builder
+      .addCase(verifyOtpThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(verifyOtpThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+        state.successMessage = action.payload.message || 'Verification successful!';
+      })
+      .addCase(verifyOtpThunk.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       });
 
-    // 3. Get Me (Cookie Session)
+    // 4. Resend OTP
+    builder
+      .addCase(resendOtpThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(resendOtpThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+        state.successMessage = action.payload.message || 'Verification code resent successfully!';
+      })
+      .addCase(resendOtpThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // 5. Forgot Password
+    builder
+      .addCase(forgotPasswordThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.successMessage = null;
+      })
+      .addCase(forgotPasswordThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.forgotEmail = action.payload.email;
+        state.pendingEmail = action.payload.email;
+        state.successMessage = action.payload.message;
+      })
+      .addCase(forgotPasswordThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // 6. Reset Password
+    builder
+      .addCase(resetPasswordThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(resetPasswordThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.successMessage = action.payload.message || 'Password reset successfully!';
+      })
+      .addCase(resetPasswordThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // 7. Get Me
     builder
       .addCase(getMe.pending, (state) => {
         state.loading = true;
@@ -124,59 +195,14 @@ const authSlice = createSlice({
         state.isInitialized = true;
       });
 
-    // 4. Forgot Password
-    builder
-      .addCase(forgotPassword.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(forgotPassword.fulfilled, (state, action) => {
-        state.loading = false;
-        state.forgotEmail = action.payload.email;
-        state.successMessage = action.payload.message;
-      })
-      .addCase(forgotPassword.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      });
-
-    // 5. Reset Password
-    builder
-      .addCase(resetPassword.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(resetPassword.fulfilled, (state, action) => {
-        state.loading = false;
-        state.successMessage = action.payload;
-      })
-      .addCase(resetPassword.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      });
-
-    // 6. Change Password
-    builder
-      .addCase(changePassword.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(changePassword.fulfilled, (state, action) => {
-        state.loading = false;
-        state.successMessage = action.payload;
-      })
-      .addCase(changePassword.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      });
-
-    // 7. Logout
+    // 8. Logout
     builder.addCase(logoutUser.fulfilled, (state) => {
       state.user = null;
       state.isAuthenticated = false;
       state.isInitialized = true;
       state.loading = false;
       state.error = null;
+      state.successMessage = null;
     });
   },
 });
@@ -187,6 +213,7 @@ export const {
   setInitialized,
   clearAuthError,
   clearSuccessMessage,
+  setPendingEmail,
   setForgotEmail,
   setOtpCode,
 } = authSlice.actions;
