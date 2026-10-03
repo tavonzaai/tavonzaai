@@ -20,8 +20,13 @@ function VerifyOtpContent() {
       const tableParam = table ? `&table=${encodeURIComponent(table)}` : '';
       router.push(`/reset-password?${emailParam}code=${encodeURIComponent(code)}${tableParam}`);
     } else {
-      // Email verification successful, redirect to login
-      router.push(`/login${forwardParam}`);
+      // Email verification successful, redirect to login with email pre-filled
+      const emailQuery = email ? `email=${encodeURIComponent(email)}` : '';
+      let target = `/login${forwardParam}`;
+      if (emailQuery) {
+        target += target.includes('?') ? `&${emailQuery}` : `?${emailQuery}`;
+      }
+      router.push(target);
     }
   };
 
