@@ -24,13 +24,13 @@ resource "aws_lb_target_group" "backend" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.backend_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
   }
 
@@ -60,13 +60,13 @@ resource "aws_lb_target_group" "ai" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.ai_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
   }
 
@@ -96,13 +96,13 @@ resource "aws_lb_target_group" "nextjs" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.nextjs_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
   }
 
@@ -132,13 +132,13 @@ resource "aws_lb_target_group" "kitchen" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.kitchen_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
   }
 
@@ -168,13 +168,13 @@ resource "aws_lb_target_group" "cashier" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.cashier_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
   }
 
@@ -204,13 +204,13 @@ resource "aws_lb_target_group" "admin" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = var.health_check_interval
     path                = var.admin_health_check_path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
     matcher             = "200-399"
   }
 

@@ -60,6 +60,10 @@ export const SWAGGER_TAGS: SwaggerTagDefinition[] = [
     name: 'System | Mailer',
     description: 'Diagnostic, testing, and queue tools for AWS SES and email verification',
   },
+  {
+    name: 'System | Storage',
+    description: 'S3 object storage, direct file uploads, multipart streaming, presigned URLs, and asset management',
+  },
 
   // ── Kitchen Operations (Planned/Upcoming) ────────────────────────────────
   {

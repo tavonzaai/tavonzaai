@@ -93,6 +93,12 @@ variable "services" {
   default = {}
 }
 
+variable "health_check_grace_period_seconds" {
+  description = "Grace period (in seconds) for load balancer health checks on newly started tasks"
+  type        = number
+  default     = 600
+}
+
 variable "tags" {
   description = "Resource tags"
   type        = map(string)
