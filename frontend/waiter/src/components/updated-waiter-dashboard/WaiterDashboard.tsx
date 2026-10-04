@@ -117,7 +117,7 @@ export default function WaiterDashboard({ initialTab = 'floor-view' }: WaiterDas
                 verified: isReady,
               })),
               orderId: tableOrder?.orderNumber,
-              billAmount: tableOrder?.total ? `$${tableOrder.total.toFixed(2)}` : undefined,
+              billAmount: tableOrder?.total ? `$${Number(tableOrder.total).toFixed(2)}` : undefined,
             };
           });
 

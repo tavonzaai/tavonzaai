@@ -58,6 +58,14 @@ export class PaymentController {
     return this.paymentService.applyDiscount(dto);
   }
 
+  @Post('discounts/validate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Validate discount code and calculate discount amount' })
+  @ApiOkResponse({ description: 'Calculated discount result' })
+  async validateDiscount(@Body() dto: ApplyDiscountDto) {
+    return this.paymentService.applyDiscount(dto);
+  }
+
   @Post(':id/refund')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refund a payment' })

@@ -40,28 +40,40 @@ export class OrderItemResponseDto {
 // Figma: "Order Summary" screen showing items, subtotal, charges, total
 
 export class CartResponseDto {
+  id!: string;
   orderId!: string;
   orderNumber!: string;
+  branchId!: string;
+  tableId!: string;
+  status!: string;
   items!: OrderItemResponseDto[];
   subtotal!: number;
   serviceChargeRate!: number;
   serviceCharge!: number;
   taxRate!: number;
   tax!: number;
+  taxAmount!: number;
   total!: number;
+  totalAmount!: number;
   itemCount!: number;
 
   static fromEntity(entity: Order): CartResponseDto {
     const dto = new CartResponseDto();
+    dto.id = entity.id;
     dto.orderId = entity.id;
     dto.orderNumber = entity.orderNumber;
+    dto.branchId = entity.branchId;
+    dto.tableId = entity.tableId ?? '';
+    dto.status = entity.status;
     dto.items = entity.items.map(OrderItemResponseDto.fromProps);
     dto.subtotal = entity.subtotal;
     dto.serviceChargeRate = entity.serviceChargeRate;
     dto.serviceCharge = entity.serviceCharge;
     dto.taxRate = entity.taxRate;
     dto.tax = entity.tax;
+    dto.taxAmount = entity.tax;
     dto.total = entity.total;
+    dto.totalAmount = entity.total;
     dto.itemCount = entity.items.reduce((sum, i) => sum + i.quantity, 0);
     return dto;
   }
@@ -71,8 +83,11 @@ export class CartResponseDto {
 // Figma: "Track Your Order" screen with timeline
 
 export class OrderTrackingResponseDto {
+  id!: string;
   orderId!: string;
   orderNumber!: string;
+  branchId!: string;
+  tableId!: string;
   status!: string;
   displayStatus!: string;
   estimatedPrepTime!: number | null;
@@ -83,6 +98,7 @@ export class OrderTrackingResponseDto {
   }>;
   items!: OrderItemResponseDto[];
   total!: number;
+  totalAmount!: number;
   submittedAt!: Date | null;
   acceptedAt!: Date | null;
   readyAt!: Date | null;
@@ -90,14 +106,18 @@ export class OrderTrackingResponseDto {
 
   static fromEntity(entity: Order): OrderTrackingResponseDto {
     const dto = new OrderTrackingResponseDto();
+    dto.id = entity.id;
     dto.orderId = entity.id;
     dto.orderNumber = entity.orderNumber;
+    dto.branchId = entity.branchId;
+    dto.tableId = entity.tableId ?? '';
     dto.status = entity.status;
     dto.displayStatus = entity.displayStatus;
     dto.estimatedPrepTime = entity.estimatedPrepTime;
     dto.timeline = entity.trackingTimeline;
     dto.items = entity.items.map(OrderItemResponseDto.fromProps);
     dto.total = entity.total;
+    dto.totalAmount = entity.total;
     dto.submittedAt = entity.submittedAt;
     dto.acceptedAt = entity.acceptedAt;
     dto.readyAt = entity.readyAt;

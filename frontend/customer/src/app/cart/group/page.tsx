@@ -16,17 +16,7 @@ interface GuestItem {
   guestName: string;
 }
 
-const INITIAL_GUEST_ITEMS: GuestItem[] = [
-  {
-    id: 'guest-item-1',
-    name: 'Potato Corn Burger',
-    subtitle: 'With Sauce',
-    price: 26.0,
-    quantity: 4,
-    image: '/images/burger.jpg',
-    guestName: 'Guest 01',
-  },
-];
+const INITIAL_GUEST_ITEMS: GuestItem[] = [];
 
 function GroupCartContent() {
   const router = useRouter();

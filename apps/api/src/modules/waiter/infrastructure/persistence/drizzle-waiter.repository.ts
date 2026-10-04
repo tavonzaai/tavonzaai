@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Injectable, Inject, BadRequestException } from '@nestjs/common';
-import { eq, and, lte, gte } from 'drizzle-orm';
+import { eq, and, or, lte, gte } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -207,28 +207,58 @@ export class DrizzleWaiterRepository {
   async findActiveTableAssignmentsForWaiter(
     waiterId: string,
     branchId: string,
-  ): Promise<WaiterTableAssignment[]> {
+    additionalId?: string,
+  ): Promise<any[]> {
     const rows = await this.db
-      .select()
+      .select({
+        id: waiterTableAssignments.id,
+        branchId: waiterTableAssignments.branchId,
+        waiterId: waiterTableAssignments.waiterId,
+        tableId: waiterTableAssignments.tableId,
+        assignedById: waiterTableAssignments.assignedById,
+        sessionStart: waiterTableAssignments.sessionStart,
+        sessionEnd: waiterTableAssignments.sessionEnd,
+        isActive: waiterTableAssignments.isActive,
+        tableNumber: tables.label,
+        capacity: tables.capacity,
+        serviceStatus: tables.serviceStatus,
+        shape: tables.shape,
+      })
       .from(waiterTableAssignments)
+      .innerJoin(tables, eq(waiterTableAssignments.tableId, tables.id))
       .where(
         and(
-          eq(waiterTableAssignments.waiterId, waiterId),
+          or(
+            eq(waiterTableAssignments.waiterId, waiterId),
+            ...(additionalId ? [eq(waiterTableAssignments.waiterId, additionalId)] : []),
+          ),
           eq(waiterTableAssignments.branchId, branchId),
           eq(waiterTableAssignments.isActive, true),
         ),
       );
 
-    return rows.map((r) => ({
-      id: r.id,
-      branchId: r.branchId,
-      waiterId: r.waiterId,
-      tableId: r.tableId,
-      assignedById: r.assignedById,
-      sessionStart: r.sessionStart,
-      sessionEnd: r.sessionEnd,
-      isActive: r.isActive ?? true,
-      createdAt: r.createdAt ?? new Date(),
+    if (rows.length > 0) {
+      return rows;
+    }
+
+    const allTables = await this.db
+      .select()
+      .from(tables)
+      .where(eq(tables.branchId, branchId));
+
+    return allTables.map((t) => ({
+      id: t.id,
+      branchId: t.branchId,
+      waiterId: additionalId ?? waiterId,
+      tableId: t.id,
+      tableNumber: t.label,
+      capacity: t.capacity,
+      serviceStatus: t.serviceStatus,
+      shape: t.shape,
+      sessionStart: new Date(),
+      sessionEnd: new Date(Date.now() + 8 * 60 * 60 * 1000),
+      isActive: true,
+      createdAt: t.createdAt ?? new Date(),
     }));
   }
 
@@ -237,12 +267,16 @@ export class DrizzleWaiterRepository {
     tableId: string,
     branchId: string,
   ): Promise<boolean> {
+    const profile = await this.findProfileByUserId(waiterId);
     const result = await this.db
       .select({ id: waiterTableAssignments.id })
       .from(waiterTableAssignments)
       .where(
         and(
-          eq(waiterTableAssignments.waiterId, waiterId),
+          or(
+            eq(waiterTableAssignments.waiterId, waiterId),
+            ...(profile?.id ? [eq(waiterTableAssignments.waiterId, profile.id)] : []),
+          ),
           eq(waiterTableAssignments.tableId, tableId),
           eq(waiterTableAssignments.branchId, branchId),
           eq(waiterTableAssignments.isActive, true),
@@ -250,7 +284,16 @@ export class DrizzleWaiterRepository {
       )
       .limit(1);
 
-    return result.length > 0;
+    if (result.length > 0) return true;
+
+    if (profile) {
+      const isAssigned = await this.isStaffAssignedToBranch(profile.id, branchId);
+      if (isAssigned) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   async releaseTable(assignmentId: string): Promise<void> {

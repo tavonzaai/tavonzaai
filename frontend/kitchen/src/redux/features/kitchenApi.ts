@@ -63,9 +63,9 @@ export const kitchenService = {
     return (res as any)?.data || res;
   },
   getActiveTickets: async (branchId: string, station?: KitchenStationType): Promise<KitchenTicketItem[]> => {
-    let url = `/kitchen/tickets?branchId=${encodeURIComponent(branchId)}`;
+    let url = `/kitchen/tickets/${encodeURIComponent(branchId)}`;
     if (station) {
-      url += `&station=${encodeURIComponent(station)}`;
+      url += `?station=${encodeURIComponent(station)}`;
     }
     const res = await baseApiFetch<KitchenTicketItem[]>(url, { method: 'GET' });
     return (res as any)?.data || res;

@@ -56,7 +56,7 @@ export class WaiterService {
     const isAssigned = await this.waiterRepo.isStaffAssignedToBranch(profile.id, branchId);
     if (!isAssigned) throw new ForbiddenException('You are not assigned to this branch');
 
-    return this.waiterRepo.findActiveTableAssignmentsForWaiter(waiterId, branchId);
+    return this.waiterRepo.findActiveTableAssignmentsForWaiter(waiterId, branchId, profile.id);
   }
 
   async assignTable(dto: AssignTableDto, assignedById: string): Promise<any> {
@@ -399,9 +399,11 @@ export class WaiterService {
   // ── Internal Helpers ────────────────────────────────────────────────
 
   private async getMyTableIds(waiterId: string, branchId: string): Promise<string[]> {
+    const profile = await this.waiterRepo.findProfileByUserId(waiterId);
     const assignments = await this.waiterRepo.findActiveTableAssignmentsForWaiter(
       waiterId,
       branchId,
+      profile?.id,
     );
     return assignments.map((a) => a.tableId);
   }

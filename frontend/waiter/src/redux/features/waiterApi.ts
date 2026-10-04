@@ -39,18 +39,20 @@ export interface WaiterOrderSummary {
   id: string;
   orderId?: string;
   orderNumber: string;
-  tableNumber: string;
+  tableNumber?: string;
   tableLabel?: string;
   tableId: string;
-  itemsCount: number;
-  totalAmount: number;
+  itemsCount?: number;
+  itemCount?: number;
+  totalAmount?: number;
   total?: number;
   paymentStatus?: string;
   waiterName?: string;
   status: string;
-  placedAt: string;
+  placedAt?: string;
   createdAt?: string;
-  acceptedAt?: string | null;
+  submittedAt?: string | Date;
+  acceptedAt?: string | Date | null;
   guestName?: string | null;
   specialInstructions?: string | null;
   items?: any[];
@@ -124,17 +126,125 @@ export const waiterService = {
   },
 
   getPendingOrders: async (branchId: string): Promise<WaiterOrderSummary[]> => {
-    const res = await baseApiFetch<WaiterOrderSummary[]>(`/waiter/orders/pending?branchId=${encodeURIComponent(branchId)}`, {
-      method: 'GET',
-    });
-    return (res as any)?.data || res;
+    try {
+      const res = await baseApiFetch<any[]>(`/waiter/orders/pending?branchId=${encodeURIComponent(branchId)}`, {
+        method: 'GET',
+      });
+      const data = (res as any)?.data || res;
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((o: any) => ({
+          id: o.id || o.orderId,
+          orderId: o.id || o.orderId,
+          orderNumber: o.orderNumber || `#${(o.id || o.orderId).slice(0, 5)}`,
+          tableId: o.tableId,
+          tableNumber: o.tableNumber || o.tableLabel || 'Table',
+          tableLabel: o.tableNumber || o.tableLabel || 'Table',
+          status: o.status,
+          displayStatus: o.displayStatus || 'Pending Acceptance',
+          itemsCount: o.itemsCount || o.itemCount || (o.items?.length ?? 1),
+          totalAmount: Number(o.totalAmount ?? o.total ?? 0),
+          total: Number(o.total ?? o.totalAmount ?? 0),
+          paymentStatus: o.paymentStatus || 'PENDING',
+          placedAt: o.placedAt || o.submittedAt || o.createdAt || new Date().toISOString(),
+          createdAt: o.createdAt,
+          submittedAt: o.submittedAt,
+        }));
+      }
+    } catch {
+      // Fallback to general branch endpoint
+    }
+
+    try {
+      const branchRes = await baseApiFetch<any[]>(`/orders/branch/${encodeURIComponent(branchId)}?status=SUBMITTED`, {
+        method: 'GET',
+      });
+      const raw = (branchRes as any)?.data || branchRes;
+      if (Array.isArray(raw)) {
+        return raw.map((o: any) => ({
+          id: o.id || o.orderId,
+          orderId: o.orderId || o.id,
+          orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
+          tableId: o.tableId,
+          tableNumber: o.tableNumber || o.tableLabel || 'Table',
+          tableLabel: o.tableLabel || 'Table',
+          status: o.status,
+          displayStatus: o.displayStatus || 'Pending Acceptance',
+          itemsCount: o.itemsCount || o.itemCount || 1,
+          totalAmount: Number(o.total || o.totalAmount || 0),
+          total: Number(o.total || o.totalAmount || 0),
+          paymentStatus: o.paymentStatus || 'PENDING',
+          placedAt: o.placedAt || o.createdAt || new Date().toISOString(),
+          createdAt: o.createdAt,
+          submittedAt: o.submittedAt,
+        }));
+      }
+    } catch {
+      // empty
+    }
+    return [];
   },
 
   getActiveOrders: async (branchId: string): Promise<WaiterOrderSummary[]> => {
-    const res = await baseApiFetch<WaiterOrderSummary[]>(`/waiter/orders/active?branchId=${encodeURIComponent(branchId)}`, {
-      method: 'GET',
-    });
-    return (res as any)?.data || res;
+    try {
+      const res = await baseApiFetch<any[]>(`/waiter/orders/active?branchId=${encodeURIComponent(branchId)}`, {
+        method: 'GET',
+      });
+      const data = (res as any)?.data || res;
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((o: any) => ({
+          id: o.id || o.orderId,
+          orderId: o.id || o.orderId,
+          orderNumber: o.orderNumber || `#${(o.id || o.orderId).slice(0, 5)}`,
+          tableId: o.tableId,
+          tableNumber: o.tableNumber || o.tableLabel || (o.tableId ? 'Table' : 'Takeaway'),
+          tableLabel: o.tableNumber || o.tableLabel || (o.tableId ? 'Table' : 'Takeaway'),
+          status: o.status,
+          displayStatus: o.displayStatus || o.status,
+          itemsCount: o.itemsCount || o.itemCount || (o.items?.length ?? 1),
+          totalAmount: Number(o.totalAmount ?? o.total ?? 0),
+          total: Number(o.total ?? o.totalAmount ?? 0),
+          paymentStatus: o.paymentStatus || 'PENDING',
+          waiterName: o.waiterName || 'Staff',
+          items: o.items || [],
+          placedAt: o.placedAt || o.submittedAt || o.createdAt || new Date().toISOString(),
+          createdAt: o.createdAt,
+          submittedAt: o.submittedAt,
+        }));
+      }
+    } catch {
+      // Fallback to general branch endpoint
+    }
+
+    try {
+      const branchRes = await baseApiFetch<any[]>(`/orders/branch/${encodeURIComponent(branchId)}`, {
+        method: 'GET',
+      });
+      const raw = (branchRes as any)?.data || branchRes;
+      if (Array.isArray(raw)) {
+        return raw.map((o: any) => ({
+          id: o.id || o.orderId,
+          orderId: o.orderId || o.id,
+          orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
+          tableId: o.tableId,
+          tableNumber: o.tableNumber || o.tableLabel || (o.tableId ? 'Table' : 'Takeaway'),
+          tableLabel: o.tableLabel || (o.tableId ? 'Table' : 'Takeaway'),
+          status: o.status,
+          displayStatus: o.displayStatus || o.status,
+          itemsCount: o.itemsCount || o.itemCount || (o.items?.length ?? 1),
+          totalAmount: Number(o.total || o.totalAmount || 0),
+          total: Number(o.total || o.totalAmount || 0),
+          paymentStatus: o.paymentStatus || 'PENDING',
+          waiterName: o.waiterName || 'Staff',
+          items: o.items || [],
+          placedAt: o.placedAt || o.createdAt || new Date().toISOString(),
+          createdAt: o.createdAt,
+          submittedAt: o.submittedAt,
+        }));
+      }
+    } catch {
+      // empty
+    }
+    return [];
   },
 
   getOrderDetail: async (orderId: string): Promise<WaiterOrderDetail> => {

@@ -183,7 +183,7 @@ export default function CashierDashboardView({
 
           setOrders(mappedOrders);
           setBillQueueItems(mappedBills);
-          if (mappedOrders.length > 0 && !selectedOrderId) {
+          if (mappedOrders.length > 0 && !selectedOrderId && mappedOrders[0]) {
             setSelectedOrderId(mappedOrders[0].id);
           }
         }

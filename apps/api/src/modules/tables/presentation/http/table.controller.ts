@@ -70,6 +70,17 @@ export class TableController {
     return this.tableService.findByBranch(branchId);
   }
 
+  @Get('branch/:branchId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'List all tables in a branch' })
+  @ApiOkResponse({ type: [TableResponseDto] })
+  async listByBranchPath(
+    @Param('branchId', new ParseUUIDPipe()) branchId: string,
+  ): Promise<TableResponseDto[]> {
+    return this.tableService.findByBranch(branchId);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')

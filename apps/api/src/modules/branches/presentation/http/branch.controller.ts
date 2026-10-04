@@ -21,6 +21,9 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
+import { Permission } from '@tavonza/authorization';
 import { BranchService } from '../../application/services/branch.service';
 import {
   CreateBranchDto,
@@ -86,6 +89,8 @@ export class BranchController {
   }
 
   @Patch(':id/settings')
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permission.MANAGE_BRANCH_SETTINGS)
   @ApiOperation({ summary: 'Update branch operational settings' })
   async updateSettings(
     @Param('id', new ParseUUIDPipe()) id: string,
