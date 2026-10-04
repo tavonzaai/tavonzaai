@@ -101,7 +101,7 @@ export const rawChatApi = {
    * Synthesize natural neural speech for JARVIS responses
    * POST /ai/voice/synthesize
    */
-  fetchVoiceAudioBlob: async (text: string, persona: string = 'uk_jarvis'): Promise<Blob> => {
+  fetchVoiceAudioBlob: async (text: string, persona: string = 'uk_jarvis', signal?: AbortSignal): Promise<Blob> => {
     const token = getAuthToken() || 'dev-waiter-token';
     const aiBaseUrl =
       (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
@@ -118,6 +118,7 @@ export const rawChatApi = {
         text: text.slice(0, 950),
         persona,
       }),
+      signal,
     });
 
     if (!res.ok) {

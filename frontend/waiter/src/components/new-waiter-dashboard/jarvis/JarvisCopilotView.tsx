@@ -22,7 +22,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { sendChatMessage } from '@/redux/features/chatApi';
 import { addUserMessage, addJarvisMessage, clearChat } from '@/redux/slices/chatSlice';
 import FormattedMessage from '@/components/chat/FormattedMessage';
-import { useJarvisVoice } from '@/hooks/useJarvisVoice';
+import { useJarvisVoice, cleanTextForSpeech } from '@/hooks/useJarvisVoice';
 
 interface JarvisCopilotViewProps {
   onNavigateTab?: (tab: string) => void;
@@ -39,12 +39,19 @@ export default function JarvisCopilotView({
 
   const [activeFilter, setActiveFilter] = useState<'All' | 'Upsell' | 'Needs Attention' | 'Regulars'>('All');
   const [inputMessage, setInputMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  // Consolidated busy state: true when a request is in-flight or Redux isTyping is true
+  const isBusy = isTyping || isSubmitting;
 
   // Initialize JARVIS Voice Engine
   const {
     isListening,
     isSpeaking,
+    speakingId,
+    speakingText,
     transcript,
     isMuted,
     startListening,
@@ -55,6 +62,7 @@ export default function JarvisCopilotView({
     toggleMute,
   } = useJarvisVoice({
     onTranscriptComplete: (finalText) => {
+      if (isBusy) return;
       handleSendMessage(undefined, finalText, true);
     },
   });
@@ -62,6 +70,19 @@ export default function JarvisCopilotView({
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  // Automatically refocus the input field when JARVIS finishes generating a response
+  useEffect(() => {
+    if (isBusy) {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isBusy]);
 
   // Recommendations data matching Figma
   const recommendations = [
@@ -114,10 +135,15 @@ export default function JarvisCopilotView({
     speakResponse: boolean = false
   ) => {
     if (e) e.preventDefault();
+    if (isBusy) {
+      toast.info('JARVIS is currently formulating a response. Please wait.');
+      return;
+    }
     const userText = (customText !== undefined ? customText : inputMessage).trim();
     if (!userText) return;
 
     if (customText === undefined) setInputMessage('');
+    setIsSubmitting(true);
 
     // Dispatch user message to Redux
     dispatch(addUserMessage({ text: userText }));
@@ -146,10 +172,16 @@ export default function JarvisCopilotView({
       if (speakResponse) {
         speakText(fallbackText);
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleActionClick = (rec: (typeof recommendations)[0]) => {
+    if (isBusy) {
+      toast.info('JARVIS is currently processing a message. Please wait.');
+      return;
+    }
     toast.success(`${rec.actionLabel} dispatched for ${rec.table}!`, {
       description: rec.text,
     });
@@ -359,7 +391,12 @@ export default function JarvisCopilotView({
                       {/* Action Button */}
                       <button
                         onClick={() => handleActionClick(rec)}
-                        className="w-full h-10 px-3 bg-neutral-800 hover:bg-neutral-750 active:bg-neutral-700 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center justify-center gap-2 text-orange-50 text-sm font-medium font-['Inter'] leading-5 transition cursor-pointer"
+                        disabled={isBusy}
+                        className={`w-full h-10 px-3 rounded-xl outline outline-1 outline-offset-[-1px] flex items-center justify-center gap-2 text-sm font-medium font-['Inter'] leading-5 transition ${
+                          isBusy
+                            ? 'bg-neutral-850 outline-neutral-800 text-neutral-500 opacity-50 cursor-not-allowed'
+                            : 'bg-neutral-800 hover:bg-neutral-750 active:bg-neutral-700 outline-neutral-700 text-orange-50 cursor-pointer'
+                        }`}
                       >
                         <ActionIcon className="w-4 h-4 text-orange-50" />
                         <span>{rec.actionLabel}</span>
@@ -392,15 +429,38 @@ export default function JarvisCopilotView({
                         <>
                           <FormattedMessage content={msg.text} />
                           <div className="mt-2 pt-1 border-t border-yellow-800/30 flex items-center justify-end">
-                            <button
-                              type="button"
-                              onClick={() => isSpeaking ? stopSpeaking() : speakText(msg.text)}
-                              className="text-[11px] text-yellow-400/80 hover:text-yellow-300 flex items-center gap-1 transition cursor-pointer"
-                              title={isSpeaking ? "Stop speaking" : "Listen to response"}
-                            >
-                              <Volume2 className="w-3.5 h-3.5" />
-                              <span>{isSpeaking ? "Stop" : "Listen"}</span>
-                            </button>
+                            {(() => {
+                              const cleanedMsg = cleanTextForSpeech(msg.text);
+                              const isThisSpeaking =
+                                isSpeaking &&
+                                (speakingId
+                                  ? speakingId === msg.id
+                                  : speakingText
+                                  ? cleanTextForSpeech(speakingText) === cleanedMsg
+                                  : false);
+
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isThisSpeaking) {
+                                      stopSpeaking();
+                                    } else {
+                                      speakText(msg.text, msg.id);
+                                    }
+                                  }}
+                                  className={`text-[11px] flex items-center gap-1 transition cursor-pointer ${
+                                    isThisSpeaking
+                                      ? 'text-amber-400 font-semibold animate-pulse'
+                                      : 'text-yellow-400/80 hover:text-yellow-300'
+                                  }`}
+                                  title={isThisSpeaking ? "Stop speaking" : "Listen to response"}
+                                >
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                  <span>{isThisSpeaking ? "Stop" : "Listen"}</span>
+                                </button>
+                              );
+                            })()}
                           </div>
                         </>
                       ) : (
@@ -422,43 +482,77 @@ export default function JarvisCopilotView({
               {/* Chat Input Field with Attachment, Mic, and Send button */}
               <form
                 onSubmit={(e) => handleSendMessage(e)}
-                className="w-full p-2.5 bg-neutral-800 rounded-[20px] outline outline-1 outline-offset-[-1px] outline-yellow-950/60 flex items-center justify-between gap-2"
+                className={`w-full p-2.5 bg-neutral-800 rounded-[20px] outline outline-1 outline-offset-[-1px] transition-all duration-200 flex items-center justify-between gap-2 ${
+                  isBusy
+                    ? 'outline-yellow-500/50 bg-neutral-800/90 shadow-sm shadow-yellow-950/20'
+                    : 'outline-yellow-950/60'
+                }`}
               >
                 <input
+                  ref={chatInputRef}
                   type="text"
                   value={inputMessage}
+                  disabled={isBusy}
                   onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder={isListening ? "Listening to your voice..." : "Ask anything ..."}
-                  className="flex-1 bg-transparent px-2 text-sm text-white placeholder:text-zinc-400 font-['Inter'] focus:outline-none"
+                  placeholder={
+                    isBusy
+                      ? 'JARVIS is replying, please wait...'
+                      : isListening
+                      ? 'Listening to your voice...'
+                      : 'Ask anything ...'
+                  }
+                  className="flex-1 bg-transparent px-2 text-sm text-white placeholder:text-zinc-400 font-['Inter'] focus:outline-none disabled:cursor-not-allowed disabled:placeholder:text-yellow-400/70"
                 />
 
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={toggleListening}
-                    className={`p-1.5 rounded-lg transition cursor-pointer ${
-                      isListening
-                        ? 'text-red-400 bg-red-950/60 animate-pulse ring-1 ring-red-500/50'
-                        : 'text-zinc-400 hover:text-white hover:bg-neutral-700'
+                    disabled={isBusy}
+                    onClick={() => {
+                      if (isBusy) {
+                        toast.info('JARVIS is currently replying. Please wait.');
+                        return;
+                      }
+                      toggleListening();
+                    }}
+                    className={`p-1.5 rounded-lg transition ${
+                      isBusy
+                        ? 'opacity-35 cursor-not-allowed text-zinc-500'
+                        : isListening
+                        ? 'text-red-400 bg-red-950/60 animate-pulse ring-1 ring-red-500/50 cursor-pointer'
+                        : 'text-zinc-400 hover:text-white hover:bg-neutral-700 cursor-pointer'
                     }`}
-                    title={isListening ? 'Stop listening' : 'Speak to JARVIS'}
+                    title={isBusy ? 'Processing request...' : isListening ? 'Stop listening' : 'Speak to JARVIS'}
                   >
                     <Mic className="w-4 h-4" />
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => toast.info('File attachment uploaded to copilot context')}
-                    className="p-1.5 text-zinc-400 hover:text-white transition cursor-pointer"
-                    title="Attach notes"
+                    disabled={isBusy}
+                    onClick={() => {
+                      if (isBusy) return;
+                      toast.info('File attachment uploaded to copilot context');
+                    }}
+                    className={`p-1.5 transition ${
+                      isBusy
+                        ? 'opacity-35 cursor-not-allowed text-zinc-500'
+                        : 'text-zinc-400 hover:text-white cursor-pointer'
+                    }`}
+                    title={isBusy ? 'Processing request...' : 'Attach notes'}
                   >
                     <Paperclip className="w-4 h-4" />
                   </button>
 
                   <button
                     type="submit"
-                    className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition cursor-pointer text-yellow-400 active:scale-95"
-                    title="Send message"
+                    disabled={isBusy || !inputMessage.trim()}
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition ${
+                      isBusy || !inputMessage.trim()
+                        ? 'bg-zinc-800 text-zinc-600 opacity-40 cursor-not-allowed'
+                        : 'bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-yellow-400 cursor-pointer'
+                    }`}
+                    title={isBusy ? 'JARVIS is replying...' : 'Send message'}
                   >
                     <Send className="w-4 h-4 stroke-[2.2]" />
                   </button>
