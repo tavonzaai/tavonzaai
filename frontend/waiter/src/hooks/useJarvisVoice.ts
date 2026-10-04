@@ -7,7 +7,7 @@ import { rawChatApi } from '@/redux/features/chatApi';
 /**
  * Strips markdown and emojis from text so it sounds natural when spoken aloud.
  */
-function cleanTextForSpeech(text: string): string {
+export function cleanTextForSpeech(text: string): string {
   if (!text) return '';
   return text
     .replace(/```[\s\S]*?```/g, ' ')
@@ -32,6 +32,8 @@ export function useJarvisVoice({
 }: UseJarvisVoiceOptions = {}) {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [speakingText, setSpeakingText] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
   const [isMuted, setIsMuted] = useState(false);
 
@@ -42,6 +44,10 @@ export function useJarvisVoice({
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const isListeningRef = useRef(false);
 
+  // Strict session tracking to prevent race conditions & overlapping dual voices
+  const speechSessionIdRef = useRef<number>(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   // Sync ref with state
   useEffect(() => {
     isListeningRef.current = isListening;
@@ -50,14 +56,24 @@ export function useJarvisVoice({
   // Clean up on unmount
   useEffect(() => {
     return () => {
+      speechSessionIdRef.current++;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
         } catch (_) {}
       }
       if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
+        const audio = currentAudioRef.current;
         currentAudioRef.current = null;
+        audio.onended = null;
+        audio.onerror = null;
+        try {
+          audio.pause();
+          audio.removeAttribute('src');
+        } catch (_) {}
       }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -65,82 +81,178 @@ export function useJarvisVoice({
     };
   }, []);
 
-  const stopSpeaking = useCallback(() => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current.src = '';
-      currentAudioRef.current = null;
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (_) {}
     }
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (_) {}
     }
-    setIsSpeaking(false);
+    setIsListening(false);
   }, []);
 
-  const speakText = useCallback(
-    async (text: string) => {
-      if (isMuted || !text) return;
+  const stopSpeaking = useCallback(() => {
+    // 1. Invalidate any in-flight speech session
+    speechSessionIdRef.current++;
 
-      stopSpeaking();
-      const cleaned = cleanTextForSpeech(text);
-      if (!cleaned) return;
+    // 2. Abort active network request for neural voice synthesis
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
 
-      setIsSpeaking(true);
-
-      // Attempt 1: High quality Neural TTS from AI backend
+    // 3. Stop and clean up current HTML Audio element
+    if (currentAudioRef.current) {
+      const audio = currentAudioRef.current;
+      currentAudioRef.current = null;
+      // CRITICAL: Detach listeners BEFORE pausing and clearing source
+      // to prevent browser from firing onerror and triggering fallback speech!
+      audio.onended = null;
+      audio.onerror = null;
       try {
-        const audioBlob = await rawChatApi.fetchVoiceAudioBlob(cleaned, persona);
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        currentAudioRef.current = audio;
+        audio.pause();
+        audio.currentTime = 0;
+        audio.removeAttribute('src');
+      } catch (_) {}
+    }
 
-        audio.onended = () => {
-          setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
-          currentAudioRef.current = null;
-        };
+    // 4. Cancel any browser Web SpeechSynthesis
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (_) {}
+    }
 
-        audio.onerror = () => {
-          setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
-          currentAudioRef.current = null;
-          // Fallback to browser synthesis if audio playback errors
-          fallbackBrowserSpeech(cleaned);
-        };
+    setIsSpeaking(false);
+    setSpeakingId(null);
+    setSpeakingText(null);
+  }, []);
 
-        await audio.play();
-        return;
-      } catch (err) {
-        console.warn('Backend neural voice unavailable, using browser speech synthesis fallback:', err);
-      }
-
-      // Attempt 2: Native Web SpeechSynthesis API fallback
-      fallbackBrowserSpeech(cleaned);
-    },
-    [isMuted, persona, stopSpeaking]
-  );
-
-  const fallbackBrowserSpeech = (text: string) => {
+  const fallbackBrowserSpeech = useCallback((text: string, sessionId: number) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      setIsSpeaking(false);
+      if (sessionId === speechSessionIdRef.current) {
+        setIsSpeaking(false);
+        setSpeakingId(null);
+        setSpeakingText(null);
+      }
       return;
     }
 
     try {
       window.speechSynthesis.cancel();
+      // Ensure this session has not been superseded
+      if (sessionId !== speechSessionIdRef.current) return;
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
       utterance.lang = 'en-GB';
 
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      utterance.onend = () => {
+        if (sessionId === speechSessionIdRef.current) {
+          setIsSpeaking(false);
+          setSpeakingId(null);
+          setSpeakingText(null);
+        }
+      };
+
+      utterance.onerror = () => {
+        if (sessionId === speechSessionIdRef.current) {
+          setIsSpeaking(false);
+          setSpeakingId(null);
+          setSpeakingText(null);
+        }
+      };
 
       window.speechSynthesis.speak(utterance);
     } catch (_) {
-      setIsSpeaking(false);
+      if (sessionId === speechSessionIdRef.current) {
+        setIsSpeaking(false);
+        setSpeakingId(null);
+        setSpeakingText(null);
+      }
     }
-  };
+  }, []);
+
+  const speakText = useCallback(
+    async (text: string, messageId?: string) => {
+      if (isMuted || !text) return;
+
+      // 1. Immediately cancel any currently speaking audio or queued utterances
+      stopSpeaking();
+
+      // 2. Mute listening while speech outputs to avoid microphone self-echo
+      if (isListeningRef.current) {
+        stopListening();
+      }
+
+      const cleaned = cleanTextForSpeech(text);
+      if (!cleaned) return;
+
+      // 3. Assign a unique session token for this speech invocation
+      const sessionId = ++speechSessionIdRef.current;
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      setIsSpeaking(true);
+      setSpeakingId(messageId || null);
+      setSpeakingText(cleaned);
+
+      // Attempt 1: High quality Neural TTS from AI backend
+      try {
+        const audioBlob = await rawChatApi.fetchVoiceAudioBlob(cleaned, persona, abortController.signal);
+
+        // Discard result if user stopped or started another message while fetching
+        if (sessionId !== speechSessionIdRef.current) {
+          return;
+        }
+
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        currentAudioRef.current = audio;
+
+        audio.onended = () => {
+          if (sessionId === speechSessionIdRef.current) {
+            setIsSpeaking(false);
+            setSpeakingId(null);
+            setSpeakingText(null);
+            currentAudioRef.current = null;
+          }
+          URL.revokeObjectURL(audioUrl);
+        };
+
+        audio.onerror = () => {
+          // If stopped intentionally, sessionId will no longer match
+          if (sessionId !== speechSessionIdRef.current) {
+            URL.revokeObjectURL(audioUrl);
+            return;
+          }
+          URL.revokeObjectURL(audioUrl);
+          currentAudioRef.current = null;
+          // Fallback to browser synthesis ONLY if session is still active
+          fallbackBrowserSpeech(cleaned, sessionId);
+        };
+
+        await audio.play();
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || sessionId !== speechSessionIdRef.current) {
+          return;
+        }
+        console.warn('Backend neural voice unavailable, using browser speech synthesis fallback:', err);
+      }
+
+      // Attempt 2: Native Web SpeechSynthesis API fallback
+      if (sessionId === speechSessionIdRef.current) {
+        fallbackBrowserSpeech(cleaned, sessionId);
+      }
+    },
+    [isMuted, persona, stopSpeaking, stopListening, fallbackBrowserSpeech]
+  );
 
   const startListening = useCallback(async () => {
     stopSpeaking();
@@ -176,8 +288,14 @@ export function useJarvisVoice({
           // If this result is final
           if (event.results[event.results.length - 1].isFinal) {
             const finalText = currentText.trim();
-            if (finalText && onTranscriptComplete) {
-              onTranscriptComplete(finalText);
+            if (finalText) {
+              try {
+                recognition.stop();
+              } catch (_) {}
+              setIsListening(false);
+              if (onTranscriptComplete) {
+                onTranscriptComplete(finalText);
+              }
             }
           }
         };
@@ -263,20 +381,6 @@ export function useJarvisVoice({
     }
   }, [onTranscriptComplete, stopSpeaking]);
 
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (_) {}
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch (_) {}
-    }
-    setIsListening(false);
-  }, []);
-
   const toggleListening = useCallback(() => {
     if (isListening) {
       stopListening();
@@ -301,6 +405,8 @@ export function useJarvisVoice({
   return {
     isListening,
     isSpeaking,
+    speakingId,
+    speakingText,
     transcript,
     isMuted,
     startListening,

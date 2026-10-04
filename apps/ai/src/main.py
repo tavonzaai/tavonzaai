@@ -9,6 +9,7 @@ Implements:
 - Structured audit on all actions
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -34,6 +35,18 @@ internal_client = InternalClient()
 conversation_store = ConversationStore()
 agent = JarvisAgent(internal_client=internal_client, conversation_store=conversation_store)
 voice_service = VoiceService()
+
+# Session locks serialize chat messages per session, preventing concurrent requests
+# from colliding or exhausting token rate limits simultaneously.
+_session_locks: dict[str, asyncio.Lock] = {}
+_session_locks_guard = asyncio.Lock()
+
+
+async def _get_session_lock(session_id: str) -> asyncio.Lock:
+    async with _session_locks_guard:
+        if session_id not in _session_locks:
+            _session_locks[session_id] = asyncio.Lock()
+        return _session_locks[session_id]
 
 
 @asynccontextmanager
@@ -135,8 +148,10 @@ async def root():
 async def chat(request: Request, payload: ChatRequest, authorization: str | None = Header(default=None)):
     actor = await _authenticate(authorization)
     sid = _resolve_effective_session_id(actor, payload.session_id)
-    reply = await agent.handle_message(actor=actor, session_id=sid, message=payload.message)
-    return ChatResponse(session_id=payload.session_id, reply=reply)
+    lock = await _get_session_lock(sid)
+    async with lock:
+        reply = await agent.handle_message(actor=actor, session_id=sid, message=payload.message)
+        return ChatResponse(session_id=payload.session_id, reply=reply)
 
 
 @app.post("/ai/chat/stream")
@@ -144,8 +159,15 @@ async def chat(request: Request, payload: ChatRequest, authorization: str | None
 async def chat_stream(request: Request, payload: ChatRequest, authorization: str | None = Header(default=None)):
     actor = await _authenticate(authorization)
     sid = _resolve_effective_session_id(actor, payload.session_id)
+    lock = await _get_session_lock(sid)
+
+    async def _locked_stream():
+        async with lock:
+            async for chunk in agent.stream_message(actor=actor, session_id=sid, message=payload.message):
+                yield chunk
+
     return StreamingResponse(
-        agent.stream_message(actor=actor, session_id=sid, message=payload.message),
+        _locked_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
