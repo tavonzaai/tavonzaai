@@ -59,6 +59,7 @@ module "security_groups" {
   kitchen_port            = var.kitchen_port
   cashier_port            = var.cashier_port
   admin_port              = var.admin_port
+  manager_port            = var.manager_port
   postgres_port           = 5432
   redis_port              = 6379
   alb_ingress_cidr_blocks = var.alb_ingress_cidr_blocks
