@@ -49,9 +49,25 @@ export default function KitchenAIModal({
   const [autoListenNext, setAutoListenNext] = useState<boolean>(true);
   const [soundMuted, setSoundMuted] = useState<boolean>(false);
 
+  const isOpenRef = useRef<boolean>(isOpen);
+  isOpenRef.current = isOpen;
+
+  const autoListenNextRef = useRef<boolean>(autoListenNext);
+  autoListenNextRef.current = autoListenNext;
+
+  const soundMutedRef = useRef<boolean>(soundMuted);
+  soundMutedRef.current = soundMuted;
+
+  const activeStationRef = useRef<string>(activeStation);
+  activeStationRef.current = activeStation;
+
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef<boolean>(false);
-  const synthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const latestTranscriptRef = useRef<string>('');
+  const hasProcessedRef = useRef<boolean>(false);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const synthesisUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Check AI health on mount or open
   useEffect(() => {
@@ -82,217 +98,410 @@ export default function KitchenAIModal({
       .trim();
   };
 
-  // Speak AI Response
-  const speakResponse = useCallback((text: string) => {
-    if (soundMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      setVoiceState('idle');
-      return;
+  // Stop AI Speech playback
+  const stopSpeaking = useCallback(() => {
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      } catch {}
+      currentAudioRef.current = null;
     }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    setVoiceState((prev) => (prev === 'speaking' ? 'idle' : prev));
+  }, []);
 
-    window.speechSynthesis.cancel();
-    const spokenText = cleanForSpeech(text);
-    const utterance = new SpeechSynthesisUtterance(spokenText);
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
-
-    // Pick best English natural voice
-    const voices = window.speechSynthesis.getVoices();
-    const naturalVoice = voices.find(
-      (v) =>
-        v.lang.startsWith('en') &&
-        (v.name.includes('Natural') ||
-          v.name.includes('Google') ||
-          v.name.includes('Guy') ||
-          v.name.includes('David') ||
-          v.name.includes('Ryan'))
-    );
-    if (naturalVoice) utterance.voice = naturalVoice;
-
-    utterance.onstart = () => {
-      setVoiceState('speaking');
-    };
-
-    utterance.onend = () => {
-      setVoiceState('idle');
-      // Automatically re-arm microphone if hands-free continuous mode is active
-      if (autoListenNext && isOpen) {
-        setTimeout(() => {
-          startListening();
-        }, 600);
-      }
-    };
-
-    utterance.onerror = () => {
-      setVoiceState('idle');
-    };
-
-    synthesisRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }, [autoListenNext, isOpen, soundMuted]);
-
-  // Handle Query Submission to AI Engine
-  const processVoiceCommand = useCallback(async (spokenCommand: string) => {
-    const query = spokenCommand.trim();
-    if (!query) return;
-
-    setLastUserVoice(query);
-    setLiveTranscript('');
-    setVoiceState('processing');
-
-    const aiBaseUrl =
-      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
-      'http://localhost:8000';
-
-    try {
-      const res = await fetch(`${aiBaseUrl}/ai/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer dev-kitchen-chef-token',
-        },
-        body: JSON.stringify({
-          message: query,
-          session_id: `kitchen_${activeStation.replace(/\s+/g, '_').toLowerCase()}`,
-        }),
-        signal: AbortSignal.timeout(10000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const reply = data.reply || data.message || 'Understood, Chef.';
-        setLastAiResponse(reply);
-        setIsAiOnline(true);
-        speakResponse(reply);
+  // Web SpeechSynthesis fallback
+  const fallbackBrowserSpeech = useCallback(
+    (spokenText: string) => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        setVoiceState('idle');
         return;
       }
-    } catch (err) {
-      console.warn('AI live call failed or timed out, activating kitchen heuristics:', err);
-    }
 
-    // High-context kitchen fallback logic
-    const lower = query.toLowerCase();
-    let reply = `I've analyzed the kitchen line for ${activeStation}. Everything is operating smoothly.`;
+      try {
+        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
 
-    if (lower === 'hi' || lower === 'hello' || lower.startsWith('hi ') || lower.startsWith('hello ')) {
-      reply = `Hello Chef Marco! I am monitoring Grill Station tickets and station bottlenecks. What would you like to check?`;
-    } else if (lower.includes('overdue') || lower.includes('late') || lower.includes('time')) {
-      reply =
-        'Ticket #1524 for Table T-01 is currently flagged as Overdue with 18 minutes elapsed. Recommend plating the 2 Classic Burgers immediately.';
-    } else if (lower.includes('burger') || lower.includes('grill') || lower.includes('how many')) {
-      reply =
-        'Grill Station currently has 4 Classic Wagyu Burgers queued: 3 Medium Well with No Onions, and 1 Medium Well with Extra Cheese.';
-    } else if (lower.includes('recipe') || lower.includes('spec') || lower.includes('classic')) {
-      reply =
-        'Classic Wagyu Smash Burger specs: 2 100-gram Wagyu patties smashed for 2 minutes per side, aged yellow cheddar, smoked bacon jam, house aioli, toasted brioche bun. Allergens are gluten and dairy.';
-    } else if (lower.includes('waiter') || lower.includes('marco') || lower.includes('notify')) {
-      reply =
-        'Notification sent to Waiter Marco: Table T-01 order is completing on the grill; please prepare for pickup in 2 minutes.';
-    } else if (lower.includes('balance') || lower.includes('bottleneck') || lower.includes('load')) {
-      reply =
-        'Grill Station is at 75% capacity with 8 active items. Fryer Station has spare capacity. Shift sides to the fryer station to shave approximately 3 minutes off ticket completion.';
-    }
+        const utterance = new SpeechSynthesisUtterance(spokenText);
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
 
-    setLastAiResponse(reply);
-    speakResponse(reply);
-  }, [activeStation, speakResponse]);
+        const voices = window.speechSynthesis.getVoices();
+        const naturalVoice = voices.find(
+          (v) =>
+            v.lang.startsWith('en') &&
+            (v.name.includes('Natural') ||
+              v.name.includes('Google') ||
+              v.name.includes('Guy') ||
+              v.name.includes('David') ||
+              v.name.includes('Ryan'))
+        );
+        if (naturalVoice) utterance.voice = naturalVoice;
 
-  // Setup Web Speech Recognition
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-
-        recognition.onstart = () => {
-          isListeningRef.current = true;
-          setVoiceState('listening');
+        utterance.onstart = () => {
+          setVoiceState('speaking');
         };
 
-        recognition.onresult = (event: any) => {
-          let current = '';
-          for (let i = 0; i < event.results.length; i++) {
-            current += event.results[i][0].transcript;
-          }
-          setLiveTranscript(current);
-
-          // Check if speech has finalized
-          if (event.results[0].isFinal) {
-            recognition.stop();
-            isListeningRef.current = false;
-            processVoiceCommand(current);
+        utterance.onend = () => {
+          setVoiceState('idle');
+          if (autoListenNextRef.current && isOpenRef.current) {
+            setTimeout(() => {
+              startListening();
+            }, 600);
           }
         };
 
-        recognition.onerror = () => {
-          isListeningRef.current = false;
+        utterance.onerror = () => {
           setVoiceState('idle');
         };
 
-        recognition.onend = () => {
-          isListeningRef.current = false;
-          if (voiceState === 'listening') {
-            setVoiceState('idle');
-          }
-        };
-
-        recognitionRef.current = recognition;
+        synthesisUtteranceRef.current = utterance;
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        setVoiceState('idle');
       }
-    }
-  }, [processVoiceCommand, voiceState]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   // Start Mic Listening
-  const startListening = () => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+  const startListening = useCallback(() => {
+    stopSpeaking();
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
-    if (!recognitionRef.current) {
-      toast.error('Voice recognition not supported in this browser.');
+
+    latestTranscriptRef.current = '';
+    hasProcessedRef.current = false;
+    setLiveTranscript('');
+
+    const rec = recognitionRef.current;
+    if (!rec) {
+      toast.error('Voice recognition not available in this browser. Please use Chrome or Edge.');
       return;
     }
-    try {
-      recognitionRef.current.abort();
-      recognitionRef.current.start();
-      setLiveTranscript('');
-      setVoiceState('listening');
-    } catch {
-      setVoiceState('idle');
+
+    if (isListeningRef.current) {
+      return;
     }
-  };
+
+    try {
+      rec.start();
+      isListeningRef.current = true;
+      setVoiceState('listening');
+    } catch (err: any) {
+      if (err?.name === 'InvalidStateError') {
+        isListeningRef.current = true;
+        setVoiceState('listening');
+      } else {
+        console.warn('Failed to start recognition:', err);
+        isListeningRef.current = false;
+        setVoiceState('idle');
+      }
+    }
+  }, [stopSpeaking]);
+
+  // Speak AI Response
+  const speakResponse = useCallback(
+    async (text: string) => {
+      stopSpeaking();
+      if (recognitionRef.current && isListeningRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+        isListeningRef.current = false;
+      }
+
+      if (soundMutedRef.current) {
+        setVoiceState('idle');
+        return;
+      }
+
+      const spokenText = cleanForSpeech(text);
+      if (!spokenText) {
+        setVoiceState('idle');
+        return;
+      }
+
+      setVoiceState('speaking');
+
+      const aiBaseUrl =
+        (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
+        'http://localhost:8000';
+
+      // Attempt 1: High quality Neural Voice Synthesis from backend
+      try {
+        const res = await fetch(`${aiBaseUrl}/ai/voice/synthesize`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer dev-kitchen-chef-token',
+          },
+          body: JSON.stringify({
+            text: spokenText.slice(0, 900),
+            persona: 'uk_jarvis',
+          }),
+          signal: AbortSignal.timeout(6000),
+        });
+
+        if (res.ok) {
+          const blob = await res.blob();
+          if (blob.size > 500) {
+            const audioUrl = URL.createObjectURL(blob);
+            const audio = new Audio(audioUrl);
+            currentAudioRef.current = audio;
+
+            audio.onended = () => {
+              URL.revokeObjectURL(audioUrl);
+              currentAudioRef.current = null;
+              setVoiceState('idle');
+              if (autoListenNextRef.current && isOpenRef.current) {
+                setTimeout(() => {
+                  startListening();
+                }, 600);
+              }
+            };
+
+            audio.onerror = () => {
+              URL.revokeObjectURL(audioUrl);
+              currentAudioRef.current = null;
+              fallbackBrowserSpeech(spokenText);
+            };
+
+            await audio.play();
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Backend neural voice fetch failed, using browser speech synthesis fallback:', err);
+      }
+
+      // Attempt 2: Fallback to browser Web SpeechSynthesis
+      fallbackBrowserSpeech(spokenText);
+    },
+    [stopSpeaking, fallbackBrowserSpeech, startListening]
+  );
+
+  // Handle Query Submission to AI Engine
+  const processVoiceCommand = useCallback(
+    async (spokenCommand: string) => {
+      const query = spokenCommand.trim();
+      if (!query) {
+        setVoiceState('idle');
+        return;
+      }
+
+      setLastUserVoice(query);
+      setLiveTranscript('');
+      setVoiceState('processing');
+
+      const currentStation = activeStationRef.current || 'Grill Station';
+      const aiBaseUrl =
+        (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
+        'http://localhost:8000';
+
+      try {
+        const res = await fetch(`${aiBaseUrl}/ai/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer dev-kitchen-chef-token',
+          },
+          body: JSON.stringify({
+            message: query,
+            session_id: `kitchen_${currentStation.replace(/\s+/g, '_').toLowerCase()}`,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const reply = data.reply || data.message || 'Understood, Chef.';
+          setLastAiResponse(reply);
+          setIsAiOnline(true);
+          speakResponse(reply);
+          return;
+        }
+      } catch (err) {
+        console.warn('AI live call failed or timed out, activating kitchen heuristics:', err);
+      }
+
+      // High-context kitchen fallback logic
+      const lower = query.toLowerCase();
+      let reply = `I have analyzed the kitchen line for ${currentStation}. Everything is operating smoothly.`;
+
+      if (lower === 'hi' || lower === 'hello' || lower.startsWith('hi ') || lower.startsWith('hello ')) {
+        reply = `Hello Chef Marco! I am monitoring ${currentStation} tickets and line bottlenecks. What would you like to check?`;
+      } else if (lower.includes('overdue') || lower.includes('late') || lower.includes('time')) {
+        reply =
+          'Ticket #1524 for Table T-01 is currently flagged as Overdue with 18 minutes elapsed. Recommend plating the 2 Classic Burgers immediately.';
+      } else if (lower.includes('burger') || lower.includes('grill') || lower.includes('how many')) {
+        reply =
+          'Grill Station currently has 4 Classic Wagyu Burgers queued: 3 Medium Well with No Onions, and 1 Medium Well with Extra Cheese.';
+      } else if (lower.includes('recipe') || lower.includes('spec') || lower.includes('classic') || lower.includes('wagyu')) {
+        reply =
+          'Classic Wagyu Smash Burger specs: 2 100-gram Wagyu patties smashed for 2 minutes per side, aged yellow cheddar, smoked bacon jam, house aioli, toasted brioche bun. Allergens are gluten and dairy.';
+      } else if (lower.includes('waiter') || lower.includes('marco') || lower.includes('notify') || lower.includes('ready')) {
+        reply =
+          'Notification sent to Waiter Marco: Table T-01 order is completing on the grill; please prepare for pickup in 2 minutes.';
+      } else if (lower.includes('balance') || lower.includes('bottleneck') || lower.includes('load') || lower.includes('capacity')) {
+        reply =
+          'Grill Station is at 75% capacity with 8 active items. Fryer Station has spare capacity. Shift sides to the fryer station to shave approximately 3 minutes off ticket completion.';
+      }
+
+      setLastAiResponse(reply);
+      speakResponse(reply);
+    },
+    [speakResponse]
+  );
+
+  // Setup Web Speech Recognition
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      console.warn('SpeechRecognition is not supported in this browser.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      isListeningRef.current = true;
+      setVoiceState('listening');
+    };
+
+    recognition.onresult = (event: any) => {
+      let fullTranscript = '';
+      let hasFinal = false;
+
+      for (let i = 0; i < event.results.length; i++) {
+        const res = event.results[i];
+        if (res && res[0]) {
+          fullTranscript += res[0].transcript + ' ';
+          if (res.isFinal) {
+            hasFinal = true;
+          }
+        }
+      }
+
+      const trimmed = fullTranscript.trim();
+      if (trimmed) {
+        latestTranscriptRef.current = trimmed;
+        setLiveTranscript(trimmed);
+      }
+
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+
+      // If browser confirmed final segment, submit immediately
+      if (hasFinal && trimmed && !hasProcessedRef.current) {
+        hasProcessedRef.current = true;
+        try {
+          recognition.stop();
+        } catch {}
+        processVoiceCommand(trimmed);
+        return;
+      }
+
+      // Silence debounce: 1.2s of silence after speech commits question
+      if (trimmed && !hasProcessedRef.current) {
+        silenceTimerRef.current = setTimeout(() => {
+          if (!hasProcessedRef.current && latestTranscriptRef.current.trim()) {
+            hasProcessedRef.current = true;
+            try {
+              recognition.stop();
+            } catch {}
+            processVoiceCommand(latestTranscriptRef.current.trim());
+          }
+        }, 1200);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.warn('SpeechRecognition error:', event?.error);
+      isListeningRef.current = false;
+      if (event?.error === 'not-allowed') {
+        toast.error('Microphone permission denied', {
+          description: 'Please click the lock icon in your browser address bar to allow microphone access.',
+        });
+      }
+      setVoiceState((prev) => (prev === 'listening' ? 'idle' : prev));
+    };
+
+    recognition.onend = () => {
+      isListeningRef.current = false;
+      if (!hasProcessedRef.current && latestTranscriptRef.current.trim().length > 0) {
+        hasProcessedRef.current = true;
+        processVoiceCommand(latestTranscriptRef.current.trim());
+        return;
+      }
+      setVoiceState((prev) => (prev === 'listening' ? 'idle' : prev));
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      try {
+        recognition.abort();
+      } catch {}
+      recognitionRef.current = null;
+    };
+  }, [processVoiceCommand]);
 
   // Stop Mic Listening
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
+  const stopListening = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    const rec = recognitionRef.current;
+    if (rec && isListeningRef.current) {
+      try {
+        rec.stop();
+      } catch {}
     }
     isListeningRef.current = false;
-    setVoiceState('idle');
-  };
 
-  // Stop AI Speech
-  const stopSpeaking = () => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    // If there is pending speech, submit it
+    const pendingText = latestTranscriptRef.current.trim();
+    if (!hasProcessedRef.current && pendingText.length > 0) {
+      hasProcessedRef.current = true;
+      processVoiceCommand(pendingText);
+    } else {
+      setVoiceState('idle');
     }
-    setVoiceState('idle');
-  };
+  }, [processVoiceCommand]);
 
   // Auto-start listening on open
   useEffect(() => {
     if (isOpen) {
       const timer = setTimeout(() => {
         startListening();
-      }, 400);
+      }, 350);
       return () => clearTimeout(timer);
     } else {
       stopListening();
       stopSpeaking();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, startListening, stopListening, stopSpeaking]);
 
   if (!isOpen) return null;
 
