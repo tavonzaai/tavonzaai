@@ -245,6 +245,7 @@ module "alb" {
   kitchen_subdomain    = var.kitchen_subdomain
   cashier_subdomain    = var.cashier_subdomain
   admin_subdomain      = var.admin_subdomain
+  manager_subdomain    = var.manager_subdomain
   target_type          = "instance"
   backend_instance_id  = module.backend_ec2.instance_id
   frontend_instance_id = module.frontend_ec2.instance_id
@@ -255,12 +256,14 @@ module "alb" {
   kitchen_port                     = var.kitchen_port
   cashier_port                     = var.cashier_port
   admin_port                       = var.admin_port
+  manager_port                     = var.manager_port
   backend_health_check_path        = var.backend_health_check_path
   nextjs_health_check_path         = var.nextjs_health_check_path
   ai_health_check_path             = var.ai_health_check_path
   kitchen_health_check_path        = var.kitchen_health_check_path
   cashier_health_check_path        = var.cashier_health_check_path
   admin_health_check_path          = var.admin_health_check_path
+  manager_health_check_path        = var.manager_health_check_path
   health_check_interval            = var.health_check_interval
   health_check_timeout             = var.health_check_timeout
   health_check_healthy_threshold   = var.health_check_healthy_threshold
@@ -279,6 +282,7 @@ module "route53" {
   kitchen_subdomain   = var.kitchen_subdomain
   cashier_subdomain   = var.cashier_subdomain
   admin_subdomain     = var.admin_subdomain
+  manager_subdomain   = var.manager_subdomain
   alb_dns_name        = module.alb.alb_dns_name
   alb_zone_id         = module.alb.alb_zone_id
   extra_txt_records   = var.extra_txt_records

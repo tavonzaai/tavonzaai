@@ -115,10 +115,14 @@ ecr_repository_names = [
   "kitchen",         # Kitchen Next.js Frontend (kitchen.tavonza.com)
   "cashier",         # Cashier Next.js Frontend (cashier.tavonza.com)
   "admin-dashboard", # Admin React Dashboard (admin.tavonza.com)
-  "branch-manager",  # Branch Manager Frontend (branch-manager.tavonza.com)
+  "manager",         # Manager Frontend (manager.tavonza.com / prod-manager.tavonza.com)
+  "branch-manager",  # Branch Manager Frontend (backward-compatibility)
   "waiter",          # Waiter Next.js Frontend (waiter.tavonza.com)
   "worker"           # Background FIFO Queue Worker
 ]
+
+manager_subdomain = "prod-manager"
+manager_port      = 3103
 
 # ALB Ingress Access (Default: Open to public Internet for tavonza.com)
 alb_ingress_cidr_blocks = [

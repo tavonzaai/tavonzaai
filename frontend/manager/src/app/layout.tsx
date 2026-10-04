@@ -4,8 +4,8 @@ import './globals.css';
 import { ReduxProvider } from '../redux';
 
 export const metadata: Metadata = {
-  title: 'Tavonza | Branch Manager Console',
-  description: 'Branch-level operational management for shifts, inventory, live orders, tables, and staff',
+  title: 'Tavonza | Manager Console',
+  description: 'Manager operational console for shifts, inventory, live orders, tables, and staff',
   icons: {
     icon: '/icon.png',
   },
