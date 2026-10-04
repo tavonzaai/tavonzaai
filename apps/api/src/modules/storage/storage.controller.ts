@@ -290,6 +290,7 @@ export class StorageController {
   async getFileInfo(@Query() query: FileKeyQueryDto): Promise<FileMetadataResponseDto> {
     try {
       const meta = await this.storageService.getFileMetadata(query.key);
+      const signedUrl = await this.storageService.getSignedUrl(meta.key, meta.bucket);
       return {
         key: meta.key,
         bucket: meta.bucket,
@@ -297,7 +298,7 @@ export class StorageController {
         contentType: meta.contentType,
         eTag: meta.eTag,
         lastModified: meta.lastModified,
-        url: this.storageService.getPublicUrl(meta.key, meta.bucket),
+        url: signedUrl,
         metadata: meta.metadata,
       };
     } catch (err: any) {
@@ -336,11 +337,15 @@ export class StorageController {
       continuationToken: query.continuationToken,
     });
 
-    return {
-      files: result.files.map((f) => ({
+    const files = await Promise.all(
+      result.files.map(async (f) => ({
         ...f,
-        url: this.storageService.getPublicUrl(f.key, f.bucket),
+        url: await this.storageService.getSignedUrl(f.key, f.bucket),
       })),
+    );
+
+    return {
+      files,
       folders: result.folders,
       nextContinuationToken: result.nextContinuationToken,
       isTruncated: result.isTruncated,
