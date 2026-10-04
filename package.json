@@ -10,6 +10,11 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "storage:test:minio": "pnpm --filter @tavonza/storage test:minio",
+    "storage:test:s3": "pnpm --filter @tavonza/storage test:s3",
     "db:push": "pnpm --filter @tavonza/database db:push",
     "db:generate": "pnpm --filter @tavonza/database db:generate",
     "db:migrate": "pnpm --filter @tavonza/database db:migrate",
@@ -22,5 +27,68 @@
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
+  },
+  "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-vfj7-8cjw-p6xm"
+      ],
+      "ignoreCves": [
+        "CVE-2026-93687"
+      ]
+    },
+    "overrides": {
+      "esbuild@<=0.24.2": ">=0.25.0",
+      "tmp@<=0.2.3": ">=0.2.4",
+      "glob@>=10.2.0 <10.5.0": ">=10.5.0",
+      "next@>=10.0.0 <15.5.10": ">=15.5.10",
+      "next@>=13.0.0 <15.0.8": ">=15.0.8",
+      "js-yaml@>=4.0.0 <4.1.1": ">=4.1.1",
+      "webpack@>=5.49.0 <=5.104.0": ">=5.104.1",
+      "webpack@>=5.49.0 <5.104.0": ">=5.104.0",
+      "minimatch@>=9.0.0 <9.0.6": ">=9.0.6",
+      "minimatch@>=9.0.0 <9.0.7": ">=9.0.7",
+      "multer@<2.1.0": ">=2.1.0",
+      "ajv@>=7.0.0-alpha.0 <8.18.0": ">=8.18.0",
+      "multer@<2.1.1": ">=2.1.1",
+      "file-type@>=13.0.0 <21.3.1": ">=21.3.1",
+      "file-type@>=20.0.0 <=21.3.1": ">=21.3.2",
+      "next@>=9.5.0 <15.5.13": ">=15.5.13",
+      "next@>=10.0.0 <15.5.14": ">=15.5.14",
+      "picomatch@>=4.0.0 <4.0.4": ">=4.0.4",
+      "lodash@>=4.0.0 <=4.17.23": ">=4.18.0",
+      "lodash@<=4.17.23": ">=4.18.0",
+      "drizzle-orm@<0.45.2": ">=0.45.2",
+      "next@>=13.0.0 <15.5.15": ">=15.5.15",
+      "postcss@<8.5.10": ">=8.5.10",
+      "next@>=13.0.0 <15.5.16": ">=15.5.16",
+      "next@>=12.2.0 <15.5.16": ">=15.5.16",
+      "next@>=13.4.0 <15.5.16": ">=15.5.16",
+      "next@>=13.4.6 <15.5.16": ">=15.5.16",
+      "next@>=10.0.0 <15.5.16": ">=15.5.16",
+      "next@>=13.4.13 <15.5.16": ">=15.5.16",
+      "next@>=14.2.0 <15.5.16": ">=15.5.16",
+      "qs@>=6.11.1 <=6.15.1": ">=6.15.2",
+      "lodash@>=4.0.0 <=4.17.22": ">=4.17.23",
+      "tmp@<0.2.6": ">=0.2.6",
+      "multer@>=1.0.0 <2.2.0": ">=2.2.0",
+      "multer@>=2.0.0-alpha.1 <2.2.0": ">=2.2.0",
+      "js-yaml@>=4.0.0 <=4.1.1": ">=4.2.0",
+      "js-yaml@>=4.0.0 <4.3.0": ">=4.3.0",
+      "body-parser@<1.20.6": ">=1.20.6",
+      "next@>=13.0.0 <15.5.21": ">=15.5.21",
+      "next@>=14.1.1 <15.5.21": ">=15.5.21",
+      "next@>=12.0.0 <15.5.21": ">=15.5.21",
+      "postcss@<=8.5.11": ">=8.5.12",
+      "postcss@<=8.5.22": ">=8.5.23",
+      "js-yaml@>=4.0.0 <4.3.1": ">=4.3.1",
+      "postcss@<=8.5.17": ">=8.5.18",
+      "qs@>=6.14.2 <=6.15.3": ">=6.16.0",
+      "qs@>=2.2.5 <6.16.0": ">=6.16.0",
+      "next@>=13.4.0 <15.5.24": ">=15.5.24",
+      "js-yaml@>=4.0.0 <4.3.2": ">=4.3.2",
+      "next@>=10.0.0 <15.5.24": ">=15.5.24",
+      "multer@<2.3.0": ">=2.3.0"
+    }
   }
 }
