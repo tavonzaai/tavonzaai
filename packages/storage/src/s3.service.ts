@@ -6,6 +6,9 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   HeadObjectCommand,
+  HeadBucketCommand,
+  CreateBucketCommand,
+  BucketLocationConstraint,
   ListObjectsV2Command,
   CopyObjectCommand,
 } from '@aws-sdk/client-s3';
@@ -64,6 +67,51 @@ export class S3StorageService {
    */
   public getDefaultBucket(): string {
     return this.config.bucket;
+  }
+
+  /**
+   * Checks if an S3 bucket exists and is accessible
+   */
+  public async bucketExists(bucketOverride?: string): Promise<boolean> {
+    const bucket = this.resolveBucket(bucketOverride);
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: bucket }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Ensures an S3 bucket exists, creating it if it does not.
+   * Particularly useful for local development with MinIO or test suites.
+   */
+  public async ensureBucketExists(bucketOverride?: string): Promise<boolean> {
+    const bucket = this.resolveBucket(bucketOverride);
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: bucket }));
+      return false; // Already existed
+    } catch (err: any) {
+      const isNotFound =
+        err.name === 'NotFound' ||
+        err.name === 'NoSuchBucket' ||
+        err.$metadata?.httpStatusCode === 404;
+
+      if (isNotFound) {
+        const createParams: { Bucket: string; CreateBucketConfiguration?: { LocationConstraint?: BucketLocationConstraint } } = {
+          Bucket: bucket,
+        };
+        // AWS S3 requires LocationConstraint for regions other than us-east-1; MinIO accepts or ignores it
+        if (this.config.region && this.config.region !== 'us-east-1') {
+          createParams.CreateBucketConfiguration = {
+            LocationConstraint: this.config.region as BucketLocationConstraint,
+          };
+        }
+        await this.client.send(new CreateBucketCommand(createParams));
+        return true; // Newly created
+      }
+      throw err;
+    }
   }
 
   /**

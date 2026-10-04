@@ -20,9 +20,20 @@ export function loadStorageConfig(overrides?: Partial<StorageConfig>): StorageCo
     env.S3_REGION ||
     'eu-west-2';
 
-  const accessKeyId = overrides?.credentials?.accessKeyId || env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = overrides?.credentials?.secretAccessKey || env.AWS_SECRET_ACCESS_KEY;
-  const sessionToken = overrides?.credentials?.sessionToken || env.AWS_SESSION_TOKEN;
+  const accessKeyId =
+    overrides?.credentials?.accessKeyId ||
+    env.S3_ACCESS_KEY_ID ||
+    env.AWS_ACCESS_KEY_ID;
+
+  const secretAccessKey =
+    overrides?.credentials?.secretAccessKey ||
+    env.S3_SECRET_ACCESS_KEY ||
+    env.AWS_SECRET_ACCESS_KEY;
+
+  const sessionToken =
+    overrides?.credentials?.sessionToken ||
+    env.S3_SESSION_TOKEN ||
+    env.AWS_SESSION_TOKEN;
 
   const credentials =
     accessKeyId && secretAccessKey
