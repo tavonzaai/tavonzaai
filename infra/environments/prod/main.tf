@@ -82,8 +82,9 @@ module "ecr" {
 module "s3" {
   source = "../../modules/s3"
 
-  bucket_name = var.s3_bucket_name
-  environment = var.environment
+  bucket_name  = var.s3_bucket_name
+  environment  = var.environment
+  project_name = var.project_name
 }
 
 # 5. AWS Secrets Manager Module
@@ -109,6 +110,8 @@ module "secrets_manager" {
     SES_CONFIGURATION_SET = var.enable_ses && length(module.ses) > 0 ? module.ses[0].configuration_set_name : ""
     AWS_ACCESS_KEY_ID     = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
     AWS_SECRET_ACCESS_KEY = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_raw_secret_key : ""
+    S3_ACCESS_KEY_ID      = module.s3.s3_access_key_id
+    S3_SECRET_ACCESS_KEY  = module.s3.s3_secret_access_key
     COMPANY_NAME          = "tavonzaai"
     S3_BUCKET_NAME        = var.s3_bucket_name
     AWS_S3_BUCKET         = var.s3_bucket_name
@@ -258,6 +261,14 @@ module "ecs" {
         {
           name      = "SES_CONFIGURATION_SET"
           valueFrom = "${module.secrets_manager.secret_arn}:SES_CONFIGURATION_SET::"
+        },
+        {
+          name      = "S3_ACCESS_KEY_ID"
+          valueFrom = "${module.secrets_manager.secret_arn}:S3_ACCESS_KEY_ID::"
+        },
+        {
+          name      = "S3_SECRET_ACCESS_KEY"
+          valueFrom = "${module.secrets_manager.secret_arn}:S3_SECRET_ACCESS_KEY::"
         }
       ]
     }
@@ -359,6 +370,14 @@ module "ecs" {
         {
           name      = "SES_CONFIGURATION_SET"
           valueFrom = "${module.secrets_manager.secret_arn}:SES_CONFIGURATION_SET::"
+        },
+        {
+          name      = "S3_ACCESS_KEY_ID"
+          valueFrom = "${module.secrets_manager.secret_arn}:S3_ACCESS_KEY_ID::"
+        },
+        {
+          name      = "S3_SECRET_ACCESS_KEY"
+          valueFrom = "${module.secrets_manager.secret_arn}:S3_SECRET_ACCESS_KEY::"
         }
       ]
     }
