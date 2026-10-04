@@ -53,11 +53,11 @@ export function getApiBaseUrl(): string {
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) ||
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
     (typeof process !== 'undefined' && process.env?.API_BASE_URL) ||
-    'https://prod-api.tavonza.com';
+    'http://localhost:3000';
 
   // Automatically clean /docs, /docs-json, and trailing slashes if pasted directly from doc URL
   url = String(url).trim().replace(/\/docs(-json)?\/?$/, '').replace(/\/$/, '');
-  return url || 'https://prod-api.tavonza.com';
+  return url || 'http://localhost:3000';
 }
 
 export const API_BASE_URL = getApiBaseUrl();

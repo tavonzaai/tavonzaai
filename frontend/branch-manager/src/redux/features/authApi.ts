@@ -99,6 +99,10 @@ export const rawAuthApi = {
         `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim() ||
         data.user.email;
       setCookie('branch_manager_user', JSON.stringify(data.user));
+      if (data.user.branchId) {
+        setCookie('tavonza_branch_id', data.user.branchId);
+        setCookie('branch_id', data.user.branchId);
+      }
     }
 
     return data;

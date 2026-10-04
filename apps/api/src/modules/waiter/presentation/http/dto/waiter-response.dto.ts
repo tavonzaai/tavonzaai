@@ -11,9 +11,12 @@ export class TableAssignmentDto {
   @ApiProperty() branchId!: string;
   @ApiProperty() waiterId!: string;
   @ApiProperty() tableId!: string;
-  @ApiProperty() shiftDate!: string;
+  @ApiPropertyOptional() tableNumber?: string;
+  @ApiPropertyOptional() capacity?: number;
+  @ApiPropertyOptional() serviceStatus?: string;
+  @ApiPropertyOptional() shiftDate?: string;
   @ApiProperty() isActive!: boolean;
-  @ApiProperty() assignedAt!: Date;
+  @ApiPropertyOptional() assignedAt?: Date;
 }
 
 // ── Order Summary (Waiter view) ───────────────────────────────────────

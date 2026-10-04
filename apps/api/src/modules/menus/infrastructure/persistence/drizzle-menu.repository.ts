@@ -1,15 +1,6 @@
 // ============================================================================
 // Menu Infrastructure — Drizzle Menu Repository
 // ============================================================================
-// Implements the menu repository interface using Drizzle ORM.
-//
-// KEY DRIZZLE PATTERNS:
-//   1. Relational queries: db.query.menuItems.findMany({ with: { ... } })
-//   2. Filter builder:     eq(), and(), ilike() from drizzle-orm
-//   3. Type-safe tables:   menuItems, menuCategories from schema
-//
-// This is the ONLY file in the menus module that imports Drizzle/DB.
-// ============================================================================
 
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, ilike, or } from 'drizzle-orm';
@@ -18,7 +9,9 @@ import {
   type DrizzleDatabase,
   menuCategories,
   menuItems,
-  menuItemAddOns,
+  modifierGroups,
+  modifiers,
+  branches,
 } from '@tavonza/database';
 import { IMenuRepository } from '../../domain/interfaces/menu-repository.interface';
 import {
@@ -38,45 +31,43 @@ export class DrizzleMenuRepository implements IMenuRepository {
   // ── Categories ──────────────────────────────────────────────────────
 
   async findCategoriesByBranch(branchId: string): Promise<MenuCategory[]> {
-    // Use relational query to include item count
-    const results = await this.db.query.menuCategories.findMany({
-      where: and(
-        eq(menuCategories.branchId, branchId),
-        eq(menuCategories.isActive, true),
-      ),
-      orderBy: menuCategories.sortOrder,
-      with: {
-        items: {
-          columns: { id: true },
-          where: eq(menuItems.isAvailable, true),
-        },
-      },
-    });
+    const restaurantId = await this.resolveRestaurantId(branchId);
 
-    return results.map((r) =>
+    const categories = await this.db
+      .select()
+      .from(menuCategories)
+      .where(
+        and(
+          eq(menuCategories.restaurantId, restaurantId),
+          eq(menuCategories.isActive, true),
+        ),
+      )
+      .orderBy(menuCategories.displayOrder);
+
+    return categories.map((c) =>
       this.toDomainCategory({
-        ...r,
-        itemCount: r.items.length,
+        ...c,
+        branchId,
+        sortOrder: c.displayOrder ?? 0,
+        itemCount: 0,
       }),
     );
   }
 
   async findCategoryById(id: string): Promise<MenuCategory | null> {
-    const result = await this.db.query.menuCategories.findFirst({
-      where: eq(menuCategories.id, id),
-      with: {
-        items: {
-          columns: { id: true },
-          where: eq(menuItems.isAvailable, true),
-        },
-      },
-    });
+    const [category] = await this.db
+      .select()
+      .from(menuCategories)
+      .where(eq(menuCategories.id, id))
+      .limit(1);
 
-    if (!result) return null;
+    if (!category) return null;
 
     return this.toDomainCategory({
-      ...result,
-      itemCount: result.items.length,
+      ...category,
+      branchId: '',
+      sortOrder: category.displayOrder ?? 0,
+      itemCount: 0,
     });
   }
 
@@ -90,17 +81,15 @@ export class DrizzleMenuRepository implements IMenuRepository {
       isPopular?: boolean;
     },
   ): Promise<MenuItem[]> {
-    // Build dynamic where conditions
+    const restaurantId = await this.resolveRestaurantId(branchId);
+
     const conditions = [
-      eq(menuItems.branchId, branchId),
+      eq(menuItems.restaurantId, restaurantId),
       eq(menuItems.isAvailable, true),
     ];
 
     if (filters?.categoryId) {
       conditions.push(eq(menuItems.categoryId, filters.categoryId));
-    }
-    if (filters?.isPopular !== undefined) {
-      conditions.push(eq(menuItems.isPopular, filters.isPopular));
     }
     if (filters?.search) {
       conditions.push(
@@ -111,80 +100,114 @@ export class DrizzleMenuRepository implements IMenuRepository {
       );
     }
 
-    const results = await this.db.query.menuItems.findMany({
-      where: and(...conditions),
-      orderBy: menuItems.sortOrder,
-      with: {
-        category: { columns: { name: true } },
-        addOns: { where: eq(menuItemAddOns.isActive, true) },
-      },
-    });
+    const items = await this.db
+      .select()
+      .from(menuItems)
+      .where(and(...conditions))
+      .orderBy(menuItems.displayOrder);
 
-    return results.map((r) => this.toDomainItem(r));
+    return items.map((item) =>
+      this.toDomainItem({
+        ...item,
+        branchId,
+        price: item.basePrice,
+        addOns: [],
+      }),
+    );
   }
 
   async findItemById(id: string): Promise<MenuItem | null> {
-    const result = await this.db.query.menuItems.findFirst({
-      where: eq(menuItems.id, id),
-      with: {
-        category: { columns: { name: true } },
-        addOns: { where: eq(menuItemAddOns.isActive, true) },
-      },
-    });
+    const [item] = await this.db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.id, id))
+      .limit(1);
 
-    if (!result) return null;
-    return this.toDomainItem(result);
+    if (!item) return null;
+
+    // Fetch modifiers for this item
+    const groups = await this.db
+      .select()
+      .from(modifierGroups)
+      .where(eq(modifierGroups.menuItemId, id));
+
+    let addOns: MenuItemAddOn[] = [];
+    if (groups.length > 0) {
+      const groupIds = groups.map((g) => g.id);
+      const mods = await this.db
+        .select()
+        .from(modifiers)
+        .where(eq(modifiers.isAvailable, true));
+
+      addOns = mods
+        .filter((m) => groupIds.includes(m.modifierGroupId))
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          price: m.priceDelta ?? 0,
+        }));
+    }
+
+    return this.toDomainItem({
+      ...item,
+      branchId: '',
+      price: item.basePrice,
+      addOns,
+    });
   }
 
-  // ── Mappers (DB Record → Domain Entity) ─────────────────────────────
+  private async resolveRestaurantId(branchId: string): Promise<string> {
+    const [branch] = await this.db
+      .select({ restaurantId: branches.restaurantId })
+      .from(branches)
+      .where(eq(branches.id, branchId))
+      .limit(1);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return branch?.restaurantId ?? branchId;
+  }
+
   private toDomainCategory(record: any): MenuCategory {
     const props: MenuCategoryProps = {
       id: record.id,
       branchId: record.branchId,
       name: record.name,
       description: record.description,
-      imageUrl: record.imageUrl,
-      sortOrder: record.sortOrder,
-      isActive: record.isActive,
+      imageUrl: record.imageUrl ?? null,
+      sortOrder: record.sortOrder ?? 0,
+      isActive: record.isActive ?? true,
       itemCount: record.itemCount ?? 0,
     };
     return new MenuCategory(props);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private toDomainItem(record: any): MenuItem {
-    const addOns: MenuItemAddOn[] = (record.addOns ?? []).map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (a: any) => ({
-        id: a.id,
-        name: a.name,
-        price: Number(a.price),
-      }),
-    );
+    const addOns: MenuItemAddOn[] = (record.addOns ?? []).map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      price: Number(a.price),
+    }));
 
     const props: MenuItemProps = {
       id: record.id,
       branchId: record.branchId,
       categoryId: record.categoryId,
-      categoryName: record.category?.name ?? '',
+      categoryName: record.categoryName ?? '',
       name: record.name,
       description: record.description,
       price: Number(record.price),
       imageUrl: record.imageUrl,
-      prepTime: record.prepTime,
-      calories: record.calories,
-      isVegetarian: record.isVegetarian,
-      isVegan: record.isVegan,
-      isGlutenFree: record.isGlutenFree,
-      allergens: record.allergens,
-      winePairing: record.winePairing,
-      winePairingNote: record.winePairingNote,
+      prepTime: record.prepTime ?? 15,
+      calories: record.calories ?? null,
+      isVegetarian: record.isVegetarian ?? false,
+      isVegan: record.isVegan ?? false,
+      isGlutenFree: record.isGlutenFree ?? false,
+      allergens: record.allergens ?? null,
+      winePairing: record.winePairing ?? null,
+      winePairingNote: record.winePairingNote ?? null,
       rating: record.rating ? Number(record.rating) : null,
-      ratingCount: record.ratingCount,
-      isAvailable: record.isAvailable,
-      isPopular: record.isPopular,
+      ratingCount: record.ratingCount ?? 0,
+      isAvailable: record.isAvailable ?? true,
+      isPopular: record.isPopular ?? false,
       addOns,
     };
     return new MenuItem(props);

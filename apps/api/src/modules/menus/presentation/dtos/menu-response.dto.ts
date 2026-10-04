@@ -49,6 +49,8 @@ export class MenuItemListResponseDto {
   isAvailable!: boolean;
   dietBadge!: string | null;
   categoryName!: string;
+  categoryId!: string;
+  basePrice!: number;
 
   static fromEntity(entity: MenuItem): MenuItemListResponseDto {
     const dto = new MenuItemListResponseDto();
@@ -56,6 +58,7 @@ export class MenuItemListResponseDto {
     dto.name = entity.name;
     dto.description = entity.description;
     dto.price = entity.price;
+    dto.basePrice = entity.price;
     dto.imageUrl = entity.imageUrl;
     dto.rating = entity.rating;
     dto.ratingCount = entity.ratingCount;
@@ -63,6 +66,7 @@ export class MenuItemListResponseDto {
     dto.isAvailable = entity.isAvailable;
     dto.dietBadge = entity.dietBadge;
     dto.categoryName = entity.categoryName;
+    dto.categoryId = entity.categoryId;
     return dto;
   }
 }

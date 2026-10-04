@@ -16,9 +16,12 @@
     "@tavonza/events": "workspace:*",
     "@tavonza/observability": "workspace:*",
     "@tavonza/shared": "workspace:*",
+    "ioredis": "^6.0.0",
+    "jsonwebtoken": "^9.0.3",
     "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.12.7",
     "@types/ws": "^8.5.10",
     "tsx": "^4.7.2",

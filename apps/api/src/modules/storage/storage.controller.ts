@@ -20,7 +20,7 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import type { Response } from "express";
-import { StorageService, generateKey } from "@tavonza/storage";
+import { StorageService, generateKey, type ObjectMetadata } from "@tavonza/storage";
 
 import {
   Base64UploadDto,
@@ -359,7 +359,7 @@ export class StorageController {
     });
 
     const files = await Promise.all(
-      result.files.map(async (f) => ({
+      result.files.map(async (f: ObjectMetadata) => ({
         ...f,
         url: await this.storageService.getSignedUrl(f.key, f.bucket),
       })),

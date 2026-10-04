@@ -19,11 +19,24 @@ export async function generateMetadata({
   };
 }
 
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+
 export default async function BranchManagerTabPage({
   params,
 }: {
   params: { tab: string };
 }) {
+  const cookieStore = await cookies();
+  const token =
+    cookieStore.get('branch_manager_token')?.value ||
+    cookieStore.get('access_token')?.value;
+  const user = cookieStore.get('branch_manager_user')?.value;
+
+  if (!token || !user) {
+    redirect('/login');
+  }
+
   const resolvedParams = await params;
   const tabParam = resolvedParams?.tab?.toLowerCase() || '';
   const tabName = routeToNav[tabParam] || 'Dashboard';
