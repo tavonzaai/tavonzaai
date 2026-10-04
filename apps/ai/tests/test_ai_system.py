@@ -251,6 +251,31 @@ class TestInternalClientMock:
         assert isinstance(a, ActorContext)
         await c.aclose()
     @pytest.mark.asyncio
+    async def test_resolve_guest_token_has_guest_permissions(self):
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        guest = await c.resolve_actor("dev-guest-token")
+        assert guest.permissions == ["menu.read", "orders.read"]
+        assert "inventory.read" not in guest.permissions
+        assert "reports.read" not in guest.permissions
+        await c.aclose()
+    @pytest.mark.asyncio
+    async def test_resolve_jwt_role_customer(self):
+        import base64
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        token = f"hdr.{base64.urlsafe_b64encode(b'{\"role\":\"CUSTOMER\"}').decode()}.sig"
+        customer = await c.resolve_actor(token)
+        assert customer.permissions == ["menu.read", "orders.read"]
+        await c.aclose()
+    @pytest.mark.asyncio
+    async def test_resolve_admin_token(self):
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        admin = await c.resolve_actor("dev-admin-token")
+        assert admin.permissions == ["*"]
+        await c.aclose()
+    @pytest.mark.asyncio
     async def test_execute_tool_get_menu(self):
         from src.internal_client import InternalClient
         from src.models import ActorContext
@@ -333,3 +358,25 @@ class TestAPIEndpoints:
         async with await self._c() as c:
             r = await c.get("/docs")
         assert r.status_code == 200
+
+    async def test_groq_fallback_chain_and_cooldown(self):
+        import time
+        from src.providers.groq_provider import GroqProvider
+        provider = GroqProvider()
+        chain = provider._build_model_chain()
+        assert len(chain) >= 2
+        primary = chain[0]
+        # Simulate rate-limit cooldown on primary
+        provider._model_cooldowns[primary] = time.time() + 60.0
+        new_chain = provider._build_model_chain()
+        assert new_chain[0] != primary
+        assert primary in new_chain
+
+    async def test_session_lock_serialization(self):
+        from src.main import _get_session_lock
+        lock1 = await _get_session_lock("sess-1")
+        lock2 = await _get_session_lock("sess-1")
+        assert lock1 is lock2
+        lock3 = await _get_session_lock("sess-2")
+        assert lock1 is not lock3
+

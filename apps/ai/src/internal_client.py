@@ -11,9 +11,9 @@ from typing import Any
 
 import httpx
 
-from src.config import settings
-from src.models import ActorContext
-from src.policies.roles import resolve_role_permissions
+from .config import settings
+from .models import ActorContext
+from .policies.roles import resolve_role_permissions
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +129,9 @@ class InternalClient:
         import base64
         import json
 
+        token_lower = (user_token or "").lower()
+
+        # 1. JWT Token Parsing
         if user_token and "." in user_token:
             try:
                 parts = user_token.split(".")
@@ -137,7 +140,12 @@ class InternalClient:
                     payload_bytes = base64.urlsafe_b64decode(parts[1] + padding)
                     payload = json.loads(payload_bytes.decode("utf-8"))
                     role = payload.get("role")
-                    permissions = payload.get("permissions") or resolve_role_permissions(role)
+                    if payload.get("permissions"):
+                        permissions = payload["permissions"]
+                    elif str(role).lower() in ("customer", "guest"):
+                        permissions = ["menu.read", "orders.read"]
+                    else:
+                        permissions = resolve_role_permissions(str(role) if role else None)
                     return ActorContext(
                         actor_type=payload.get("actor_type", "USER"),
                         acting_user_id=str(payload.get("acting_user_id") or payload.get("sub", "dev-user-1")),
@@ -153,7 +161,7 @@ class InternalClient:
                 pass
 
         token_lower = (user_token or "").lower()
-        if "customer" in token_lower or "guest" in token_lower:
+        if any(k in token_lower for k in ("customer", "guest")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="cust-dev-01",
@@ -161,10 +169,10 @@ class InternalClient:
                 organization_id="org_dev",
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
-                permissions=resolve_role_permissions("customer"),
-                resource_scope={"table_code": "T1", "table_session_id": "ts_dev_1"},
+                permissions=["menu.read", "orders.read"],
+                resource_scope={"role": "CUSTOMER", "table_code": "T1", "table_session_id": "ts_dev_1"},
             )
-        if "waiter" in token_lower:
+        if any(k in token_lower for k in ("waiter", "server")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="waiter-dev-01",
@@ -173,9 +181,9 @@ class InternalClient:
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
                 permissions=resolve_role_permissions("waiter"),
-                resource_scope={"tables": ["T1", "T2", "T5"]},
+                resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
             )
-        if "kitchen" in token_lower or "chef" in token_lower:
+        if any(k in token_lower for k in ("kitchen", "chef")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="chef-dev-01",
@@ -184,7 +192,7 @@ class InternalClient:
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
                 permissions=resolve_role_permissions("kitchen"),
-                resource_scope={"stations": ["grill", "cold", "fryer"]},
+                resource_scope={"role": "KITCHEN", "stations": ["grill", "cold", "fryer"]},
             )
         if "cashier" in token_lower:
             return ActorContext(
@@ -195,7 +203,7 @@ class InternalClient:
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
                 permissions=resolve_role_permissions("cashier"),
-                resource_scope={},
+                resource_scope={"role": "CASHIER"},
             )
         if "manager" in token_lower:
             return ActorContext(
@@ -206,9 +214,9 @@ class InternalClient:
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
                 permissions=resolve_role_permissions("manager"),
-                resource_scope={},
+                resource_scope={"role": "MANAGER"},
             )
-        if "owner" in token_lower or "admin" in token_lower:
+        if any(k in token_lower for k in ("owner", "admin", "super", "system", "internal")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="owner-dev-01",
@@ -217,19 +225,18 @@ class InternalClient:
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
                 permissions=["*"],
-                resource_scope={},
+                resource_scope={"role": "ADMIN"},
             )
-
         return ActorContext(
-            actor_type="AI_AGENT",
-            acting_user_id="dev-user-1",
+            actor_type="USER",
+            acting_user_id="waiter-staff",
             ai_agent_id=settings.ai_agent_default_id,
             role="manager",
             organization_id="org_dev",
             restaurant_id="rest_dev",
             branch_id="branch_dev",
-            permissions=resolve_role_permissions("manager"),
-            resource_scope={"tables": ["T1", "T2", "T5"]},
+            permissions=resolve_role_permissions("waiter"),
+            resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
         )
 
     def _mock_tool_result(self, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -241,8 +248,10 @@ class InternalClient:
                     "category": "Mains",
                     "dietary": ["high_protein", "high-protein"],
                     "allergens": ["gluten", "dairy"],
-                    "description": "Double American wagyu beef patties, aged cheddar, smoked bacon jam, brioche bun.",
+                    "description": "Double American wagyu beef patties, aged cheddar, smoked bacon jam, brioche bun. #1 top-selling guest favorite.",
                     "pairing": "2021 Tuscan Chianti Classico Riserva or Craft IPA",
+                    "tags": ["top-seller", "bestseller", "popular"],
+                    "is_bestseller": True,
                 },
                 {
                     "name": "Pan-Seared Line-Caught Seabass",
@@ -250,8 +259,10 @@ class InternalClient:
                     "category": "Mains",
                     "dietary": ["keto", "gluten_free", "gluten-free", "high_protein", "high-protein", "organic"],
                     "allergens": ["fish"],
-                    "description": "Crispy skin sea bass, braised baby carrots, fennel crisp, herb citrus reduction.",
+                    "description": "Crispy skin sea bass, braised baby carrots, fennel crisp, herb citrus reduction. Chef signature top-seller.",
                     "pairing": "2022 Oaked Chardonnay or Crisp Pinot Grigio",
+                    "tags": ["top-seller", "bestseller", "chef-special"],
+                    "is_bestseller": True,
                 },
                 {
                     "name": "Grilled Prime Ribeye (300g)",
@@ -261,6 +272,28 @@ class InternalClient:
                     "allergens": [],
                     "description": "Prime Black Angus ribeye with roasted rosemary garlic butter and red wine jus.",
                     "pairing": "2021 Tuscan Chianti Classico Riserva",
+                    "tags": ["top-seller", "premium"],
+                    "is_bestseller": True,
+                },
+                {
+                    "name": "Caesar Salad",
+                    "price": 9.0,
+                    "category": "Starters",
+                    "dietary": ["vegetarian"],
+                    "allergens": ["dairy"],
+                    "description": "Romaine lettuce, parmesan, garlic croutons.",
+                    "tags": ["starter", "classic"],
+                    "is_bestseller": False,
+                },
+                {
+                    "name": "Avocado Green Salad Bowl",
+                    "price": 14.0,
+                    "category": "Starters",
+                    "dietary": ["vegan", "gluten-free", "organic", "keto"],
+                    "allergens": [],
+                    "description": "Fresh avocado, mixed baby greens, citrus vinaigrette.",
+                    "tags": ["popular", "healthy", "vegan"],
+                    "is_bestseller": False,
                 },
                 {
                     "name": "Wild Mushroom Truffle Risotto",
@@ -320,7 +353,9 @@ class InternalClient:
                     "category": "Drinks",
                     "dietary": ["vegan"],
                     "allergens": ["gluten"],
-                    "description": "Locally brewed hazy IPA with passionfruit, citrus zest, and mosaic hops.",
+                    "description": "Locally brewed hazy IPA with passionfruit, citrus zest, and mosaic hops. Best-selling beverage.",
+                    "tags": ["bestseller", "drink"],
+                    "is_bestseller": True,
                 },
             ]
 

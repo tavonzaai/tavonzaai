@@ -39,6 +39,64 @@ export class RejectOrderDto {
   @IsUUID()
   orderId!: string;
 
+  @ApiPropertyOptional({
+    description: 'Predefined rejection reason code',
+    enum: [
+      'ITEM_UNAVAILABLE',
+      'KITCHEN_CAPACITY',
+      'MODIFICATION_IMPOSSIBLE',
+      'ALLERGY_CONCERN',
+      'RESTAURANT_CLOSING',
+      'OTHER',
+    ],
+    example: 'ITEM_UNAVAILABLE',
+  })
+  @IsOptional()
+  @IsIn([
+    'ITEM_UNAVAILABLE',
+    'KITCHEN_CAPACITY',
+    'MODIFICATION_IMPOSSIBLE',
+    'ALLERGY_CONCERN',
+    'RESTAURANT_CLOSING',
+    'OTHER',
+  ])
+  reasonCode?:
+    | 'ITEM_UNAVAILABLE'
+    | 'KITCHEN_CAPACITY'
+    | 'MODIFICATION_IMPOSSIBLE'
+    | 'ALLERGY_CONCERN'
+    | 'RESTAURANT_CLOSING'
+    | 'OTHER';
+
+  @ApiPropertyOptional({
+    description: 'Predefined rejection reason code (alias for reasonCode)',
+    enum: [
+      'ITEM_UNAVAILABLE',
+      'KITCHEN_CAPACITY',
+      'MODIFICATION_IMPOSSIBLE',
+      'ALLERGY_CONCERN',
+      'RESTAURANT_CLOSING',
+      'OTHER',
+    ],
+    example: 'ITEM_UNAVAILABLE',
+  })
+  @IsOptional()
+  @IsIn([
+    'ITEM_UNAVAILABLE',
+    'KITCHEN_CAPACITY',
+    'MODIFICATION_IMPOSSIBLE',
+    'ALLERGY_CONCERN',
+    'RESTAURANT_CLOSING',
+    'OTHER',
+  ])
+  rejectionReasonCode?:
+    | 'ITEM_UNAVAILABLE'
+    | 'KITCHEN_CAPACITY'
+    | 'MODIFICATION_IMPOSSIBLE'
+    | 'ALLERGY_CONCERN'
+    | 'RESTAURANT_CLOSING'
+    | 'OTHER';
+
   @ApiProperty({ description: 'Reason for rejection', example: 'Item out of stock' })
   @IsString()
   @IsNotEmpty()

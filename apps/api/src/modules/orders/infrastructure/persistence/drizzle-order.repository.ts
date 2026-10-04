@@ -1,22 +1,17 @@
 // ============================================================================
 // Order Infrastructure — Drizzle Order Repository
 // ============================================================================
-// Implements order persistence using Drizzle ORM.
-//
-// KEY PATTERNS:
-//   1. Insert + select:  db.insert(orders).values(...).returning()
-//   2. Transactions:     db.transaction(async (tx) => { ... })
-//   3. Aggregation:      Manual total recalculation after item changes
-//   4. Timestamps:       Recorded per status transition
-// ============================================================================
 
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, or, ilike, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
   orders,
   orderItems,
+  menuItems,
+  menuCategories,
+  branchSettings,
 } from '@tavonza/database';
 import {
   IOrderRepository,
@@ -48,8 +43,10 @@ export class DrizzleOrderRepository implements IOrderRepository {
         branchId: input.branchId,
         tableId: input.tableId,
         tableSessionId: input.tableSessionId ?? null,
-        customerSessionId: input.customerSessionId ?? null,
+        guestSessionId: input.customerSessionId ?? null,
         status: 'DRAFT',
+        subtotal: 0,
+        totalAmount: 0,
       })
       .returning();
 
@@ -59,71 +56,157 @@ export class DrizzleOrderRepository implements IOrderRepository {
   // ── Find ────────────────────────────────────────────────────────────
 
   async findById(id: string): Promise<Order | null> {
-    const result = await this.db.query.orders.findFirst({
-      where: eq(orders.id, id),
-      with: { items: true },
-    });
+    const [record] = await this.db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, id))
+      .limit(1);
 
-    if (!result) return null;
-    return this.toDomain(result);
+    if (!record) return null;
+
+    const items = await this.db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, id));
+
+    return this.toDomain({ ...record, items });
   }
 
   async findDraftByTable(
     branchId: string,
     tableId: string,
+    guestSessionId?: string,
   ): Promise<Order | null> {
-    const result = await this.db.query.orders.findFirst({
-      where: and(
-        eq(orders.branchId, branchId),
-        eq(orders.tableId, tableId),
-        eq(orders.status, 'DRAFT'),
-      ),
-      with: { items: true },
-    });
+    // If guestSessionId is provided, first try to find the guest's own draft
+    if (guestSessionId) {
+      const [guestRecord] = await this.db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.branchId, branchId),
+            eq(orders.tableId, tableId),
+            eq(orders.guestSessionId, guestSessionId),
+            eq(orders.status, 'DRAFT'),
+          ),
+        )
+        .limit(1);
 
-    if (!result) return null;
-    return this.toDomain(result);
+      if (guestRecord) {
+        const items = await this.db
+          .select()
+          .from(orderItems)
+          .where(eq(orderItems.orderId, guestRecord.id));
+        return this.toDomain({ ...guestRecord, items });
+      }
+    }
+
+    const [record] = await this.db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          eq(orders.branchId, branchId),
+          eq(orders.tableId, tableId),
+          eq(orders.status, 'DRAFT'),
+        ),
+      )
+      .limit(1);
+
+    if (!record) return null;
+
+    const items = await this.db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, record.id));
+
+    return this.toDomain({ ...record, items });
   }
 
   async findByBranch(
     branchId: string,
-    filters?: { status?: OrderStatus; tableId?: string },
+    filters?: {
+      status?: OrderStatus;
+      tableId?: string;
+      search?: string;
+      guestSessionId?: string;
+      tableSessionId?: string;
+    },
   ): Promise<Order[]> {
     const conditions = [eq(orders.branchId, branchId)];
 
     if (filters?.status) {
-      conditions.push(eq(orders.status, filters.status));
+      conditions.push(eq(orders.status, this.toDbStatus(filters.status)));
     }
     if (filters?.tableId) {
       conditions.push(eq(orders.tableId, filters.tableId));
     }
+    if (filters?.guestSessionId) {
+      conditions.push(eq(orders.guestSessionId, filters.guestSessionId));
+    }
+    if (filters?.tableSessionId) {
+      conditions.push(eq(orders.tableSessionId, filters.tableSessionId));
+    }
+    if (filters?.search && filters.search.trim()) {
+      const term = `%${filters.search.trim()}%`;
+      conditions.push(or(ilike(orders.orderNumber, term), ilike(orders.guestName, term))!);
+    }
 
-    const results = await this.db.query.orders.findMany({
-      where: and(...conditions),
-      with: { items: true },
-      orderBy: (orders, { desc }) => [desc(orders.createdAt)],
-    });
+    const orderRecords = await this.db
+      .select()
+      .from(orders)
+      .where(and(...conditions))
+      .orderBy(desc(orders.createdAt));
 
-    return results.map((r) => this.toDomain(r));
+    const result: Order[] = [];
+    for (const record of orderRecords) {
+      const items = await this.db
+        .select()
+        .from(orderItems)
+        .where(eq(orderItems.orderId, record.id));
+      result.push(this.toDomain({ ...record, items }));
+    }
+
+    return result;
   }
 
   // ── Item Operations ─────────────────────────────────────────────────
 
   async addItem(input: AddOrderItemInput): Promise<Order> {
+    let name = input.name;
+    let unitPrice = input.unitPrice;
+    let stationType: 'KITCHEN' | 'BAR' = 'KITCHEN';
+
+    const [menuItem] = await this.db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.id, input.menuItemId));
+    if (menuItem) {
+      name = menuItem.name;
+      unitPrice = Number(menuItem.basePrice);
+
+      const [category] = await this.db
+        .select()
+        .from(menuCategories)
+        .where(eq(menuCategories.id, menuItem.categoryId));
+      if (category && /drink|beverage|bar|cocktail|wine|beer|water|juice/i.test(category.name)) {
+        stationType = 'BAR';
+      }
+    }
+
     const addOns = input.addOns ?? [];
     const addOnsTotal = addOns.reduce((sum, a) => sum + a.price, 0);
-    const lineTotal = (input.unitPrice + addOnsTotal) * input.quantity;
+    const lineTotal = (unitPrice + addOnsTotal) * input.quantity;
 
     await this.db.insert(orderItems).values({
       orderId: input.orderId,
-      menuItemId: input.menuItemId,
-      name: input.name,
-      unitPrice: String(input.unitPrice),
+      productId: input.menuItemId,
+      productNameSnapshot: name || 'Dish',
+      unitPrice: unitPrice,
       quantity: input.quantity,
-      specialInstructions: input.specialInstructions ?? null,
-      addOns: addOns.length > 0 ? addOns : null,
-      addOnsTotal: String(addOnsTotal),
-      lineTotal: String(lineTotal),
+      subtotal: lineTotal,
+      stationType,
+      status: 'PENDING',
     });
 
     return this.recalculateTotals(input.orderId);
@@ -133,7 +216,6 @@ export class DrizzleOrderRepository implements IOrderRepository {
     itemId: string,
     input: UpdateOrderItemInput,
   ): Promise<Order> {
-    // Fetch current item to compute new line total
     const [currentItem] = await this.db
       .select()
       .from(orderItems)
@@ -144,17 +226,14 @@ export class DrizzleOrderRepository implements IOrderRepository {
     }
 
     const newQuantity = input.quantity ?? currentItem.quantity;
-    const lineTotal =
-      (Number(currentItem.unitPrice) + Number(currentItem.addOnsTotal)) *
-      newQuantity;
+    const lineTotal = currentItem.unitPrice * newQuantity;
 
     await this.db
       .update(orderItems)
       .set({
         quantity: newQuantity,
-        specialInstructions:
-          input.specialInstructions ?? currentItem.specialInstructions,
-        lineTotal: String(lineTotal),
+        subtotal: lineTotal,
+        updatedAt: new Date(),
       })
       .where(eq(orderItems.id, itemId));
 
@@ -182,85 +261,91 @@ export class DrizzleOrderRepository implements IOrderRepository {
     orderId: string,
     newStatus: OrderStatus,
   ): Promise<Order> {
-    // Build timestamp updates based on the target status
-    const timestamps: Record<string, Date> = {};
     const now = new Date();
-
-    if (newStatus === 'SUBMITTED') timestamps.submittedAt = now;
-    if (newStatus === 'ACCEPTED') timestamps.acceptedAt = now;
-    if (newStatus === 'READY') timestamps.readyAt = now;
-    if (newStatus === 'SERVED') timestamps.servedAt = now;
+    const dbStatus = this.toDbStatus(newStatus);
 
     await this.db
       .update(orders)
       .set({
-        status: newStatus,
+        status: dbStatus,
         updatedAt: now,
-        ...timestamps,
       })
       .where(eq(orders.id, orderId));
 
-    const result = await this.db.query.orders.findFirst({
-      where: eq(orders.id, orderId),
-      with: { items: true },
-    });
+    const [record] = await this.db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId));
 
-    return this.toDomain(result!);
-  }
-
-  // ── Private Helpers ─────────────────────────────────────────────────
-
-  /**
-   * Recalculate order totals from line items.
-   *
-   * Figma "Order Summary":
-   *   Subtotal             $28.30
-   *   Service Charge (5%)  $0.93
-   *   Tax (8%)             $1.48
-   */
-  private async recalculateTotals(orderId: string): Promise<Order> {
-    // Sum all line totals
     const items = await this.db
       .select()
       .from(orderItems)
       .where(eq(orderItems.orderId, orderId));
 
-    const subtotal = items.reduce((sum, item) => sum + Number(item.lineTotal), 0);
+    return this.toDomain({ ...record!, items });
+  }
 
-    // Fetch order for rates
-    const [order] = await this.db
+  // ── Private Helpers ─────────────────────────────────────────────────
+
+  private async recalculateTotals(orderId: string): Promise<Order> {
+    const items = await this.db
       .select()
-      .from(orders)
-      .where(eq(orders.id, orderId));
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId));
 
-    const serviceChargeRate = Number(order!.serviceChargeRate);
-    const taxRate = Number(order!.taxRate);
-    const serviceCharge = Math.round(subtotal * serviceChargeRate * 100) / 100;
+    const [orderRec] = await this.db
+      .select({ branchId: orders.branchId })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+
+    let taxRate = 0.08;
+    let serviceRate = 0.05;
+
+    if (orderRec?.branchId) {
+      const [settings] = await this.db
+        .select({
+          taxPercent: branchSettings.taxPercent,
+          serviceChargePct: branchSettings.serviceChargePct,
+        })
+        .from(branchSettings)
+        .where(eq(branchSettings.branchId, orderRec.branchId))
+        .limit(1);
+
+      if (settings) {
+        if (typeof settings.taxPercent === 'number') {
+          taxRate = settings.taxPercent / 100;
+        }
+        if (typeof settings.serviceChargePct === 'number') {
+          serviceRate = settings.serviceChargePct / 100;
+        }
+      }
+    }
+
+    const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const serviceCharge = Math.round(subtotal * serviceRate * 100) / 100;
     const tax = Math.round(subtotal * taxRate * 100) / 100;
     const total = Math.round((subtotal + serviceCharge + tax) * 100) / 100;
 
     await this.db
       .update(orders)
       .set({
-        subtotal: String(subtotal),
-        serviceCharge: String(serviceCharge),
-        tax: String(tax),
-        total: String(total),
-        estimatedPrepTime: items.length > 0 ? 18 : null, // placeholder
+        subtotal,
+        serviceCharge,
+        taxAmount: tax,
+        totalAmount: total,
         updatedAt: new Date(),
       })
       .where(eq(orders.id, orderId));
 
-    // Refetch with items for the domain entity
-    const result = await this.db.query.orders.findFirst({
-      where: eq(orders.id, orderId),
-      with: { items: true },
-    });
+    const [result] = await this.db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId));
 
-    return this.toDomain(result!);
+    return this.toDomain({ ...result!, items });
   }
 
-  /** Generate order number like "#10001-482". */
   private async generateOrderNumber(_branchId: string): Promise<string> {
     const [result] = await this.db
       .select({ count: sql<number>`count(*)::int` })
@@ -271,47 +356,91 @@ export class DrizzleOrderRepository implements IOrderRepository {
     return `#${10000 + seq}-${randomSuffix}`;
   }
 
+  private toDbStatus(status: OrderStatus): any {
+    switch (status) {
+      case 'DRAFT':
+        return 'DRAFT';
+      case 'SUBMITTED':
+        return 'PENDING';
+      case 'ACCEPTED':
+      case 'KITCHEN_QUEUE':
+        return 'CONFIRMED';
+      case 'PREPARING':
+        return 'PREPARING';
+      case 'READY':
+        return 'READY';
+      case 'SERVED':
+        return 'SERVED';
+      case 'CANCELLED':
+        return 'CANCELLED';
+      case 'REJECTED':
+        return 'REJECTED';
+      default:
+        return 'PENDING';
+    }
+  }
+
+  private fromDbStatus(status: string | null): OrderStatus {
+    switch (status) {
+      case 'DRAFT':
+        return 'DRAFT';
+      case 'PENDING':
+        return 'SUBMITTED';
+      case 'CONFIRMED':
+        return 'ACCEPTED';
+      case 'PREPARING':
+        return 'PREPARING';
+      case 'READY':
+        return 'READY';
+      case 'SERVED':
+      case 'COMPLETED':
+        return 'SERVED';
+      case 'CANCELLED':
+        return 'CANCELLED';
+      case 'REJECTED':
+        return 'REJECTED';
+      default:
+        return 'SUBMITTED';
+    }
+  }
+
   // ── Mapper (DB → Domain) ────────────────────────────────────────────
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private toDomain(record: any): Order {
-    const items: OrderItemProps[] = (record.items ?? []).map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (item: any) => ({
-        id: item.id,
-        menuItemId: item.menuItemId,
-        name: item.name,
-        unitPrice: Number(item.unitPrice),
-        quantity: item.quantity,
-        specialInstructions: item.specialInstructions,
-        addOns: (item.addOns as OrderItemAddOn[]) ?? [],
-        addOnsTotal: Number(item.addOnsTotal),
-        lineTotal: Number(item.lineTotal),
-      }),
-    );
+    const items: OrderItemProps[] = (record.items ?? []).map((item: any) => ({
+      id: item.id,
+      menuItemId: item.productId,
+      name: item.productNameSnapshot,
+      unitPrice: Number(item.unitPrice),
+      quantity: item.quantity,
+      specialInstructions: null,
+      addOns: [] as OrderItemAddOn[],
+      addOnsTotal: 0,
+      lineTotal: Number(item.subtotal),
+    }));
 
     const props: OrderProps = {
       id: record.id,
       orderNumber: record.orderNumber,
       branchId: record.branchId,
-      tableId: record.tableId,
+      tableId: record.tableId ?? '',
       tableSessionId: record.tableSessionId,
-      customerSessionId: record.customerSessionId,
-      status: record.status as OrderStatus,
+      customerSessionId: record.guestSessionId,
+      status: this.fromDbStatus(record.status),
       subtotal: Number(record.subtotal),
-      serviceChargeRate: Number(record.serviceChargeRate),
-      serviceCharge: Number(record.serviceCharge),
-      taxRate: Number(record.taxRate),
-      tax: Number(record.tax),
-      total: Number(record.total),
-      estimatedPrepTime: record.estimatedPrepTime,
+      serviceChargeRate: 0.05,
+      serviceCharge: Number(record.serviceCharge ?? 0),
+      taxRate: 0.08,
+      tax: Number(record.taxAmount ?? 0),
+      total: Number(record.totalAmount ?? 0),
+      estimatedPrepTime: 15,
       items,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
-      submittedAt: record.submittedAt,
+      createdAt: record.createdAt ?? new Date(),
+      updatedAt: record.updatedAt ?? new Date(),
+      submittedAt: record.createdAt,
       acceptedAt: record.acceptedAt,
-      readyAt: record.readyAt,
-      servedAt: record.servedAt,
+      readyAt: null,
+      servedAt: null,
     };
 
     return new Order(props);

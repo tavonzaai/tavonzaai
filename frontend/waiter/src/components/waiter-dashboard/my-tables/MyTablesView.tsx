@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   UtensilsCrossed,
   Receipt,
@@ -13,6 +13,7 @@ import {
   DollarSign,
   Layers,
 } from 'lucide-react';
+import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
 
 export interface DetailedTableItem {
   id: string;
@@ -41,298 +42,12 @@ export interface DetailedTableItem {
   };
 }
 
-export const initialTablesData: DetailedTableItem[] = [
-  // --- Window Zone ---
-  {
-    id: 't-01',
-    tableNumber: 'T-01',
-    isMine: true,
-    zone: 'Window',
-    status: 'Available',
-    guests: '0/2 guests',
-    timeText: '—',
-    ordersCount: 1,
-    orderDetail: {
-      orderNumber: '#10580',
-      items: ['Espresso', 'Croissant'],
-      status: 'Ready',
-      placedAgo: '5 min ago',
-      total: 12.5,
-    },
-  },
-  {
-    id: 't-02',
-    tableNumber: 'T-02',
-    isMine: true,
-    zone: 'Window',
-    status: 'Reserved',
-    guests: '0/4 guests',
-    timeText: '—',
-    ordersCount: 0,
-  },
-  {
-    id: 't-03',
-    tableNumber: 'T-03',
-    isMine: true,
-    zone: 'Window',
-    status: 'Dining',
-    guests: '2/4 guests',
-    timeText: '18 min',
-    ordersCount: 1,
-    orderDetail: {
-      orderNumber: '#10581',
-      items: ['Sparkling Water (San Pellegrino)', 'Burrata Caprese', 'Chianti Classico'],
-      status: 'Served',
-      placedAgo: '18 min ago',
-      total: 48.0,
-    },
-  },
-  {
-    id: 't-04',
-    tableNumber: 'T-04',
-    isMine: false,
-    zone: 'Window',
-    status: 'Available',
-    guests: '0/2 guests',
-    timeText: '—',
-    ordersCount: 0,
-  },
-
-  // --- Main Hall Zone ---
-  {
-    id: 't-05',
-    tableNumber: 'T-05',
-    isMine: true,
-    zone: 'Main Hall',
-    status: 'Waiting for Order',
-    guests: '4/6 guests',
-    timeText: '4 min',
-    ordersCount: 1,
-    orderDetail: {
-      orderNumber: '#10583',
-      items: ['Beef Tenderloin', 'Truffle Fries', 'Red Wine'],
-      status: 'New Order',
-      placedAgo: '12 min ago',
-      total: 118.0,
-    },
-  },
-  {
-    id: 't-06',
-    tableNumber: 'T-06',
-    isMine: false,
-    zone: 'Main Hall',
-    status: 'Available',
-    guests: '0/4 guests',
-    timeText: '—',
-    ordersCount: 0,
-  },
-  {
-    id: 't-07',
-    tableNumber: 'T-07',
-    isMine: false,
-    zone: 'Main Hall',
-    status: 'Dining',
-    guests: '6/8 guests',
-    timeText: '35 min',
-    ordersCount: 1,
-    orderDetail: {
-      orderNumber: '#10584',
-      items: ['Grilled Salmon Risotto x2', 'Caesar Salad x2', 'Pinot Grigio Bottle'],
-      status: 'Dining',
-      placedAgo: '35 min ago',
-      total: 142.0,
-    },
-  },
-  {
-    id: 't-08',
-    tableNumber: 'T-08',
-    isMine: true,
-    zone: 'Main Hall',
-    status: 'Main Course Served',
-    guests: '3/4 guests',
-    timeText: '26 min',
-    ordersCount: 1,
-    orderDetail: {
-      orderNumber: '#10585',
-      items: ['Artisan Margherita Pizza', 'Pasta Carbonara', 'Aperol Spritz x3'],
-      status: 'Served',
-      placedAgo: '26 min ago',
-      total: 86.5,
-    },
-  },
-  {
-    id: 't-12',
-    tableNumber: 'T-12',
-    isMine: true,
-    zone: 'Main Hall',
-    status: 'Food Ready',
-    guests: '2/4 guests',
-    timeText: 'Ready',
-    ordersCount: 1,
-    orderDetail: {
-      orderNumber: '#10582',
-      items: ['Wagyu Truffle Burger', 'Truffle Parmesan Fries', 'Iced Hibiscus Tea'],
-      status: 'Food Ready',
-      placedAgo: '18 min ago',
-      total: 44.5,
-    },
-  },
-  {
-    id: 't-14',
-    tableNumber: 'T-14',
-    isMine: false,
-    zone: 'Main Hall',
-    status: 'Dining',
-    guests: '4/4 guests',
-    timeText: '22 min',
-    ordersCount: 1,
-    orderDetail: {
-      orderNumber: '#10586',
-      items: ['Ribeye Steak', 'Mashed Potatoes', 'Craft Beer x2'],
-      status: 'Dining',
-      placedAgo: '22 min ago',
-      total: 92.0,
-    },
-  },
-  {
-    id: 't-15',
-    tableNumber: 'T-15',
-    isMine: true,
-    zone: 'Main Hall',
-    status: 'Waiting for Bill',
-    guests: '5/6 guests',
-    timeText: '5 min',
-    ordersCount: 1,
-    isBilled: true,
-    orderDetail: {
-      orderNumber: '#10587',
-      items: ['Chef Tasting Menu x5', 'Wine Pairing Selection', 'Dessert Platter'],
-      status: 'Waiting for Bill',
-      placedAgo: '55 min ago',
-      total: 345.0,
-    },
-  },
-
-  // --- Bar Zone ---
-  {
-    id: 't-13',
-    tableNumber: 'T-13',
-    isMine: false,
-    zone: 'Bar',
-    status: 'Available',
-    guests: '0/4 guests',
-    timeText: '—',
-    ordersCount: 0,
-  },
-  {
-    id: 't-16',
-    tableNumber: 'T-16',
-    isMine: false,
-    zone: 'Bar',
-    status: 'Dining',
-    guests: '2/2 guests',
-    timeText: '9 min',
-    ordersCount: 1,
-    orderDetail: {
-      orderNumber: '#10588',
-      items: ['Dry Martini x2', 'Oysters Rockefeller (6pcs)'],
-      status: 'Served',
-      placedAgo: '9 min ago',
-      total: 54.0,
-    },
-  },
-  {
-    id: 't-18',
-    tableNumber: 'T-18',
-    isMine: true,
-    zone: 'Bar',
-    status: 'Waiting for Bill',
-    guests: '3/4 guests',
-    timeText: '8 min',
-    ordersCount: 1,
-    isBilled: true,
-    orderDetail: {
-      orderNumber: '#10589',
-      items: ['Old Fashioned x3', 'Charcuterie Board'],
-      status: 'Waiting for Bill',
-      placedAgo: '42 min ago',
-      total: 82.4,
-    },
-  },
-
-  // --- Terrace Zone ---
-  {
-    id: 't-10',
-    tableNumber: 'T-10',
-    isMine: false,
-    zone: 'Terrace',
-    status: 'Available',
-    guests: '0/6 guests',
-    timeText: '—',
-    ordersCount: 0,
-  },
-  {
-    id: 't-11',
-    tableNumber: 'T-11',
-    isMine: false,
-    zone: 'Terrace',
-    status: 'Available',
-    guests: '0/2 guests',
-    timeText: '—',
-    ordersCount: 0,
-  },
-  {
-    id: 't-17',
-    tableNumber: 'T-17',
-    isMine: false,
-    zone: 'Terrace',
-    status: 'Waiting for Bill',
-    guests: '0/4 guests',
-    timeText: 'Just now',
-    ordersCount: 1,
-    isBilled: true,
-    orderDetail: {
-      orderNumber: '#10590',
-      items: ['Grilled Sea Bass', 'Greek Salad', 'Sparkling Lemonade'],
-      status: 'Waiting for Bill',
-      placedAgo: '38 min ago',
-      total: 62.0,
-    },
-  },
-
-  // --- Private Zone ---
-  {
-    id: 't-19',
-    tableNumber: 'T-19',
-    isMine: false,
-    zone: 'Private',
-    status: 'Available',
-    guests: '0/8 guests',
-    timeText: '—',
-    ordersCount: 0,
-  },
-  {
-    id: 't-20',
-    tableNumber: 'T-20',
-    isMine: false,
-    zone: 'Private',
-    status: 'Dining',
-    guests: '4/8 guests',
-    timeText: '41 min',
-    ordersCount: 1,
-    orderDetail: {
-      orderNumber: '#10591',
-      items: ['Tomahawk Steak (32oz)', 'Lobster Mac & Cheese', 'Vintage Bordeaux'],
-      status: 'Dining',
-      placedAgo: '41 min ago',
-      total: 295.0,
-    },
-  },
-];
+export const initialTablesData: DetailedTableItem[] = [];
 
 export default function MyTablesView() {
   const [filter, setFilter] = useState<'All' | 'Available' | 'Occupied' | 'Food Ready' | 'Waiting for Bill'>('All');
-  const [tables, setTables] = useState<DetailedTableItem[]>(initialTablesData);
+  const [tables, setTables] = useState<DetailedTableItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedOrderTable, setSelectedOrderTable] = useState<DetailedTableItem | null>(null);
 
   const zones: Array<'Window' | 'Main Hall' | 'Bar' | 'Terrace' | 'Private'> = [
@@ -342,6 +57,70 @@ export default function MyTablesView() {
     'Terrace',
     'Private',
   ];
+
+  useEffect(() => {
+    let mounted = true;
+    const loadTables = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const [apiTables, apiOrders] = await Promise.all([
+          waiterService.getAllTables(branchId).catch(() => []),
+          waiterService.getActiveOrders(branchId).catch(() => []),
+        ]);
+        if (mounted && Array.isArray(apiTables)) {
+          const zoneList: Array<DetailedTableItem['zone']> = ['Window', 'Main Hall', 'Bar', 'Terrace', 'Private'];
+          const mapped: DetailedTableItem[] = apiTables.map((t: any, idx: number) => {
+            const tableOrder = (apiOrders || []).find(
+              (o: any) => o.tableId === t.id || o.tableLabel === t.label
+            );
+            const isOccupied = t.serviceStatus === 'OCCUPIED' || Boolean(t.activeSessionId);
+            const isFoodReady = tableOrder?.status === 'READY_TO_SERVE';
+            const isPaymentPending = t.serviceStatus === 'PAYMENT_PENDING' || tableOrder?.paymentStatus === 'UNPAID';
+
+            let status: DetailedTableItem['status'] = 'Available';
+            if (isFoodReady) status = 'Food Ready';
+            else if (isPaymentPending) status = 'Waiting for Bill';
+            else if (isOccupied) status = 'Occupied';
+
+            return {
+              id: t.id,
+              tableNumber: t.label || `T-${String(idx + 1).padStart(2, '0')}`,
+              isMine: true,
+              zone: zoneList[idx % zoneList.length] || 'Main Hall',
+              status,
+              guests: `${t.capacity || 4} guests`,
+              timeText: tableOrder ? 'Active' : '—',
+              ordersCount: tableOrder ? 1 : 0,
+              orderDetail: tableOrder
+                ? {
+                    orderNumber: tableOrder.orderNumber,
+                    items:
+                      tableOrder.items?.map((i: any) => `${i.quantity}x ${i.name}`) || [
+                        'Live Order Items',
+                      ],
+                    status: tableOrder.status,
+                    placedAgo: 'Recently',
+                    total: tableOrder.total || 0,
+                  }
+                : undefined,
+            };
+          });
+          setTables(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load waiter tables:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    loadTables();
+    const interval = setInterval(loadTables, 8000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Filtering Logic
   const getFilteredTablesByZone = (zone: DetailedTableItem['zone']) => {
@@ -366,7 +145,6 @@ export default function MyTablesView() {
     if (table.orderDetail) {
       setSelectedOrderTable(table);
     } else {
-      // Default placeholder if table has no active order
       setSelectedOrderTable({
         ...table,
         orderDetail: {
@@ -479,7 +257,7 @@ export default function MyTablesView() {
           My Tables
         </h1>
         <p className="text-slate-500 text-lg font-normal font-['Inter'] mt-1">
-          Managing 8 assigned tables · Downtown Branch
+          {loading ? 'Synchronizing branch floor tables...' : `Managing ${tables.length} live registered tables · Downtown Branch`}
         </p>
       </div>
 
@@ -511,122 +289,134 @@ export default function MyTablesView() {
       </div>
 
       {/* 3. Tables Grouped by Floor Zone */}
-      <div className="space-y-8">
-        {zones.map((zoneName) => {
-          const zoneTables = getFilteredTablesByZone(zoneName);
-          if (zoneTables.length === 0) return null;
+      {loading ? (
+        <div className="py-20 text-center text-zinc-500 font-['Inter']">
+          Fetching live tables from database...
+        </div>
+      ) : tables.length === 0 ? (
+        <div className="py-16 text-center space-y-3 bg-white/5 border border-white/10 rounded-2xl">
+          <Layers className="w-10 h-10 text-neutral-600 mx-auto" />
+          <h3 className="text-white font-medium text-base font-['Inter']">No Tables Found</h3>
+          <p className="text-neutral-500 text-sm font-['Inter']">
+            No tables currently registered for this branch. Create tables in the manager dashboard to view them here.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {zones.map((zoneName) => {
+            const zoneTables = getFilteredTablesByZone(zoneName);
+            if (zoneTables.length === 0) return null;
 
-          return (
-            <div key={zoneName} className="space-y-3">
-              {/* Zone Section Title */}
-              <h2 className="text-white text-lg font-semibold font-['Inter'] leading-7">
-                {zoneName}
-              </h2>
+            return (
+              <div key={zoneName} className="space-y-3">
+                {/* Zone Section Title */}
+                <h2 className="text-white text-lg font-semibold font-['Inter'] leading-7">
+                  {zoneName}
+                </h2>
 
-              {/* Zone Cards Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {zoneTables.map((table) => {
-                  const isAvailable = table.status === 'Available';
-                  return (
-                    <div
-                      key={table.id}
-                      className="h-32 bg-white/5 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-white/10 hover:outline-amber-500 hover:shadow-lg hover:shadow-amber-500/10 backdrop-blur-sm flex flex-col justify-between overflow-hidden transition-all duration-200 group"
-                    >
-                      {/* Top Card Body */}
-                      <div className="px-3 pt-3 pb-2 flex-1 flex flex-col justify-start">
-                        {/* Table Header: Name + Mine Tag */}
-                        <div className="w-full flex justify-between items-center">
-                          <div className="text-slate-200 text-base font-medium font-['DM_Mono'] leading-5">
-                            {table.tableNumber}
-                          </div>
-                          {table.isMine && (
-                            <div className="px-1.5 py-0.5 bg-amber-500/20 rounded-sm">
-                              <div className="text-amber-500 text-[10px] font-semibold font-['DM_Sans'] leading-3">
-                                Mine
-                              </div>
+                {/* Zone Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {zoneTables.map((table) => {
+                    const isAvailable = table.status === 'Available';
+                    return (
+                      <div
+                        key={table.id}
+                        className="h-32 bg-white/5 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-white/10 hover:outline-amber-500 hover:shadow-lg hover:shadow-amber-500/10 backdrop-blur-sm flex flex-col justify-between overflow-hidden transition-all duration-200 group"
+                      >
+                        {/* Top Card Body */}
+                        <div className="px-3 pt-3 pb-2 flex-1 flex flex-col justify-start">
+                          {/* Table Header: Name + Mine Tag */}
+                          <div className="w-full flex justify-between items-center">
+                            <div className="text-slate-200 text-base font-medium font-['DM_Mono'] leading-5">
+                              {table.tableNumber}
                             </div>
-                          )}
+                            {table.isMine && (
+                              <div className="px-1.5 py-0.5 bg-amber-500/20 rounded-sm">
+                                <div className="text-amber-500 text-[10px] font-semibold font-['DM_Sans'] leading-3">
+                                  Mine
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Status Dot & Label */}
+                          <div className="w-full pt-1.5">{renderStatusDot(table.status)}</div>
+
+                          {/* Guest Count & Elapsed Time */}
+                          <div className="w-full flex justify-between items-center text-xs font-['DM_Sans'] pt-1">
+                            <span className="text-slate-500">{table.guests}</span>
+                            <span className={`${table.timeText === 'Ready' ? 'text-green-500 font-medium' : 'text-slate-500 font-medium'}`}>
+                              {table.timeText}
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Status Dot & Label */}
-                        <div className="w-full pt-1.5">{renderStatusDot(table.status)}</div>
+                        {/* Bottom 3 Action Buttons */}
+                        <div className="w-full border-t border-white/5 flex items-stretch h-9 bg-black/20">
+                          {/* Button 1: Orders Modal Trigger */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenOrdersModal(table)}
+                            className="flex-1 py-1.5 border-r border-white/5 flex flex-col justify-center items-center gap-0.5 text-slate-500 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                            title="View table order tickets"
+                          >
+                            <UtensilsCrossed className="w-3 h-3 text-slate-500" />
+                            <span className="text-[10px] font-medium font-['DM_Sans'] leading-3">
+                              {table.ordersCount > 0
+                                ? table.ordersCount === 1
+                                : `${table.ordersCount} Orders`}
+                            </span>
+                          </button>
 
-                        {/* Guest Count & Elapsed Time */}
-                        <div className="w-full flex justify-between items-center text-xs font-['DM_Sans'] pt-1">
-                          <span className="text-slate-500">{table.guests}</span>
-                          <span className={`${table.timeText === 'Ready' ? 'text-green-500 font-medium' : 'text-slate-500 font-medium'}`}>
-                            {table.timeText}
-                          </span>
+                          {/* Button 2: Bill Status / Action */}
+                          <button
+                            type="button"
+                            disabled={isAvailable}
+                            onClick={() => handleToggleBill(table.id)}
+                            className={`flex-1 py-1.5 border-r border-white/5 flex flex-col justify-center items-center gap-0.5 transition-colors ${
+                              isAvailable
+                                ? 'opacity-30 cursor-not-allowed text-slate-500'
+                                : table.isBilled
+                                ? 'bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 cursor-pointer'
+                                : 'text-slate-500 hover:text-white hover:bg-white/5 cursor-pointer'
+                            }`}
+                            title={table.isBilled ? 'Bill requested' : 'Request Bill'}
+                          >
+                            <Receipt className={`w-3 h-3 ${table.isBilled ? 'text-orange-500' : 'text-slate-500'}`} />
+                            <span className="text-[10px] font-medium font-['DM_Sans'] leading-3">
+                              {table.isBilled ? 'Billed ✓' : 'Bill'}
+                            </span>
+                          </button>
+
+                          {/* Button 3: Clear or Open */}
+                          <button
+                            type="button"
+                            disabled={isAvailable}
+                            onClick={() => handleClearTable(table.id)}
+                            className={`flex-1 py-1.5 flex flex-col justify-center items-center gap-0.5 transition-colors ${
+                              isAvailable
+                                ? 'opacity-30 cursor-not-allowed text-slate-500'
+                                : 'text-slate-500 hover:text-white hover:bg-white/5 cursor-pointer'
+                            }`}
+                            title="Clear / Reset Table"
+                          >
+                            <RotateCcw className="w-3 h-3 text-slate-500" />
+                            <span className="text-[10px] font-medium font-['DM_Sans'] leading-3">
+                              {isAvailable ? 'Open' : 'Clear'}
+                            </span>
+                          </button>
                         </div>
                       </div>
-
-                      {/* Bottom 3 Action Buttons (Icon on top, Text below) */}
-                      <div className="w-full border-t border-white/5 flex items-stretch h-9 bg-black/20">
-                        {/* Button 1: Orders Modal Trigger */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenOrdersModal(table)}
-                          className="flex-1 py-1.5 border-r border-white/5 flex flex-col justify-center items-center gap-0.5 text-slate-500 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                          title="View table order tickets"
-                        >
-                          <UtensilsCrossed className="w-3 h-3 text-slate-500" />
-                          <span className="text-[10px] font-medium font-['DM_Sans'] leading-3">
-                            {table.ordersCount > 0
-                              ? table.ordersCount === 1
-                                ? '1 order'
-                                : `${table.ordersCount} Orders`
-                              : 'Orders'}
-                          </span>
-                        </button>
-
-                        {/* Button 2: Bill Status / Action */}
-                        <button
-                          type="button"
-                          disabled={isAvailable}
-                          onClick={() => handleToggleBill(table.id)}
-                          className={`flex-1 py-1.5 border-r border-white/5 flex flex-col justify-center items-center gap-0.5 transition-colors ${
-                            isAvailable
-                              ? 'opacity-30 cursor-not-allowed text-slate-500'
-                              : table.isBilled
-                              ? 'bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 cursor-pointer'
-                              : 'text-slate-500 hover:text-white hover:bg-white/5 cursor-pointer'
-                          }`}
-                          title={table.isBilled ? 'Bill requested' : 'Request Bill'}
-                        >
-                          <Receipt className={`w-3 h-3 ${table.isBilled ? 'text-orange-500' : 'text-slate-500'}`} />
-                          <span className="text-[10px] font-medium font-['DM_Sans'] leading-3">
-                            {table.isBilled ? 'Billed ✓' : 'Bill'}
-                          </span>
-                        </button>
-
-                        {/* Button 3: Clear or Open */}
-                        <button
-                          type="button"
-                          disabled={isAvailable}
-                          onClick={() => handleClearTable(table.id)}
-                          className={`flex-1 py-1.5 flex flex-col justify-center items-center gap-0.5 transition-colors ${
-                            isAvailable
-                              ? 'opacity-30 cursor-not-allowed text-slate-500'
-                              : 'text-slate-500 hover:text-white hover:bg-white/5 cursor-pointer'
-                          }`}
-                          title="Clear / Reset Table"
-                        >
-                          <RotateCcw className="w-3 h-3 text-slate-500" />
-                          <span className="text-[10px] font-medium font-['DM_Sans'] leading-3">
-                            {isAvailable ? 'Open' : 'Clear'}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
-      {/* 4. Interactive Order Detail Modal (Matching User Screenshot Exactly) */}
+      {/* 4. Interactive Order Detail Modal */}
       {selectedOrderTable && selectedOrderTable.orderDetail && (
         <div className="fixed top-20 left-0 md:left-72 right-0 bottom-0 z-40 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150 overflow-y-auto">
           <div className="w-full max-w-[420px] bg-[#18181b] border border-zinc-700/70 rounded-3xl p-6 shadow-2xl space-y-5 text-white relative my-auto">
@@ -655,7 +445,7 @@ export default function MyTablesView() {
               </button>
             </div>
 
-            {/* Order Items List with Green Dots and Status Badge */}
+            {/* Order Items List */}
             <div className="flex items-start justify-between pt-1">
               <div className="space-y-2.5">
                 {selectedOrderTable.orderDetail.items.map((dish, i) => (
