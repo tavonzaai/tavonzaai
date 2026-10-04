@@ -13,6 +13,7 @@ export class FifoQueue<T = any> {
 
     this.queue = new Queue(queueName, {
       connection: redisConn,
+      prefix: '{bull}',
       defaultJobOptions: {
         attempts: 3,
         backoff: {

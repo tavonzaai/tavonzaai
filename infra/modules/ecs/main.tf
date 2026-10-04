@@ -114,7 +114,9 @@ data "aws_iam_policy_document" "task_s3" {
     actions = [
       "s3:GetObject",
       "s3:PutObject",
-      "s3:DeleteObject"
+      "s3:DeleteObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts"
     ]
     resources = ["${var.s3_bucket_arn}/*"]
   }
@@ -287,7 +289,7 @@ resource "aws_ecs_service" "services" {
 
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 200
-  health_check_grace_period_seconds  = each.value.target_group_arn != null ? 60 : null
+  health_check_grace_period_seconds  = each.value.target_group_arn != null ? var.health_check_grace_period_seconds : null
 
   enable_execute_command = true
 

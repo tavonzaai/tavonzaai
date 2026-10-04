@@ -48,6 +48,12 @@ cashier_health_check_path = "/"
 admin_port                = 3043
 admin_health_check_path   = "/"
 
+# Health Check Timings (AWS ALB enforces maximum interval of 300 seconds / 5 minutes)
+health_check_interval            = 300
+health_check_timeout             = 5
+health_check_healthy_threshold   = 2
+health_check_unhealthy_threshold = 3
+
 # EC2 Compute Settings (Rightsized for Cost & Performance)
 backend_instance_type     = "t3.small"
 frontend_instance_type    = "t3.small"
@@ -97,7 +103,8 @@ ecr_repository_names = [
   "cashier",
   "admin-dashboard",
   "branch-manager",
-  "waiter"
+  "waiter",
+  "worker"
 ]
 
 # ALB Ingress Access (Public Internet)

@@ -93,18 +93,25 @@ module "secrets_manager" {
   secret_name = local.secret_name
   description = "Application secrets for ${local.name_prefix}"
   initial_secret_keys = {
-    DATABASE_URL         = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
-    DATABASE_PASSWORD    = var.rds_db_password
-    JWT_SECRET           = ""
-    REDIS_URL            = "redis://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
-    THIRD_PARTY_API_KEYS = ""
-    SMTP_HOST            = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.${var.aws_region}.amazonaws.com"
-    SMTP_PORT            = "587"
-    SMTP_USER            = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
-    SMTP_PASS            = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_password_v4 : ""
-    SMTP_FROM            = "noreply@${var.domain_name}"
-    SMTP_SECURE          = "false"
-    COMPANY_NAME         = "tavonzaai"
+    DATABASE_URL          = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
+    DATABASE_PASSWORD     = var.rds_db_password
+    JWT_SECRET            = ""
+    JWT_REFRESH_SECRET    = ""
+    REDIS_URL             = "rediss://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
+    THIRD_PARTY_API_KEYS  = ""
+    SMTP_HOST             = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.${var.aws_region}.amazonaws.com"
+    SMTP_PORT             = "587"
+    SMTP_USER             = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
+    SMTP_PASS             = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_password_v4 : ""
+    SMTP_FROM             = "noreply@${var.domain_name}"
+    SMTP_SECURE           = "false"
+    MAIL_FROM_ADDRESS     = "noreply@${var.domain_name}"
+    SES_CONFIGURATION_SET = var.enable_ses && length(module.ses) > 0 ? module.ses[0].configuration_set_name : ""
+    AWS_ACCESS_KEY_ID     = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
+    AWS_SECRET_ACCESS_KEY = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_raw_secret_key : ""
+    COMPANY_NAME          = "tavonzaai"
+    S3_BUCKET_NAME        = var.s3_bucket_name
+    AWS_S3_BUCKET         = var.s3_bucket_name
   }
 }
 
@@ -130,7 +137,7 @@ module "iam" {
   enable_ec2_admin_secret_access = true
   ec2_admin_secret_arn           = module.ec2_admin_secret.secret_arn
   ecr_repository_arns            = module.ecr.repository_arns_list
-  enable_ses_access              = false
+  enable_ses_access              = true # ECS/EC2 role needs SES SendEmail permission for SDK-based dispatch
   ses_domain_identity_arn        = var.enable_ses && length(module.ses) > 0 ? module.ses[0].domain_identity_arn : ""
   enable_github_actions_role     = var.enable_github_actions_ecr_role
   github_repository              = var.github_repository
@@ -239,18 +246,22 @@ module "alb" {
   backend_instance_id  = module.backend_ec2.instance_id
   frontend_instance_id = module.frontend_ec2.instance_id
 
-  backend_port              = var.backend_port
-  nextjs_port               = var.nextjs_port
-  ai_port                   = var.ai_port
-  kitchen_port              = var.kitchen_port
-  cashier_port              = var.cashier_port
-  admin_port                = var.admin_port
-  backend_health_check_path = var.backend_health_check_path
-  nextjs_health_check_path  = var.nextjs_health_check_path
-  ai_health_check_path      = var.ai_health_check_path
-  kitchen_health_check_path = var.kitchen_health_check_path
-  cashier_health_check_path = var.cashier_health_check_path
-  admin_health_check_path   = var.admin_health_check_path
+  backend_port                     = var.backend_port
+  nextjs_port                      = var.nextjs_port
+  ai_port                          = var.ai_port
+  kitchen_port                     = var.kitchen_port
+  cashier_port                     = var.cashier_port
+  admin_port                       = var.admin_port
+  backend_health_check_path        = var.backend_health_check_path
+  nextjs_health_check_path         = var.nextjs_health_check_path
+  ai_health_check_path             = var.ai_health_check_path
+  kitchen_health_check_path        = var.kitchen_health_check_path
+  cashier_health_check_path        = var.cashier_health_check_path
+  admin_health_check_path          = var.admin_health_check_path
+  health_check_interval            = var.health_check_interval
+  health_check_timeout             = var.health_check_timeout
+  health_check_healthy_threshold   = var.health_check_healthy_threshold
+  health_check_unhealthy_threshold = var.health_check_unhealthy_threshold
 }
 
 # 13. Route 53 DNS Alias Records Module

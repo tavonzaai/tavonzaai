@@ -7,8 +7,9 @@ Tests for backend readiness:
 """
 import os
 import sys
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.audit.audit_writer import _sanitize_audit_after
@@ -92,3 +93,28 @@ class TestBackendReadiness:
                     await client.resolve_actor("some-user-token")
 
             await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_unauthorized_tool_call_audits_deny(self):
+        """Unauthorized tool call audits DENY before raising ToolExecutionError."""
+        from src.tools.executor.executor import ToolExecutionError
+        client = InternalClient()
+        executor = ToolExecutor(client)
+
+        actor = ActorContext(
+            actor_type="USER",
+            organization_id="org_1",
+            branch_id="branch_1",
+            permissions=["menu.read"],  # Missing reports.read
+        )
+
+        with patch("src.tools.executor.executor.write_tool_audit", new_callable=AsyncMock) as mock_audit:
+            with pytest.raises(ToolExecutionError):
+                await executor.execute("get_branch_summary", {}, actor)
+
+            mock_audit.assert_called_once()
+            _, kwargs = mock_audit.call_args
+            assert kwargs["result"]["ok"] is False
+            assert "lacks permission" in kwargs["result"]["error"]
+
+        await client.aclose()

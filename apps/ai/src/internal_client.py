@@ -11,8 +11,9 @@ from typing import Any
 
 import httpx
 
-from src.config import settings
-from src.models import ActorContext
+from .config import settings
+from .models import ActorContext
+from .policies.roles import resolve_role_permissions
 
 logger = logging.getLogger(__name__)
 
@@ -138,94 +139,98 @@ class InternalClient:
                     padding = "=" * (4 - len(parts[1]) % 4)
                     payload_bytes = base64.urlsafe_b64decode(parts[1] + padding)
                     payload = json.loads(payload_bytes.decode("utf-8"))
-
-                    # Resolve permissions based on explicit permissions or role
-                    role = str(payload.get("role", "")).upper()
-                    if payload.get("permissions"):
-                        perms = payload["permissions"]
-                    elif role in ("SUPER_ADMIN", "ADMIN", "RESTAURANT_OWNER"):
-                        perms = ["*"]
-                    elif role in ("WAITER", "STAFF"):
-                        perms = ["menu.read", "tables.read", "orders.read", "payments.read"]
-                    elif role == "KITCHEN":
-                        perms = ["orders.read", "inventory.read"]
-                    elif role == "CUSTOMER":
-                        perms = ["menu.read", "orders.read"]
-                    else:
-                        perms = ["orders.read", "tables.read", "menu.read"]
-
+                    role = payload.get("role")
+                    permissions = payload.get("permissions") or resolve_role_permissions(str(role) if role else None)
                     return ActorContext(
                         actor_type=payload.get("actor_type", "USER"),
                         acting_user_id=str(payload.get("acting_user_id") or payload.get("sub", "dev-user-1")),
                         ai_agent_id=payload.get("ai_agent_id", settings.ai_agent_default_id),
+                        role=role,
                         organization_id=str(payload.get("organization_id", "org_dev")),
                         restaurant_id=str(payload.get("restaurant_id", "rest_dev")),
                         branch_id=str(payload.get("branch_id", "branch_dev")),
-                        permissions=perms,
+                        permissions=permissions,
                         resource_scope=payload.get("resource_scope", {}),
                     )
             except Exception:
                 pass
 
-        # 2. Named Dev Token Role Mapping (dev-guest-token, waiter-token, etc.)
-        if any(k in token_lower for k in ("guest", "customer")):
+        token_lower = (user_token or "").lower()
+        if any(k in token_lower for k in ("customer", "guest")):
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="customer-guest",
-                ai_agent_id=settings.ai_agent_default_id,
+                acting_user_id="cust-dev-01",
+                role="customer",
                 organization_id="org_dev",
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
-                permissions=["menu.read", "orders.read"],
-                resource_scope={"role": "CUSTOMER"},
+                permissions=resolve_role_permissions("customer"),
+                resource_scope={"role": "CUSTOMER", "table_code": "T1", "table_session_id": "ts_dev_1"},
             )
-
         if any(k in token_lower for k in ("waiter", "server")):
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="waiter-staff",
-                ai_agent_id=settings.ai_agent_default_id,
+                acting_user_id="waiter-dev-01",
+                role="waiter",
                 organization_id="org_dev",
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
-                permissions=["menu.read", "tables.read", "orders.read", "payments.read"],
+                permissions=resolve_role_permissions("waiter"),
                 resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
             )
-
         if any(k in token_lower for k in ("kitchen", "chef")):
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="kitchen-staff",
-                ai_agent_id=settings.ai_agent_default_id,
+                acting_user_id="chef-dev-01",
+                role="kitchen",
                 organization_id="org_dev",
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
-                permissions=["orders.read", "inventory.read"],
-                resource_scope={"role": "KITCHEN"},
+                permissions=resolve_role_permissions("kitchen"),
+                resource_scope={"role": "KITCHEN", "stations": ["grill", "cold", "fryer"]},
             )
-
-        if any(k in token_lower for k in ("admin", "owner", "super", "system", "internal")):
+        if "cashier" in token_lower:
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="manager-admin",
-                ai_agent_id=settings.ai_agent_default_id,
+                acting_user_id="cashier-dev-01",
+                role="cashier",
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=resolve_role_permissions("cashier"),
+                resource_scope={"role": "CASHIER"},
+            )
+        if "manager" in token_lower:
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="manager-dev-01",
+                role="manager",
+                organization_id="org_dev",
+                restaurant_id="rest_dev",
+                branch_id="branch_dev",
+                permissions=resolve_role_permissions("manager"),
+                resource_scope={"role": "MANAGER"},
+            )
+        if any(k in token_lower for k in ("owner", "admin", "super", "system", "internal")):
+            return ActorContext(
+                actor_type="USER",
+                acting_user_id="owner-dev-01",
+                role="owner",
                 organization_id="org_dev",
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
                 permissions=["*"],
                 resource_scope={"role": "ADMIN"},
             )
-
-        # 3. Default fallback: Enforce least privilege for floor staff / waiters
-        # (Does NOT grant inventory.read or reports.read)
         return ActorContext(
             actor_type="USER",
             acting_user_id="waiter-staff",
             ai_agent_id=settings.ai_agent_default_id,
+            role="manager",
             organization_id="org_dev",
             restaurant_id="rest_dev",
             branch_id="branch_dev",
-            permissions=["menu.read", "tables.read", "orders.read", "payments.read"],
+            permissions=resolve_role_permissions("waiter"),
             resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
         )
 
@@ -234,22 +239,35 @@ class InternalClient:
             all_items: list[dict[str, Any]] = [
                 {
                     "name": "Classic Wagyu Smash Burger",
-                    "price": 18.5,
-                    "category": "Burgers",
-                    "dietary": ["high-protein"],
+                    "price": 26.50,
+                    "category": "Mains",
+                    "dietary": ["high_protein", "high-protein"],
                     "allergens": ["gluten", "dairy"],
-                    "description": "Double beef patty, aged cheddar, brioche bun. #1 top-selling guest favorite.",
+                    "description": "Double American wagyu beef patties, aged cheddar, smoked bacon jam, brioche bun. #1 top-selling guest favorite.",
+                    "pairing": "2021 Tuscan Chianti Classico Riserva or Craft IPA",
                     "tags": ["top-seller", "bestseller", "popular"],
                     "is_bestseller": True,
                 },
                 {
                     "name": "Pan-Seared Line-Caught Seabass",
-                    "price": 28.0,
+                    "price": 34.00,
                     "category": "Mains",
-                    "dietary": ["keto", "gluten-free", "high-protein", "organic"],
+                    "dietary": ["keto", "gluten_free", "gluten-free", "high_protein", "high-protein", "organic"],
                     "allergens": ["fish"],
-                    "description": "Crispy skin sea bass, braised carrots, herb reduction. Chef signature top-seller.",
+                    "description": "Crispy skin sea bass, braised baby carrots, fennel crisp, herb citrus reduction. Chef signature top-seller.",
+                    "pairing": "2022 Oaked Chardonnay or Crisp Pinot Grigio",
                     "tags": ["top-seller", "bestseller", "chef-special"],
+                    "is_bestseller": True,
+                },
+                {
+                    "name": "Grilled Prime Ribeye (300g)",
+                    "price": 38.00,
+                    "category": "Mains",
+                    "dietary": ["keto", "gluten_free", "gluten-free", "high_protein", "high-protein", "halal"],
+                    "allergens": [],
+                    "description": "Prime Black Angus ribeye with roasted rosemary garlic butter and red wine jus.",
+                    "pairing": "2021 Tuscan Chianti Classico Riserva",
+                    "tags": ["top-seller", "premium"],
                     "is_bestseller": True,
                 },
                 {
@@ -273,44 +291,104 @@ class InternalClient:
                     "is_bestseller": False,
                 },
                 {
-                    "name": "Craft IPA",
-                    "price": 7.0,
+                    "name": "Wild Mushroom Truffle Risotto",
+                    "price": 24.00,
+                    "category": "Mains",
+                    "dietary": ["vegetarian", "gluten_free", "gluten-free"],
+                    "allergens": ["dairy"],
+                    "description": "Carnaroli rice, wild forest porcini, white truffle oil, shaved pecorino.",
+                    "pairing": "Light Pinot Noir",
+                },
+                {
+                    "name": "Arancini al Tartufo",
+                    "price": 14.50,
+                    "category": "Starters",
+                    "dietary": ["vegetarian", "organic"],
+                    "allergens": ["gluten", "dairy"],
+                    "description": "Crispy black truffle risotto croquettes, aged parmesan, roasted garlic aioli.",
+                    "pairing": "Sparkling Prosecco Superiore",
+                },
+                {
+                    "name": "Organic Garden Caesar Salad",
+                    "price": 11.00,
+                    "category": "Starters",
+                    "dietary": ["vegetarian", "organic"],
+                    "allergens": ["dairy", "gluten", "eggs"],
+                    "description": "Crisp baby gem lettuce, sourdough croutons, shaved parmesan, garlic emulsion.",
+                    "pairing": "Sauvignon Blanc",
+                },
+                {
+                    "name": "Flourless Dark Chocolate Torte",
+                    "price": 10.00,
+                    "category": "Desserts",
+                    "dietary": ["vegetarian", "gluten_free", "gluten-free"],
+                    "allergens": ["dairy", "eggs"],
+                    "description": "70% Valrhona dark chocolate cake, espresso mascarpone, raspberry coulis.",
+                    "pairing": "Espresso or Vintage Port",
+                },
+                {
+                    "name": "2021 Tuscan Chianti Classico Riserva",
+                    "price": 14.00,
+                    "category": "Wines",
+                    "dietary": ["vegan", "gluten_free", "gluten-free"],
+                    "allergens": ["sulfites"],
+                    "description": "Full-bodied dry red with wild blackberry, dark cherry, and cedar oak notes.",
+                },
+                {
+                    "name": "2022 Oaked Chardonnay",
+                    "price": 12.00,
+                    "category": "Wines",
+                    "dietary": ["vegan", "gluten_free", "gluten-free"],
+                    "allergens": ["sulfites"],
+                    "description": "Creamy white wine with notes of green apple, toasted brioche, and vanilla.",
+                },
+                {
+                    "name": "Citrus Botanical Craft IPA",
+                    "price": 8.00,
                     "category": "Drinks",
                     "dietary": ["vegan"],
                     "allergens": ["gluten"],
-                    "description": "Locally brewed citrus hoppy IPA. Best-selling beverage.",
+                    "description": "Locally brewed hazy IPA with passionfruit, citrus zest, and mosaic hops. Best-selling beverage.",
                     "tags": ["bestseller", "drink"],
                     "is_bestseller": True,
                 },
             ]
 
-            category = str(args.get("category") or "").strip().lower()
-            diet = str(args.get("dietary_preference") or "").strip().lower()
-            exclude_raw = str(args.get("exclude_allergens") or "").strip().lower()
-            exclude_allergens = [a.strip() for a in exclude_raw.split(",") if a.strip()]
-            max_price = args.get("max_price")
+            filtered = all_items
+            cat = str(args.get("category") or "").strip().lower()
+            if cat and cat != "all":
+                filtered = [it for it in filtered if cat in str(it.get("category", "")).lower()]
 
-            filtered: list[dict[str, Any]] = all_items
-            if category:
-                filtered = [i for i in filtered if category in str(i.get("category", "")).lower()]
+            diet = str(args.get("dietary_preference") or "").strip().lower().replace("-", "_")
             if diet:
                 filtered = [
-                    i for i in filtered
-                    if any(diet in str(d).lower() for d in (i.get("dietary") or []))
+                    it for it in filtered
+                    if any(diet in str(d).lower().replace("-", "_") for d in (it.get("dietary") or []))
                 ]
+
+            raw_exclude = args.get("exclude_allergens")
+            exclude_allergens = []
+            if isinstance(raw_exclude, list):
+                exclude_allergens = [str(a).lower().strip() for a in raw_exclude if isinstance(a, str)]
+            elif isinstance(raw_exclude, str) and raw_exclude.strip():
+                exclude_allergens = [a.strip().lower() for a in raw_exclude.split(",") if a.strip()]
+
             if exclude_allergens:
                 filtered = [
-                    i for i in filtered
-                    if not any(al in [str(a).lower() for a in (i.get("allergens") or [])] for al in exclude_allergens)
+                    it for it in filtered
+                    if isinstance(it.get("allergens"), list)
+                    and not any(allg in it["allergens"] for allg in exclude_allergens)
                 ]
-            if max_price is not None:
+
+            max_p = args.get("max_price")
+            if max_p is not None:
                 try:
-                    p = float(max_price)
-                    filtered = [i for i in filtered if float(i.get("price", 0.0)) <= p]
+                    price_limit = float(max_p)
+                    filtered = [it for it in filtered if float(it.get("price", 0.0)) <= price_limit]
                 except (ValueError, TypeError):
                     pass
 
-            return {"ok": True, "data": {"items": filtered if filtered else []}}
+            return {"ok": True, "data": {"items": filtered, "total_count": len(filtered)}}
 
         fixtures: dict[str, Any] = {
             "get_table_status": {"table_id": args.get("table_id"), "status": "OCCUPIED"},

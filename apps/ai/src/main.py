@@ -40,6 +40,7 @@ voice_service = VoiceService()
 async def lifespan(app: FastAPI):
     yield
     await internal_client.aclose()
+    await conversation_store.aclose()
 
 
 app = FastAPI(
