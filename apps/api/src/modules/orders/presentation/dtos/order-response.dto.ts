@@ -130,6 +130,7 @@ export class OrderTrackingResponseDto {
 // Figma: Waiter Home / Orders tab — order cards
 
 export class OrderListResponseDto {
+  id!: string;
   orderId!: string;
   orderNumber!: string;
   tableId!: string;
@@ -137,12 +138,16 @@ export class OrderListResponseDto {
   displayStatus!: string;
   itemCount!: number;
   total!: number;
+  totalAmount!: number;
   estimatedPrepTime!: number | null;
+  items!: OrderItemResponseDto[];
+  orderType!: string;
   createdAt!: Date;
   submittedAt!: Date | null;
 
   static fromEntity(entity: Order): OrderListResponseDto {
     const dto = new OrderListResponseDto();
+    dto.id = entity.id;
     dto.orderId = entity.id;
     dto.orderNumber = entity.orderNumber;
     dto.tableId = entity.tableId;
@@ -150,7 +155,10 @@ export class OrderListResponseDto {
     dto.displayStatus = entity.displayStatus;
     dto.itemCount = entity.items.reduce((sum, i) => sum + i.quantity, 0);
     dto.total = entity.total;
+    dto.totalAmount = entity.total;
     dto.estimatedPrepTime = entity.estimatedPrepTime;
+    dto.items = entity.items ? entity.items.map(OrderItemResponseDto.fromProps) : [];
+    dto.orderType = (entity as any).orderType || 'DINE_IN';
     dto.createdAt = entity.createdAt;
     dto.submittedAt = entity.submittedAt;
     return dto;

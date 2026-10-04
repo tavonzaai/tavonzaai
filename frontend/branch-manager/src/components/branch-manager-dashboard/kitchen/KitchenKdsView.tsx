@@ -34,16 +34,63 @@ function mapOrderToTicket(order: LiveOrderItem): KdsTicket {
 export default function KitchenKdsView({ onTicketPlated }: KitchenKdsViewProps) {
   const [tickets, setTickets] = useState<KdsTicket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedStation, setSelectedStation] = useState<string>('ALL');
+
+  const stationTabs = ['ALL', 'KITCHEN', 'BAR', 'GRILL', 'SAUTE', 'PANTRY'];
 
   const fetchTickets = async () => {
     try {
       const branchId = getActiveBranchId();
-      const orders = await branchManagerService.getOrders(branchId);
-      // Filter orders relevant to kitchen: ACCEPTED, PREPARING, READY_TO_SERVE
-      const kitchenOrders = (Array.isArray(orders) ? orders : []).filter(
-        (o) => o.status === 'ACCEPTED' || o.status === 'PREPARING' || o.status === 'READY_TO_SERVE'
-      );
-      setTickets(kitchenOrders.map(mapOrderToTicket));
+      const stationParam = selectedStation !== 'ALL' ? selectedStation : undefined;
+      const rawTickets = await branchManagerService.getKitchenTickets(branchId, stationParam);
+
+      if (Array.isArray(rawTickets) && rawTickets.length > 0) {
+        // Group ticket items by orderId
+        const orderMap = new Map<string, KdsTicket>();
+
+        for (const item of rawTickets) {
+          const key = item.orderId || item.id;
+          const createdDate = new Date(item.createdAt || Date.now());
+          const diffMins = !isNaN(createdDate.getTime())
+            ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 60000))
+            : 0;
+          const timeAgo = diffMins === 0 ? 'Just now' : `${diffMins} min ago`;
+
+          if (!orderMap.has(key)) {
+            orderMap.set(key, {
+              id: key,
+              table: item.tableLabel || 'Table',
+              orderNumber: item.orderNumber,
+              timeAgo,
+              server: 'Floor Staff',
+              isPlated: item.status === 'READY' || item.status === 'SERVED',
+              items: [],
+            });
+          }
+
+          const existing = orderMap.get(key)!;
+          existing.items.push({
+            name: `${item.quantity}x ${item.productName}`,
+            mod: item.specialInstructions || '',
+            category: (item.stationType?.toUpperCase() === 'BAR' || item.stationType?.toUpperCase() === 'BEVERAGE'
+              ? 'BEVERAGE'
+              : item.stationType?.toUpperCase() === 'APPETIZER'
+              ? 'APPETIZER'
+              : item.stationType?.toUpperCase() === 'SIDE'
+              ? 'SIDE'
+              : 'MAIN') as any,
+          });
+
+          // If any item is not ready, ticket is not ready
+          if (item.status !== 'READY' && item.status !== 'SERVED') {
+            existing.isPlated = false;
+          }
+        }
+
+        setTickets(Array.from(orderMap.values()));
+      } else {
+        setTickets([]);
+      }
     } catch (err) {
       console.error('Failed to fetch KDS tickets:', err);
     } finally {
@@ -55,7 +102,7 @@ export default function KitchenKdsView({ onTicketPlated }: KitchenKdsViewProps) 
     fetchTickets();
     const interval = setInterval(fetchTickets, 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedStation]);
 
   const togglePlated = async (ticketId: string) => {
     const target = tickets.find((t) => t.id === ticketId);
@@ -68,7 +115,7 @@ export default function KitchenKdsView({ onTicketPlated }: KitchenKdsViewProps) 
     try {
       await branchManagerService.updateOrderStatus(
         ticketId,
-        newPlatedState ? 'READY_TO_SERVE' : 'PREPARING'
+        newPlatedState ? 'READY' : 'PREPARING'
       );
       if (onTicketPlated) {
         onTicketPlated(ticketId);
@@ -87,7 +134,7 @@ export default function KitchenKdsView({ onTicketPlated }: KitchenKdsViewProps) 
             Kitchen Display System (KDS Monitor)
           </h1>
           <p className="text-neutral-500 text-sm font-normal font-['Poppins']">
-            Live cook line tickets from Grill, Saute, and Pantry stations connected to backend orders stream.
+            Live cook line tickets connected directly to backend Kitchen routing engine.
           </p>
         </div>
 
@@ -95,9 +142,30 @@ export default function KitchenKdsView({ onTicketPlated }: KitchenKdsViewProps) 
         <div className="px-3.5 py-2 bg-teal-500/10 rounded-md outline outline-1 outline-offset-[-1px] outline-teal-500/70 flex items-center gap-2">
           <Radio className="w-3.5 h-3.5 text-teal-400 animate-pulse" />
           <span className="text-teal-400 text-sm font-medium font-['Inter']">
-            Live Stream Connected
+            Backend Stream Connected
           </span>
         </div>
+      </div>
+
+      {/* Station Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        {stationTabs.map((station) => {
+          const isActive = selectedStation === station;
+          return (
+            <button
+              key={station}
+              type="button"
+              onClick={() => setSelectedStation(station)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium font-['Poppins'] transition outline outline-1 outline-offset-[-1px] cursor-pointer ${
+                isActive
+                  ? 'bg-yellow-400 text-neutral-900 outline-neutral-700 font-semibold shadow-md'
+                  : 'bg-neutral-900 text-neutral-400 outline-neutral-800 hover:bg-neutral-800 hover:text-white'
+              }`}
+            >
+              {station === 'ALL' ? 'All Stations' : `${station} Station`}
+            </button>
+          );
+        })}
       </div>
 
       {/* Tickets Grid or Empty State */}

@@ -44,15 +44,16 @@ export function isManagerAuthenticated(): boolean {
 
   const managerToken = getCookie(BRANCH_MANAGER_TOKEN_KEY);
   const accessToken = getCookie('access_token');
-  const sessionToken = getCookie('cashier_token');
+  const rawUser = getCookie(BRANCH_MANAGER_USER_KEY);
 
-  return !!(managerToken || accessToken || sessionToken);
+  const token = managerToken || accessToken;
+  return !!(token && token.trim().length > 0 && rawUser);
 }
 
 /**
  * Retrieve cached branch manager profile from Cookies
  */
-export function getManagerProfile(): BranchManagerUser {
+export function getManagerProfile(): BranchManagerUser | null {
   const raw = getCookie(BRANCH_MANAGER_USER_KEY);
   if (raw) {
     try {
@@ -62,35 +63,34 @@ export function getManagerProfile(): BranchManagerUser {
     }
   }
 
-  return DEMO_BRANCH_MANAGER_USER;
+  return null;
 }
 
 /**
  * Log in the branch manager, establishing strictly Cookies session (NO LOCALSTORAGE)
  */
-export function loginManagerSession(customUser?: Partial<BranchManagerUser>): BranchManagerUser {
-  const existingToken = getCookie(BRANCH_MANAGER_TOKEN_KEY) || getCookie('access_token');
-  const token =
-    existingToken && !existingToken.startsWith('bm_tok_')
-      ? existingToken
-      : `bm_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+export function loginManagerSession(customUser: BranchManagerUser, token?: string): BranchManagerUser {
+  const authToken = token || getCookie('access_token') || getCookie(BRANCH_MANAGER_TOKEN_KEY);
+
+  if (!authToken) {
+    throw new Error('Authentication token is required to establish a manager session.');
+  }
 
   const validBranchId =
-    customUser?.branchId &&
+    customUser.branchId &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(customUser.branchId)
       ? customUser.branchId
       : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
 
   const user: BranchManagerUser = {
-    ...DEMO_BRANCH_MANAGER_USER,
     ...customUser,
     branchId: validBranchId,
     shiftStartedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
 
   // Store strictly in Cookies (NO LOCALSTORAGE)
-  setCookie(BRANCH_MANAGER_TOKEN_KEY, token);
-  setCookie('access_token', token);
+  setCookie(BRANCH_MANAGER_TOKEN_KEY, authToken);
+  setCookie('access_token', authToken);
   setCookie(BRANCH_MANAGER_USER_KEY, JSON.stringify(user));
   setCookie('tavonza_branch_id', validBranchId);
   setCookie('branch_id', validBranchId);

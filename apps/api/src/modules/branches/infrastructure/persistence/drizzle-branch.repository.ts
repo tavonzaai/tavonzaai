@@ -1,5 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, and, or, ilike } from 'drizzle-orm';
+import * as argon2 from 'argon2';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -274,7 +275,19 @@ export class DrizzleBranchRepository {
 
   // ── Staff Assignments ──────────────────────────────────────────────────
 
-  async findStaffByBranchId(branchId: string) {
+  async findStaffByBranchId(branchId: string, filters?: { role?: string; search?: string }) {
+    const conditions: any[] = [eq(staffAssignments.branchId, branchId)];
+
+    if (filters?.role && filters.role !== 'ALL') {
+      const roleUpper = filters.role.toUpperCase();
+      conditions.push(eq(staffAssignments.role, roleUpper as any));
+    }
+
+    if (filters?.search && filters.search.trim()) {
+      const term = `%${filters.search.trim()}%`;
+      conditions.push(or(ilike(users.name, term), ilike(users.email, term))!);
+    }
+
     return this.db
       .select({
         id: staffAssignments.id,
@@ -291,7 +304,112 @@ export class DrizzleBranchRepository {
       .from(staffAssignments)
       .innerJoin(staff, eq(staff.id, staffAssignments.staffId))
       .innerJoin(users, eq(users.id, staff.userId))
-      .where(eq(staffAssignments.branchId, branchId));
+      .where(and(...conditions));
+  }
+
+  async createStaffAndAssignment(data: {
+    branchId: string;
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    role: any;
+    permissions?: string[];
+  }) {
+    const emailNormalized = data.email.trim().toLowerCase();
+
+    // 1. Check if user already exists
+    const [existingUser] = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.email, emailNormalized))
+      .limit(1);
+
+    let userId = existingUser?.id;
+
+    if (!userId) {
+      const cleanPhone = data.phone?.trim() || null;
+      if (cleanPhone) {
+        const [existingPhone] = await this.db
+          .select()
+          .from(users)
+          .where(eq(users.contactNo, cleanPhone))
+          .limit(1);
+        if (existingPhone) {
+          throw new Error(`Phone number "${cleanPhone}" is already in use by another user.`);
+        }
+      }
+
+      const passwordHash = await argon2.hash(data.password);
+      const [newUser] = await this.db
+        .insert(users)
+        .values({
+          name: data.name.trim(),
+          email: emailNormalized,
+          password: passwordHash,
+          contactNo: cleanPhone,
+          role: 'STAFF',
+          status: 'ACTIVE',
+        })
+        .returning();
+      if (!newUser) throw new Error('Failed to create user record');
+      userId = newUser.id;
+    }
+
+    // 2. Check if staff entity exists for this user
+    const [existingStaff] = await this.db
+      .select()
+      .from(staff)
+      .where(eq(staff.userId, userId))
+      .limit(1);
+
+    let staffId = existingStaff?.id;
+    if (!staffId) {
+      const [newStaff] = await this.db
+        .insert(staff)
+        .values({
+          userId,
+        })
+        .returning();
+      if (!newStaff) throw new Error('Failed to create staff record');
+      staffId = newStaff.id;
+    }
+
+    // 3. Assign staff to branch
+    const [assignment] = await this.db
+      .insert(staffAssignments)
+      .values({
+        branchId: data.branchId,
+        staffId,
+        role: data.role,
+        permissions: data.permissions ?? [],
+        isActive: true,
+      })
+      .onConflictDoUpdate({
+        target: [staffAssignments.staffId, staffAssignments.branchId],
+        set: {
+          role: data.role,
+          permissions: data.permissions ?? [],
+          isActive: true,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    if (!assignment) throw new Error('Failed to assign staff to branch');
+
+    return {
+      id: assignment.id,
+      staffId,
+      branchId: data.branchId,
+      role: assignment.role,
+      permissions: assignment.permissions,
+      isActive: assignment.isActive,
+      assignedAt: assignment.createdAt,
+      name: data.name.trim(),
+      email: emailNormalized,
+      phone: data.phone,
+    };
   }
 
   async assignStaff(data: {

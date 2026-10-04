@@ -22,7 +22,18 @@ export default function OrdersListView({ onSelectOrder }: OrdersListViewProps) {
       try {
         setIsLoading(true);
         const branchId = getActiveBranchId();
-        const liveOrders = await branchManagerService.getOrders(branchId);
+
+        let backendStatus: string | undefined = undefined;
+        if (filter === 'Preparing') backendStatus = 'PREPARING';
+        else if (filter === 'Ready') backendStatus = 'READY';
+        else if (filter === 'Payment Pending') backendStatus = 'PAYMENT_PENDING';
+        else if (filter === 'Completed') backendStatus = 'SERVED';
+
+        const liveOrders = await branchManagerService.getOrders(branchId, {
+          status: backendStatus,
+          search: searchQuery.trim() || undefined,
+        });
+
         if (isMounted) {
           if (liveOrders && liveOrders.length > 0) {
             const mapped: OrderItemRow[] = liveOrders.map((o: any, idx: number) => {
@@ -34,26 +45,30 @@ export default function OrdersListView({ onSelectOrder }: OrdersListViewProps) {
               else if (st === 'PAYMENT_PENDING') uiStatus = 'Payment Pending';
               else if (st === 'NEEDS_ATTENTION') uiStatus = 'Needs Attention';
 
-              const formattedTime = o.submittedAt
-                ? new Date(o.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              const formattedTime = o.submittedAt || o.createdAt
+                ? new Date(o.submittedAt || o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : 'Just now';
 
               const itemsStr = o.items && o.items.length > 0
-                ? o.items.map((i: any) => `${i.quantity}x ${i.name}`).join(', ')
+                ? o.items.map((i: any) => `${i.quantity}x ${i.name || i.productNameSnapshot || i.productName || 'Dish'}`).join(', ')
                 : `${o.itemCount || 1} items`;
 
               return {
-                id: o.orderId,
+                id: o.orderId || o.id,
                 orderNumber: o.orderNumber || `#1000${idx + 1}`,
                 waiterLocation: o.tableLabel || `Table T-${String(idx + 1).padStart(2, '0')}`,
                 items: itemsStr,
                 timeElapsed: formattedTime,
                 status: uiStatus,
-                total: `$${Number(o.total || 0).toFixed(2)}`,
+                total: `$${Number(o.total || o.totalAmount || 0).toFixed(2)}`,
               };
             });
 
-            setOrders(mapped);
+            if (filter === 'Active') {
+              setOrders(mapped.filter((o) => o.status !== 'Completed'));
+            } else {
+              setOrders(mapped);
+            }
           } else {
             setOrders([]);
           }
@@ -65,35 +80,14 @@ export default function OrdersListView({ onSelectOrder }: OrdersListViewProps) {
       }
     }
 
-    loadOrders();
+    const timer = setTimeout(loadOrders, searchQuery ? 250 : 0);
     return () => {
       isMounted = false;
+      clearTimeout(timer);
     };
-  }, []);
+  }, [filter, searchQuery]);
 
-  const filteredOrders = orders.filter((order) => {
-    if (filter === 'Active') {
-      if (order.status === 'Completed') return false;
-    } else if (filter === 'Preparing') {
-      if (order.status !== 'Preparing') return false;
-    } else if (filter === 'Ready') {
-      if (order.status !== 'Ready') return false;
-    } else if (filter === 'Payment Pending') {
-      if (order.status !== 'Payment Pending') return false;
-    } else if (filter === 'Completed') {
-      if (order.status !== 'Completed') return false;
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchNumber = order.orderNumber.toLowerCase().includes(q);
-      const matchLocation = order.waiterLocation.toLowerCase().includes(q);
-      const matchItems = order.items.toLowerCase().includes(q);
-      if (!matchNumber && !matchLocation && !matchItems) return false;
-    }
-
-    return true;
-  });
+  const filteredOrders = orders;
 
   const getStatusBadge = (status: OrderItemRow['status']) => {
     switch (status) {

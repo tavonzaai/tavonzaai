@@ -179,16 +179,18 @@ export class OrderController {
    * Lists orders for a branch, with optional status/table filters.
    */
   @Get('branch/:branchId')
-  @ApiOperation({ summary: '[Waiter] Get orders by branch with status filter' })
+  @ApiOperation({ summary: '[Waiter/Manager] Get orders by branch with status and search filters' })
   @ApiOkResponse({ type: [OrderListResponseDto] })
   async getOrdersByBranch(
     @Param('branchId') branchId: string,
     @Query('status') status?: string,
     @Query('tableId') tableId?: string,
+    @Query('search') search?: string,
   ): Promise<OrderListResponseDto[]> {
     const orders = await this.orderService.getOrdersByBranch(branchId, {
       status: status as OrderStatus | undefined,
       tableId,
+      search,
     });
     return orders.map(OrderListResponseDto.fromEntity);
   }

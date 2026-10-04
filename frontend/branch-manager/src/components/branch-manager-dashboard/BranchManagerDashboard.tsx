@@ -140,22 +140,30 @@ export default function BranchManagerDashboard({
 
   const handleSelectTable = (tableId: string) => {
     setSelectedTableId(tableId);
-    handleSetActiveNav('Table');
+    setActiveNav('Table');
+    const targetRoute = navToRoute['Table'] || '/branch-manager-dashboard/tables';
+    router.push(targetRoute);
   };
 
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrderId(orderId);
-    handleSetActiveNav('Orders');
+    setActiveNav('Orders');
+    const targetRoute = navToRoute['Orders'] || '/branch-manager-dashboard/orders';
+    router.push(targetRoute);
   };
 
   const handleSelectStaff = (staffId: string) => {
     setSelectedStaffId(staffId);
-    handleSetActiveNav('Staff');
+    setActiveNav('Staff');
+    const targetRoute = navToRoute['Staff'] || '/branch-manager-dashboard/staff';
+    router.push(targetRoute);
   };
 
   const handleSelectPayment = (paymentId: string) => {
     setSelectedPaymentId(paymentId);
-    handleSetActiveNav('Payments');
+    setActiveNav('Payments');
+    const targetRoute = navToRoute['Payments'] || '/branch-manager-dashboard/payments';
+    router.push(targetRoute);
   };
 
   const currentTable: TableItem =

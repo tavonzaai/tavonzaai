@@ -14,8 +14,8 @@ interface LoginViewProps {
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   const dispatch = useAppDispatch();
-  const [email, setEmail] = useState('manager@tavonza.demo');
-  const [password, setPassword] = useState('ManagerPass123!');
+  const [email, setEmail] = useState('manager@tavonza.ai');
+  const [password, setPassword] = useState('Manager@1234');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,15 +24,17 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     name: string,
     userEmail: string,
     role = 'BRANCH_MANAGER',
-    profile?: any
+    profile?: any,
+    token?: string
   ) => {
     const logged = loginManagerSession({
       id: profile?.id,
       name,
       email: userEmail,
       role,
+      branchId: profile?.branchId,
       assignments: profile?.assignments,
-    });
+    }, token);
 
     dispatch(
       setUser({
@@ -56,6 +58,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       // 1. Dispatch real login thunk to backend REST endpoint (POST /auth/login)
       const res: any = await dispatch(loginUser({ email: email.trim(), password })).unwrap();
       const userProfile = res?.user || res;
+      const authToken = res?.accessToken || res?.data?.accessToken;
 
       const roleUpper = String(userProfile?.role || '').toUpperCase();
       const isManager =
@@ -80,23 +83,12 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         'Branch Manager';
       const userRole = userProfile?.role ? String(userProfile.role).toUpperCase() : 'BRANCH_MANAGER';
 
-      handleCompleteSession(userName, email.trim(), userRole, userProfile);
+      handleCompleteSession(userName, email.trim(), userRole, userProfile, authToken);
     } catch (err: any) {
-      // If server is unreachable or demo testing credentials provided
-      if (email.toLowerCase().includes('manager')) {
-        handleCompleteSession('Nobin Mille', email.trim(), 'BRANCH_MANAGER');
-      } else {
-        setError(err?.message || typeof err === 'string' ? err : 'Invalid email or password.');
-      }
+      setError(err?.message || (typeof err === 'string' ? err : 'Invalid email or password.'));
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickDemoLogin = () => {
-    setEmail('manager@tavonza.demo');
-    setPassword('ManagerPass123!');
-    handleCompleteSession('Nobin Mille', 'manager@tavonza.demo', 'BRANCH_MANAGER');
   };
 
   return (
@@ -187,17 +179,10 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         </button>
       </form>
 
-      {/* Quick Demo Sign In Box */}
-      <div className="mt-6 pt-6 border-t border-neutral-800/80 flex flex-col items-center gap-3">
-        <span className="text-[11px] text-neutral-500">Quick Development Access:</span>
-        <button
-          type="button"
-          onClick={handleQuickDemoLogin}
-          className="w-full py-2.5 px-4 bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 text-xs font-medium text-neutral-300 rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-          <span>Demo Branch Manager Login (Nobin Mille)</span>
-        </button>
+      {/* Credentials Hint */}
+      <div className="mt-6 pt-4 border-t border-neutral-800/80 flex flex-col items-center gap-1.5 text-center">
+        <span className="text-[11px] text-neutral-500 font-mono">Restricted Terminal · Authorized Personnel Only</span>
+        <span className="text-[11px] text-neutral-400">Default Manager: manager@tavonza.ai / Manager@1234</span>
       </div>
     </div>
   );

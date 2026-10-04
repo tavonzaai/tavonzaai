@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, or, ilike, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -97,7 +97,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
 
   async findByBranch(
     branchId: string,
-    filters?: { status?: OrderStatus; tableId?: string },
+    filters?: { status?: OrderStatus; tableId?: string; search?: string },
   ): Promise<Order[]> {
     const conditions = [eq(orders.branchId, branchId)];
 
@@ -106,6 +106,10 @@ export class DrizzleOrderRepository implements IOrderRepository {
     }
     if (filters?.tableId) {
       conditions.push(eq(orders.tableId, filters.tableId));
+    }
+    if (filters?.search && filters.search.trim()) {
+      const term = `%${filters.search.trim()}%`;
+      conditions.push(or(ilike(orders.orderNumber, term), ilike(orders.guestName, term))!);
     }
 
     const orderRecords = await this.db

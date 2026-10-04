@@ -236,3 +236,34 @@ export class BranchResponseDto {
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
 }
+
+export class CreateBranchStaffDto {
+  @ApiProperty({ example: 'Jane Waiter' })
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @ApiProperty({ example: 'jane@restaurant.com' })
+  @IsString()
+  @IsNotEmpty()
+  email!: string;
+
+  @ApiProperty({ example: 'StaffPass123!' })
+  @IsString()
+  @IsNotEmpty()
+  password!: string;
+
+  @ApiPropertyOptional({ example: '+1-555-1234' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiProperty({ example: 'WAITER' })
+  @IsString()
+  @IsNotEmpty()
+  role!: string;
+
+  @ApiPropertyOptional({ example: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'] })
+  @IsOptional()
+  permissions?: string[];
+}

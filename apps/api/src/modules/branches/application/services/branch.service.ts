@@ -1,6 +1,7 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { DrizzleBranchRepository } from '../../infrastructure/persistence/drizzle-branch.repository';
 import type {
@@ -10,6 +11,7 @@ import type {
   SetOperatingHoursDto,
   CreateHolidayDto,
   BranchResponseDto,
+  CreateBranchStaffDto,
 } from '../../presentation/http/dto/branch.dto';
 import type {
   Branch,
@@ -122,8 +124,30 @@ export class BranchService {
 
   // ── Staff Assignments ──────────────────────────────────────────────────
 
-  async getStaffByBranch(branchId: string) {
-    return this.branchRepo.findStaffByBranchId(branchId);
+  async getStaffByBranch(branchId: string, filters?: { role?: string; search?: string }) {
+    return this.branchRepo.findStaffByBranchId(branchId, filters);
+  }
+
+  async createStaffForBranch(branchId: string, dto: CreateBranchStaffDto) {
+    try {
+      const branch = await this.branchRepo.findBranchById(branchId);
+      if (!branch) {
+        throw new NotFoundException(`Branch "${branchId}" not found`);
+      }
+
+      return await this.branchRepo.createStaffAndAssignment({
+        branchId,
+        name: dto.name,
+        email: dto.email,
+        password: dto.password,
+        phone: dto.phone,
+        role: dto.role,
+        permissions: dto.permissions,
+      });
+    } catch (err: any) {
+      console.error('CRITICAL createStaffForBranch error:', err);
+      throw new BadRequestException(`Staff creation failed: ${err?.message || err}`);
+    }
   }
 
   async assignStaffToBranch(branchId: string, dto: { staffId: string; role: any; permissions?: string[] }) {

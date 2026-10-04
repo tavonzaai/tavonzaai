@@ -1,6 +1,5 @@
-'use client';
-
 import React, { useState, useEffect } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
   Building2,
   Table as TableIcon,
@@ -13,6 +12,7 @@ import {
   Plus,
   RefreshCw,
   Sliders,
+  Loader2,
 } from 'lucide-react';
 import AddTableModal, { NewTableData } from './AddTableModal';
 import { branchManagerService, getActiveBranchId } from '@/redux/features/branchManagerApi';
@@ -23,6 +23,22 @@ type ConfigSubTab =
   | 'Kitchen Stations'
   | 'Staff Configuration'
   | 'Ordering Channels';
+
+const SUBTAB_TO_KEY: Record<ConfigSubTab, string> = {
+  'Branch Info & Hours': 'info',
+  'Tables & Seating': 'tables',
+  'Kitchen Stations': 'kitchen',
+  'Staff Configuration': 'staff',
+  'Ordering Channels': 'channels',
+};
+
+const KEY_TO_SUBTAB: Record<string, ConfigSubTab> = {
+  info: 'Branch Info & Hours',
+  tables: 'Tables & Seating',
+  kitchen: 'Kitchen Stations',
+  staff: 'Staff Configuration',
+  channels: 'Ordering Channels',
+};
 
 interface ConfigTable {
   id: string;
@@ -96,23 +112,50 @@ const DAYS_OF_WEEK = [
   { day: 'Sunday', isOpen: true, openTime: '09 : 00 AM', closeTime: '09 : 30 PM' },
 ];
 
-export default function BranchConfigView() {
-  const [activeSubTab, setActiveSubTab] = useState<ConfigSubTab>('Branch Info & Hours');
+function BranchConfigContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const currentSlug = searchParams.get('subtab')?.toLowerCase();
+  const initialSubTab: ConfigSubTab =
+    currentSlug && KEY_TO_SUBTAB[currentSlug]
+      ? KEY_TO_SUBTAB[currentSlug]
+      : 'Branch Info & Hours';
+
+  const [activeSubTab, setActiveSubTab] = useState<ConfigSubTab>(initialSubTab);
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('Configuration saved successfully!');
 
-  // Form states for Branch Info
-  const [branchName, setBranchName] = useState('Downtown Flagshipp Branch');
+  // Form states for Branch Info (populated from real database)
+  const [branchName, setBranchName] = useState('Downtown HQ');
   const [branchCode, setBranchCode] = useState('BR-001');
   const [phone, setPhone] = useState('+1 (555) 234-5678');
-  const [email, setEmail] = useState('downtown@tavonza.com');
-  const [address, setAddress] = useState('742 Evergreen Terrace, Suite 100');
-  const [city, setCity] = useState('Springfield');
+  const [email, setEmail] = useState('manager@tavonza.ai');
+  const [address, setAddress] = useState('742 Evergreen Terrace');
+  const [city, setCity] = useState('Metropolis');
   const [stateCode, setStateCode] = useState('IL');
   const [postalCode, setPostalCode] = useState('62704');
 
-  // Operating Hours State
-  const [operatingHours, setOperatingHours] = useState(DAYS_OF_WEEK);
+  // Operating Hours State (populated from database branch_operating_hours)
+  const [operatingHours, setOperatingHours] = useState<
+    Array<{
+      dayOfWeek: number;
+      day: string;
+      isOpen: boolean;
+      openTime: string;
+      closeTime: string;
+    }>
+  >([
+    { dayOfWeek: 1, day: 'Monday', isOpen: true, openTime: '09:00', closeTime: '22:00' },
+    { dayOfWeek: 2, day: 'Tuesday', isOpen: true, openTime: '09:00', closeTime: '22:00' },
+    { dayOfWeek: 3, day: 'Wednesday', isOpen: true, openTime: '09:00', closeTime: '22:00' },
+    { dayOfWeek: 4, day: 'Thursday', isOpen: true, openTime: '09:00', closeTime: '22:00' },
+    { dayOfWeek: 5, day: 'Friday', isOpen: true, openTime: '09:00', closeTime: '23:00' },
+    { dayOfWeek: 6, day: 'Saturday', isOpen: true, openTime: '08:30', closeTime: '23:30' },
+    { dayOfWeek: 0, day: 'Sunday', isOpen: true, openTime: '09:00', closeTime: '21:30' },
+  ]);
 
   // Tables State
   const [configTables, setConfigTables] = useState<ConfigTable[]>([]);
@@ -123,24 +166,71 @@ export default function BranchConfigView() {
   // Order Acceptance Mode ('AUTO_ACCEPT' | 'WAITER_APPROVAL')
   const [acceptanceMode, setAcceptanceMode] = useState<'AUTO_ACCEPT' | 'WAITER_APPROVAL'>('WAITER_APPROVAL');
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
+  const [isSavingHours, setIsSavingHours] = useState(false);
+  const [isSavingBranchInfo, setIsSavingBranchInfo] = useState(false);
+
+  // Sync subtab from URL query parameters on navigation
+  useEffect(() => {
+    const slug = searchParams.get('subtab')?.toLowerCase();
+    if (slug && KEY_TO_SUBTAB[slug]) {
+      setActiveSubTab(KEY_TO_SUBTAB[slug]);
+    }
+  }, [searchParams]);
+
+  const handleSubTabChange = (tab: ConfigSubTab) => {
+    setActiveSubTab(tab);
+    const slug = SUBTAB_TO_KEY[tab] || 'info';
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('subtab', slug);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   useEffect(() => {
     let mounted = true;
     const fetchBranchConfig = async () => {
       try {
         const branchId = getActiveBranchId();
-        const [settingsRes, tablesRes] = await Promise.allSettled([
+        const [branchRes, hoursRes, settingsRes, tablesRes] = await Promise.allSettled([
+          branchManagerService.getBranch(branchId),
+          branchManagerService.getOperatingHours(branchId),
           branchManagerService.getSettings(branchId),
           branchManagerService.getTables(branchId),
         ]);
 
         if (mounted) {
+          if (branchRes.status === 'fulfilled' && branchRes.value) {
+            const b = branchRes.value;
+            if (b.name) setBranchName(b.name);
+            if (b.phone) setPhone(b.phone);
+            const addr = b.address || {};
+            if (addr.line1 || addr.street) setAddress(addr.line1 || addr.street || '');
+            if (addr.city) setCity(addr.city);
+            if (addr.state) setStateCode(addr.state);
+            if (addr.postalCode) setPostalCode(addr.postalCode);
+          }
+
+          if (hoursRes.status === 'fulfilled' && Array.isArray(hoursRes.value) && hoursRes.value.length > 0) {
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const mappedHours = [1, 2, 3, 4, 5, 6, 0].map((dNum) => {
+              const matched = hoursRes.value.find((h: any) => h.dayOfWeek === dNum);
+              return {
+                dayOfWeek: dNum,
+                day: dayNames[dNum] ?? 'Monday',
+                isOpen: !!matched,
+                openTime: matched?.openTime || '09:00',
+                closeTime: matched?.closeTime || '22:00',
+              };
+            });
+            setOperatingHours(mappedHours);
+          }
+
           if (settingsRes.status === 'fulfilled' && settingsRes.value) {
             const mode = settingsRes.value.orderAcceptanceMode;
             if (mode === 'AUTO_ACCEPT' || mode === 'WAITER_APPROVAL') {
               setAcceptanceMode(mode);
             }
           }
+
           if (tablesRes.status === 'fulfilled' && Array.isArray(tablesRes.value)) {
             const mappedTables: ConfigTable[] = tablesRes.value.map((t) => ({
               id: t.id,
@@ -234,8 +324,75 @@ export default function BranchConfigView() {
   };
 
   const triggerSaveToast = (msg?: string) => {
+    if (msg) setToastMessage(msg);
     setSaveToast(true);
     setTimeout(() => setSaveToast(false), 3000);
+  };
+
+  const handleSaveBranchInfo = async () => {
+    setIsSavingBranchInfo(true);
+    try {
+      const branchId = getActiveBranchId();
+      await branchManagerService.updateBranch(branchId, {
+        name: branchName.trim(),
+        phone: phone.trim(),
+        address: {
+          line1: address.trim(),
+          city: city.trim(),
+          state: stateCode.trim(),
+          postalCode: postalCode.trim(),
+          country: 'US',
+        },
+      });
+      triggerSaveToast('Branch details saved to database successfully!');
+    } catch (err: any) {
+      console.error('Failed to update branch info:', err);
+      triggerSaveToast('Failed to save branch info: ' + (err.message || 'Error'));
+    } finally {
+      setIsSavingBranchInfo(false);
+    }
+  };
+
+  const handleSaveOperatingHours = async () => {
+    setIsSavingHours(true);
+    try {
+      const branchId = getActiveBranchId();
+      const openHours = operatingHours
+        .filter((d) => d.isOpen)
+        .map((d) => ({
+          dayOfWeek: d.dayOfWeek,
+          openTime: d.openTime.replace(/\s+/g, ''),
+          closeTime: d.closeTime.replace(/\s+/g, ''),
+        }));
+
+      await branchManagerService.updateOperatingHours(branchId, openHours);
+      triggerSaveToast('Weekly operating hours saved to database successfully!');
+    } catch (err: any) {
+      console.error('Failed to update operating hours:', err);
+      triggerSaveToast('Failed to save operating hours: ' + (err.message || 'Error'));
+    } finally {
+      setIsSavingHours(false);
+    }
+  };
+
+  const handleSaveAll = async () => {
+    if (activeSubTab === 'Branch Info & Hours') {
+      await Promise.all([handleSaveBranchInfo(), handleSaveOperatingHours()]);
+    } else {
+      triggerSaveToast('Settings saved successfully!');
+    }
+  };
+
+  const handleOpenTimeChange = (idx: number, val: string) => {
+    setOperatingHours((prev) =>
+      prev.map((d, i) => (i === idx ? { ...d, openTime: val } : d))
+    );
+  };
+
+  const handleCloseTimeChange = (idx: number, val: string) => {
+    setOperatingHours((prev) =>
+      prev.map((d, i) => (i === idx ? { ...d, closeTime: val } : d))
+    );
   };
 
   return (
@@ -244,7 +401,7 @@ export default function BranchConfigView() {
       {saveToast && (
         <div className="fixed top-5 right-5 z-50 bg-emerald-500 text-neutral-950 font-semibold px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-3">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span className="text-xs">Configuration saved successfully!</span>
+          <span className="text-xs">{toastMessage}</span>
         </div>
       )}
 
@@ -284,10 +441,12 @@ export default function BranchConfigView() {
 
           <button
             type="button"
-            onClick={() => triggerSaveToast()}
-            className="px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-neutral-900 text-sm font-semibold rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 transition cursor-pointer shadow-md active:scale-95"
+            onClick={handleSaveAll}
+            disabled={isSavingHours || isSavingBranchInfo}
+            className="px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-neutral-900 text-sm font-semibold rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 transition cursor-pointer shadow-md active:scale-95 flex items-center gap-2"
           >
-            Save Changes
+            {(isSavingHours || isSavingBranchInfo) && <Loader2 className="w-4 h-4 animate-spin" />}
+            <span>Save Changes</span>
           </button>
         </div>
       </div>
@@ -302,7 +461,7 @@ export default function BranchConfigView() {
             {/* Branch Info & Hours */}
             <button
               type="button"
-              onClick={() => setActiveSubTab('Branch Info & Hours')}
+              onClick={() => handleSubTabChange('Branch Info & Hours')}
               className={`w-full px-3 py-2.5 rounded-lg outline outline-1 outline-offset-[-1px] flex items-center justify-between transition cursor-pointer text-left ${
                 activeSubTab === 'Branch Info & Hours'
                   ? 'bg-yellow-400/10 outline-yellow-400/80 text-white shadow-sm'
@@ -326,7 +485,7 @@ export default function BranchConfigView() {
             {/* Tables & Seating */}
             <button
               type="button"
-              onClick={() => setActiveSubTab('Tables & Seating')}
+              onClick={() => handleSubTabChange('Tables & Seating')}
               className={`w-full px-3 py-2.5 rounded-lg outline outline-1 outline-offset-[-1px] flex items-center justify-between transition cursor-pointer text-left ${
                 activeSubTab === 'Tables & Seating'
                   ? 'bg-yellow-400/10 outline-yellow-400/80 text-white shadow-sm'
@@ -350,7 +509,7 @@ export default function BranchConfigView() {
             {/* Kitchen Stations */}
             <button
               type="button"
-              onClick={() => setActiveSubTab('Kitchen Stations')}
+              onClick={() => handleSubTabChange('Kitchen Stations')}
               className={`w-full px-3 py-2.5 rounded-lg outline outline-1 outline-offset-[-1px] flex items-center justify-between transition cursor-pointer text-left ${
                 activeSubTab === 'Kitchen Stations'
                   ? 'bg-yellow-400/10 outline-yellow-400/80 text-white shadow-sm'
@@ -374,7 +533,7 @@ export default function BranchConfigView() {
             {/* Staff Configuration */}
             <button
               type="button"
-              onClick={() => setActiveSubTab('Staff Configuration')}
+              onClick={() => handleSubTabChange('Staff Configuration')}
               className={`w-full px-3 py-2.5 rounded-lg outline outline-1 outline-offset-[-1px] flex items-center justify-between transition cursor-pointer text-left ${
                 activeSubTab === 'Staff Configuration'
                   ? 'bg-yellow-400/10 outline-yellow-400/80 text-white shadow-sm'
@@ -398,7 +557,7 @@ export default function BranchConfigView() {
             {/* Ordering Channels */}
             <button
               type="button"
-              onClick={() => setActiveSubTab('Ordering Channels')}
+              onClick={() => handleSubTabChange('Ordering Channels')}
               className={`w-full px-3 py-2.5 rounded-lg outline outline-1 outline-offset-[-1px] flex items-center justify-between transition cursor-pointer text-left ${
                 activeSubTab === 'Ordering Channels'
                   ? 'bg-yellow-400/10 outline-yellow-400/80 text-white shadow-sm'
@@ -525,6 +684,18 @@ export default function BranchConfigView() {
                     />
                   </div>
                 </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveBranchInfo}
+                    disabled={isSavingBranchInfo}
+                    className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-neutral-900 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  >
+                    {isSavingBranchInfo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    <span>{isSavingBranchInfo ? 'Saving...' : 'Save Branch Details'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Operating Hours Section matching Figma */}
@@ -571,16 +742,39 @@ export default function BranchConfigView() {
 
                       {/* Time Pickers */}
                       <div className="flex items-center gap-2 text-xs font-['Poppins']">
-                        <div className="px-3 py-1.5 bg-slate-950 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-700 text-white">
-                          {schedule.openTime}
-                        </div>
+                        <input
+                          type="time"
+                          value={schedule.openTime}
+                          disabled={!schedule.isOpen}
+                          onChange={(e) => handleOpenTimeChange(idx, e.target.value)}
+                          className="px-2.5 py-1.5 bg-slate-950 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-700 text-white disabled:opacity-40 focus:outline-yellow-400"
+                        />
                         <span className="text-neutral-500">To</span>
-                        <div className="px-3 py-1.5 bg-slate-950 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-700 text-white">
-                          {schedule.closeTime}
-                        </div>
+                        <input
+                          type="time"
+                          value={schedule.closeTime}
+                          disabled={!schedule.isOpen}
+                          onChange={(e) => handleCloseTimeChange(idx, e.target.value)}
+                          className="px-2.5 py-1.5 bg-slate-950 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-700 text-white disabled:opacity-40 focus:outline-yellow-400"
+                        />
                       </div>
                     </div>
                   ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-2">
+                  <span className="text-xs text-neutral-400">
+                    Changes persist directly to database table <code className="text-teal-400">branch_operating_hours</code>.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSaveOperatingHours}
+                    disabled={isSavingHours}
+                    className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-neutral-900 text-xs font-semibold rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  >
+                    {isSavingHours ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    <span>{isSavingHours ? 'Saving to Database...' : 'Save Operating Hours'}</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -936,5 +1130,20 @@ export default function BranchConfigView() {
         onSaveTable={handleSaveNewTable}
       />
     </div>
+  );
+}
+
+export default function BranchConfigView() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="p-8 text-neutral-400 flex items-center gap-2">
+          <Loader2 className="w-5 h-5 animate-spin text-yellow-400" />
+          <span>Loading branch configuration...</span>
+        </div>
+      }
+    >
+      <BranchConfigContent />
+    </React.Suspense>
   );
 }

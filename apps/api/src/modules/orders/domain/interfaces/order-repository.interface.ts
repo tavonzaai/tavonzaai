@@ -50,7 +50,7 @@ export interface IOrderRepository {
   /** Find orders by branch, optionally filtered by status. */
   findByBranch(
     branchId: string,
-    filters?: { status?: OrderStatus; tableId?: string },
+    filters?: { status?: OrderStatus; tableId?: string; search?: string },
   ): Promise<Order[]>;
 
   // ── Items ───────────────────────────────────────────────────────────

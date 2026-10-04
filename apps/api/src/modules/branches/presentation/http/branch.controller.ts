@@ -32,6 +32,7 @@ import {
   SetOperatingHoursDto,
   CreateHolidayDto,
   BranchResponseDto,
+  CreateBranchStaffDto,
 } from './dto/branch.dto';
 
 @ApiTags('Branches')
@@ -137,9 +138,25 @@ export class BranchController {
   // ── Staff ─────────────────────────────────────────────────────────────
 
   @Get(':id/staff')
-  @ApiOperation({ summary: 'Get all staff assigned to this branch' })
-  async getStaff(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.branchService.getStaffByBranch(id);
+  @ApiOperation({ summary: 'Get all staff assigned to this branch with optional role and search filters' })
+  @ApiQuery({ name: 'role', required: false, type: String })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  async getStaff(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Query('role') role?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.branchService.getStaffByBranch(id, { role, search });
+  }
+
+  @Post(':id/staff')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new staff member and assign to this branch' })
+  async createStaff(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CreateBranchStaffDto,
+  ) {
+    return this.branchService.createStaffForBranch(id, dto);
   }
 
   @Post(':id/staff/assign')

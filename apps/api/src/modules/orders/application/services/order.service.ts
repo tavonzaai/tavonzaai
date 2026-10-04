@@ -272,7 +272,7 @@ export class OrderService {
    */
   async getOrdersByBranch(
     branchId: string,
-    filters?: { status?: OrderStatus; tableId?: string },
+    filters?: { status?: OrderStatus; tableId?: string; search?: string },
   ): Promise<Order[]> {
     return this.orderRepository.findByBranch(branchId, filters);
   }

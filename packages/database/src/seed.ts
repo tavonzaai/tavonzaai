@@ -53,6 +53,8 @@ const runSeed = async () => {
     await db.delete(schema.tables);
     await db.delete(schema.menuItems);
     await db.delete(schema.menuCategories);
+    await db.delete(schema.branchOperatingHours);
+    await db.delete(schema.branchHolidays);
     await db.delete(schema.branchSettings);
     await db.delete(schema.branches);
     await db.delete(schema.restaurants);
@@ -114,6 +116,17 @@ const runSeed = async () => {
       allowSplitBill: true,
       allowGuestCheckoutWithoutAccount: true,
     });
+
+    // 5b. Branch Operating Hours (7 Days Weekly)
+    await db.insert(schema.branchOperatingHours).values([
+      { branchId: branch.id, dayOfWeek: 1, openTime: '09:00', closeTime: '22:00' }, // Monday
+      { branchId: branch.id, dayOfWeek: 2, openTime: '09:00', closeTime: '22:00' }, // Tuesday
+      { branchId: branch.id, dayOfWeek: 3, openTime: '09:00', closeTime: '22:00' }, // Wednesday
+      { branchId: branch.id, dayOfWeek: 4, openTime: '09:00', closeTime: '22:00' }, // Thursday
+      { branchId: branch.id, dayOfWeek: 5, openTime: '09:00', closeTime: '23:00' }, // Friday
+      { branchId: branch.id, dayOfWeek: 6, openTime: '08:30', closeTime: '23:30' }, // Saturday
+      { branchId: branch.id, dayOfWeek: 0, openTime: '09:00', closeTime: '21:30' }, // Sunday
+    ]);
 
     // 6. Branch Manager User & Assignment
     const [managerUser] = await db.insert(schema.users).values({

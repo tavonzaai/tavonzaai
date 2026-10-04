@@ -80,6 +80,7 @@ export interface LiveOrderItem {
   total: number;
   totalAmount?: number;
   paymentStatus?: string;
+  orderType?: string;
   waiterName?: string;
   estimatedPrepTime?: number;
   createdAt: string;
@@ -114,7 +115,95 @@ export interface MenuItemResponse {
   isAvailable?: boolean;
 }
 
+export interface BranchDetail {
+  id: string;
+  restaurantId: string;
+  name: string;
+  address: {
+    line1?: string;
+    street?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    [key: string]: any;
+  };
+  phone?: string;
+  timezone?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BranchOperatingHourItem {
+  id?: string;
+  branchId?: string;
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateStaffPayload {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  role: string;
+  permissions?: string[];
+}
+
+export interface KitchenTicketItem {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  tableLabel?: string | null;
+  productName: string;
+  quantity: number;
+  stationType: string;
+  status: string;
+  specialInstructions?: string | null;
+  preparingAt?: string | null;
+  readyAt?: string | null;
+  servedAt?: string | null;
+  createdAt?: string;
+}
+
 export const branchManagerService = {
+  getBranch: async (branchId: string): Promise<BranchDetail> => {
+    const res = await baseApiFetch<BranchDetail>(`/branches/${encodeURIComponent(branchId)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  updateBranch: async (branchId: string, payload: Partial<BranchDetail>): Promise<BranchDetail> => {
+    const res = await baseApiFetch<BranchDetail>(`/branches/${encodeURIComponent(branchId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  getOperatingHours: async (branchId: string): Promise<BranchOperatingHourItem[]> => {
+    const res = await baseApiFetch<BranchOperatingHourItem[]>(`/branches/${encodeURIComponent(branchId)}/operating-hours`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  updateOperatingHours: async (
+    branchId: string,
+    hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }>
+  ): Promise<BranchOperatingHourItem[]> => {
+    const res = await baseApiFetch<BranchOperatingHourItem[]>(`/branches/${encodeURIComponent(branchId)}/operating-hours`, {
+      method: 'PUT',
+      body: JSON.stringify({ hours }),
+    });
+    return (res as any)?.data || res;
+  },
+
   getSettings: async (branchId: string): Promise<BranchSettings> => {
     const res = await baseApiFetch<BranchSettings>(`/branches/${encodeURIComponent(branchId)}/settings`, {
       method: 'GET',
@@ -186,9 +275,24 @@ export const branchManagerService = {
     return (res as any)?.data || res;
   },
 
-  getStaffAssignments: async (branchId: string): Promise<StaffAssignmentItem[]> => {
-    const res = await baseApiFetch<StaffAssignmentItem[]>(`/branches/${encodeURIComponent(branchId)}/staff`, {
+  getStaffAssignments: async (
+    branchId: string,
+    filters?: { role?: string; search?: string }
+  ): Promise<StaffAssignmentItem[]> => {
+    const params = new URLSearchParams();
+    if (filters?.role && filters.role !== 'ALL') params.append('role', filters.role);
+    if (filters?.search && filters.search.trim()) params.append('search', filters.search.trim());
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await baseApiFetch<StaffAssignmentItem[]>(`/branches/${encodeURIComponent(branchId)}/staff${query}`, {
       method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  createStaff: async (branchId: string, payload: CreateStaffPayload): Promise<StaffAssignmentItem> => {
+    const res = await baseApiFetch<StaffAssignmentItem>(`/branches/${encodeURIComponent(branchId)}/staff`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
     return (res as any)?.data || res;
   },
@@ -201,9 +305,28 @@ export const branchManagerService = {
     return (res as any)?.data || res;
   },
 
-  getOrders: async (branchId: string, status?: string): Promise<LiveOrderItem[]> => {
-    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  getOrders: async (
+    branchId: string,
+    filters?: { status?: string; search?: string; tableId?: string } | string
+  ): Promise<LiveOrderItem[]> => {
+    const params = new URLSearchParams();
+    if (typeof filters === 'string') {
+      if (filters && filters !== 'ALL') params.append('status', filters);
+    } else if (filters) {
+      if (filters.status && filters.status !== 'ALL') params.append('status', filters.status);
+      if (filters.search && filters.search.trim()) params.append('search', filters.search.trim());
+      if (filters.tableId) params.append('tableId', filters.tableId);
+    }
+    const query = params.toString() ? `?${params.toString()}` : '';
     const res = await baseApiFetch<LiveOrderItem[]>(`/orders/branch/${encodeURIComponent(branchId)}${query}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  getKitchenTickets: async (branchId: string, station?: string): Promise<KitchenTicketItem[]> => {
+    const query = station && station !== 'ALL' ? `?station=${encodeURIComponent(station)}` : '';
+    const res = await baseApiFetch<KitchenTicketItem[]>(`/kitchen/tickets/${encodeURIComponent(branchId)}${query}`, {
       method: 'GET',
     });
     return (res as any)?.data || res;
