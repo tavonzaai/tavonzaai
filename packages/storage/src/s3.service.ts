@@ -162,6 +162,22 @@ export class S3StorageService {
   }
 
   /**
+   * Generates a signed, authorized URL to retrieve/view an object from a private bucket.
+   * Works consistently on both AWS S3 and MinIO local development.
+   */
+  public async getSignedUrl(
+    key: string,
+    bucketOverride?: string,
+    expiresIn?: number,
+  ): Promise<string> {
+    return this.getPresignedDownloadUrl({
+      key,
+      bucket: bucketOverride,
+      expiresIn: expiresIn ?? this.config.defaultSignedUrlExpiresIn ?? 86400,
+    });
+  }
+
+  /**
    * Formats standard S3 URI (s3://bucket/key)
    */
   public getS3Uri(key: string, bucketOverride?: string): string {
@@ -200,11 +216,19 @@ export class S3StorageService {
 
     const response = await this.client.send(command);
 
+    const expiresIn =
+      options.signedUrlExpiresIn ?? this.config.defaultSignedUrlExpiresIn ?? 86400;
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key,
+      bucket,
+      expiresIn,
+    });
+
     return {
       key,
       bucket,
       location: this.getS3Uri(key, bucket),
-      url: this.getPublicUrl(key, bucket),
+      url: signedUrl,
       eTag: response.ETag?.replace(/"/g, ''),
       versionId: response.VersionId,
       size: options.contentLength,
@@ -257,11 +281,19 @@ export class S3StorageService {
 
     const output = await parallelUpload.done();
 
+    const expiresIn =
+      options.signedUrlExpiresIn ?? this.config.defaultSignedUrlExpiresIn ?? 86400;
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key,
+      bucket,
+      expiresIn,
+    });
+
     return {
       key,
       bucket,
       location: this.getS3Uri(key, bucket),
-      url: this.getPublicUrl(key, bucket),
+      url: signedUrl,
       eTag: output.ETag?.replace(/"/g, ''),
       versionId: output.VersionId,
       size: options.contentLength,
@@ -370,6 +402,12 @@ export class S3StorageService {
 
     const uploadUrl = await getSignedUrl(this.client, command, { expiresIn });
 
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key,
+      bucket,
+      expiresIn: this.config.defaultSignedUrlExpiresIn ?? 86400,
+    });
+
     return {
       uploadUrl,
       key,
@@ -378,6 +416,7 @@ export class S3StorageService {
       method: 'PUT',
       requiredHeaders: Object.keys(requiredHeaders).length > 0 ? requiredHeaders : undefined,
       publicUrl: this.getPublicUrl(key, bucket),
+      signedUrl,
     };
   }
 
@@ -415,6 +454,12 @@ export class S3StorageService {
       Expires: expiresIn,
     });
 
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key,
+      bucket,
+      expiresIn: this.config.defaultSignedUrlExpiresIn ?? 86400,
+    });
+
     return {
       url: post.url,
       fields: post.fields,
@@ -422,6 +467,7 @@ export class S3StorageService {
       bucket,
       expiresIn,
       publicUrl: this.getPublicUrl(key, bucket),
+      signedUrl,
     };
   }
 
@@ -631,13 +677,19 @@ export class S3StorageService {
 
     const response = await this.client.send(command);
 
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key: cleanDest,
+      bucket: destBucket,
+      expiresIn: this.config.defaultSignedUrlExpiresIn ?? 86400,
+    });
+
     return {
       sourceKey: cleanSource,
       destinationKey: cleanDest,
       sourceBucket,
       destinationBucket: destBucket,
       eTag: response.CopyObjectResult?.ETag?.replace(/"/g, ''),
-      url: this.getPublicUrl(cleanDest, destBucket),
+      url: signedUrl,
     };
   }
 

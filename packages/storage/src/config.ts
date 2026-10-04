@@ -54,6 +54,10 @@ export function loadStorageConfig(overrides?: Partial<StorageConfig>): StorageCo
 
   const maxRetries = overrides?.maxRetries ?? (env.S3_MAX_RETRIES ? parseInt(env.S3_MAX_RETRIES, 10) : 3);
 
+  const defaultSignedUrlExpiresIn =
+    overrides?.defaultSignedUrlExpiresIn ??
+    (env.S3_SIGNED_URL_EXPIRATION ? parseInt(env.S3_SIGNED_URL_EXPIRATION, 10) : 86400);
+
   return {
     bucket,
     region,
@@ -62,5 +66,6 @@ export function loadStorageConfig(overrides?: Partial<StorageConfig>): StorageCo
     forcePathStyle,
     cdnBaseUrl,
     maxRetries,
+    defaultSignedUrlExpiresIn,
   };
 }
