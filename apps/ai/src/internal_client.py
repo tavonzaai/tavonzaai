@@ -140,7 +140,12 @@ class InternalClient:
                     payload_bytes = base64.urlsafe_b64decode(parts[1] + padding)
                     payload = json.loads(payload_bytes.decode("utf-8"))
                     role = payload.get("role")
-                    permissions = payload.get("permissions") or resolve_role_permissions(str(role) if role else None)
+                    if payload.get("permissions"):
+                        permissions = payload["permissions"]
+                    elif str(role).lower() in ("customer", "guest"):
+                        permissions = ["menu.read", "orders.read"]
+                    else:
+                        permissions = resolve_role_permissions(str(role) if role else None)
                     return ActorContext(
                         actor_type=payload.get("actor_type", "USER"),
                         acting_user_id=str(payload.get("acting_user_id") or payload.get("sub", "dev-user-1")),
@@ -164,7 +169,7 @@ class InternalClient:
                 organization_id="org_dev",
                 restaurant_id="rest_dev",
                 branch_id="branch_dev",
-                permissions=resolve_role_permissions("customer"),
+                permissions=["menu.read", "orders.read"],
                 resource_scope={"role": "CUSTOMER", "table_code": "T1", "table_session_id": "ts_dev_1"},
             )
         if any(k in token_lower for k in ("waiter", "server")):
