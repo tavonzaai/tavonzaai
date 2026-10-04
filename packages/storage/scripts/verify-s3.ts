@@ -16,6 +16,8 @@ async function testBucket(bucketName: string, environmentLabel: string) {
   const config = loadStorageConfig({
     bucket: bucketName,
     region: 'eu-west-2',
+    endpoint: undefined,
+    forcePathStyle: false,
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',

@@ -8,6 +8,7 @@ export function createS3Client(config: StorageConfig): S3Client {
   const s3Config: S3ClientConfig = {
     region: config.region || 'eu-west-2',
     maxAttempts: config.maxRetries ?? 3,
+    followRegionRedirects: true,
   };
 
   // Explicit credentials if provided; otherwise AWS SDK uses default chain (IAM Role / ECS / Env)

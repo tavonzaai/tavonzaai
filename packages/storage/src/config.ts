@@ -40,11 +40,15 @@ export function loadStorageConfig(overrides?: Partial<StorageConfig>): StorageCo
       ? { accessKeyId, secretAccessKey, sessionToken }
       : undefined;
 
-  const endpoint = overrides?.endpoint || env.S3_ENDPOINT || undefined;
+  const endpoint =
+    overrides && 'endpoint' in overrides
+      ? overrides.endpoint || undefined
+      : env.S3_ENDPOINT || undefined;
 
   const forcePathStyle =
-    overrides?.forcePathStyle ??
-    (env.S3_FORCE_PATH_STYLE === 'true' || env.S3_FORCE_PATH_STYLE === '1');
+    overrides && 'forcePathStyle' in overrides
+      ? overrides.forcePathStyle
+      : env.S3_FORCE_PATH_STYLE === 'true' || env.S3_FORCE_PATH_STYLE === '1';
 
   const cdnBaseUrl = overrides?.cdnBaseUrl || env.CDN_BASE_URL || env.CLOUDFRONT_DOMAIN || undefined;
 
