@@ -131,6 +131,16 @@ output "s3_bucket_arn" {
   value       = module.s3.bucket_arn
 }
 
+output "s3_user_name" {
+  description = "Name of the dedicated S3 IAM user"
+  value       = module.s3.s3_user_name
+}
+
+output "s3_access_key_id" {
+  description = "Access Key ID for dedicated S3 IAM user"
+  value       = module.s3.s3_access_key_id
+}
+
 output "secrets_manager_secret_name" {
   description = "Name of the AWS Secrets Manager secret"
   value       = module.secrets_manager.secret_name

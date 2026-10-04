@@ -17,7 +17,10 @@ set -euo pipefail
 # Default Configurations
 DEFAULT_REGION="eu-west-2"
 DEFAULT_PROFILE="milkey-dev"
-DEFAULT_ENV_FILE=".env"
+DEFAULT_ENV_FILE=".env.production"
+if [[ ! -f "$DEFAULT_ENV_FILE" && -f ".env" ]]; then
+  DEFAULT_ENV_FILE=".env"
+fi
 PROJECT_NAME="tavonzaai"
 
 # Colors for output
@@ -149,15 +152,19 @@ if [[ -z "$SECRET_ID" ]]; then
   SECRET_ID="/${TARGET_ENV}/${PROJECT_NAME}/backend"
 fi
 
-# Check .env file path
+# Check environment file path (.env.production takes priority for AWS sync)
 if [[ -z "$ENV_FILE" ]]; then
-  if [[ -f ".env" ]]; then
+  if [[ -f ".env.production" ]]; then
+    ENV_FILE=".env.production"
+  elif [[ -f "../.env.production" ]]; then
+    ENV_FILE="../.env.production"
+  elif [[ -f ".env" ]]; then
     ENV_FILE=".env"
   elif [[ -f "../.env" ]]; then
     ENV_FILE="../.env"
   else
-    read -rp "Path to .env file [default: .env]: " user_file
-    ENV_FILE="${user_file:-.env}"
+    read -rp "Path to env file [default: .env.production]: " user_file
+    ENV_FILE="${user_file:-.env.production}"
   fi
 fi
 

@@ -62,3 +62,59 @@ resource "aws_s3_bucket_cors_configuration" "this" {
   }
 }
 
+# ------------------------------------------------------------------------------
+# Dedicated S3 IAM User (Separated from SES SMTP User)
+# ------------------------------------------------------------------------------
+locals {
+  s3_user_name = var.s3_user_name != "" ? var.s3_user_name : "${var.project_name}-${var.environment}-s3-user"
+}
+
+resource "aws_iam_user" "s3_user" {
+  count = var.create_s3_user ? 1 : 0
+  name  = local.s3_user_name
+
+  tags = merge(var.tags, {
+    Name        = local.s3_user_name
+    Environment = var.environment
+  })
+}
+
+resource "aws_iam_access_key" "s3_user" {
+  count = var.create_s3_user ? 1 : 0
+  user  = aws_iam_user.s3_user[0].name
+}
+
+data "aws_iam_policy_document" "s3_user_policy" {
+  count = var.create_s3_user ? 1 : 0
+
+  statement {
+    sid    = "S3BucketAccess"
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket",
+      "s3:GetBucketLocation"
+    ]
+    resources = [aws_s3_bucket.this.arn]
+  }
+
+  statement {
+    sid    = "S3ObjectAccess"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts"
+    ]
+    resources = ["${aws_s3_bucket.this.arn}/*"]
+  }
+}
+
+resource "aws_iam_user_policy" "s3_user_policy" {
+  count  = var.create_s3_user ? 1 : 0
+  name   = "${local.s3_user_name}-policy"
+  user   = aws_iam_user.s3_user[0].name
+  policy = data.aws_iam_policy_document.s3_user_policy[0].json
+}
+
