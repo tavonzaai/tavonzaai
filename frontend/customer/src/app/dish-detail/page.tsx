@@ -16,12 +16,30 @@ import {
   Wine,
   AlertTriangle,
 } from 'lucide-react';
-import { MENU_ITEMS, MenuItem } from '@/data/menuData';
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { fetchMenuItemById } from '@/redux/features/menu-items/menuItemApi';
+import { fetchMenuItemById, fetchMenuItems } from '@/redux/features/menu-items/menuItemApi';
 import { getItemImage } from '@/lib/menuUtils';
+
+interface MenuItem {
+  id: string;
+  name: string;
+  subtitle: string;
+  price: number;
+  category: string;
+  image: string;
+  popular?: boolean;
+  description: string;
+  addOns: { id: string; name: string; price: number }[];
+  rating?: number | string | null;
+  reviewsCount?: number | string | null;
+  dietary?: string | null;
+  contains?: string | string[] | null;
+  winePairing?: { wine: string; description: string } | null;
+  prepTime?: number | string | null;
+  calories?: number | string | null;
+}
 
 function DishDetailContent() {
   const router = useRouter();
@@ -34,9 +52,14 @@ function DishDetailContent() {
 
   const { items: backendItems, selectedItem } = useAppSelector((state) => state.menuItems);
 
+  const isUUID = (val?: string | null) =>
+    Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
   useEffect(() => {
-    if (dishParam) {
+    if (dishParam && isUUID(dishParam)) {
       dispatch(fetchMenuItemById(dishParam));
+    } else {
+      dispatch(fetchMenuItems({ page: 1, limit: 50 }));
     }
   }, [dispatch, dishParam]);
 
@@ -59,7 +82,7 @@ function DishDetailContent() {
         id: selectedItem.id,
         name: selectedItem.name,
         subtitle: selectedItem.description || selectedItem.category?.name || 'Chef Specialty',
-        price: selectedItem.basePrice,
+        price: selectedItem.basePrice || (selectedItem as any).price || 0,
         category: selectedItem.categoryId,
         image: getItemImage(selectedItem.name, selectedItem.category?.name, selectedItem.imageUrl),
         popular: selectedItem.isAvailable,
@@ -71,13 +94,13 @@ function DishDetailContent() {
       };
     }
 
-    const foundBackend = backendItems?.find((i) => i.id === dishParam);
+    const foundBackend = backendItems?.find((i) => i.id === dishParam) || (backendItems && backendItems.length > 0 ? backendItems[0] : null);
     if (foundBackend) {
       return {
         id: foundBackend.id,
         name: foundBackend.name,
         subtitle: foundBackend.description || foundBackend.category?.name || 'Chef Specialty',
-        price: foundBackend.basePrice,
+        price: foundBackend.basePrice || (foundBackend as any).price || 0,
         category: foundBackend.categoryId,
         image: getItemImage(foundBackend.name, foundBackend.category?.name, foundBackend.imageUrl),
         popular: foundBackend.isAvailable,
@@ -89,14 +112,20 @@ function DishDetailContent() {
       };
     }
 
-    if (dishParam) {
-      const found = MENU_ITEMS.find((item) => item.id === dishParam);
-      if (found) return found;
-    }
-    return (
-      MENU_ITEMS.find((item) => item.id === 'arancini-al-tartufo') ||
-      MENU_ITEMS[0]
-    );
+    return {
+      id: '4455110d-db04-4cef-92c6-46bcd6a4c7e2',
+      name: 'Potato Corn Burger',
+      subtitle: 'Chef Specialty',
+      price: 26,
+      category: 'ba394e24-642c-4608-8e42-61424fc78448',
+      image: '/images/burger.jpg',
+      popular: true,
+      description: 'Prepared fresh with the finest seasonal ingredients by Tavonza chefs.',
+      addOns: [
+        { id: 'addon-extra-cheese', name: 'Extra Cheddar', price: 1.5 },
+        { id: 'addon-truffle-oil', name: 'Truffle Oil Drizzle', price: 2.0 },
+      ],
+    };
   }, [dishParam, selectedItem, backendItems]);
 
   // Find previously added/saved configuration for this dish in cart state

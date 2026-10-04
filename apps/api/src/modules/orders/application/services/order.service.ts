@@ -56,16 +56,27 @@ export class OrderService {
   // ══════════════════════════════════════════════════════════════════════
 
   /**
-   * Get or create the customer's cart (DRAFT order) for a table.
-   * Only one active DRAFT order per table at a time.
+   * Get or create the customer's cart (DRAFT order) for a table or guest session.
+   * Only one active DRAFT order per guest/table at a time.
    */
-  async getOrCreateCart(branchId: string, tableId: string): Promise<Order> {
+  async getOrCreateCart(
+    branchId: string,
+    tableId: string,
+    guestSessionId?: string,
+    tableSessionId?: string,
+  ): Promise<Order> {
     const existing = await this.orderRepository.findDraftByTable(
       branchId,
       tableId,
+      guestSessionId,
     );
     if (existing) return existing;
-    return this.orderRepository.create({ branchId, tableId });
+    return this.orderRepository.create({
+      branchId,
+      tableId,
+      tableSessionId,
+      customerSessionId: guestSessionId,
+    });
   }
 
   /**
@@ -272,7 +283,13 @@ export class OrderService {
    */
   async getOrdersByBranch(
     branchId: string,
-    filters?: { status?: OrderStatus; tableId?: string; search?: string },
+    filters?: {
+      status?: OrderStatus;
+      tableId?: string;
+      search?: string;
+      guestSessionId?: string;
+      tableSessionId?: string;
+    },
   ): Promise<Order[]> {
     return this.orderRepository.findByBranch(branchId, filters);
   }

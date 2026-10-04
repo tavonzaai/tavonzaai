@@ -10,6 +10,8 @@ import {
   orders,
   orderItems,
   menuItems,
+  menuCategories,
+  branchSettings,
 } from '@tavonza/database';
 import {
   IOrderRepository,
@@ -41,6 +43,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
         branchId: input.branchId,
         tableId: input.tableId,
         tableSessionId: input.tableSessionId ?? null,
+        guestSessionId: input.customerSessionId ?? null,
         status: 'DRAFT',
         subtotal: 0,
         totalAmount: 0,
@@ -72,7 +75,32 @@ export class DrizzleOrderRepository implements IOrderRepository {
   async findDraftByTable(
     branchId: string,
     tableId: string,
+    guestSessionId?: string,
   ): Promise<Order | null> {
+    // If guestSessionId is provided, first try to find the guest's own draft
+    if (guestSessionId) {
+      const [guestRecord] = await this.db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.branchId, branchId),
+            eq(orders.tableId, tableId),
+            eq(orders.guestSessionId, guestSessionId),
+            eq(orders.status, 'DRAFT'),
+          ),
+        )
+        .limit(1);
+
+      if (guestRecord) {
+        const items = await this.db
+          .select()
+          .from(orderItems)
+          .where(eq(orderItems.orderId, guestRecord.id));
+        return this.toDomain({ ...guestRecord, items });
+      }
+    }
+
     const [record] = await this.db
       .select()
       .from(orders)
@@ -97,7 +125,13 @@ export class DrizzleOrderRepository implements IOrderRepository {
 
   async findByBranch(
     branchId: string,
-    filters?: { status?: OrderStatus; tableId?: string; search?: string },
+    filters?: {
+      status?: OrderStatus;
+      tableId?: string;
+      search?: string;
+      guestSessionId?: string;
+      tableSessionId?: string;
+    },
   ): Promise<Order[]> {
     const conditions = [eq(orders.branchId, branchId)];
 
@@ -106,6 +140,12 @@ export class DrizzleOrderRepository implements IOrderRepository {
     }
     if (filters?.tableId) {
       conditions.push(eq(orders.tableId, filters.tableId));
+    }
+    if (filters?.guestSessionId) {
+      conditions.push(eq(orders.guestSessionId, filters.guestSessionId));
+    }
+    if (filters?.tableSessionId) {
+      conditions.push(eq(orders.tableSessionId, filters.tableSessionId));
     }
     if (filters?.search && filters.search.trim()) {
       const term = `%${filters.search.trim()}%`;
@@ -135,14 +175,22 @@ export class DrizzleOrderRepository implements IOrderRepository {
   async addItem(input: AddOrderItemInput): Promise<Order> {
     let name = input.name;
     let unitPrice = input.unitPrice;
-    if (!name || unitPrice <= 0) {
-      const [menuItem] = await this.db
+    let stationType: 'KITCHEN' | 'BAR' = 'KITCHEN';
+
+    const [menuItem] = await this.db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.id, input.menuItemId));
+    if (menuItem) {
+      name = menuItem.name;
+      unitPrice = Number(menuItem.basePrice);
+
+      const [category] = await this.db
         .select()
-        .from(menuItems)
-        .where(eq(menuItems.id, input.menuItemId));
-      if (menuItem) {
-        name = menuItem.name;
-        unitPrice = Number(menuItem.basePrice);
+        .from(menuCategories)
+        .where(eq(menuCategories.id, menuItem.categoryId));
+      if (category && /drink|beverage|bar|cocktail|wine|beer|water|juice/i.test(category.name)) {
+        stationType = 'BAR';
       }
     }
 
@@ -157,7 +205,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
       unitPrice: unitPrice,
       quantity: input.quantity,
       subtotal: lineTotal,
-      stationType: 'KITCHEN',
+      stationType,
       status: 'PENDING',
     });
 
@@ -245,9 +293,38 @@ export class DrizzleOrderRepository implements IOrderRepository {
       .from(orderItems)
       .where(eq(orderItems.orderId, orderId));
 
+    const [orderRec] = await this.db
+      .select({ branchId: orders.branchId })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+
+    let taxRate = 0.08;
+    let serviceRate = 0.05;
+
+    if (orderRec?.branchId) {
+      const [settings] = await this.db
+        .select({
+          taxPercent: branchSettings.taxPercent,
+          serviceChargePct: branchSettings.serviceChargePct,
+        })
+        .from(branchSettings)
+        .where(eq(branchSettings.branchId, orderRec.branchId))
+        .limit(1);
+
+      if (settings) {
+        if (typeof settings.taxPercent === 'number') {
+          taxRate = settings.taxPercent / 100;
+        }
+        if (typeof settings.serviceChargePct === 'number') {
+          serviceRate = settings.serviceChargePct / 100;
+        }
+      }
+    }
+
     const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
-    const serviceCharge = Math.round(subtotal * 0.05 * 100) / 100;
-    const tax = Math.round(subtotal * 0.08 * 100) / 100;
+    const serviceCharge = Math.round(subtotal * serviceRate * 100) / 100;
+    const tax = Math.round(subtotal * taxRate * 100) / 100;
     const total = Math.round((subtotal + serviceCharge + tax) * 100) / 100;
 
     await this.db

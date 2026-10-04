@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
-import { GlobalRole } from '@tavonza/authorization';
+import { GlobalRole, resolvePermissions } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
 // Assuming MailService is mocked or works.
 // import { MailService } from '../../../notifications/application/mail.service';
@@ -168,6 +168,10 @@ export class AuthService {
       role: effectiveRole,
       globalRole: user.role,
       branchId,
+      permissions: resolvePermissions(
+        effectiveRole,
+        (primaryAssignment?.permissions as any) ?? [],
+      ),
     };
 
     const accessToken = this.jwtService.sign(payload, {

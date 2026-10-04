@@ -125,6 +125,50 @@ export const waiterService = {
     return (res as any)?.data || res;
   },
 
+  queryOrders: async (params: {
+    branchId?: string;
+    scope?: 'MY_TABLES' | 'ALL_TABLES';
+    status?: string;
+    tableId?: string;
+    search?: string;
+  } = {}): Promise<WaiterOrderSummary[]> => {
+    const q = new URLSearchParams();
+    if (params.branchId) q.append('branchId', params.branchId);
+    if (params.scope) q.append('scope', params.scope);
+    if (params.status) q.append('status', params.status);
+    if (params.tableId) q.append('tableId', params.tableId);
+    if (params.search) q.append('search', params.search);
+
+    const res = await baseApiFetch<any[]>(`/waiter/orders?${q.toString()}`, {
+      method: 'GET',
+    });
+    const data = (res as any)?.data || res;
+    if (Array.isArray(data)) {
+      return data.map((o: any) => ({
+        id: o.id || o.orderId,
+        orderId: o.id || o.orderId,
+        orderNumber: o.orderNumber || `#${(o.id || o.orderId).slice(0, 5)}`,
+        tableId: o.tableId,
+        tableNumber: o.tableNumber || o.tableLabel || 'Table',
+        tableLabel: o.tableNumber || o.tableLabel || 'Table',
+        status: o.status,
+        displayStatus: o.displayStatus || o.status,
+        itemsCount: o.itemsCount || o.itemCount || (o.items?.length ?? 1),
+        totalAmount: Number(o.totalAmount ?? o.total ?? 0),
+        total: Number(o.total ?? o.totalAmount ?? 0),
+        paymentStatus: o.paymentStatus || 'PENDING',
+        waiterName: o.waiterName || 'Staff',
+        items: o.items || [],
+        placedAt: o.placedAt || o.submittedAt || o.createdAt || new Date().toISOString(),
+        createdAt: o.createdAt,
+        submittedAt: o.submittedAt,
+        guestName: o.guestName,
+        specialInstructions: o.specialInstructions,
+      }));
+    }
+    return [];
+  },
+
   getPendingOrders: async (branchId: string): Promise<WaiterOrderSummary[]> => {
     try {
       const res = await baseApiFetch<any[]>(`/waiter/orders/pending?branchId=${encodeURIComponent(branchId)}`, {

@@ -87,7 +87,27 @@ export class WaiterService {
       );
     }
 
-    await this.orderRepo.acceptOrder(orderId);
+    const profile = await this.waiterRepo.findProfileByUserId(waiterId);
+    await this.orderRepo.acceptOrder(orderId, profile?.id);
+
+    if (order.tableId) {
+      await this.waiterRepo.updateTableStatus(order.tableId, 'PREPARING');
+      await this.outboxService.publishEvent({
+        aggregateType: 'TABLE',
+        aggregateId: order.tableId,
+        eventType: 'TableStatusChanged',
+        branchId: order.branchId,
+        payload: {
+          tableId: order.tableId,
+          tableLabel: 'Table',
+          branchId: order.branchId,
+          serviceStatus: 'PREPARING',
+          operationalFlag: 'NORMAL',
+          activeSessionId: order.tableSessionId,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    }
 
     await this.outboxService.publishEvent({
       aggregateType: 'ORDER',
@@ -120,8 +140,9 @@ export class WaiterService {
       );
     }
 
+    const profile = await this.waiterRepo.findProfileByUserId(waiterId);
     const reasonCode = dto.rejectionReasonCode ?? dto.reasonCode ?? 'OTHER';
-    await this.orderRepo.rejectOrder(dto.orderId, dto.reason, reasonCode, waiterId);
+    await this.orderRepo.rejectOrder(dto.orderId, dto.reason, reasonCode, profile?.id);
 
     await this.outboxService.publishEvent({
       aggregateType: 'ORDER',
@@ -281,14 +302,23 @@ export class WaiterService {
 
   // ── Slice 5: Pending / Active Orders ───────────────────────────────
 
+  async getOrders(
+    waiterId: string,
+    branchId: string,
+    filters: { scope?: string; status?: string; tableId?: string; search?: string },
+  ): Promise<any[]> {
+    const tableIds = await this.getMyTableIds(waiterId, branchId);
+    return this.orderRepo.findOrdersForTables(tableIds, branchId, filters);
+  }
+
   async getPendingOrders(waiterId: string, branchId: string): Promise<any[]> {
     const tableIds = await this.getMyTableIds(waiterId, branchId);
-    return this.orderRepo.findPendingOrdersForTables(tableIds);
+    return this.orderRepo.findPendingOrdersForTables(tableIds, branchId);
   }
 
   async getActiveOrders(waiterId: string, branchId: string): Promise<any[]> {
     const tableIds = await this.getMyTableIds(waiterId, branchId);
-    return this.orderRepo.findActiveOrdersForTables(tableIds);
+    return this.orderRepo.findActiveOrdersForTables(tableIds, branchId);
   }
 
   async getOrderDetail(orderId: string, waiterId: string): Promise<any> {

@@ -44,13 +44,23 @@ export interface IOrderRepository {
   /** Find an order by ID, including all items. */
   findById(id: string): Promise<Order | null>;
 
-  /** Find the active DRAFT order for a table (= current cart). */
-  findDraftByTable(branchId: string, tableId: string): Promise<Order | null>;
+  /** Find the active DRAFT order for a table or guest (= current cart). */
+  findDraftByTable(
+    branchId: string,
+    tableId: string,
+    guestSessionId?: string,
+  ): Promise<Order | null>;
 
-  /** Find orders by branch, optionally filtered by status. */
+  /** Find orders by branch, optionally filtered by status, table, search, or session. */
   findByBranch(
     branchId: string,
-    filters?: { status?: OrderStatus; tableId?: string; search?: string },
+    filters?: {
+      status?: OrderStatus;
+      tableId?: string;
+      search?: string;
+      guestSessionId?: string;
+      tableSessionId?: string;
+    },
   ): Promise<Order[]>;
 
   // ── Items ───────────────────────────────────────────────────────────

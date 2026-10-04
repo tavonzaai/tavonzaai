@@ -69,6 +69,10 @@ export class TableSessionService {
       verified: false,
     });
 
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[TableSessionService] 🔑 Dev OTP generated for ${dto.contact}: ${code}`);
+    }
+
     return {
       success: true,
       message: 'Verification code sent',

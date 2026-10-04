@@ -259,8 +259,8 @@ const runSeed = async () => {
 
     // 12. Active Waiter Table Assignments
     const now = new Date();
-    const sessionStart = new Date(now.getTime() - 4 * 3600 * 1000);
-    const sessionEnd = new Date(now.getTime() + 8 * 3600 * 1000);
+    const sessionStart = new Date(now.getTime() - 24 * 3600 * 1000);
+    const sessionEnd = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
 
     for (const t of createdTables) {
       await db.insert(schema.waiterTableAssignments).values({
