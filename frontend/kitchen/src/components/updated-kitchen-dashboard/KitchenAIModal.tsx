@@ -48,6 +48,7 @@ export default function KitchenAIModal({
   const [isAiOnline, setIsAiOnline] = useState<boolean | null>(null);
   const [autoListenNext, setAutoListenNext] = useState<boolean>(true);
   const [soundMuted, setSoundMuted] = useState<boolean>(false);
+  const [micBlocked, setMicBlocked] = useState<boolean>(false);
 
   const isOpenRef = useRef<boolean>(isOpen);
   isOpenRef.current = isOpen;
@@ -173,7 +174,7 @@ export default function KitchenAIModal({
   );
 
   // Start Mic Listening
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     stopSpeaking();
 
     if (silenceTimerRef.current) {
@@ -195,9 +196,26 @@ export default function KitchenAIModal({
       return;
     }
 
+    // Prompt via getUserMedia if permission not yet acquired
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+        setMicBlocked(false);
+      } catch (err: any) {
+        if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+          setMicBlocked(true);
+          isListeningRef.current = false;
+          setVoiceState('idle');
+          return;
+        }
+      }
+    }
+
     try {
       rec.start();
       isListeningRef.current = true;
+      setMicBlocked(false);
       setVoiceState('listening');
     } catch (err: any) {
       if (err?.name === 'InvalidStateError') {
@@ -439,9 +457,7 @@ export default function KitchenAIModal({
       console.warn('SpeechRecognition error:', event?.error);
       isListeningRef.current = false;
       if (event?.error === 'not-allowed') {
-        toast.error('Microphone permission denied', {
-          description: 'Please click the lock icon in your browser address bar to allow microphone access.',
-        });
+        setMicBlocked(true);
       }
       setVoiceState((prev) => (prev === 'listening' ? 'idle' : prev));
     };
@@ -576,6 +592,42 @@ export default function KitchenAIModal({
             </button>
           </div>
         </div>
+
+        {/* Permission Blocked Guide Banner */}
+        {micBlocked && (
+          <div className="mx-6 mt-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/40 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-yellow-400 text-sm block">Microphone Access Needed</span>
+                <span className="text-zinc-300 block mt-0.5">
+                  1. Click the <strong>lock 🔒</strong> or <strong>sliders 🎛️</strong> icon in your browser address bar.<br />
+                  2. Set <strong>Microphone</strong> to <strong>Allow</strong>.<br />
+                  3. Then tap <strong>&ldquo;Enable Mic&rdquo;</strong> below.
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                if (navigator.mediaDevices?.getUserMedia) {
+                  try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach((t) => t.stop());
+                    setMicBlocked(false);
+                    startListening();
+                    toast.success('Microphone enabled successfully!');
+                  } catch {
+                    toast.error('Still blocked. Please toggle Microphone to Allow in your address bar icon.');
+                  }
+                }
+              }}
+              className="px-4 py-2 bg-yellow-400 text-black font-bold rounded-xl text-xs hover:bg-yellow-300 shrink-0 cursor-pointer shadow-lg transition self-end sm:self-center active:scale-95"
+            >
+              Enable Mic
+            </button>
+          </div>
+        )}
 
         {/* CENTRAL HERO VOICE ORB / EQUALIZER (NO TYPING) */}
         <div className="p-8 flex flex-col items-center justify-center bg-gradient-to-b from-black/60 to-[#121214] border-b border-zinc-800/80 relative overflow-hidden">
