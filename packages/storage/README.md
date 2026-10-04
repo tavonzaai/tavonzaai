@@ -37,25 +37,38 @@ Provides full-featured file upload methods, presigned URLs, streaming downloads,
 
 ### Environment Variables
 
-The package automatically loads from `process.env`:
+The package automatically loads from `process.env`. It works seamlessly with both local **MinIO** emulation and **AWS S3 Private Buckets** in production/live:
 
+#### 1. Local Development (MinIO)
 ```env
-# AWS Region (default: eu-west-2)
-AWS_REGION=eu-west-2
+# MinIO Local Endpoint & Path-Style
+S3_ENDPOINT=http://localhost:9000
+S3_FORCE_PATH_STYLE=true
 
-# Target S3 Bucket
+# MinIO Default Credentials (overrides AWS_ACCESS_KEY_ID for storage only)
+S3_ACCESS_KEY_ID=minioadmin
+S3_SECRET_ACCESS_KEY=minioadmin
+
+# Bucket & Region
 S3_BUCKET_NAME=tavonzaai-dev-storage-bucket
-AWS_S3_BUCKET=tavonzaai-dev-storage-bucket
+AWS_REGION=eu-west-2
+```
 
-# AWS Credentials (if not using ECS/EC2 IAM instance role)
+#### 2. Production & Live (AWS S3 Private Bucket)
+```env
+# Leave endpoint and forcePathStyle unset/commented out for native AWS S3
+# S3_ENDPOINT=
+# S3_FORCE_PATH_STYLE=false
+
+# Real IAM credentials (or omit to use AWS IAM Task / Instance Role)
 AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...
 
-# Optional Custom Endpoint (MinIO, LocalStack)
-S3_ENDPOINT=
-S3_FORCE_PATH_STYLE=false
+# Production Private Bucket
+S3_BUCKET_NAME=tavonzaai-prod-storage-bucket
+AWS_REGION=eu-west-2
 
-# Optional CDN Domain
+# Optional CDN Domain (CloudFront OAC fronting private bucket)
 CDN_BASE_URL=https://cdn.tavonza.com
 ```
 
@@ -180,10 +193,22 @@ Interactive Swagger documentation is available at `http://localhost:3000/docs` u
 
 ---
 
-## Verification Test
+## Verification Tests
 
-To verify connectivity and all methods against real AWS S3 buckets:
+### 1. Local MinIO Test
+Verify connectivity and all upload/presign/delete operations against local MinIO:
 
 ```bash
-pnpm --filter @tavonza/storage test:s3
+# Start MinIO via Docker
+pnpm docker:up
+
+# Run MinIO test suite
+pnpm storage:test:minio
+```
+
+### 2. AWS S3 Production & Live Test
+Verify connectivity and all operations against real AWS S3 private buckets:
+
+```bash
+pnpm storage:test:s3
 ```
