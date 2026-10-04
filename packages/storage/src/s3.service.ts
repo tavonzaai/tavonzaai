@@ -6,6 +6,9 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   HeadObjectCommand,
+  HeadBucketCommand,
+  CreateBucketCommand,
+  BucketLocationConstraint,
   ListObjectsV2Command,
   CopyObjectCommand,
 } from '@aws-sdk/client-s3';
@@ -67,6 +70,51 @@ export class S3StorageService {
   }
 
   /**
+   * Checks if an S3 bucket exists and is accessible
+   */
+  public async bucketExists(bucketOverride?: string): Promise<boolean> {
+    const bucket = this.resolveBucket(bucketOverride);
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: bucket }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Ensures an S3 bucket exists, creating it if it does not.
+   * Particularly useful for local development with MinIO or test suites.
+   */
+  public async ensureBucketExists(bucketOverride?: string): Promise<boolean> {
+    const bucket = this.resolveBucket(bucketOverride);
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: bucket }));
+      return false; // Already existed
+    } catch (err: any) {
+      const isNotFound =
+        err.name === 'NotFound' ||
+        err.name === 'NoSuchBucket' ||
+        err.$metadata?.httpStatusCode === 404;
+
+      if (isNotFound) {
+        const createParams: { Bucket: string; CreateBucketConfiguration?: { LocationConstraint?: BucketLocationConstraint } } = {
+          Bucket: bucket,
+        };
+        // AWS S3 requires LocationConstraint for regions other than us-east-1; MinIO accepts or ignores it
+        if (this.config.region && this.config.region !== 'us-east-1') {
+          createParams.CreateBucketConfiguration = {
+            LocationConstraint: this.config.region as BucketLocationConstraint,
+          };
+        }
+        await this.client.send(new CreateBucketCommand(createParams));
+        return true; // Newly created
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Resolves target bucket with fallback to default bucket
    */
   private resolveBucket(bucketOverride?: string): string {
@@ -114,6 +162,22 @@ export class S3StorageService {
   }
 
   /**
+   * Generates a signed, authorized URL to retrieve/view an object from a private bucket.
+   * Works consistently on both AWS S3 and MinIO local development.
+   */
+  public async getSignedUrl(
+    key: string,
+    bucketOverride?: string,
+    expiresIn?: number,
+  ): Promise<string> {
+    return this.getPresignedDownloadUrl({
+      key,
+      bucket: bucketOverride,
+      expiresIn: expiresIn ?? this.config.defaultSignedUrlExpiresIn ?? 86400,
+    });
+  }
+
+  /**
    * Formats standard S3 URI (s3://bucket/key)
    */
   public getS3Uri(key: string, bucketOverride?: string): string {
@@ -152,11 +216,19 @@ export class S3StorageService {
 
     const response = await this.client.send(command);
 
+    const expiresIn =
+      options.signedUrlExpiresIn ?? this.config.defaultSignedUrlExpiresIn ?? 86400;
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key,
+      bucket,
+      expiresIn,
+    });
+
     return {
       key,
       bucket,
       location: this.getS3Uri(key, bucket),
-      url: this.getPublicUrl(key, bucket),
+      url: signedUrl,
       eTag: response.ETag?.replace(/"/g, ''),
       versionId: response.VersionId,
       size: options.contentLength,
@@ -209,11 +281,19 @@ export class S3StorageService {
 
     const output = await parallelUpload.done();
 
+    const expiresIn =
+      options.signedUrlExpiresIn ?? this.config.defaultSignedUrlExpiresIn ?? 86400;
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key,
+      bucket,
+      expiresIn,
+    });
+
     return {
       key,
       bucket,
       location: this.getS3Uri(key, bucket),
-      url: this.getPublicUrl(key, bucket),
+      url: signedUrl,
       eTag: output.ETag?.replace(/"/g, ''),
       versionId: output.VersionId,
       size: options.contentLength,
@@ -322,6 +402,12 @@ export class S3StorageService {
 
     const uploadUrl = await getSignedUrl(this.client, command, { expiresIn });
 
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key,
+      bucket,
+      expiresIn: this.config.defaultSignedUrlExpiresIn ?? 86400,
+    });
+
     return {
       uploadUrl,
       key,
@@ -330,6 +416,7 @@ export class S3StorageService {
       method: 'PUT',
       requiredHeaders: Object.keys(requiredHeaders).length > 0 ? requiredHeaders : undefined,
       publicUrl: this.getPublicUrl(key, bucket),
+      signedUrl,
     };
   }
 
@@ -367,6 +454,12 @@ export class S3StorageService {
       Expires: expiresIn,
     });
 
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key,
+      bucket,
+      expiresIn: this.config.defaultSignedUrlExpiresIn ?? 86400,
+    });
+
     return {
       url: post.url,
       fields: post.fields,
@@ -374,6 +467,7 @@ export class S3StorageService {
       bucket,
       expiresIn,
       publicUrl: this.getPublicUrl(key, bucket),
+      signedUrl,
     };
   }
 
@@ -583,13 +677,19 @@ export class S3StorageService {
 
     const response = await this.client.send(command);
 
+    const signedUrl = await this.getPresignedDownloadUrl({
+      key: cleanDest,
+      bucket: destBucket,
+      expiresIn: this.config.defaultSignedUrlExpiresIn ?? 86400,
+    });
+
     return {
       sourceKey: cleanSource,
       destinationKey: cleanDest,
       sourceBucket,
       destinationBucket: destBucket,
       eTag: response.CopyObjectResult?.ETag?.replace(/"/g, ''),
-      url: this.getPublicUrl(cleanDest, destBucket),
+      url: signedUrl,
     };
   }
 

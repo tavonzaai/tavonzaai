@@ -3,7 +3,9 @@ import {
   Global,
   Inject,
   Injectable,
+  Logger,
   Module,
+  OnModuleInit,
   Provider,
   Type,
 } from '@nestjs/common';
@@ -19,9 +21,28 @@ export const STORAGE_SERVICE = Symbol('STORAGE_SERVICE');
  * Wraps S3StorageService with full dependency injection support.
  */
 @Injectable()
-export class StorageService extends S3StorageService {
+export class StorageService extends S3StorageService implements OnModuleInit {
+  private readonly logger = new Logger(StorageService.name);
+
   constructor(@Inject(STORAGE_CONFIG) config: StorageConfig) {
     super(config);
+  }
+
+  async onModuleInit() {
+    // In local development with MinIO (or custom endpoint), automatically ensure the default bucket exists
+    if (this.getConfig().endpoint && process.env.NODE_ENV !== 'production') {
+      try {
+        const bucket = this.getDefaultBucket();
+        if (bucket) {
+          const created = await this.ensureBucketExists(bucket);
+          if (created) {
+            this.logger.log(`Initialized local S3 bucket: "${bucket}" on ${this.getConfig().endpoint}`);
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Could not verify local S3 bucket on ${this.getConfig().endpoint}: ${err.message}`);
+      }
+    }
   }
 }
 
