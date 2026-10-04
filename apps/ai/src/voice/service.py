@@ -69,7 +69,9 @@ def humanize_text_for_speech(text: str) -> str:
 
 class VoiceService:
     def __init__(self) -> None:
-        self._groq_client = AsyncGroq(api_key=settings.groq_api_key)
+        # Use a placeholder key in dev mode to avoid empty Bearer header crash (mirrors GroqProvider guard)
+        api_key = settings.groq_api_key.strip() if settings.groq_api_key else "gsk_placeholder_dev_key"
+        self._groq_client = AsyncGroq(api_key=api_key)
 
     async def transcribe_audio(
         self,

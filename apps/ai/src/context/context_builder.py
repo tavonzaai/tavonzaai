@@ -21,7 +21,7 @@ async def build_context(client: InternalClient, actor: ActorContext) -> str:
             f"Never show, disclose, or discuss orders from other tables."
         )
 
-    if "items.write" in actor.permissions and "reports.read" not in actor.permissions:
+    if "kitchen.read" in actor.permissions and "reports.read" not in actor.permissions:
         station = safe_scope.get("station", "all stations")
         return (
             f"You are speaking with Kitchen Staff / Chef (Station: {station}). "
@@ -39,7 +39,7 @@ async def build_context(client: InternalClient, actor: ActorContext) -> str:
             "Focus on dining room table monitoring, guest ordering, and serving ready dishes."
         )
 
-    if "payments.write" in actor.permissions and "reports.read" not in actor.permissions:
+    if "payments.create" in actor.permissions and "orders.serve" not in actor.permissions and "reports.read" not in actor.permissions:
         raw = await client.get_context_bootstrap(actor)
         tables = raw.get("assigned_tables", [])
         sessions = raw.get("active_sessions", [])

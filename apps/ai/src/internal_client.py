@@ -11,9 +11,9 @@ from typing import Any
 
 import httpx
 
-from src.config import settings
-from src.models import ActorContext
-from src.policies.roles import resolve_role_permissions
+from .config import settings
+from .models import ActorContext
+from .policies.roles import resolve_role_permissions
 
 logger = logging.getLogger(__name__)
 

@@ -6,14 +6,14 @@ AI never accesses the database directly.
 
 from typing import Any
 
-from src.audit.audit_writer import write_tool_audit
-from src.internal_client import InternalClient
-from src.models import ActorContext
-from src.tools.authorization.auth_gate import (
+from ...audit.audit_writer import write_tool_audit
+from ...internal_client import InternalClient
+from ...models import ActorContext
+from ..authorization.auth_gate import (
     ToolAuthorizationError,
     authorize_tool_call,
 )
-from src.tools.registry.registry import get_tool
+from ..registry.registry import get_tool
 
 
 class ToolExecutionError(Exception):
