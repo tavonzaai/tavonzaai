@@ -120,7 +120,7 @@ tavonzaai/
 │   ├── customer/       # QR-driven ordering experience          (port 3100)
 │   ├── waiter/         # Floor waiter app                       (port 3101)
 │   ├── admin/          # Tenant & branch admin console          (port 3102)
-│   ├── branch-manager/ # Branch manager dashboard               (port 3103)
+│   ├── manager/        # Manager dashboard                      (port 3103)
 │   ├── cashier/        # Cashier & POS interface                (port 3104)
 │   └── kitchen/        # Kitchen Display System (KDS)           (port 3105)
 │
@@ -339,7 +339,7 @@ git commit -m "docs: update developer guide with AI role section"
 | Customer App       | `frontend/customer/`       | 3100 | Restaurant guests (QR scan)        |
 | Waiter App         | `frontend/waiter/`         | 3101 | Floor waiters (tables, orders)     |
 | Admin App          | `frontend/admin/`          | 3102 | Tenant & branch admins             |
-| Branch Manager App | `frontend/branch-manager/` | 3103 | Restaurant branch managers         |
+| Manager App        | `frontend/manager/`        | 3103 | Restaurant branch & ops managers   |
 | Cashier App        | `frontend/cashier/`        | 3104 | Cashiers (POS, checkout)           |
 | Kitchen App        | `frontend/kitchen/`        | 3105 | Kitchen chefs (KDS, tickets, prep) |
 
@@ -360,7 +360,7 @@ pnpm dev
 pnpm --filter @frontend/customer dev
 pnpm --filter @frontend/waiter dev
 pnpm --filter @frontend/admin dev
-pnpm --filter @frontend/branch-manager dev
+pnpm --filter @frontend/manager dev
 pnpm --filter @frontend/cashier dev
 pnpm --filter @frontend/kitchen dev
 ```

@@ -230,6 +230,42 @@ resource "aws_lb_target_group_attachment" "admin" {
   port             = var.admin_port
 }
 
+# 7. Manager Frontend Target Group
+resource "aws_lb_target_group" "manager" {
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}mgr-tg"
+  port        = var.manager_port
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = var.target_type
+
+  health_check {
+    enabled             = true
+    interval            = var.health_check_interval
+    path                = var.manager_health_check_path
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
+    matcher             = "200-399"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-${var.environment}-mgr-tg"
+  })
+}
+
+resource "aws_lb_target_group_attachment" "manager" {
+  count            = var.target_type == "instance" ? 1 : 0
+  target_group_arn = aws_lb_target_group.manager.arn
+  target_id        = coalesce(var.manager_instance_id, var.frontend_instance_id)
+  port             = var.manager_port
+}
+
 locals {
   active_listener_arn = var.enable_https ? aws_lb_listener.https[0].arn : aws_lb_listener.http.arn
 }
@@ -386,7 +422,27 @@ resource "aws_lb_listener_rule" "admin" {
   tags = var.tags
 }
 
-# Rule 6: Customer Domain -> Next.js Target Group (root domain/www, or dedicated subdomain e.g. prod.example.com)
+# Rule 6: Manager Subdomain -> Manager Target Group (manager.example.com or prod-manager.example.com)
+resource "aws_lb_listener_rule" "manager" {
+  count        = var.manager_subdomain != "" ? 1 : 0
+  listener_arn = local.active_listener_arn
+  priority     = 35
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.manager.arn
+  }
+
+  condition {
+    host_header {
+      values = ["${var.manager_subdomain}.${var.domain_name}"]
+    }
+  }
+
+  tags = var.tags
+}
+
+# Rule 7: Customer Domain -> Next.js Target Group (root domain/www, or dedicated subdomain e.g. prod.example.com)
 resource "aws_lb_listener_rule" "customer" {
   listener_arn = local.active_listener_arn
   priority     = 40
@@ -501,6 +557,25 @@ resource "aws_lb_listener_rule" "admin_path" {
   condition {
     path_pattern {
       values = ["/admin", "/admin/*"]
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_lb_listener_rule" "manager_path" {
+  count        = var.enable_https ? 0 : (var.manager_subdomain != "" ? 1 : 0)
+  listener_arn = local.active_listener_arn
+  priority     = 75
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.manager.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/manager", "/manager/*", "/branch-manager", "/branch-manager/*"]
     }
   }
 

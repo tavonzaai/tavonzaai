@@ -26,7 +26,7 @@ jobs:
       frontend-admin:          ${{ steps.filter.outputs.frontend-admin }}
       frontend-customer:       ${{ steps.filter.outputs.frontend-customer }}
       frontend-waiter:         ${{ steps.filter.outputs.frontend-waiter }}
-      frontend-branch-manager: ${{ steps.filter.outputs.frontend-branch-manager }}
+      frontend-manager:        ${{ steps.filter.outputs.frontend-manager }}
       frontend-cashier:        ${{ steps.filter.outputs.frontend-cashier }}
       frontend-kitchen:        ${{ steps.filter.outputs.frontend-kitchen }}
       ci-config:               ${{ steps.filter.outputs.ci-config }}
@@ -62,8 +62,8 @@ jobs:
               - 'frontend/waiter/**'
               - 'packages/contracts/**'
               - 'packages/shared/**'
-            frontend-branch-manager:
-              - 'frontend/branch-manager/**'
+            frontend-manager:
+              - 'frontend/manager/**'
               - 'packages/contracts/**'
               - 'packages/shared/**'
             frontend-cashier:
@@ -119,7 +119,7 @@ jobs:
       needs.changes.outputs['frontend-admin'] == 'true' ||
       needs.changes.outputs['frontend-customer'] == 'true' ||
       needs.changes.outputs['frontend-waiter'] == 'true' ||
-      needs.changes.outputs['frontend-branch-manager'] == 'true' ||
+      needs.changes.outputs['frontend-manager'] == 'true' ||
       needs.changes.outputs['frontend-cashier'] == 'true' ||
       needs.changes.outputs['frontend-kitchen'] == 'true' ||
       needs.changes.outputs['ci-config'] == 'true'
@@ -131,7 +131,7 @@ jobs:
           - { id: 'frontend-admin', name: 'Admin', filter: '@frontend/admin' }
           - { id: 'frontend-customer', name: 'Customer', filter: '@frontend/customer' }
           - { id: 'frontend-waiter', name: 'Waiter', filter: '@frontend/waiter' }
-          - { id: 'frontend-branch-manager', name: 'Branch Manager', filter: '@frontend/branch-manager' }
+          - { id: 'frontend-manager', name: 'Manager', filter: '@frontend/manager' }
           - { id: 'frontend-cashier', name: 'Cashier', filter: '@frontend/cashier' }
           - { id: 'frontend-kitchen', name: 'Kitchen', filter: '@frontend/kitchen' }
     steps:

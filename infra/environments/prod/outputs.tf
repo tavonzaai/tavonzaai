@@ -55,6 +55,7 @@ output "application_urls" {
     kitchen      = var.enable_https ? "https://${module.route53.kitchen_fqdn}" : "http://${module.alb.alb_dns_name}/kitchen"
     cashier      = var.enable_https ? "https://${module.route53.cashier_fqdn}" : "http://${module.alb.alb_dns_name}/cashier"
     admin        = var.admin_subdomain != "" ? (var.enable_https ? "https://${module.route53.admin_fqdn}" : "http://${module.alb.alb_dns_name}/admin") : null
+    manager      = var.manager_subdomain != "" ? (var.enable_https ? "https://${module.route53.manager_fqdn}" : "http://${module.alb.alb_dns_name}/manager") : null
   }
 }
 
@@ -139,6 +140,12 @@ output "s3_user_name" {
 output "s3_access_key_id" {
   description = "Access Key ID for dedicated S3 IAM user"
   value       = module.s3.s3_access_key_id
+}
+
+output "s3_secret_access_key" {
+  description = "Secret Access Key for dedicated S3 IAM user"
+  value       = module.s3.s3_secret_access_key
+  sensitive   = true
 }
 
 output "secrets_manager_secret_name" {
