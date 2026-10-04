@@ -137,6 +137,33 @@ export const INITIAL_ORDERS: KitchenOrder[] = [
       },
     ],
   },
+  {
+    id: "ord-6",
+    orderNumber: "#1528",
+    table: "T-03",
+    orderType: "Dine-in",
+    waiter: "Marco",
+    status: "NEW",
+    station: "Grill Station",
+    timeElapsedMinutes: 1,
+    createdAt: "3:49 PM",
+    items: [
+      {
+        id: "item-6-1",
+        name: "Classic Wagyu Burger",
+        quantity: 1,
+        options: ["Medium Rare", "No Onions", "Truffle Aioli"],
+        isCompleted: false,
+      },
+      {
+        id: "item-6-2",
+        name: "BBQ Pork Ribs Full Rack",
+        quantity: 1,
+        options: ["Spicy Sauce", "Sweet Potato Fries"],
+        isCompleted: false,
+      },
+    ],
+  },
 ];
 
 export const KITCHEN_STATIONS: KitchenStation[] = [

@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # --- Model provider: Groq ---
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
+    groq_fallback_models: str = "openai/gpt-oss-20b,qwen/qwen3.8-27b"
+    groq_timeout_seconds: float = 12.0
+    groq_max_retries: int = 0
+    groq_rate_limit_cooldown_seconds: float = 30.0
 
     # --- Alternative Model Providers ---
     openai_api_key: str = ""
