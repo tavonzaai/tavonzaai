@@ -27,6 +27,7 @@ export interface TableItem {
   itemsCount?: number;
   capacity?: number;
   subtotal?: number;
+  activeSessionId?: string | null;
 }
 
 export interface OrderDish {

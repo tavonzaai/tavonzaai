@@ -87,31 +87,33 @@ A customer session represents the customer's browser/session identity for the or
 
 It is intentionally lightweight and must not require unnecessary account friction.
 
-## Table Session
+## Table Session & Multi-Guest Model
 
-A table session represents a customer visit/order session at a specific table.
-
-A table session is first-class because a customer may submit multiple orders during the same visit.
+A table session represents a customer visit at a specific table. It is a first-class entity supporting multi-guest collaboration without collisions.
 
 ```text
 Table Session
-├── Order 1
-├── Order 2
-├── Order 3
-└── Payment
+├── Host Guest Session (First Guest)
+├── Guest Session 2 (Joined via QR / Code)
+├── Guest Session 3 (Joined via QR / Code)
+├── Orders (Individual or Together)
+└── Payment Allocations (Scope: ORDER | ORDER_ITEMS | GUEST_SESSION | TABLE_SESSION)
 ```
 
 ## Order
 
-An order belongs to a table session.
+An order belongs to a table session (or direct takeaway/delivery) and is associated with a specific guest session or shared table context.
 
-Orders contain order items and progress through controlled state transitions.
+Orders contain order items and progress through controlled, independent state transitions.
 
-## Kitchen
+## Stations: Kitchen & Bar
 
-Kitchen is an operational domain responsible for preparation workflow.
+Kitchen and Bar are operational production domains responsible for station workflow:
 
-An accepted order can produce one or more kitchen tickets/station workloads.
+- `KITCHEN`: Food items prepared by `KITCHEN_STAFF`.
+- `BAR`: Beverage items prepared by `BARTENDER`.
+
+An accepted order splits items automatically by `stationType` (`KITCHEN` vs. `BAR`), and line items progress independently (`PENDING` → `PREPARING` → `READY` / `UNAVAILABLE`). Ready notifications route directly to the assigned waiter for service.
 
 ## Payment
 

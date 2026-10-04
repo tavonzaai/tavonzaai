@@ -14,11 +14,12 @@
 import { Module } from '@nestjs/common';
 import { MenuService } from './application/services/menu.service';
 import { MenuController } from './presentation/controllers/menu.controller';
+import { MenuCompatibilityController } from './presentation/controllers/menu-compatibility.controller';
 import { DrizzleMenuRepository } from './infrastructure/persistence/drizzle-menu.repository';
 import { MENU_REPOSITORY } from './domain/interfaces/menu-repository.interface';
 
 @Module({
-  controllers: [MenuController],
+  controllers: [MenuController, MenuCompatibilityController],
   providers: [
     MenuService,
     {

@@ -32,15 +32,23 @@ import {
 import { Order } from '../../domain/entities/order.entity';
 import type { OrderStatus } from '../../domain/enums/order-status.enum';
 import {
-  OrderSubmittedEvent,
-  OrderStatusChangedEvent,
-} from '../../domain/events/order.events';
+  DRIZZLE,
+  type DrizzleDatabase,
+  branchSettings,
+  tables,
+  orders,
+  OutboxService,
+} from '@tavonza/database';
+import { eq } from 'drizzle-orm';
 
 @Injectable()
 export class OrderService {
   constructor(
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: IOrderRepository,
+    @Inject(DRIZZLE)
+    private readonly db: DrizzleDatabase,
+    private readonly outboxService: OutboxService,
   ) {}
 
   // ══════════════════════════════════════════════════════════════════════
@@ -48,16 +56,27 @@ export class OrderService {
   // ══════════════════════════════════════════════════════════════════════
 
   /**
-   * Get or create the customer's cart (DRAFT order) for a table.
-   * Only one active DRAFT order per table at a time.
+   * Get or create the customer's cart (DRAFT order) for a table or guest session.
+   * Only one active DRAFT order per guest/table at a time.
    */
-  async getOrCreateCart(branchId: string, tableId: string): Promise<Order> {
+  async getOrCreateCart(
+    branchId: string,
+    tableId: string,
+    guestSessionId?: string,
+    tableSessionId?: string,
+  ): Promise<Order> {
     const existing = await this.orderRepository.findDraftByTable(
       branchId,
       tableId,
+      guestSessionId,
     );
     if (existing) return existing;
-    return this.orderRepository.create({ branchId, tableId });
+    return this.orderRepository.create({
+      branchId,
+      tableId,
+      tableSessionId,
+      customerSessionId: guestSessionId,
+    });
   }
 
   /**
@@ -108,7 +127,9 @@ export class OrderService {
 
   /**
    * Submit the cart as a real order (DRAFT → SUBMITTED).
-   * Figma: "Place Order" button
+   * Checks branchSettings.orderAcceptanceMode:
+   * - If AUTO_ACCEPT: immediately transitions to ACCEPTED (CONFIRMED), updates table to PREPARING, emits OrderAccepted.
+   * - Else: sets table to ORDERING, emits OrderSubmitted.
    */
   async submitOrder(orderId: string): Promise<Order> {
     const order = await this.findOrderOrFail(orderId);
@@ -128,18 +149,120 @@ export class OrderService {
       'SUBMITTED',
     );
 
-    // Domain event — in production, emit via EventEmitter/outbox
-    const _event = new OrderSubmittedEvent(
-      updatedOrder.id,
-      updatedOrder.orderNumber,
-      updatedOrder.branchId,
-      updatedOrder.tableId,
-      updatedOrder.items.length,
-      updatedOrder.total,
-    );
-    console.log('[Event] OrderSubmitted:', _event);
+    // Check branch order acceptance mode
+    const [settings] = await this.db
+      .select({
+        orderAcceptanceMode: branchSettings.orderAcceptanceMode,
+      })
+      .from(branchSettings)
+      .where(eq(branchSettings.branchId, updatedOrder.branchId))
+      .limit(1);
 
-    return updatedOrder;
+    const isAutoAccept = settings?.orderAcceptanceMode === 'AUTO_ACCEPT';
+
+    let finalOrder = updatedOrder;
+
+    if (isAutoAccept) {
+      finalOrder = await this.orderRepository.updateStatus(orderId, 'ACCEPTED');
+
+      await this.db
+        .update(orders)
+        .set({
+          acceptanceMode: 'AUTO_ACCEPT',
+          acceptedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, orderId));
+
+      // Advance table service status to PREPARING
+      if (finalOrder.tableId) {
+        await this.db
+          .update(tables)
+          .set({ serviceStatus: 'PREPARING', updatedAt: new Date() })
+          .where(eq(tables.id, finalOrder.tableId));
+
+        await this.outboxService.publishEvent({
+          aggregateType: 'TABLE',
+          aggregateId: finalOrder.tableId,
+          eventType: 'TableStatusChanged',
+          branchId: finalOrder.branchId,
+          payload: {
+            tableId: finalOrder.tableId,
+            tableLabel: 'Table',
+            branchId: finalOrder.branchId,
+            serviceStatus: 'PREPARING',
+            operationalFlag: 'NORMAL',
+            activeSessionId: finalOrder.tableSessionId,
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      await this.outboxService.publishEvent({
+        aggregateType: 'ORDER',
+        aggregateId: finalOrder.id,
+        eventType: 'OrderAccepted',
+        branchId: finalOrder.branchId,
+        payload: {
+          orderId: finalOrder.id,
+          orderNumber: finalOrder.orderNumber,
+          branchId: finalOrder.branchId,
+          tableId: finalOrder.tableId,
+          tableSessionId: finalOrder.tableSessionId,
+          acceptedById: 'SYSTEM_AUTO_ACCEPT',
+          acceptedAt: new Date().toISOString(),
+        },
+      });
+    } else {
+      // Advance table service status to ORDERING
+      if (finalOrder.tableId) {
+        await this.db
+          .update(tables)
+          .set({ serviceStatus: 'ORDERING', updatedAt: new Date() })
+          .where(eq(tables.id, finalOrder.tableId));
+
+        await this.outboxService.publishEvent({
+          aggregateType: 'TABLE',
+          aggregateId: finalOrder.tableId,
+          eventType: 'TableStatusChanged',
+          branchId: finalOrder.branchId,
+          payload: {
+            tableId: finalOrder.tableId,
+            tableLabel: 'Table',
+            branchId: finalOrder.branchId,
+            serviceStatus: 'ORDERING',
+            operationalFlag: 'NORMAL',
+            activeSessionId: finalOrder.tableSessionId,
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      await this.outboxService.publishEvent({
+        aggregateType: 'ORDER',
+        aggregateId: updatedOrder.id,
+        eventType: 'OrderSubmitted',
+        branchId: updatedOrder.branchId,
+        payload: {
+          orderId: updatedOrder.id,
+          orderNumber: updatedOrder.orderNumber,
+          branchId: updatedOrder.branchId,
+          tableId: updatedOrder.tableId,
+          tableSessionId: updatedOrder.tableSessionId,
+          itemsCount: updatedOrder.items.length,
+          totalAmount: updatedOrder.total,
+          items: updatedOrder.items.map((i) => ({
+            id: i.id,
+            productName: (i as any).productName ?? i.name,
+            quantity: i.quantity,
+            stationType: (i as any).stationType ?? 'KITCHEN',
+          })),
+          occurredAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    return finalOrder;
   }
 
   /**
@@ -160,7 +283,13 @@ export class OrderService {
    */
   async getOrdersByBranch(
     branchId: string,
-    filters?: { status?: OrderStatus; tableId?: string },
+    filters?: {
+      status?: OrderStatus;
+      tableId?: string;
+      search?: string;
+      guestSessionId?: string;
+      tableSessionId?: string;
+    },
   ): Promise<Order[]> {
     return this.orderRepository.findByBranch(branchId, filters);
   }
@@ -189,16 +318,73 @@ export class OrderService {
       newStatus,
     );
 
-    // Domain event
-    const _event = new OrderStatusChangedEvent(
-      updatedOrder.id,
-      updatedOrder.orderNumber,
-      updatedOrder.branchId,
-      updatedOrder.tableId,
-      order.status,
-      newStatus,
-    );
-    console.log('[Event] OrderStatusChanged:', _event);
+    if (newStatus === 'ACCEPTED' && updatedOrder.tableId) {
+      await this.db
+        .update(tables)
+        .set({ serviceStatus: 'PREPARING', updatedAt: new Date() })
+        .where(eq(tables.id, updatedOrder.tableId));
+
+      await this.outboxService.publishEvent({
+        aggregateType: 'TABLE',
+        aggregateId: updatedOrder.tableId,
+        eventType: 'TableStatusChanged',
+        branchId: updatedOrder.branchId,
+        payload: {
+          tableId: updatedOrder.tableId,
+          tableLabel: 'Table',
+          branchId: updatedOrder.branchId,
+          serviceStatus: 'PREPARING',
+          operationalFlag: 'NORMAL',
+          activeSessionId: updatedOrder.tableSessionId,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    if (newStatus === 'SERVED' && updatedOrder.tableId) {
+      await this.db
+        .update(tables)
+        .set({ serviceStatus: 'SERVING', updatedAt: new Date() })
+        .where(eq(tables.id, updatedOrder.tableId));
+
+      await this.outboxService.publishEvent({
+        aggregateType: 'TABLE',
+        aggregateId: updatedOrder.tableId,
+        eventType: 'TableStatusChanged',
+        branchId: updatedOrder.branchId,
+        payload: {
+          tableId: updatedOrder.tableId,
+          tableLabel: 'Table',
+          branchId: updatedOrder.branchId,
+          serviceStatus: 'SERVING',
+          operationalFlag: 'NORMAL',
+          activeSessionId: updatedOrder.tableSessionId,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    let eventType = 'OrderStatusChanged';
+    if (newStatus === 'ACCEPTED') eventType = 'OrderAccepted';
+    if (newStatus === 'REJECTED') eventType = 'OrderRejected';
+    if (newStatus === 'SERVED') eventType = 'OrderServed';
+
+    await this.outboxService.publishEvent({
+      aggregateType: 'ORDER',
+      aggregateId: updatedOrder.id,
+      eventType,
+      branchId: updatedOrder.branchId,
+      payload: {
+        orderId: updatedOrder.id,
+        orderNumber: updatedOrder.orderNumber,
+        branchId: updatedOrder.branchId,
+        tableId: updatedOrder.tableId,
+        tableSessionId: updatedOrder.tableSessionId,
+        previousStatus: order.status,
+        newStatus,
+        occurredAt: new Date().toISOString(),
+      },
+    });
 
     return updatedOrder;
   }

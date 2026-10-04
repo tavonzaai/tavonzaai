@@ -10,7 +10,7 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "npx tsx src/seed.ts",
+    "db:seed": "node ../../node_modules/.pnpm/node_modules/tsx/dist/cli.mjs src/seed.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },

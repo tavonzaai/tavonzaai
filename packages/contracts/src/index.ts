@@ -3,4 +3,4 @@
  * Cross-domain contracts, API specifications, and shared DTOs
  */
 
-export {};
+export * from './dtos';

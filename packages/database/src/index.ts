@@ -12,3 +12,7 @@ export { DatabaseModule } from './database.module';
 
 // Schema (tables + relations) — so repositories can import table references
 export * from './schema';
+export * as schema from './schema';
+
+export * from './tenant-repository';
+export * from './outbox.service';

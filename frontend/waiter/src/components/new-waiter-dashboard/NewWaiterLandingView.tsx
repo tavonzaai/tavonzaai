@@ -31,6 +31,7 @@ import { TavonzaLogoIcon } from '@/components/TavonzaLogo';
 import { useAppSelector } from '@/redux/store';
 import { useLogout } from '@/hooks/useLogout';
 import { toast } from 'sonner';
+import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
 import OrdersListView from './orders/OrdersListView';
 import OrderDetailView from './orders/OrderDetailView';
 import { OrderItemData } from './orders/orderData';
@@ -216,97 +217,137 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
     return 'Good Evening';
   };
 
-  // 1. Interactive Tables State matching Figma
-  const [tables, setTables] = useState<TableItem[]>([
-    {
-      id: 'T-01',
-      name: 'Table-01',
-      guests: '2/4 Guests',
-      location: 'Main Hall',
-      status: 'Available',
-    },
-    {
-      id: 'T-02',
-      name: 'Table-02',
-      guests: '3/5 Guests',
-      location: 'Main Hall',
-      status: 'New Order',
-      orderCount: 1,
-    },
-    {
-      id: 'T-03',
-      name: 'Table-03',
-      guests: '2/4 Guests',
-      location: 'Main Hall',
-      status: 'Ready To Serve',
-      orderCount: 1,
-      timeWaiting: '4 min',
-    },
-    {
-      id: 'T-04',
-      name: 'Table-04',
-      guests: '4/4 Guests',
-      location: 'Main Hall',
-      status: 'Occupied',
-      orderCount: 1,
-    },
-  ]);
+  // 1. Interactive Tables State
+  const [tables, setTables] = useState<TableItem[]>([]);
 
-  // 2. Pending Orders matching Figma
-  const [pendingOrders, setPendingOrders] = useState<OrderItem[]>([
-    {
-      id: '#10582',
-      table: 'T-02',
-      items: 'Grilled Salmon, Caesar Salad',
-      price: '$64.50',
-      status: 'Active',
-    },
-    {
-      id: '#10583',
-      table: 'T-03',
-      items: 'Wagyu Burger, Truffle Fries',
-      price: '$48.00',
-      status: 'Pending',
-    },
-    {
-      id: '#10584',
-      table: 'T-04',
-      items: 'Ribeye Steak, Mashed Potatoes',
-      price: '$79.20',
-      status: 'Pending',
-    },
-  ]);
+  // 2. Pending Orders
+  const [pendingOrders, setPendingOrders] = useState<OrderItem[]>([]);
 
-  // 3. Table Orders Details State (Matching Figma Screenshots 1, 2, 3 for Table-01)
+  // 3. Table Orders Details State
   const [tableOrderFilter, setTableOrderFilter] = useState<'ALL' | 'Pending' | 'Active' | 'Completed'>('ALL');
-  const [tableOrders, setTableOrders] = useState<TableOrderDetail[]>([
-    {
-      id: 'ord-1230-active',
-      orderNumber: 'Oder No #1230',
-      tableId: 'T-01',
-      status: 'Pending', // Interactive transitions: 'Pending' -> 'Cooking' -> 'Ready to Serve' -> 'Completed'
-      targetTime: '10:24',
-      targetDuration: 'Target 12min',
-      items: [
-        { name: 'Potato Corn Burger', price: '$168.00' },
-        { name: 'Potato Corn Burger', price: '$168.00' },
-      ],
-      totalAmount: '$193.20',
-    },
-    {
-      id: 'ord-1229-completed',
-      orderNumber: 'Oder No #1230',
-      tableId: 'T-01',
-      status: 'Completed',
-      targetTime: '10:24',
-      targetDuration: 'Target 12min',
-      items: [
-        { name: 'Potato Corn Burger', price: '$168.00' },
-        { name: 'Potato Corn Burger', price: '$168.00' },
-      ],
-      totalAmount: '$193.20',
-    },
-  ]);
+  const [tableOrders, setTableOrders] = useState<TableOrderDetail[]>([]);
+
+  // Real-time polling for tables and pending orders on the home tab
+  const loadHomeDashboardData = React.useCallback(async () => {
+    try {
+      const branchId = getActiveBranchId();
+      const [backendTables, liveOrders] = await Promise.all([
+        waiterService.getMyTables(branchId).catch(() => []),
+        waiterService.queryOrders({ branchId, status: 'PENDING' }).catch(() => []),
+      ]);
+
+      if (Array.isArray(backendTables) && backendTables.length > 0) {
+        setTables(
+          backendTables.map((bt: any) => {
+            const tableLabel = bt.tableNumber || bt.label || `Table-${bt.id?.slice(0, 2)}`;
+            const tableOrdersCount = Array.isArray(liveOrders)
+              ? liveOrders.filter(
+                  (o: any) =>
+                    o.tableId === bt.tableId ||
+                    o.tableId === bt.id ||
+                    o.tableNumber === tableLabel ||
+                    o.tableLabel === tableLabel
+                ).length
+              : 0;
+
+            let statusDisplay: 'Available' | 'New Order' | 'Ready To Serve' | 'Occupied' = 'Available';
+            if (tableOrdersCount > 0) {
+              statusDisplay = 'New Order';
+            } else if (bt.serviceStatus === 'OCCUPIED' || bt.serviceStatus === 'PREPARING') {
+              statusDisplay = 'Occupied';
+            } else if (bt.serviceStatus === 'READY') {
+              statusDisplay = 'Ready To Serve';
+            }
+
+            return {
+              id: bt.tableId || bt.id,
+              name: tableLabel.startsWith('Table') ? tableLabel : `Table-${tableLabel}`,
+              guests: `${bt.capacity || 4} Guests`,
+              location: 'Main Hall',
+              status: statusDisplay,
+              orderCount: tableOrdersCount,
+            };
+          })
+        );
+      }
+
+      if (Array.isArray(liveOrders)) {
+        setPendingOrders(
+          liveOrders.map((lo: any) => {
+            const itemsSummary =
+              Array.isArray(lo.items) && lo.items.length > 0
+                ? lo.items.map((i: any) => `${i.quantity || 1}x ${i.productName || i.name || 'Dish'}`).join(', ')
+                : `${lo.itemsCount || 1} item(s)`;
+
+            return {
+              id: lo.orderNumber
+                ? lo.orderNumber.startsWith('#')
+                  ? lo.orderNumber
+                  : `#${lo.orderNumber}`
+                : `#${(lo.id || '').slice(0, 5)}`,
+              table: lo.tableLabel || lo.tableNumber || 'Table',
+              items: itemsSummary,
+              price: `$${Number(lo.totalAmount || lo.total || 0).toFixed(2)}`,
+              status: 'Pending',
+            };
+          })
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load waiter home data:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHomeDashboardData();
+    const interval = setInterval(loadHomeDashboardData, 4000);
+    return () => clearInterval(interval);
+  }, [loadHomeDashboardData]);
+
+  // Load orders for selected table
+  useEffect(() => {
+    if (selectedTable?.id) {
+      const branchId = getActiveBranchId();
+      waiterService
+        .queryOrders({ branchId, tableId: selectedTable.id })
+        .then((orders) => {
+          if (Array.isArray(orders) && orders.length > 0) {
+            setTableOrders(
+              orders.map((o: any) => {
+                const placed = o.placedAt ? new Date(o.placedAt) : new Date();
+                const timeStr = !isNaN(placed.getTime())
+                  ? placed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : '10:24';
+                let statusVal: 'Pending' | 'Cooking' | 'Ready to Serve' | 'Completed' = 'Pending';
+                if (o.status === 'CONFIRMED' || o.status === 'PREPARING') statusVal = 'Cooking';
+                else if (o.status === 'READY') statusVal = 'Ready to Serve';
+                else if (o.status === 'SERVED' || o.status === 'COMPLETED') statusVal = 'Completed';
+
+                return {
+                  id: o.id || o.orderId,
+                  orderNumber: o.orderNumber ? `Order No #${o.orderNumber}` : `Order #${(o.id || '').slice(0, 5)}`,
+                  tableId: selectedTable.id,
+                  status: statusVal,
+                  targetTime: timeStr,
+                  targetDuration: statusVal === 'Completed' ? 'Completed' : 'Target 15min',
+                  items:
+                    Array.isArray(o.items) && o.items.length > 0
+                      ? o.items.map((i: any) => ({
+                          name: i.productName || i.name || 'Dish',
+                          price: `$${Number(i.unitPrice || 0).toFixed(2)}`,
+                        }))
+                      : [{ name: `${o.itemsCount || 1} Item(s)`, price: `$${Number(o.totalAmount || 0).toFixed(2)}` }],
+                  totalAmount: `$${Number(o.totalAmount || o.total || 0).toFixed(2)}`,
+                };
+              })
+            );
+          } else {
+            setTableOrders([]);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selectedTable?.id]);
 
   // 4. Browse Menu & Search States
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
