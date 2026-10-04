@@ -517,7 +517,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
         {/* MAIN KDS TICKETS WORKSPACE MATCHING USER SCREENSHOT */}
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
-            {filteredOrders.slice(0, 6).map((order, idx) => {
+            {filteredOrders.map((order, idx) => {
               const isOverdue = order.status === "OVERDUE" || !!order.flaggedIssue;
               const isPreparing = order.status === "PREPARING";
               const isReady = order.status === "READY";
