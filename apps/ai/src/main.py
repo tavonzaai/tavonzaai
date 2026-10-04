@@ -55,32 +55,39 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 
-raw_origins = [
+dev_origins = [
+    "http://localhost:3000",
+    "http://localhost:3100",
+    "http://localhost:3101",
+    "http://localhost:3102",
+    "http://localhost:3103",
+    "http://localhost:3104",
+    "http://localhost:3105",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3100",
+    "http://127.0.0.1:3101",
+    "http://127.0.0.1:3102",
+    "http://127.0.0.1:3103",
+    "http://127.0.0.1:3104",
+    "http://127.0.0.1:3105",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+]
+
+configured_origins = [
     origin.strip()
     for origin in settings.allowed_origins.split(",")
-    if origin.strip()
-] if settings.allowed_origins and settings.allowed_origins != "*" else ["*"]
+    if origin.strip() and origin.strip() != "*"
+]
 
-if settings.environment == "dev" and raw_origins != ["*"]:
-    dev_origins = {
-        "http://localhost:3000",
-        "http://localhost:3100",
-        "http://localhost:3101",
-        "http://localhost:5173",
-        "http://localhost:8000",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3100",
-        "http://127.0.0.1:3101",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:8000",
-    }
-    allowed_origins = list(set(raw_origins) | dev_origins)
-else:
-    allowed_origins = raw_origins
+allowed_origins = list(set(dev_origins + configured_origins))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

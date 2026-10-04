@@ -184,10 +184,10 @@ export default function KitchenAIModal({
           Authorization: 'Bearer dev-kitchen-chef-token',
         },
         body: JSON.stringify({
-          message: `[KITCHEN STATION: ${activeStation}] ${query}`,
+          message: query,
           session_id: `kitchen_${activeStation.replace(/\s+/g, '_').toLowerCase()}`,
         }),
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (res.ok) {
@@ -206,15 +206,18 @@ export default function KitchenAIModal({
         setIsTyping(false);
         return;
       }
-    } catch {
-      // Offline fallback: Provide intelligent kitchen assistant responses
+    } catch (err) {
+      console.warn('AI engine call failed or timed out, using kitchen fallback:', err);
     }
 
     // High-context kitchen fallback logic
     const lower = query.toLowerCase();
-    let reply = "I've analyzed the kitchen line for " + activeStation + ". Everything is on schedule.";
+    let reply = "I've analyzed the kitchen line for " + activeStation + ". Everything is running on schedule.";
 
-    if (lower.includes('overdue') || lower.includes('late') || lower.includes('time')) {
+    if (lower === 'hi' || lower === 'hello' || lower.startsWith('hi ') || lower.startsWith('hello ')) {
+      reply =
+        'Hello Chef Marco! 👋 I am monitoring Grill Station tickets and station bottlenecks. How can I assist you right now?';
+    } else if (lower.includes('overdue') || lower.includes('late') || lower.includes('time')) {
       reply =
         '⚠️ Ticket #1524 (Table T-01) for Takeaway is currently flagged as Overdue (18 mins elapsed). Recommend plating the 2 Classic Burgers immediately.';
     } else if (lower.includes('burger') || lower.includes('grill') || lower.includes('how many')) {
