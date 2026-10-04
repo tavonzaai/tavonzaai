@@ -30,8 +30,16 @@ import {
   Param,
   Body,
   Query,
+  UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiOkResponse, ApiCreatedResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiOkResponse,
+  ApiCreatedResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { OrderService } from '../../application/services/order.service';
 import { OrderStatus } from '../../domain/enums/order-status.enum';
 import {
@@ -45,6 +53,13 @@ import {
   OrderListResponseDto,
   OrderDetailResponseDto,
 } from '../dtos/order-response.dto';
+import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../../../common/guards/optional-jwt-auth.guard';
+import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
+import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
+import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
+import { Permission } from '@tavonza/authorization';
+import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 
 @ApiTags('Customer | Orders')
 @Controller('orders')
@@ -56,6 +71,36 @@ export class OrderController {
   // ══════════════════════════════════════════════════════════════════════
 
   /**
+   * GET /orders/cart
+   *
+   * Gets or creates the current cart for the authenticated guest/table session.
+   */
+  @Get('cart')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: '[Customer] Get current cart from session or parameters' })
+  @ApiOkResponse({ type: CartResponseDto })
+  async getCartFromSession(
+    @CurrentUser() user?: JwtPayload,
+    @Query('branchId') qBranchId?: string,
+    @Query('tableId') qTableId?: string,
+  ): Promise<CartResponseDto> {
+    const branchId = user?.branchId || qBranchId;
+    const tableId = (user as any)?.tableId || qTableId;
+    if (!branchId || !tableId) {
+      throw new BadRequestException('branchId and tableId are required');
+    }
+    const guestSessionId = (user as any)?.guestSessionId;
+    const tableSessionId = (user as any)?.tableSessionId;
+    const order = await this.orderService.getOrCreateCart(
+      branchId,
+      tableId,
+      guestSessionId,
+      tableSessionId,
+    );
+    return CartResponseDto.fromEntity(order);
+  }
+
+  /**
    * GET /orders/cart/:branchId/:tableId
    *
    * Figma: Cart icon / Order Summary screen
@@ -63,14 +108,55 @@ export class OrderController {
    * Creates one if it doesn't exist.
    */
   @Get('cart/:branchId/:tableId')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: '[Customer] Get current cart for table' })
   @ApiOkResponse({ type: CartResponseDto })
   async getCart(
     @Param('branchId') branchId: string,
     @Param('tableId') tableId: string,
+    @CurrentUser() user?: JwtPayload,
   ): Promise<CartResponseDto> {
-    const order = await this.orderService.getOrCreateCart(branchId, tableId);
+    const guestSessionId = (user as any)?.guestSessionId;
+    const tableSessionId = (user as any)?.tableSessionId;
+    const effectiveBranchId = user?.branchId || branchId;
+    const effectiveTableId = (user as any)?.tableId || tableId;
+    const order = await this.orderService.getOrCreateCart(
+      effectiveBranchId,
+      effectiveTableId,
+      guestSessionId,
+      tableSessionId,
+    );
     return CartResponseDto.fromEntity(order);
+  }
+
+  /**
+   * GET /orders/me
+   *
+   * Figma: Orders tab on Customer Dashboard
+   * Lists orders placed in the current customer session.
+   */
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: '[Customer] Get my session orders' })
+  @ApiOkResponse({ type: [OrderListResponseDto] })
+  async getMyOrders(
+    @CurrentUser() user: JwtPayload,
+    @Query('branchId') qBranchId?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+  ): Promise<OrderListResponseDto[]> {
+    const branchId = user?.branchId || qBranchId;
+    if (!branchId) return [];
+
+    const guestSessionId = (user as any)?.guestSessionId;
+    const tableSessionId = (user as any)?.tableSessionId;
+    const orders = await this.orderService.getOrdersByBranch(branchId, {
+      status: status as OrderStatus | undefined,
+      search,
+      guestSessionId,
+      tableSessionId,
+    });
+    return orders.map(OrderListResponseDto.fromEntity);
   }
 
   /**
@@ -179,16 +265,21 @@ export class OrderController {
    * Lists orders for a branch, with optional status/table filters.
    */
   @Get('branch/:branchId')
-  @ApiOperation({ summary: '[Waiter] Get orders by branch with status filter' })
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.ORDERS_READ)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: '[Waiter/Manager] Get orders by branch with status and search filters' })
   @ApiOkResponse({ type: [OrderListResponseDto] })
   async getOrdersByBranch(
     @Param('branchId') branchId: string,
     @Query('status') status?: string,
     @Query('tableId') tableId?: string,
+    @Query('search') search?: string,
   ): Promise<OrderListResponseDto[]> {
     const orders = await this.orderService.getOrdersByBranch(branchId, {
       status: status as OrderStatus | undefined,
       tableId,
+      search,
     });
     return orders.map(OrderListResponseDto.fromEntity);
   }
@@ -219,6 +310,9 @@ export class OrderController {
    * Invalid transitions return a 400 with helpful error message.
    */
   @Patch(':orderId/status')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.ORDERS_UPDATE)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: '[Waiter] Update order lifecycle status' })
   @ApiOkResponse({ type: OrderDetailResponseDto })
   async updateOrderStatus(

@@ -1,12 +1,13 @@
 /**
  * Worker Service Entrypoint
  * Handles asynchronous background workloads, FIFO email delivery via AWS SES,
- * outbox event propagation, and multichannel notifications.
+ * outbox event propagation, idle session cleanup, and multichannel notifications.
  */
 import { closeSharedRedisConnection } from '@tavonza/queue';
 import { createEmailWorker } from './notifications/email.worker.js';
 import { createNotificationWorker } from './notifications/notification.worker.js';
-import { createOutboxWorker } from './outbox/outbox.worker.js';
+import { OutboxProcessor } from './outbox/outbox.worker.js';
+import { IdleSessionJob } from './jobs/idle-session.job.js';
 
 async function bootstrap() {
   console.log('====================================================');
@@ -18,11 +19,16 @@ async function bootstrap() {
   // Initialize workers with strict FIFO handling
   const emailWorker = createEmailWorker();
   const notificationWorker = createNotificationWorker();
-  const outboxWorker = createOutboxWorker();
+  const activeWorkers = [emailWorker, notificationWorker];
 
-  const activeWorkers = [emailWorker, notificationWorker, outboxWorker];
+  // Initialize Transactional Outbox processor & Scheduled maintenance
+  const outboxProcessor = new OutboxProcessor();
+  await outboxProcessor.start();
 
-  console.log('✅ All FIFO background workers active and listening for jobs.');
+  const idleSessionJob = new IdleSessionJob();
+  await idleSessionJob.start();
+
+  console.log('✅ All FIFO background workers, outbox processor, and maintenance jobs are active.');
 
   // Graceful shutdown handler
   let isShuttingDown = false;
@@ -30,6 +36,9 @@ async function bootstrap() {
     if (isShuttingDown) return;
     isShuttingDown = true;
     console.log(`\n🛑 Received ${signal}. Commencing graceful shutdown of workers...`);
+
+    outboxProcessor.stop();
+    idleSessionJob.stop();
 
     const shutdownPromises = activeWorkers.map((w) => w.close());
     await Promise.allSettled(shutdownPromises);

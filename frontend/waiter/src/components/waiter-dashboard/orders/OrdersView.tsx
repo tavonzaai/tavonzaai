@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   ChevronRight,
@@ -15,6 +15,8 @@ import {
   Eye,
   SlidersHorizontal,
 } from 'lucide-react';
+import { waiterService } from '@/redux/features/waiterApi';
+import { getCookie } from '@/redux/api/baseApi';
 
 export interface OrderItemRow {
   id: string;
@@ -178,12 +180,62 @@ export const initialOrdersList: OrderItemRow[] = [
 ];
 
 export default function OrdersView() {
-  const [orders, setOrders] = useState<OrderItemRow[]>(initialOrdersList);
+  const [orders, setOrders] = useState<OrderItemRow[]>([]);
   const [filter, setFilter] = useState<'All' | 'New Order' | 'Preparing' | 'Ready to Serve' | 'Served'>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<OrderItemRow | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 8;
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchOrders = async () => {
+      try {
+        const rawBranchId = getCookie('waiter_branch_id') || getCookie('branch_id');
+        const branchId =
+          rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
+            ? rawBranchId
+            : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+        const activeOrders = await waiterService.getActiveOrders(branchId);
+        if (mounted) {
+          if (Array.isArray(activeOrders) && activeOrders.length > 0) {
+            const mapped: OrderItemRow[] = activeOrders.map((o) => ({
+              id: o.id,
+              orderNumber: o.orderNumber ? `#${o.orderNumber}` : `#${o.id.slice(0, 6)}`,
+              tableNumber: o.tableNumber?.startsWith('T-') ? o.tableNumber : `T-${o.tableNumber || '01'}`,
+              itemsSummary: `${o.itemsCount} items`,
+              itemsDetail: [],
+              status:
+                o.status === 'PREPARING' || o.status === 'IN_PREPARATION'
+                  ? 'Preparing'
+                  : o.status === 'READY'
+                  ? 'Ready to Serve'
+                  : o.status === 'SERVED'
+                  ? 'Served'
+                  : 'New Order',
+              total: o.totalAmount || 0,
+              placedAgo: o.placedAt
+                ? new Date(o.placedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'recently',
+              serverName: o.guestName || 'Table Guest',
+            }));
+            setOrders(mapped);
+          } else {
+            setOrders([]);
+          }
+        }
+      } catch (err) {
+        console.warn('Live waiter orders fetch error:', err);
+      }
+    };
+
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 10000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const filteredOrders = orders.filter((ord) => {
     const matchesFilter = filter === 'All' || ord.status === filter;
@@ -198,12 +250,22 @@ export default function OrdersView() {
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const displayedOrders = filteredOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const handleUpdateStatus = (orderId: string, nextStatus: OrderItemRow['status']) => {
+  const handleUpdateStatus = async (orderId: string, nextStatus: OrderItemRow['status']) => {
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
     );
     if (selectedOrder && selectedOrder.id === orderId) {
       setSelectedOrder((prev) => (prev ? { ...prev, status: nextStatus } : null));
+    }
+
+    try {
+      if (nextStatus === 'Preparing') {
+        await waiterService.acceptOrder(orderId);
+      } else if (nextStatus === 'Served') {
+        await waiterService.serveOrder(orderId);
+      }
+    } catch (err) {
+      console.warn('Waiter status transition fallback to local state:', err);
     }
   };
 

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
 import {
   Clock,
   CheckCircle2,
@@ -38,133 +39,7 @@ export interface KDSOrder {
   }[];
 }
 
-const initialKdsOrders: KDSOrder[] = [
-  {
-    id: 'kds-1',
-    orderNumber: '#TAV-2196',
-    tableNumber: 2,
-    tableName: 'Table 2',
-    createdTime: 'Created just now',
-    waiterName: 'Waiter Taken',
-    status: 'received',
-    paid: true,
-    station: 'Kitchen Station 1',
-    elapsedMins: 2,
-    items: [
-      {
-        id: 'item-1',
-        name: 'Truffle Margherita Pizza',
-        quantity: 1,
-        status: 'Pending',
-        station: 'Pizza Deck #1',
-        notes: 'Extra crispy base, basil fresh on top',
-      },
-      {
-        id: 'item-2',
-        name: 'Truffle & Wild Mushroom Crostini',
-        quantity: 2,
-        status: 'Pending',
-        station: 'Appetizers Prep',
-        notes: 'Gluten-conscious prep request',
-      },
-      {
-        id: 'item-3',
-        name: 'Artisan Negroni Sbagliato',
-        quantity: 2,
-        status: 'Preparing',
-        station: 'Bar Station',
-        notes: 'Orange twist peel express',
-      },
-    ],
-  },
-  {
-    id: 'kds-2',
-    orderNumber: '#TAV-2192',
-    tableNumber: 3,
-    tableName: 'Table 3',
-    createdTime: '18 min ago',
-    waiterName: 'Alex Rivera',
-    status: 'preparing',
-    paid: false,
-    station: 'Station 2 (Grill)',
-    elapsedMins: 18,
-    items: [
-      {
-        id: 'item-4',
-        name: 'Wild Mushroom Risotto',
-        quantity: 2,
-        status: 'Preparing',
-        station: 'Sauté Station',
-        notes: 'Awaiting Chef bump - Ticket elapsed 18 min',
-      },
-      {
-        id: 'item-5',
-        name: 'Prime Dry-Aged Ribeye 12oz',
-        quantity: 1,
-        status: 'Preparing',
-        station: 'Charcoal Grill',
-        notes: 'Medium-rare, roasted bone marrow jus',
-      },
-    ],
-  },
-  {
-    id: 'kds-3',
-    orderNumber: '#TAV-2188',
-    tableNumber: 6,
-    tableName: 'Table 6',
-    createdTime: '24 min ago',
-    waiterName: 'Michael Davis',
-    status: 'ready',
-    paid: true,
-    station: 'Kitchen Station 1',
-    elapsedMins: 24,
-    items: [
-      {
-        id: 'item-6',
-        name: 'Pan-Seared Chilean Sea Bass',
-        quantity: 2,
-        status: 'Ready to Serve',
-        station: 'Main Pass',
-        notes: 'Garnish set. Under heat lamp #3',
-      },
-      {
-        id: 'item-7',
-        name: 'Truffle Parmesan Fries',
-        quantity: 1,
-        status: 'Ready to Serve',
-        station: 'Fryer Line',
-      },
-    ],
-  },
-  {
-    id: 'kds-4',
-    orderNumber: '#TAV-2180',
-    tableNumber: 8,
-    tableName: 'Table 8',
-    createdTime: '42 min ago',
-    waiterName: 'Michael Davis',
-    status: 'served',
-    paid: true,
-    station: 'Kitchen Station 1',
-    elapsedMins: 42,
-    items: [
-      {
-        id: 'item-8',
-        name: 'Handcrafted Tiramisu Classico',
-        quantity: 2,
-        status: 'Ready to Serve',
-        station: 'Pastry Station',
-      },
-      {
-        id: 'item-9',
-        name: 'Espresso Romano x2',
-        quantity: 2,
-        status: 'Ready to Serve',
-        station: 'Bar Station',
-      },
-    ],
-  },
-];
+const initialKdsOrders: KDSOrder[] = [];
 
 interface OrderStatusViewProps {
   onShowToast?: (msg: string) => void;
@@ -178,7 +53,63 @@ export default function OrderStatusView({
   onNavigateToFloor,
   onNavigateToCheckout,
 }: OrderStatusViewProps) {
-  const [orders, setOrders] = useState<KDSOrder[]>(initialKdsOrders);
+  const [orders, setOrders] = useState<KDSOrder[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchOrders = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const liveOrders = await waiterService.getActiveOrders(branchId);
+        if (mounted && Array.isArray(liveOrders)) {
+          const mapped: KDSOrder[] = liveOrders.map((o: any) => {
+            let status: KDSOrder['status'] = 'received';
+            if (o.status === 'PREPARING') status = 'preparing';
+            else if (o.status === 'READY_TO_SERVE') status = 'ready';
+            else if (o.status === 'SERVED' || o.status === 'COMPLETED') status = 'served';
+
+            const createdDate = new Date(o.createdAt);
+            const diffMins = !isNaN(createdDate.getTime())
+              ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 60000))
+              : 0;
+
+            return {
+              id: o.orderId || o.id,
+              orderNumber: o.orderNumber,
+              tableNumber: parseInt(o.tableLabel?.replace(/\D/g, '') || '1', 10) || 1,
+              tableName: o.tableLabel || 'Table',
+              createdTime: diffMins === 0 ? 'Created just now' : `Created ${diffMins}m ago`,
+              waiterName: o.waiterName || 'Staff Assigned',
+              status,
+              paid: o.paymentStatus === 'PAID',
+              station: 'Kitchen Station 1',
+              elapsedMins: diffMins,
+              items: (o.items || []).map((it: any, idx: number) => ({
+                id: it.id || `item-${idx}`,
+                name: it.name,
+                quantity: it.quantity,
+                status: status === 'served' ? 'Ready to Serve' : status === 'ready' ? 'Cooked' : status === 'preparing' ? 'Preparing' : 'Pending',
+                station: 'Kitchen Main Deck',
+                notes: it.notes,
+              })),
+            };
+          });
+          setOrders(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load active orders for KDS monitor:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 8000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
   const [filterStation, setFilterStation] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);

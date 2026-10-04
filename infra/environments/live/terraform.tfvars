@@ -102,10 +102,14 @@ ecr_repository_names = [
   "kitchen",
   "cashier",
   "admin-dashboard",
+  "manager",
   "branch-manager",
   "waiter",
   "worker"
 ]
+
+manager_subdomain = "manager"
+manager_port      = 3103
 
 # ALB Ingress Access (Public Internet)
 alb_ingress_cidr_blocks = [

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { baseApiFetch } from '../../redux/api/baseApi';
 import {
   Store,
   LayoutDashboard,
@@ -57,6 +58,88 @@ export default function OwnerDashboard({
   const [selectedBranch, setSelectedBranch] = useState('All Restaurants');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [liveOrders, setLiveOrders] = useState<any[]>([]);
+  const [liveTables, setLiveTables] = useState<any[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchLiveData = async () => {
+      try {
+        const branchId = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+        const [ordersRes, tablesRes] = await Promise.allSettled([
+          baseApiFetch<any[]>(`/orders/branch/${branchId}`),
+          baseApiFetch<any[]>(`/tables/branch/${branchId}`),
+        ]);
+        if (mounted) {
+          if (ordersRes.status === 'fulfilled') {
+            const raw = (ordersRes.value as any)?.data || ordersRes.value;
+            if (Array.isArray(raw)) setLiveOrders(raw);
+          }
+          if (tablesRes.status === 'fulfilled') {
+            const raw = (tablesRes.value as any)?.data || tablesRes.value;
+            if (Array.isArray(raw)) setLiveTables(raw);
+          }
+        }
+      } catch {
+        // use defaults
+      }
+    };
+
+    fetchLiveData();
+    return () => { mounted = false; };
+  }, [refreshing]);
+
+  const activeTablesCount = liveTables.length > 0 
+    ? liveTables.filter((t) => t.serviceStatus !== 'AVAILABLE').length 
+    : 3;
+  const totalTablesCount = liveTables.length > 0 ? liveTables.length : 5;
+  const occupancyPct = totalTablesCount > 0 ? Math.round((activeTablesCount / totalTablesCount) * 100) : 60;
+  
+  const totalRevenue = useMemo(() => {
+    if (liveOrders.length === 0) return '$148,250.00';
+    const sum = liveOrders.reduce((acc, o) => acc + (Number(o.total || o.totalAmount) || 0), 0);
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(sum);
+  }, [liveOrders]);
+
+  const displayedOrders = useMemo(() => {
+    if (liveOrders.length === 0) {
+      return [
+        {
+          id: 'ORD-1001',
+          restaurant: 'Downtown HQ',
+          table: 'Table 01',
+          items: '2x Potato Corn Burger',
+          amount: '$58.76',
+          status: 'Submitted',
+          time: '5m ago',
+        },
+        {
+          id: 'ORD-1002',
+          restaurant: 'Downtown HQ',
+          table: 'Table 03',
+          items: '1x Salmon, 1x Ribeye, 2x Cocktail',
+          amount: '$98.30',
+          status: 'Preparing',
+          time: '12m ago',
+        },
+      ];
+    }
+    return liveOrders.map((o) => {
+      const itemsSummary = Array.isArray(o.items) && o.items.length > 0
+        ? o.items.map((i: any) => `${i.quantity}x ${i.name || i.productNameSnapshot || 'Item'}`).join(', ')
+        : `${o.itemCount || 1} items`;
+      const amountVal = Number(o.total || o.totalAmount || 0);
+      return {
+        id: o.orderNumber || o.id.slice(0, 8),
+        restaurant: 'Downtown HQ',
+        table: o.tableLabel || (o.tableId ? `Table ${o.tableId.slice(0, 4)}` : 'Dine In'),
+        items: itemsSummary,
+        amount: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountVal),
+        status: o.status || 'Active',
+        time: o.createdAt ? new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+      };
+    });
+  }, [liveOrders]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -275,7 +358,7 @@ export default function OwnerDashboard({
                     </div>
                   </div>
                   <div className="mt-3">
-                    <div className="text-2xl font-bold text-white">$148,250.00</div>
+                    <div className="text-2xl font-bold text-white">{totalRevenue}</div>
                     <div className="flex items-center gap-1.5 mt-1 text-xs text-emerald-400">
                       <TrendingUp className="w-3.5 h-3.5" />
                       <span>+18.4% vs last week</span>
@@ -291,9 +374,9 @@ export default function OwnerDashboard({
                     </div>
                   </div>
                   <div className="mt-3">
-                    <div className="text-2xl font-bold text-white">86 / 112</div>
+                    <div className="text-2xl font-bold text-white">{activeTablesCount} / {totalTablesCount}</div>
                     <div className="flex items-center gap-1.5 mt-1 text-xs text-amber-400">
-                      <span>76.8% network capacity</span>
+                      <span>{occupancyPct}% network capacity</span>
                     </div>
                   </div>
                 </div>
@@ -435,47 +518,10 @@ export default function OwnerDashboard({
               <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl overflow-hidden">
                 <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
                   <span className="text-xs font-semibold text-white">Active Orders Queue</span>
-                  <span className="text-xs text-zinc-400">18 orders in progress</span>
+                  <span className="text-xs text-zinc-400">{displayedOrders.length} orders in progress</span>
                 </div>
                 <div className="divide-y divide-zinc-800/60">
-                  {[
-                    {
-                      id: 'ORD-9021',
-                      restaurant: 'Tavonza Downtown',
-                      table: 'Table 04',
-                      items: '2x Truffle Pasta, 1x Wagyu Ribeye, 2x Sparkling Water',
-                      amount: '$142.50',
-                      status: 'Preparing',
-                      time: '6m ago',
-                    },
-                    {
-                      id: 'ORD-9022',
-                      restaurant: 'Café Bistro',
-                      table: 'Table 12',
-                      items: '3x Avocado Toast, 2x Flat White, 1x Berry Bowl',
-                      amount: '$56.00',
-                      status: 'Ready to Serve',
-                      time: '11m ago',
-                    },
-                    {
-                      id: 'ORD-9023',
-                      restaurant: 'Tavonza Gulshan Bistro',
-                      table: 'VIP Room 01',
-                      items: 'Chef Tasting Menu (4 pax), Vintage Champagne 2012',
-                      amount: '$680.00',
-                      status: 'In Kitchen',
-                      time: '14m ago',
-                    },
-                    {
-                      id: 'ORD-9024',
-                      restaurant: 'Tavonza Downtown',
-                      table: 'Bar 02',
-                      items: '2x Smoked Old Fashioned, 1x Truffle Fries',
-                      amount: '$48.00',
-                      status: 'Served',
-                      time: '18m ago',
-                    },
-                  ].map((order) => (
+                  {displayedOrders.map((order) => (
                     <div
                       key={order.id}
                       className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-zinc-800/30 transition-colors"

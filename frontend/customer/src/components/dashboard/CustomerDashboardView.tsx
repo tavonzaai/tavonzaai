@@ -26,6 +26,9 @@ import SearchView from './SearchView';
 import JarvisChatView from './JarvisChatView';
 import OrdersView from './OrdersView';
 import ProfileView from './ProfileView';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { fetchMenuItems, BackendMenuItem } from '@/redux/features/menu-items/menuItemApi';
+import { getItemImage } from '@/lib/menuUtils';
 
 interface CustomerDashboardViewProps {
   showAuthSuccessModal?: boolean;
@@ -37,6 +40,10 @@ export default function CustomerDashboardView({
   initialTab = 'menu',
 }: CustomerDashboardViewProps) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector((state) => state.auth);
+  const { items: backendMenuItems, loading: menuLoading } = useAppSelector((state) => state.menuItems);
+
   const [activeIntent, setActiveIntent] = useState('Date Night');
   const [activeDietary, setActiveDietary] = useState(['Keto & Low Carb']);
   const [jarvisQuery, setJarvisQuery] = useState('');
@@ -48,6 +55,12 @@ export default function CustomerDashboardView({
   const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
   const [chatMessages, setChatMessages] = useState<string[]>([]);
   const [isNavVisible, setIsNavVisible] = useState(true);
+
+  useEffect(() => {
+    if (!backendMenuItems || backendMenuItems.length === 0) {
+      dispatch(fetchMenuItems({ page: 1, limit: 20 }));
+    }
+  }, [dispatch, backendMenuItems]);
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -96,27 +109,27 @@ export default function CustomerDashboardView({
     setActiveTab('jarvis');
   };
 
-
-  const openAranciniDetail = () => {
+  const handleOpenDishDetail = (dish: BackendMenuItem) => {
     setSelectedDishDetail({
-      id: 'arancini-1',
-      title: 'Arancini al Tartufo',
+      id: dish.id,
+      title: dish.name,
       restaurant: 'Maison Verde - Tuscan Trattoria',
-      price: 30.5,
-      rating: '4.5',
+      price: Number(dish.basePrice || 0),
+      rating: '4.8',
       reviewsCount: 142,
-      description:
-        'Crispy risotto balls filled with black truffle, melted mozzarella, and fresh garden herbs served with warm garlic reduction.',
-      isVegetarian: true,
-      containsAllergens: 'Gluten, Dairy, Nuts',
+      description: dish.description || 'Prepared fresh with black truffle, premium cheese, and chef special garden reduction.',
+      isVegetarian: Boolean(dish.isVegetarian),
+      containsAllergens: dish.isVegetarian ? 'Dairy' : 'Gluten, Dairy',
       winePairing: {
         wine: 'Chardonnay',
-        description: "Oaked Chardonnay echoes the truffle's earthy richness.",
+        description: "Oaked Chardonnay echoes the dish's earthy richness.",
       },
       prepTime: '12 min',
       calories: '480 kcal',
-      image: '/images/slide1.jpg',
-      addOns: [
+      image: dish.imageUrl || getItemImage(dish.name),
+      addOns: dish.modifierGroups?.flatMap((mg) =>
+        mg.modifiers.map((m) => ({ name: m.name, price: Number(m.priceDelta || 0) }))
+      ) || [
         { name: 'Extra Parmigiano', price: 1.5 },
         { name: 'Truffle Butter', price: 1.5 },
         { name: 'Rosemary Fries', price: 1.5 },
@@ -158,7 +171,7 @@ export default function CustomerDashboardView({
                 </div>
 
                 <h2 className="text-base sm:text-lg md:text-xl font-semibold text-white leading-snug font-['Inter']">
-                  Good evening, Alex. What are you in the mood for?
+                  Good evening, {user?.name || user?.firstName || 'Alex'}. What are you in the mood for?
                 </h2>
 
                 <p className="text-xs sm:text-sm text-neutral-400 font-normal leading-relaxed font-['Inter']">
@@ -362,74 +375,60 @@ export default function CustomerDashboardView({
                 </p>
               </div>
 
-              {/* Dish Cards */}
+              {/* Dish Cards from real backend database */}
               <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-2">
-                {[
-                  {
-                    title: 'Pan-Seared Line-Caught Seabass',
-                    restaurant: 'Le Gabriel . Contemporary French',
-                    desc: 'Crispy skin sea bass resting on tender carrots & herb reduction.',
-                    price: '€88',
-                    match: '99% Health Match',
-                    img: '/images/seabass.jpg',
-                    macros: ['Protein-48g', 'Carbs-06g', 'Fat-22g'],
-                    tags: ['Keto & Low Carb', 'High Protein'],
-                  },
-                  {
-                    title: 'Arancini al Tartufo',
-                    restaurant: 'Maison Verde - Tuscan Trattoria',
-                    desc: 'Crispy risotto balls filled with black truffle & mozzarella.',
-                    price: '$30.50',
-                    match: '98% Popular Match',
-                    img: '/images/slide1.jpg',
-                    macros: ['Prep-12 min', 'Cal-480 kcal'],
-                    tags: ['Vegetarian', 'Truffle Special'],
-                  },
-                ].map((dish, idx) => (
-                  <div
-                    key={idx}
-                    onClick={openAranciniDetail}
-                    className="w-72 bg-neutral-900 border border-white/10 hover:border-yellow-400/40 cursor-pointer rounded-2xl p-3 flex flex-col gap-2.5 shrink-0 shadow-lg transition"
-                  >
-                    <div className="w-full h-32 relative rounded-xl overflow-hidden">
-                      <Image src={dish.img} alt={dish.title} fill className="object-cover" />
-                      <div className="absolute top-2 left-2 px-2 py-0.5 bg-zinc-900 text-white text-[10px] font-medium rounded-sm">
-                        {dish.match}
-                      </div>
-                      <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black text-yellow-400 text-xs font-bold rounded-sm">
-                        {dish.price}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] text-neutral-400">{dish.restaurant}</span>
-                      <h4 className="text-xs font-semibold text-white">{dish.title}</h4>
-                      <p className="text-[10px] text-white/60 leading-tight">{dish.desc}</p>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      {dish.macros.map((m, mIdx) => (
-                        <span
-                          key={mIdx}
-                          className="px-2 py-0.5 bg-zinc-800 text-[10px] font-medium text-zinc-100 rounded-md"
-                        >
-                          {m}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      {dish.tags.map((t, tIdx) => (
-                        <span
-                          key={tIdx}
-                          className="px-2 py-0.5 bg-zinc-800 text-[10px] font-medium text-yellow-400 rounded-md"
-                        >
-                          {t}
-                        </span>
-                      ))}
-                    </div>
+                {menuLoading && (!backendMenuItems || backendMenuItems.length === 0) ? (
+                  <div className="flex items-center gap-3">
+                    {[1, 2, 3].map((n) => (
+                      <div
+                        key={n}
+                        className="w-72 h-64 bg-neutral-900 border border-white/5 rounded-2xl animate-pulse"
+                      />
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  (backendMenuItems || []).map((dish) => {
+                    const dishImage = dish.imageUrl || getItemImage(dish.name);
+                    const formattedPrice = `$${Number(dish.basePrice || 0).toFixed(2)}`;
+
+                    return (
+                      <div
+                        key={dish.id}
+                        onClick={() => handleOpenDishDetail(dish)}
+                        className="w-72 bg-neutral-900 border border-white/10 hover:border-yellow-400/40 cursor-pointer rounded-2xl p-3 flex flex-col gap-2.5 shrink-0 shadow-lg transition"
+                      >
+                        <div className="w-full h-32 relative rounded-xl overflow-hidden bg-neutral-950">
+                          <Image src={dishImage} alt={dish.name} fill className="object-cover" />
+                          <div className="absolute top-2 left-2 px-2 py-0.5 bg-zinc-900 text-white text-[10px] font-medium rounded-sm">
+                            {dish.isVegetarian ? 'Vegetarian' : 'Chef Special'}
+                          </div>
+                          <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black text-yellow-400 text-xs font-bold rounded-sm">
+                            {formattedPrice}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] text-neutral-400">
+                            {dish.category?.name || 'Maison Verde - Tuscan Trattoria'}
+                          </span>
+                          <h4 className="text-xs font-semibold text-white truncate">{dish.name}</h4>
+                          <p className="text-[10px] text-white/60 leading-tight line-clamp-2">
+                            {dish.description || 'Freshly prepared with authentic ingredients and herbs.'}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 bg-zinc-800 text-[10px] font-medium text-zinc-100 rounded-md">
+                            {dish.isVegetarian ? 'Plant-Based' : 'High Protein'}
+                          </span>
+                          <span className="px-2 py-0.5 bg-zinc-800 text-[10px] font-medium text-yellow-400 rounded-md">
+                            {formattedPrice}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PaymentStatCards,
   HourlyRevenueChart,
@@ -13,9 +13,54 @@ import {
   PAYMENT_METHOD_BREAKDOWN,
 } from './paymentsData';
 import { PaymentStatItem } from './types';
+import { cashierService, getActiveBranchId } from '@/redux/features/cashierApi';
 
 export default function PaymentsView() {
   const [stats, setStats] = useState<PaymentStatItem[]>(INITIAL_PAYMENT_STATS);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadStats = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const rawOrders = await cashierService.getOrders(branchId);
+        if (mounted && Array.isArray(rawOrders)) {
+          const paidOrders = rawOrders.filter((o: any) => o.paymentStatus === 'PAID');
+          const pendingOrders = rawOrders.filter((o: any) => o.paymentStatus !== 'PAID');
+          const settledTotal = paidOrders.reduce((sum: number, o: any) => sum + (o.totalAmount || o.total || 0), 0);
+          const pendingTotal = pendingOrders.reduce((sum: number, o: any) => sum + (o.totalAmount || o.total || 0), 0);
+
+          setStats((prev) =>
+            prev.map((s) => {
+              if (s.id === 'today-revenue') {
+                return {
+                  ...s,
+                  value: `$${settledTotal.toFixed(2)}`,
+                  subtitle: `${paidOrders.length} transactions settled`,
+                };
+              }
+              if (s.id === 'pending-settlements') {
+                return {
+                  ...s,
+                  value: `$${pendingTotal.toFixed(2)}`,
+                  subtitle: `${pendingOrders.length} orders pending checkout`,
+                };
+              }
+              return s;
+            })
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load live payment stats:', err);
+      }
+    };
+    loadStats();
+    const interval = setInterval(loadStats, 10000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleProcessSuccess = (_orderRef: string, amount: number) => {
     setStats((prev) =>

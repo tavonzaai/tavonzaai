@@ -18,7 +18,9 @@
     "@tavonza/observability": "workspace:*",
     "@tavonza/queue": "workspace:*",
     "@tavonza/shared": "workspace:*",
-    "@tavonza/storage": "workspace:*"
+    "@tavonza/storage": "workspace:*",
+    "drizzle-orm": "^0.31.0",
+    "ioredis": "^6.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

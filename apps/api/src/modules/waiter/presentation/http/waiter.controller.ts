@@ -20,6 +20,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -104,6 +105,37 @@ export class WaiterOrdersController {
   constructor(private readonly waiterService: WaiterService) {}
 
   /**
+   * GET /waiter/orders
+   * Lists orders for waiter's assigned tables with filters: scope, status, search, tableId.
+   */
+  @Get()
+  @RequirePermissions(Permission.ORDERS_READ)
+  @ApiOperation({ summary: '[Waiter] Get orders at my tables with search & filters' })
+  @ApiOkResponse({ type: [WaiterOrderSummaryDto] })
+  @ApiQuery({ name: 'branchId', required: false, type: String })
+  @ApiQuery({ name: 'scope', required: false, type: String })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'tableId', required: false, type: String })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  async getOrders(
+    @CurrentUser() user: JwtPayload,
+    @Query('branchId') qBranchId?: string,
+    @Query('scope') scope?: string,
+    @Query('status') status?: string,
+    @Query('tableId') tableId?: string,
+    @Query('search') search?: string,
+  ): Promise<WaiterOrderSummaryDto[]> {
+    const branchId = user.branchId || qBranchId;
+    if (!branchId) throw new BadRequestException('Branch ID is required');
+    return this.waiterService.getOrders(user.sub, branchId, {
+      scope,
+      status,
+      tableId,
+      search,
+    });
+  }
+
+  /**
    * GET /waiter/orders/pending
    * Lists all SUBMITTED orders at waiter's assigned tables — the incoming queue.
    */
@@ -184,10 +216,14 @@ export class WaiterOrdersController {
   @ApiForbiddenResponse({ description: 'Table not assigned to this waiter' })
   async rejectOrder(
     @Param('id') id: string,
-    @Body() body: { reason: string },
+    @Body() body: { reason: string; reasonCode?: any; rejectionReasonCode?: any },
     @CurrentUser() user: JwtPayload,
   ): Promise<WaiterMessageDto> {
-    await this.waiterService.rejectOrder({ orderId: id, reason: body.reason }, user.sub);
+    const reasonCode = body.reasonCode || body.rejectionReasonCode || 'OTHER';
+    await this.waiterService.rejectOrder(
+      { orderId: id, reason: body.reason, reasonCode, rejectionReasonCode: reasonCode },
+      user.sub,
+    );
     return { message: 'Order rejected' };
   }
 

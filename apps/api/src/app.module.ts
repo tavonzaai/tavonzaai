@@ -16,6 +16,8 @@ import { PaymentsModule } from "./modules/payments/payments.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
+import { ShiftsModule } from "./modules/shifts/shifts.module";
+import { InventoryModule } from "./modules/inventory/inventory.module";
 import { AiModule } from "./modules/ai/ai.module";
 import { ApiStorageModule } from "./modules/storage/storage.module";
 
@@ -40,6 +42,8 @@ import { AppController } from "./app.controller";
     OrdersModule,
     KitchenModule,
     PaymentsModule,
+    ShiftsModule,
+    InventoryModule,
     NotificationsModule,
     AuditModule,
     AnalyticsModule,
