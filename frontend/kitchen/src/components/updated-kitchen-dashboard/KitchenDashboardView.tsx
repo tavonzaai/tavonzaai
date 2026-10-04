@@ -105,6 +105,9 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
   const [selectedOrderForFlag, setSelectedOrderForFlag] = useState<KitchenOrder | null>(null);
   const [selectedFlagReason, setSelectedFlagReason] = useState<string>("Food Quality / Problem");
 
+  // Kitchen AI Modal State
+  const [aiModalOpen, setAiModalOpen] = useState<boolean>(false);
+
   // Notifications Popover State
   const [alertsOpen, setAlertsOpen] = useState<boolean>(false);
   const [readyNotification, setReadyNotification] = useState<string | null>(null);

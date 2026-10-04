@@ -176,6 +176,7 @@ const runSeed = async () => {
       userId: customerUser.id,
       loyaltyPoints: 120,
     }).returning();
+    if (!customerEntity) throw new Error('Failed to create customer entity');
 
     // 8. Waiter User
     const [waiterUser] = await db.insert(schema.users).values({
@@ -255,7 +256,8 @@ const runSeed = async () => {
       { branchId: branch.id, label: 'T-05', capacity: 4, shape: 'CIRCLE', serviceStatus: 'AVAILABLE' },
     ]).returning();
 
-    const [t1, t2, t3, t4, t5] = createdTables;
+    const [t1, , t3, t4] = createdTables;
+    if (!t1 || !t3 || !t4) throw new Error('Failed to create tables');
 
     // 12. Active Waiter Table Assignments
     const now = new Date();
@@ -284,6 +286,7 @@ const runSeed = async () => {
       openedByStaffId: waiterStaff.id,
       startedAt: new Date(now.getTime() - 45 * 60 * 1000),
     }).returning();
+    if (!tableSession1) throw new Error('Failed to create tableSession1');
 
     const [guestSession1] = await db.insert(schema.guestSessions).values({
       tableSessionId: tableSession1.id,
@@ -292,6 +295,7 @@ const runSeed = async () => {
       isHostGuest: true,
       status: 'ACTIVE',
     }).returning();
+    if (!guestSession1) throw new Error('Failed to create guestSession1');
 
     // Table 3 Session (Active, party of 4)
     const [tableSession3] = await db.insert(schema.tableSessions).values({
@@ -302,6 +306,7 @@ const runSeed = async () => {
       openedByStaffId: waiterStaff.id,
       startedAt: new Date(now.getTime() - 60 * 60 * 1000),
     }).returning();
+    if (!tableSession3) throw new Error('Failed to create tableSession3');
 
     const [guestSession3] = await db.insert(schema.guestSessions).values({
       tableSessionId: tableSession3.id,
@@ -309,6 +314,7 @@ const runSeed = async () => {
       isHostGuest: true,
       status: 'ACTIVE',
     }).returning();
+    if (!guestSession3) throw new Error('Failed to create guestSession3');
 
     // Table 4 Session (Bill Requested / Payment Pending)
     const [tableSession4] = await db.insert(schema.tableSessions).values({
@@ -319,6 +325,7 @@ const runSeed = async () => {
       openedByStaffId: waiterStaff.id,
       startedAt: new Date(now.getTime() - 90 * 60 * 1000),
     }).returning();
+    if (!tableSession4) throw new Error('Failed to create tableSession4');
 
     const [guestSession4] = await db.insert(schema.guestSessions).values({
       tableSessionId: tableSession4.id,
@@ -326,19 +333,22 @@ const runSeed = async () => {
       isHostGuest: true,
       status: 'ACTIVE',
     }).returning();
+    if (!guestSession4) throw new Error('Failed to create guestSession4');
 
     // 14. Menu Categories & Items
     const [catBurgers] = await db.insert(schema.menuCategories).values({
       restaurantId: restaurant.id,
       name: 'Burgers & Mains',
     }).returning();
+    if (!catBurgers) throw new Error('Failed to create catBurgers');
 
     const [catDrinks] = await db.insert(schema.menuCategories).values({
       restaurantId: restaurant.id,
       name: 'Drinks & Beverages',
     }).returning();
+    if (!catDrinks) throw new Error('Failed to create catDrinks');
 
-    const [itemBurger, itemSalmon, itemSteak, itemCocktail, itemWater] = await db.insert(schema.menuItems).values([
+    const [itemBurger, itemSalmon, itemSteak, itemCocktail] = await db.insert(schema.menuItems).values([
       {
         restaurantId: restaurant.id,
         categoryId: catBurgers.id,
@@ -380,6 +390,9 @@ const runSeed = async () => {
         isAvailable: true,
       },
     ]).returning();
+    if (!itemBurger || !itemSalmon || !itemSteak || !itemCocktail) {
+      throw new Error('Failed to create menu items');
+    }
 
     // 15. Discounts
     await db.insert(schema.discounts).values([
@@ -429,6 +442,7 @@ const runSeed = async () => {
       guestName: 'Sarah Jenkins',
       specialInstructions: 'Extra napkins please',
     }).returning();
+    if (!order1) throw new Error('Failed to create order1');
 
     await db.insert(schema.orderItems).values([
       {
@@ -461,6 +475,7 @@ const runSeed = async () => {
       paymentStatus: 'UNPAID',
       guestName: 'Alex Guest',
     }).returning();
+    if (!order2) throw new Error('Failed to create order2');
 
     await db.insert(schema.orderItems).values([
       {
@@ -516,6 +531,7 @@ const runSeed = async () => {
       paymentStatus: 'UNPAID',
       guestName: 'Michael Scott',
     }).returning();
+    if (!order3) throw new Error('Failed to create order3');
 
     await db.insert(schema.orderItems).values([
       {
@@ -554,12 +570,14 @@ const runSeed = async () => {
       address: '100 Farmer Way, Ruralville',
       isActive: true,
     }).returning();
+    if (!supplier) throw new Error('Failed to create supplier');
 
     const [invCategory] = await db.insert(schema.inventoryCategories).values({
       branchId: branch.id,
       name: 'Produce & Meats',
       description: 'Raw meat, poultry, seafood and fresh vegetables',
     }).returning();
+    if (!invCategory) throw new Error('Failed to create invCategory');
 
     await db.insert(schema.inventoryItems).values([
       {
