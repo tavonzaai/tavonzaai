@@ -141,6 +141,12 @@ output "s3_access_key_id" {
   value       = module.s3.s3_access_key_id
 }
 
+output "s3_secret_access_key" {
+  description = "Secret Access Key for dedicated S3 IAM user"
+  value       = module.s3.s3_secret_access_key
+  sensitive   = true
+}
+
 output "secrets_manager_secret_name" {
   description = "Name of the AWS Secrets Manager secret"
   value       = module.secrets_manager.secret_name
