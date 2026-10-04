@@ -20,24 +20,43 @@ export function loadStorageConfig(overrides?: Partial<StorageConfig>): StorageCo
     env.S3_REGION ||
     'eu-west-2';
 
-  const accessKeyId = overrides?.credentials?.accessKeyId || env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = overrides?.credentials?.secretAccessKey || env.AWS_SECRET_ACCESS_KEY;
-  const sessionToken = overrides?.credentials?.sessionToken || env.AWS_SESSION_TOKEN;
+  const accessKeyId =
+    overrides?.credentials?.accessKeyId ||
+    env.S3_ACCESS_KEY_ID ||
+    env.AWS_ACCESS_KEY_ID;
+
+  const secretAccessKey =
+    overrides?.credentials?.secretAccessKey ||
+    env.S3_SECRET_ACCESS_KEY ||
+    env.AWS_SECRET_ACCESS_KEY;
+
+  const sessionToken =
+    overrides?.credentials?.sessionToken ||
+    env.S3_SESSION_TOKEN ||
+    env.AWS_SESSION_TOKEN;
 
   const credentials =
     accessKeyId && secretAccessKey
       ? { accessKeyId, secretAccessKey, sessionToken }
       : undefined;
 
-  const endpoint = overrides?.endpoint || env.S3_ENDPOINT || undefined;
+  const endpoint =
+    overrides && 'endpoint' in overrides
+      ? overrides.endpoint || undefined
+      : env.S3_ENDPOINT || undefined;
 
   const forcePathStyle =
-    overrides?.forcePathStyle ??
-    (env.S3_FORCE_PATH_STYLE === 'true' || env.S3_FORCE_PATH_STYLE === '1');
+    overrides && 'forcePathStyle' in overrides
+      ? overrides.forcePathStyle
+      : env.S3_FORCE_PATH_STYLE === 'true' || env.S3_FORCE_PATH_STYLE === '1';
 
   const cdnBaseUrl = overrides?.cdnBaseUrl || env.CDN_BASE_URL || env.CLOUDFRONT_DOMAIN || undefined;
 
   const maxRetries = overrides?.maxRetries ?? (env.S3_MAX_RETRIES ? parseInt(env.S3_MAX_RETRIES, 10) : 3);
+
+  const defaultSignedUrlExpiresIn =
+    overrides?.defaultSignedUrlExpiresIn ??
+    (env.S3_SIGNED_URL_EXPIRATION ? parseInt(env.S3_SIGNED_URL_EXPIRATION, 10) : 86400);
 
   return {
     bucket,
@@ -47,5 +66,6 @@ export function loadStorageConfig(overrides?: Partial<StorageConfig>): StorageCo
     forcePathStyle,
     cdnBaseUrl,
     maxRetries,
+    defaultSignedUrlExpiresIn,
   };
 }

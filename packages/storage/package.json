@@ -8,7 +8,8 @@
     "build": "tsc",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test:s3": "tsx scripts/verify-s3.ts"
+    "test:s3": "tsx scripts/verify-s3.ts",
+    "test:minio": "tsx scripts/verify-minio.ts"
   },
   "devDependencies": {
     "@types/mime-types": "^3.0.1",

@@ -42,6 +42,11 @@ export interface StorageConfig {
    * Maximum retry attempts for S3 operations
    */
   maxRetries?: number;
+
+  /**
+   * Default expiration in seconds for signed download URLs (default: 86400 = 24 hours)
+   */
+  defaultSignedUrlExpiresIn?: number;
 }
 
 export type SupportedFileBody = Buffer | Uint8Array | Readable | string | Blob;
@@ -107,6 +112,11 @@ export interface UploadFileOptions {
    * Whether to format the returned URL using the CDN / public domain
    */
   isPublic?: boolean;
+
+  /**
+   * Expiration time in seconds for the returned signed URL. Defaults to defaultSignedUrlExpiresIn (86400 = 24 hours).
+   */
+  signedUrlExpiresIn?: number;
 }
 
 export interface UploadMultipartOptions extends UploadFileOptions {
@@ -170,6 +180,11 @@ export interface UploadBase64Options {
    * Whether to format returned URL using CDN / public URL
    */
   isPublic?: boolean;
+
+  /**
+   * Expiration time in seconds for the returned signed URL. Defaults to defaultSignedUrlExpiresIn (86400 = 24 hours).
+   */
+  signedUrlExpiresIn?: number;
 }
 
 export interface UploadFromUrlOptions {
@@ -207,6 +222,11 @@ export interface UploadFromUrlOptions {
    * Whether to format returned URL using CDN / public URL
    */
   isPublic?: boolean;
+
+  /**
+   * Expiration time in seconds for the returned signed URL. Defaults to defaultSignedUrlExpiresIn (86400 = 24 hours).
+   */
+  signedUrlExpiresIn?: number;
 }
 
 export interface UploadResult {
@@ -323,6 +343,11 @@ export interface PresignedUploadResult {
    * The final URL where the file will be accessible after upload
    */
   publicUrl: string;
+
+  /**
+   * Pre-authorized signed URL to retrieve the object immediately after upload
+   */
+  signedUrl?: string;
 }
 
 export interface PresignedPostOptions {
@@ -392,6 +417,11 @@ export interface PresignedPostResult {
    * Final accessible URL
    */
   publicUrl: string;
+
+  /**
+   * Pre-authorized signed URL to retrieve the object immediately after upload
+   */
+  signedUrl?: string;
 }
 
 export interface PresignedDownloadOptions {
