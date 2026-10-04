@@ -324,6 +324,19 @@ module "ecs" {
         { name = "PORT", value = tostring(var.cashier_port) }
       ]
     }
+    manager = {
+      name             = "tavonzaai-prod-manager"
+      container_image  = "${module.ecr.repository_urls["manager"]}:latest"
+      container_port   = var.manager_port
+      cpu              = 256
+      memory           = 512
+      desired_count    = 1
+      target_group_arn = module.alb.manager_target_group_arn
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "PORT", value = tostring(var.manager_port) }
+      ]
+    }
     worker = {
       name            = "tavonzaai-prod-worker"
       container_image = "${module.ecr.repository_urls["worker"]}:latest"
@@ -412,6 +425,7 @@ module "alb" {
   kitchen_subdomain    = var.kitchen_subdomain
   cashier_subdomain    = var.cashier_subdomain
   admin_subdomain      = var.admin_subdomain
+  manager_subdomain    = var.manager_subdomain
   target_type          = "ip"
   backend_instance_id  = null
   frontend_instance_id = null
@@ -422,12 +436,14 @@ module "alb" {
   kitchen_port                     = var.kitchen_port
   cashier_port                     = var.cashier_port
   admin_port                       = var.admin_port
+  manager_port                     = var.manager_port
   backend_health_check_path        = var.backend_health_check_path
   nextjs_health_check_path         = var.nextjs_health_check_path
   ai_health_check_path             = var.ai_health_check_path
   kitchen_health_check_path        = var.kitchen_health_check_path
   cashier_health_check_path        = var.cashier_health_check_path
   admin_health_check_path          = var.admin_health_check_path
+  manager_health_check_path        = var.manager_health_check_path
   health_check_interval            = var.health_check_interval
   health_check_timeout             = var.health_check_timeout
   health_check_healthy_threshold   = var.health_check_healthy_threshold
@@ -446,6 +462,7 @@ module "route53" {
   kitchen_subdomain   = var.kitchen_subdomain
   cashier_subdomain   = var.cashier_subdomain
   admin_subdomain     = var.admin_subdomain
+  manager_subdomain   = var.manager_subdomain
   alb_dns_name        = module.alb.alb_dns_name
   alb_zone_id         = module.alb.alb_zone_id
   extra_txt_records   = var.extra_txt_records

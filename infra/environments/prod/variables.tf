@@ -99,6 +99,12 @@ variable "admin_subdomain" {
   default     = "admin"
 }
 
+variable "manager_subdomain" {
+  description = "Subdomain prefix for Manager frontend (e.g. prod-manager)"
+  type        = string
+  default     = "prod-manager"
+}
+
 variable "enable_https" {
   description = "Whether to configure HTTPS with ACM certificate validation in Route 53"
   type        = bool
@@ -207,6 +213,12 @@ variable "admin_port" {
   default     = 3043
 }
 
+variable "manager_port" {
+  description = "Port the Manager Docker container listens on"
+  type        = number
+  default     = 3103
+}
+
 variable "backend_health_check_path" {
   description = "Health check HTTP endpoint for backend service"
   type        = string
@@ -239,6 +251,12 @@ variable "cashier_health_check_path" {
 
 variable "admin_health_check_path" {
   description = "Health check HTTP endpoint for Admin dashboard service"
+  type        = string
+  default     = "/"
+}
+
+variable "manager_health_check_path" {
+  description = "Health check HTTP endpoint for Manager dashboard service"
   type        = string
   default     = "/"
 }

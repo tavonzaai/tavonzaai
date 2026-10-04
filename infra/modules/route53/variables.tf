@@ -44,6 +44,12 @@ variable "admin_subdomain" {
   default     = "admin"
 }
 
+variable "manager_subdomain" {
+  description = "Subdomain prefix for Manager frontend (e.g. manager or prod-manager)"
+  type        = string
+  default     = "manager"
+}
+
 variable "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
   type        = string
