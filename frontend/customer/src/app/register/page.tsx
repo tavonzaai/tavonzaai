@@ -5,12 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import CreateAccountView from '@/components/auth/CreateAccountView';
 import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { getMe } from '@/redux/features/authApi';
 import { setCookie } from '@/redux/api/baseApi';
 
 function RegisterContent() {
   const router = useRouter();
-  const dispatch = useAppDispatch();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const table = searchParams.get('table');
@@ -48,12 +46,25 @@ function RegisterContent() {
     );
   }
 
+  const handleAccountCreated = (email?: string) => {
+    const tableParam = table ? `&table=${encodeURIComponent(table)}` : '';
+    const emailParam = email ? `email=${encodeURIComponent(email)}&` : '';
+    router.push(`/verify-otp?${emailParam}type=email_verification${tableParam}`);
+  };
+
   return (
     <AuthDesktopLayout>
       <CreateAccountView
-        onAccountCreated={() => router.push(`/welcome${forwardParam}`)}
-        onGoBackToLogin={() => router.push(`/login${forwardParam}`)}
-      /> 
+        onAccountCreated={handleAccountCreated}
+        onGoBackToLogin={(email?: string) => {
+          const emailQuery = email ? `email=${encodeURIComponent(email)}` : '';
+          let target = `/login${forwardParam}`;
+          if (emailQuery) {
+            target += target.includes('?') ? `&${emailQuery}` : `?${emailQuery}`;
+          }
+          router.push(target);
+        }}
+      />
     </AuthDesktopLayout>
   );
 }

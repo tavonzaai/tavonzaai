@@ -2,7 +2,9 @@
 Tavonza AI - Full Test Suite
 All tests use DEV_MODE_MOCK_BACKEND=true - no real network calls.
 """
-import json, os, sys
+import os
+import sys
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -31,21 +33,25 @@ class TestModels:
         assert a.actor_type == "USER"
     def test_actor_type_literal_enforced(self):
         from pydantic import ValidationError
+
         from src.models import ActorContext
         with pytest.raises(ValidationError):
             ActorContext(actor_type="HACKER", organization_id="org1", branch_id="b1")
     def test_chat_request_max_message_length(self):
         from pydantic import ValidationError
+
         from src.models import ChatRequest
         with pytest.raises(ValidationError):
             ChatRequest(session_id="s1", message="x" * 2001)
     def test_chat_request_session_id_max_length(self):
         from pydantic import ValidationError
+
         from src.models import ChatRequest
         with pytest.raises(ValidationError):
             ChatRequest(session_id="x" * 129, message="hi")
     def test_voice_request_max_length(self):
         from pydantic import ValidationError
+
         from src.models import SynthesizeVoiceRequest
         with pytest.raises(ValidationError):
             SynthesizeVoiceRequest(text="x" * 1001)
@@ -111,6 +117,32 @@ class TestToolRegistry:
     def test_get_tool_unknown_returns_none(self):
         from src.tools.registry.registry import get_tool
         assert get_tool("drop_database") is None
+    def test_get_menu_schema_has_optional_filters(self):
+        from src.tools.registry.registry import get_tool
+        t = get_tool("get_menu")
+        params = t["schema"]["function"]["parameters"]
+        assert params["required"] == []
+        assert "category" in params["properties"]
+        assert "dietary_preference" in params["properties"]
+        assert "exclude_allergens" in params["properties"]
+        assert "max_price" in params["properties"]
+    def test_mock_get_menu_dietary_filtering(self):
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        res = c._mock_tool_result("get_menu", {"dietary_preference": "keto"})
+        items = res["data"]["items"]
+        assert len(items) > 0
+        for item in items:
+            assert "keto" in [d.lower() for d in item.get("dietary", [])]
+    def test_mock_get_menu_exclude_allergens(self):
+        from src.internal_client import InternalClient
+        c = InternalClient()
+        res = c._mock_tool_result("get_menu", {"exclude_allergens": "dairy,gluten"})
+        items = res["data"]["items"]
+        assert len(items) > 0
+        for item in items:
+            assert "dairy" not in item.get("allergens", [])
+            assert "gluten" not in item.get("allergens", [])
 
 # --- 5. CONVERSATION STORE ---
 class TestConversationStore:

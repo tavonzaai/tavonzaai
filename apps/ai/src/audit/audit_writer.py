@@ -68,6 +68,7 @@ async def write_tool_audit(
         "actorType": actor.actor_type,
         "actingUserId": actor.acting_user_id,
         "aiAgentId": actor.ai_agent_id,
+        "role": actor.role,
         "organizationId": actor.organization_id,
         "restaurantId": actor.restaurant_id,
         "branchId": actor.branch_id,
@@ -78,6 +79,5 @@ async def write_tool_audit(
         "authorizationResult": "ALLOW" if result.get("ok", True) else "DENY",
         "timestamp": datetime.now(UTC).isoformat(),
         "source": "tavonza-ai",
-
     }
     await client.write_audit(record)
