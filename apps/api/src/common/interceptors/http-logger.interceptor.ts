@@ -52,17 +52,14 @@ export class HttpLoggerInterceptor implements NestInterceptor {
             requestId,
           });
         },
-        error: (err: unknown) => {
+        error: () => {
+          // Detailed error and stack trace are logged by AllExceptionsFilter
           const duration = formatDuration(Date.now() - start);
-          const status   = (err as any)?.status ?? 500;
-
-          this.logger.error(`${method} ${originalUrl} ${status}`, {
-            status,
+          this.logger.debug(`${method} ${originalUrl} failed in ${duration}`, {
             duration,
             ip,
             userAgent,
             requestId,
-            error: (err as any)?.message,
           });
         },
       }),

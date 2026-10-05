@@ -13,6 +13,10 @@ import type {
   InventoryItemEntity,
   InventoryUnit,
 } from '../../domain/entities/inventory.entity';
+import {
+  ResourceNotFoundException,
+  InternalOperationException,
+} from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzleInventoryRepository {
@@ -41,7 +45,7 @@ export class DrizzleInventoryRepository {
       })
       .returning();
 
-    if (!created) throw new Error('Failed to create supplier');
+    if (!created) throw new InternalOperationException('Failed to create supplier');
     return this.mapSupplier(created);
   }
 
@@ -80,7 +84,7 @@ export class DrizzleInventoryRepository {
       })
       .returning();
 
-    if (!created) throw new Error('Failed to create inventory category');
+    if (!created) throw new InternalOperationException('Failed to create inventory category');
     return this.mapCategory(created);
   }
 
@@ -122,7 +126,7 @@ export class DrizzleInventoryRepository {
       })
       .returning();
 
-    if (!created) throw new Error('Failed to create inventory item');
+    if (!created) throw new InternalOperationException('Failed to create inventory item');
     return this.mapItem(created);
   }
 
@@ -161,7 +165,7 @@ export class DrizzleInventoryRepository {
       .where(eq(inventoryItems.id, id))
       .returning();
 
-    if (!updated) throw new Error(`Inventory item ${id} not found`);
+    if (!updated) throw new ResourceNotFoundException('InventoryItem', id);
     return this.mapItem(updated);
   }
 

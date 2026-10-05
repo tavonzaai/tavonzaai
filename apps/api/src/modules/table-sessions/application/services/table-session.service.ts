@@ -21,6 +21,7 @@ import {
 } from '@nestjs/common';
 import { eq, and, gt, desc, inArray } from 'drizzle-orm';
 import { JwtService } from '@nestjs/jwt';
+import { InternalOperationException } from '../../../../common/errors/app.exception';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -199,7 +200,7 @@ export class TableSessionService {
       .returning();
 
     if (!guest) {
-      throw new Error('Failed to create guest session');
+      throw new InternalOperationException('Failed to create guest session');
     }
 
     await this.outboxService.publishEvent({

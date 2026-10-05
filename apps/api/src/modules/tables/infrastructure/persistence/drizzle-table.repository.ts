@@ -15,6 +15,7 @@ import type {
   TableOperationalFlag,
   ReservationStatus,
 } from '../../domain/entities/table.entity';
+import { InternalOperationException } from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzleTableRepository {
@@ -45,7 +46,7 @@ export class DrizzleTableRepository {
       })
       .returning();
 
-    if (!created) throw new Error('Failed to create table');
+    if (!created) throw new InternalOperationException('Failed to create table');
     return this.mapTable(created);
   }
 
@@ -152,7 +153,7 @@ export class DrizzleTableRepository {
       })
       .returning();
 
-    if (!created) throw new Error('Failed to create reservation');
+    if (!created) throw new InternalOperationException('Failed to create reservation');
     return this.mapReservation(created);
   }
 

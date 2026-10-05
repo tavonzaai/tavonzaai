@@ -6,6 +6,10 @@ import {
   workShifts,
 } from '@tavonza/database';
 import type { WorkShiftEntity } from '../../domain/entities/shift.entity';
+import {
+  InternalOperationException,
+  ResourceNotFoundException,
+} from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzleShiftRepository {
@@ -38,7 +42,7 @@ export class DrizzleShiftRepository {
       })
       .returning();
 
-    if (!created) throw new Error('Failed to create work shift');
+    if (!created) throw new InternalOperationException('Failed to create work shift');
     return this.mapShift(created);
   }
 
@@ -94,7 +98,7 @@ export class DrizzleShiftRepository {
       .where(eq(workShifts.id, id))
       .returning();
 
-    if (!updated) throw new Error(`Work shift ${id} not found`);
+    if (!updated) throw new ResourceNotFoundException('WorkShift', id);
     return this.mapShift(updated);
   }
 

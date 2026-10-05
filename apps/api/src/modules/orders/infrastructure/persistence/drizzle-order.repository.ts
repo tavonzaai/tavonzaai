@@ -26,6 +26,7 @@ import {
   type OrderItemAddOn,
 } from '../../domain/entities/order.entity';
 import type { OrderStatus } from '../../domain/enums/order-status.enum';
+import { ResourceNotFoundException } from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzleOrderRepository implements IOrderRepository {
@@ -222,7 +223,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
       .where(eq(orderItems.id, itemId));
 
     if (!currentItem) {
-      throw new Error(`Order item ${itemId} not found`);
+      throw new ResourceNotFoundException('OrderItem', itemId);
     }
 
     const newQuantity = input.quantity ?? currentItem.quantity;
@@ -247,7 +248,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
       .where(eq(orderItems.id, itemId));
 
     if (!currentItem) {
-      throw new Error(`Order item ${itemId} not found`);
+      throw new ResourceNotFoundException('OrderItem', itemId);
     }
 
     await this.db.delete(orderItems).where(eq(orderItems.id, itemId));
