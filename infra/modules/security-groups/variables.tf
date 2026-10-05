@@ -55,6 +55,12 @@ variable "manager_port" {
   default     = 3103
 }
 
+variable "waiter_port" {
+  description = "Port the Waiter application listens on"
+  type        = number
+  default     = 3101
+}
+
 variable "postgres_port" {
   description = "Port PostgreSQL database listens on"
   type        = number

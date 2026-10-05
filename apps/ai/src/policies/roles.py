@@ -119,6 +119,35 @@ ROLE_ALLOWED_TOOLS: Final[dict[str, set[str]]] = {
 }
 
 
+ROLE_ALIASES: Final[dict[str, str]] = {
+    "branch_manager": RoleLabel.MANAGER,
+    "manager": RoleLabel.MANAGER,
+    "kitchen_staff": RoleLabel.KITCHEN,
+    "kitchen": RoleLabel.KITCHEN,
+    "chef": RoleLabel.KITCHEN,
+    "cook": RoleLabel.KITCHEN,
+    "bartender": RoleLabel.KITCHEN,
+    "waiter": RoleLabel.WAITER,
+    "server": RoleLabel.WAITER,
+    "host": RoleLabel.WAITER,
+    "cashier": RoleLabel.CASHIER,
+    "customer": RoleLabel.CUSTOMER,
+    "guest": RoleLabel.CUSTOMER,
+    "admin": RoleLabel.SUPER_ADMIN,
+    "super_admin": RoleLabel.SUPER_ADMIN,
+    "owner": RoleLabel.OWNER,
+    "restaurant_owner": RoleLabel.OWNER,
+}
+
+
+def normalize_role(role: str | None) -> str:
+    """Normalizes platform/staff/global role strings into canonical RoleLabel."""
+    if not role:
+        return ""
+    clean = str(role).strip().lower().replace("-", "_").replace(" ", "_")
+    return ROLE_ALIASES.get(clean, clean)
+
+
 def resolve_role_permissions(
     role: str | None,
     explicit_permissions: list[str] | None = None,
@@ -129,7 +158,7 @@ def resolve_role_permissions(
     """
     if not role:
         return list(dict.fromkeys(explicit_permissions or []))
-    canonical_role = role.lower()
+    canonical_role = normalize_role(role)
     defaults = ROLE_DEFAULT_PERMISSIONS.get(canonical_role, [])
     if "*" in defaults or (explicit_permissions and "*" in explicit_permissions):
         return ["*"]
@@ -141,13 +170,13 @@ def resolve_role_permissions(
 
 def get_allowed_tools_for_role(role: str) -> set[str]:
     """Returns the set of AI tools approved for this role."""
-    canonical_role = role.lower()
+    canonical_role = normalize_role(role)
     return ROLE_ALLOWED_TOOLS.get(canonical_role, set())
 
 
 def get_blocked_tools_for_role(role: str) -> set[str]:
     """Returns the set of AI tools strictly blocked for this role."""
-    canonical_role = role.lower()
+    canonical_role = normalize_role(role)
     allowed = ROLE_ALLOWED_TOOLS.get(canonical_role)
     if allowed is None:
         # Unknown role: fail closed, block all tools
@@ -157,7 +186,7 @@ def get_blocked_tools_for_role(role: str) -> set[str]:
 
 def is_tool_allowed_for_role(tool_name: str, role: str) -> bool:
     """Check if tool is in the allowed set for the given role."""
-    canonical_role = role.lower()
+    canonical_role = normalize_role(role)
     allowed = ROLE_ALLOWED_TOOLS.get(canonical_role)
     if allowed is None:
         return False

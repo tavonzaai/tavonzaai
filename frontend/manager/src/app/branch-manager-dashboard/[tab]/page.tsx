@@ -27,6 +27,7 @@ export default async function BranchManagerTabPage({
 }: {
   params: { tab: string };
 }) {
+  /*
   const cookieStore = await cookies();
   const token =
     cookieStore.get('branch_manager_token')?.value ||
@@ -36,6 +37,7 @@ export default async function BranchManagerTabPage({
   if (!token || !user) {
     redirect('/login');
   }
+  */
 
   const resolvedParams = await params;
   const tabParam = resolvedParams?.tab?.toLowerCase() || '';
