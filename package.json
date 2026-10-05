@@ -18,7 +18,8 @@
     "db:push": "pnpm --filter @tavonza/database db:push",
     "db:generate": "pnpm --filter @tavonza/database db:generate",
     "db:migrate": "pnpm --filter @tavonza/database db:migrate",
-    "db:studio": "pnpm --filter @tavonza/database db:studio"
+    "db:studio": "pnpm --filter @tavonza/database db:studio",
+    "redis:connect": "./infra/scripts/connect-live-redis.sh"
   },
   "devDependencies": {
     "turbo": "^2.0.0",
