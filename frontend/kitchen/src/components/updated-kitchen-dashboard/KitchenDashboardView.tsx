@@ -176,7 +176,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
   const newCount = orders.filter((o) => o.status === "NEW").length;
   const preparingCount = orders.filter((o) => o.status === "PREPARING").length;
   const readyCount = orders.filter((o) => o.status === "READY").length;
-  const overdueCount = orders.filter((o) => o.status === "OVERDUE" || !!o.flaggedIssue).length;
+  const overdueCount = orders.filter((o) => o.status !== "READY" && (o.status === "OVERDUE" || !!o.flaggedIssue)).length;
 
   // Filtered orders
   const filteredOrders = orders.filter((order) => {
@@ -186,7 +186,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     if (activeTabFilter === "NEW") return order.status === "NEW";
     if (activeTabFilter === "PREPARING") return order.status === "PREPARING";
     if (activeTabFilter === "READY") return order.status === "READY";
-    if (activeTabFilter === "OVERDUE") return order.status === "OVERDUE" || !!order.flaggedIssue;
+    if (activeTabFilter === "OVERDUE") return order.status !== "READY" && (order.status === "OVERDUE" || !!order.flaggedIssue);
     return true;
   });
 
@@ -209,7 +209,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
         const allCompleted = updatedItems.every((i) => i.isCompleted);
         const newStatus: OrderStatus = allCompleted
           ? "READY"
-          : order.status === "NEW"
+          : order.status === "READY" || order.status === "NEW"
           ? "PREPARING"
           : order.status;
 
@@ -227,6 +227,25 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
         };
       })
     );
+  };
+
+  const handleMarkOrderReady = (orderId: string) => {
+    setOrders((prev) =>
+      prev.map((order) => {
+        if (order.id !== orderId) return order;
+        const updatedItems = order.items.map((item) => ({ ...item, isCompleted: true }));
+        return {
+          ...order,
+          items: updatedItems,
+          status: "READY" as OrderStatus,
+        };
+      })
+    );
+    playChime("ready");
+    const targetOrder = orders.find((o) => o.id === orderId);
+    const notif = `Ticket ${targetOrder?.orderNumber || ""} items completed! Table ${targetOrder?.table || ""} ready.`;
+    setReadyNotification(notif);
+    toast.success(notif);
   };
 
   const openFlagModal = (order: KitchenOrder) => {
@@ -359,9 +378,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                 className="h-9 px-3 bg-black border border-yellow-400 rounded-md flex items-center justify-between gap-3 text-xs font-semibold text-white uppercase tracking-wider min-w-[145px] hover:bg-zinc-900 transition cursor-pointer"
               >
                 <span>
-                  {selectedStation === "Grill Station"
-                    ? "GRILL SATION"
-                    : selectedStation.toUpperCase()}
+                  {selectedStation.toUpperCase()}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
               </button>
@@ -432,7 +449,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                 <span className="text-[11px] text-zinc-400 font-medium block">Preparing</span>
               </button>
 
-              {/* Card 3: 04 Preparing (Ready to Serve) */}
+              {/* Card 3: Ready to Serve */}
               <button
                 type="button"
                 onClick={() => setActiveTabFilter(activeTabFilter === "READY" ? "ALL" : "READY")}
@@ -445,10 +462,10 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                 <span className="text-[#f59e0b] font-bold text-base sm:text-lg leading-tight block">
                   {readyCount.toString().padStart(2, "0")}
                 </span>
-                <span className="text-[11px] text-zinc-400 font-medium block">Preparing</span>
+                <span className="text-[11px] text-zinc-400 font-medium block">Ready</span>
               </button>
 
-              {/* Card 4: 04 Preparing (Overdue) */}
+              {/* Card 4: Overdue */}
               <button
                 type="button"
                 onClick={() => setActiveTabFilter(activeTabFilter === "OVERDUE" ? "ALL" : "OVERDUE")}
@@ -461,7 +478,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                 <span className="text-[#f59e0b] font-bold text-base sm:text-lg leading-tight block">
                   {overdueCount.toString().padStart(2, "0")}
                 </span>
-                <span className="text-[11px] text-zinc-400 font-medium block">Preparing</span>
+                <span className="text-[11px] text-zinc-400 font-medium block">Overdue</span>
               </button>
             </div>
 
@@ -576,10 +593,10 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
             {filteredOrders.map((order, idx) => {
-              const isOverdue = order.status === "OVERDUE" || !!order.flaggedIssue;
-              const isPreparing = order.status === "PREPARING";
               const isReady = order.status === "READY";
-              const isNew = order.status === "NEW";
+              const isOverdue = !isReady && (order.status === "OVERDUE" || !!order.flaggedIssue);
+              const isPreparing = !isReady && !isOverdue && order.status === "PREPARING";
+              const isNew = !isReady && !isOverdue && order.status === "NEW";
 
               return (
                 <div
@@ -621,8 +638,8 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                       )}
                     </div>
 
-                    {/* Flagged Issue Sub-banner if any */}
-                    {order.flaggedIssue && (
+                    {/* Flagged Issue Sub-banner if any (only when order is not yet ready) */}
+                    {order.flaggedIssue && !isReady && (
                       <div className="mb-3 p-2 bg-red-950/80 border border-red-500/40 rounded-lg text-xs text-red-200 flex items-center gap-2">
                         <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
                         <span>Issue: {order.flaggedIssue}</span>
@@ -707,21 +724,14 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                           <AlertTriangle className="w-4 h-4 text-zinc-400" />
                           <span>Flag issue</span>
                         </button>
-                        {isPreparing && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // Mark all items complete
-                              order.items.forEach((it) => {
-                                if (!it.isCompleted) handleToggleItem(order.id, it.id);
-                              });
-                            }}
-                            className="px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition text-xs cursor-pointer"
-                            title="Mark ticket ready"
-                          >
-                            Ready
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleMarkOrderReady(order.id)}
+                          className="px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition text-xs cursor-pointer"
+                          title="Mark ticket ready"
+                        >
+                          Ready
+                        </button>
                       </div>
                     )}
 

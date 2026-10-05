@@ -72,7 +72,8 @@ function MenuContent() {
     setMounted(true);
   }, []);
 
-  // Redirect to login if user is not authenticated
+  /*
+  // Optional: Redirect to login if user is not authenticated
   useEffect(() => {
     if (!mounted) return;
     const token = getAuthToken();
@@ -84,17 +85,18 @@ function MenuContent() {
       router.replace(`/login${forwardParam}`);
     }
   }, [mounted, isInitialized, isAuthenticated, user, forwardParam, router]);
+  */
 
   // Fetch dynamic categories on mount
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (mounted) {
       dispatch(fetchMenuCategories({ page: 1, limit: 100 }));
     }
-  }, [dispatch, isAuthenticated, user]);
+  }, [dispatch, mounted]);
 
   // Fetch items via Backend Search and Filter API
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (mounted) {
       dispatch(
         fetchMenuItems({
           page: 1,
@@ -104,7 +106,7 @@ function MenuContent() {
         })
       );
     }
-  }, [dispatch, isAuthenticated, user, searchQuery, selectedCategory]);
+  }, [dispatch, mounted, searchQuery, selectedCategory]);
 
   // Transform dynamic categories with "ALL" chip
   const categories: DisplayCategory[] = useMemo(() => {
@@ -174,12 +176,12 @@ function MenuContent() {
 
   const isDataLoading = (categoriesLoading || itemsLoading) && allItems.length === 0;
 
-  if (!mounted || !isInitialized || !isAuthenticated || !user) {
+  if (!mounted || !isInitialized) {
     return (
       <div className="w-full min-h-screen bg-black flex flex-col items-center justify-center text-white p-4">
         <div className="w-10 h-10 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-stone-300 text-sm font-medium tracking-wide">
-          {!isAuthenticated && isInitialized ? 'Redirecting to login...' : 'Loading Tavonza Menu...'}
+          Loading Tavonza Menu...
         </p>
       </div>
     );

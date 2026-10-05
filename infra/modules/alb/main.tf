@@ -266,6 +266,42 @@ resource "aws_lb_target_group_attachment" "manager" {
   port             = var.manager_port
 }
 
+# 8. Waiter Frontend Target Group
+resource "aws_lb_target_group" "waiter" {
+  name        = "${var.project_name}-${var.environment}-${var.target_type == "ip" ? "ip-" : ""}wait-tg"
+  port        = var.waiter_port
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = var.target_type
+
+  health_check {
+    enabled             = true
+    interval            = var.health_check_interval
+    path                = var.waiter_health_check_path
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = var.health_check_timeout
+    healthy_threshold   = var.health_check_healthy_threshold
+    unhealthy_threshold = var.health_check_unhealthy_threshold
+    matcher             = "200-399"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-${var.environment}-wait-tg"
+  })
+}
+
+resource "aws_lb_target_group_attachment" "waiter" {
+  count            = var.target_type == "instance" ? 1 : 0
+  target_group_arn = aws_lb_target_group.waiter.arn
+  target_id        = coalesce(var.waiter_instance_id, var.frontend_instance_id)
+  port             = var.waiter_port
+}
+
 locals {
   active_listener_arn = var.enable_https ? aws_lb_listener.https[0].arn : aws_lb_listener.http.arn
 }
@@ -442,6 +478,26 @@ resource "aws_lb_listener_rule" "manager" {
   tags = var.tags
 }
 
+# Rule 6b: Waiter Subdomain -> Waiter Target Group (waiter.example.com)
+resource "aws_lb_listener_rule" "waiter" {
+  count        = var.waiter_subdomain != "" ? 1 : 0
+  listener_arn = local.active_listener_arn
+  priority     = 38
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.waiter.arn
+  }
+
+  condition {
+    host_header {
+      values = ["${var.waiter_subdomain}.${var.domain_name}"]
+    }
+  }
+
+  tags = var.tags
+}
+
 # Rule 7: Customer Domain -> Next.js Target Group (root domain/www, or dedicated subdomain e.g. prod.example.com)
 resource "aws_lb_listener_rule" "customer" {
   listener_arn = local.active_listener_arn
@@ -576,6 +632,25 @@ resource "aws_lb_listener_rule" "manager_path" {
   condition {
     path_pattern {
       values = ["/manager", "/manager/*", "/branch-manager", "/branch-manager/*"]
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "aws_lb_listener_rule" "waiter_path" {
+  count        = var.enable_https ? 0 : (var.waiter_subdomain != "" ? 1 : 0)
+  listener_arn = local.active_listener_arn
+  priority     = 80
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.waiter.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/waiter", "/waiter/*"]
     }
   }
 

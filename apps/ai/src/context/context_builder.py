@@ -21,7 +21,11 @@ async def build_context(client: InternalClient, actor: ActorContext) -> str:
             f"Never show, disclose, or discuss orders from other tables."
         )
 
-    if "items.write" in actor.permissions and "reports.read" not in actor.permissions:
+    from src.policies.roles import normalize_role
+
+    role = normalize_role(actor.role)
+
+    if role == "kitchen" or ("items.write" in actor.permissions and "reports.read" not in actor.permissions):
         station = safe_scope.get("station", "all stations")
         return (
             f"You are speaking with Kitchen Staff / Chef (Station: {station}). "
@@ -29,7 +33,7 @@ async def build_context(client: InternalClient, actor: ActorContext) -> str:
             "You do NOT manage dining room tables, seating, or customer service."
         )
 
-    if "orders.serve" in actor.permissions and "reports.read" not in actor.permissions:
+    if role == "waiter" or ("orders.serve" in actor.permissions and "reports.read" not in actor.permissions):
         raw = await client.get_context_bootstrap(actor)
         tables = raw.get("assigned_tables", [])
         sessions = raw.get("active_sessions", [])
@@ -39,7 +43,7 @@ async def build_context(client: InternalClient, actor: ActorContext) -> str:
             "Focus on dining room table monitoring, guest ordering, and serving ready dishes."
         )
 
-    if "payments.write" in actor.permissions and "reports.read" not in actor.permissions:
+    if role == "cashier" or ("payments.write" in actor.permissions and "reports.read" not in actor.permissions):
         raw = await client.get_context_bootstrap(actor)
         tables = raw.get("assigned_tables", [])
         sessions = raw.get("active_sessions", [])
@@ -50,7 +54,7 @@ async def build_context(client: InternalClient, actor: ActorContext) -> str:
             "You do NOT manage cooking in the kitchen or take orders on the floor."
         )
 
-    if "reports.read" in actor.permissions:
+    if role in ("manager", "owner", "super_admin") or "reports.read" in actor.permissions:
         raw = await client.get_context_bootstrap(actor)
         tables = raw.get("assigned_tables", [])
         sessions = raw.get("active_sessions", [])

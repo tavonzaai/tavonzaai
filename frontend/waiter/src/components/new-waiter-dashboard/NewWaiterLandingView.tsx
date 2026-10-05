@@ -204,6 +204,59 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   // Selected Order for Order Details View (Figma Screen 2/3/4/5)
   const [selectedDetailOrder, setSelectedDetailOrder] = useState<OrderItemData | null>(null);
 
+  // Track if navigated to Orders via "See All" button on Floor page
+  const [cameFromFloor, setCameFromFloor] = useState(false);
+
+  // Sync activeTab when initialTab prop changes
+  useEffect(() => {
+    const tab = (() => {
+      if (initialTab === 'table-orders' || initialTab === 'table-order' || initialTab === 'table-01') return 'table-orders';
+      if (initialTab === 'menu' || initialTab === 'browse-menu') return 'menu';
+      if (initialTab === 'create-order') return 'create-order';
+      if (initialTab === 'order' || initialTab === 'orders') return 'order';
+      if (initialTab === 'alert' || initialTab === 'alerts') return 'alert';
+      if (initialTab === 'profile') return 'profile';
+      return 'home';
+    })();
+    setActiveTab(tab);
+  }, [initialTab]);
+
+  // Synchronize browser URL route in address bar whenever activeTab changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const tabToPathMap: Record<string, string> = {
+      'home': '/new-waiter-dashboard/floor',
+      'menu': '/new-waiter-dashboard/menu',
+      'create-order': '/new-waiter-dashboard/create-order',
+      'table-orders': '/new-waiter-dashboard/table-orders',
+      'order': '/new-waiter-dashboard/orders',
+      'alert': '/new-waiter-dashboard/alerts',
+      'profile': '/new-waiter-dashboard/profile',
+    };
+    const targetPath = tabToPathMap[activeTab] || '/new-waiter-dashboard/floor';
+    const currentPath = window.location.pathname.replace(/\/$/, '');
+    if (currentPath !== targetPath) {
+      window.history.pushState({ tab: activeTab }, '', targetPath);
+    }
+  }, [activeTab]);
+
+  // Listen to browser back / forward popstate navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase().replace(/\/$/, '');
+      if (path.endsWith('/menu')) setActiveTab('menu');
+      else if (path.endsWith('/create-order')) setActiveTab('create-order');
+      else if (path.endsWith('/table-orders')) setActiveTab('table-orders');
+      else if (path.endsWith('/orders')) setActiveTab('order');
+      else if (path.endsWith('/alerts') || path.endsWith('/alert')) setActiveTab('alert');
+      else if (path.endsWith('/profile')) setActiveTab('profile');
+      else if (path.endsWith('/floor') || path.endsWith('/home') || path.endsWith('/new-waiter-dashboard')) setActiveTab('home');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Modals & drawers
   const [activeModal, setActiveModal] = useState<'bill' | 'jarvis' | null>(null);
 
@@ -700,7 +753,10 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                     </span>
                   </div>
                   <button
-                    onClick={() => setActiveTab('order')}
+                    onClick={() => {
+                      setCameFromFloor(true);
+                      setActiveTab('order');
+                    }}
                     className="h-7 px-3 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-medium font-['Inter'] rounded-[6px] flex items-center transition cursor-pointer shadow-sm shadow-yellow-500/20"
                   >
                     See All
@@ -1301,6 +1357,11 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
               <OrdersListView
                 onSelectOrder={(order) => setSelectedDetailOrder(order)}
                 embedded={true}
+                showBackButton={cameFromFloor}
+                onBack={() => {
+                  setCameFromFloor(false);
+                  setActiveTab('home');
+                }}
               />
             )
           )}
@@ -1513,6 +1574,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
           }
           showFloorLabel={true}
           onNavigateTab={(tab) => {
+            setCameFromFloor(false);
             if (tab === 'home' || tab === 'floor') setActiveTab('home');
             else if (tab === 'order') {
               setActiveTab('order');

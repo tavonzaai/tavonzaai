@@ -50,6 +50,12 @@ variable "manager_subdomain" {
   default     = "manager"
 }
 
+variable "waiter_subdomain" {
+  description = "Subdomain prefix for Waiter frontend (e.g. waiter)"
+  type        = string
+  default     = "waiter"
+}
+
 variable "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
   type        = string

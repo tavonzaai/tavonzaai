@@ -66,3 +66,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "assign_eip" {
+  description = "Allocate and associate an Elastic IP (EIP) with this EC2 instance"
+  type        = bool
+  default     = false
+}

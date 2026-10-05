@@ -49,6 +49,7 @@ export default function KitchenAIModal({
   const [autoListenNext, setAutoListenNext] = useState<boolean>(true);
   const [soundMuted, setSoundMuted] = useState<boolean>(false);
   const [micBlocked, setMicBlocked] = useState<boolean>(false);
+  const [sessionId, setSessionId] = useState<string>(() => `kitchen_${activeStation.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`);
 
   const isOpenRef = useRef<boolean>(isOpen);
   isOpenRef.current = isOpen;
@@ -62,6 +63,9 @@ export default function KitchenAIModal({
   const activeStationRef = useRef<string>(activeStation);
   activeStationRef.current = activeStation;
 
+  const sessionIdRef = useRef<string>(sessionId);
+  sessionIdRef.current = sessionId;
+
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef<boolean>(false);
   const latestTranscriptRef = useRef<string>('');
@@ -69,6 +73,10 @@ export default function KitchenAIModal({
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const synthesisUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const activeRequestIdRef = useRef<number>(0);
+  const activeSpeechIdRef = useRef<number>(0);
+  const chatAbortControllerRef = useRef<AbortController | null>(null);
+  const voiceAbortControllerRef = useRef<AbortController | null>(null);
 
   // Check AI health on mount or open
   useEffect(() => {
@@ -99,12 +107,51 @@ export default function KitchenAIModal({
       .trim();
   };
 
-  // Stop AI Speech playback
+  const splitSentencesForSpeech = (text: string): string[] => {
+    if (!text) return [];
+    const protectedText = text.replace(
+      /\b(e\.g\.|i\.e\.|etc\.|mr\.|ms\.|mrs\.|dr\.|approx\.)/gi,
+      (m) => m.replace(/\./g, '@DOT@')
+    );
+    const raw = protectedText.split(/(?<=[.!?])\s+|\n+/);
+    const cleaned = raw.map((s) => s.replace(/@DOT@/g, '.').trim()).filter(Boolean);
+    if (!cleaned.length) return [text];
+
+    const merged: string[] = [];
+    let buffer = '';
+    for (const s of cleaned) {
+      buffer = buffer ? `${buffer} ${s}` : s;
+      if (buffer.length >= 35 || s === cleaned[cleaned.length - 1]) {
+        merged.push(buffer);
+        buffer = '';
+      }
+    }
+    if (buffer) {
+      if (merged.length) merged[merged.length - 1] += ` ${buffer}`;
+      else merged.push(buffer);
+    }
+    return merged;
+  };
+
+  // Stop AI Speech playback and cancel all ongoing audio pipelines
   const stopSpeaking = useCallback(() => {
+    // Invalidate active generation id so any awaiting async loops self-terminate
+    activeSpeechIdRef.current++;
+
+    if (voiceAbortControllerRef.current) {
+      try {
+        voiceAbortControllerRef.current.abort();
+      } catch {}
+      voiceAbortControllerRef.current = null;
+    }
+
     if (currentAudioRef.current) {
       try {
         currentAudioRef.current.pause();
         currentAudioRef.current.currentTime = 0;
+        currentAudioRef.current.onended = null;
+        currentAudioRef.current.onerror = null;
+        currentAudioRef.current.src = '';
       } catch {}
       currentAudioRef.current = null;
     }
@@ -118,9 +165,12 @@ export default function KitchenAIModal({
 
   // Web SpeechSynthesis fallback
   const fallbackBrowserSpeech = useCallback(
-    (spokenText: string) => {
+    (spokenText: string, speechId: number) => {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
         setVoiceState('idle');
+        return;
+      }
+      if (activeSpeechIdRef.current !== speechId) {
         return;
       }
 
@@ -147,26 +197,37 @@ export default function KitchenAIModal({
         if (naturalVoice) utterance.voice = naturalVoice;
 
         utterance.onstart = () => {
+          if (activeSpeechIdRef.current !== speechId) {
+            window.speechSynthesis.cancel();
+            return;
+          }
           setVoiceState('speaking');
         };
 
         utterance.onend = () => {
+          if (activeSpeechIdRef.current !== speechId) return;
           setVoiceState('idle');
           if (autoListenNextRef.current && isOpenRef.current) {
             setTimeout(() => {
-              startListening();
+              if (activeSpeechIdRef.current === speechId && isOpenRef.current) {
+                startListening();
+              }
             }, 600);
           }
         };
 
         utterance.onerror = () => {
-          setVoiceState('idle');
+          if (activeSpeechIdRef.current === speechId) {
+            setVoiceState('idle');
+          }
         };
 
         synthesisUtteranceRef.current = utterance;
         window.speechSynthesis.speak(utterance);
       } catch {
-        setVoiceState('idle');
+        if (activeSpeechIdRef.current === speechId) {
+          setVoiceState('idle');
+        }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,10 +293,13 @@ export default function KitchenAIModal({
   // Speak AI Response
   const speakResponse = useCallback(
     async (text: string) => {
+      // 1. Immediately cancel any prior speech
       stopSpeaking();
+
+      // 2. Stop listening to prevent echo / mic feedback
       if (recognitionRef.current && isListeningRef.current) {
         try {
-          recognitionRef.current.stop();
+          recognitionRef.current.abort();
         } catch {}
         isListeningRef.current = false;
       }
@@ -251,61 +315,112 @@ export default function KitchenAIModal({
         return;
       }
 
+      // Assign new unique speech session ID to invalidate any prior speech loops
+      const speechId = ++activeSpeechIdRef.current;
       setVoiceState('speaking');
 
       const aiBaseUrl =
         (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
         'http://localhost:8000';
 
-      // Attempt 1: High quality Neural Voice Synthesis from backend
-      try {
-        const res = await fetch(`${aiBaseUrl}/ai/voice/synthesize`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer dev-kitchen-chef-token',
-          },
-          body: JSON.stringify({
-            text: spokenText.slice(0, 900),
-            persona: 'uk_jarvis',
-          }),
-          signal: AbortSignal.timeout(6000),
-        });
-
-        if (res.ok) {
-          const blob = await res.blob();
-          if (blob.size > 500) {
-            const audioUrl = URL.createObjectURL(blob);
-            const audio = new Audio(audioUrl);
-            currentAudioRef.current = audio;
-
-            audio.onended = () => {
-              URL.revokeObjectURL(audioUrl);
-              currentAudioRef.current = null;
-              setVoiceState('idle');
-              if (autoListenNextRef.current && isOpenRef.current) {
-                setTimeout(() => {
-                  startListening();
-                }, 600);
-              }
-            };
-
-            audio.onerror = () => {
-              URL.revokeObjectURL(audioUrl);
-              currentAudioRef.current = null;
-              fallbackBrowserSpeech(spokenText);
-            };
-
-            await audio.play();
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn('Backend neural voice fetch failed, using browser speech synthesis fallback:', err);
+      const sentences = splitSentencesForSpeech(spokenText);
+      if (!sentences.length) {
+        setVoiceState('idle');
+        return;
       }
 
-      // Attempt 2: Fallback to browser Web SpeechSynthesis
-      fallbackBrowserSpeech(spokenText);
+      let currentIdx = 0;
+
+      const playNextSentence = async () => {
+        if (activeSpeechIdRef.current !== speechId) {
+          return;
+        }
+
+        if (currentIdx >= sentences.length) {
+          currentAudioRef.current = null;
+          setVoiceState('idle');
+          if (autoListenNextRef.current && isOpenRef.current && activeSpeechIdRef.current === speechId) {
+            setTimeout(() => {
+              if (activeSpeechIdRef.current === speechId && isOpenRef.current) {
+                startListening();
+              }
+            }, 600);
+          }
+          return;
+        }
+
+        const sentence = sentences[currentIdx++];
+        if (!sentence) {
+          playNextSentence();
+          return;
+        }
+
+        try {
+          const voiceAbort = new AbortController();
+          voiceAbortControllerRef.current = voiceAbort;
+
+          const res = await fetch(`${aiBaseUrl}/ai/voice/synthesize`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer dev-kitchen-chef-token',
+            },
+            body: JSON.stringify({
+              text: sentence.slice(0, 900),
+              persona: 'uk_jarvis',
+            }),
+            signal: voiceAbort.signal,
+          });
+
+          if (activeSpeechIdRef.current !== speechId) {
+            return;
+          }
+
+          if (res.ok) {
+            const blob = await res.blob();
+            if (activeSpeechIdRef.current !== speechId) {
+              return;
+            }
+
+            if (blob.size > 500) {
+              const audioUrl = URL.createObjectURL(blob);
+              const audio = new Audio(audioUrl);
+              currentAudioRef.current = audio;
+
+              audio.onended = () => {
+                URL.revokeObjectURL(audioUrl);
+                if (activeSpeechIdRef.current === speechId) {
+                  playNextSentence();
+                }
+              };
+
+              audio.onerror = () => {
+                URL.revokeObjectURL(audioUrl);
+                if (activeSpeechIdRef.current !== speechId) return;
+                if (currentIdx < sentences.length) {
+                  playNextSentence();
+                } else {
+                  fallbackBrowserSpeech(spokenText, speechId);
+                }
+              };
+
+              await audio.play();
+              return;
+            }
+          }
+        } catch (err: any) {
+          if (activeSpeechIdRef.current !== speechId) {
+            return;
+          }
+          console.warn('Backend neural voice chunk failed, using browser speech synthesis fallback:', err);
+        }
+
+        if (activeSpeechIdRef.current === speechId) {
+          fallbackBrowserSpeech(spokenText, speechId);
+        }
+      };
+
+      await playNextSentence();
     },
     [stopSpeaking, fallbackBrowserSpeech, startListening]
   );
@@ -319,6 +434,34 @@ export default function KitchenAIModal({
         return;
       }
 
+      // 1. Immediately abort any existing chat fetch
+      if (chatAbortControllerRef.current) {
+        try {
+          chatAbortControllerRef.current.abort();
+        } catch {}
+        chatAbortControllerRef.current = null;
+      }
+
+      // 2. Stop any existing voice playback immediately
+      stopSpeaking();
+
+      // 3. Stop mic recognition immediately and clear transcript buffer
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      latestTranscriptRef.current = '';
+      hasProcessedRef.current = true;
+      if (recognitionRef.current && isListeningRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {}
+        isListeningRef.current = false;
+      }
+
+      // 4. Assign unique request ID for this query
+      const currentReqId = ++activeRequestIdRef.current;
+
       setLastUserVoice(query);
       setLiveTranscript('');
       setVoiceState('processing');
@@ -327,6 +470,9 @@ export default function KitchenAIModal({
       const aiBaseUrl =
         (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
         'http://localhost:8000';
+
+      const chatAbort = new AbortController();
+      chatAbortControllerRef.current = chatAbort;
 
       try {
         const res = await fetch(`${aiBaseUrl}/ai/chat`, {
@@ -337,21 +483,38 @@ export default function KitchenAIModal({
           },
           body: JSON.stringify({
             message: query,
-            session_id: `kitchen_${currentStation.replace(/\s+/g, '_').toLowerCase()}`,
+            session_id: sessionIdRef.current,
           }),
-          signal: AbortSignal.timeout(10000),
+          signal: chatAbort.signal,
         });
+
+        // If another command was clicked or spoken while waiting, discard this response
+        if (activeRequestIdRef.current !== currentReqId) {
+          return;
+        }
 
         if (res.ok) {
           const data = await res.json();
+          if (activeRequestIdRef.current !== currentReqId) {
+            return;
+          }
           const reply = data.reply || data.message || 'Understood, Chef.';
           setLastAiResponse(reply);
           setIsAiOnline(true);
           speakResponse(reply);
           return;
         }
-      } catch (err) {
+      } catch (err: any) {
+        // If aborted or preempted by a newer command, exit silently — do NOT trigger duplicate fallback!
+        if (err?.name === 'AbortError' || activeRequestIdRef.current !== currentReqId) {
+          return;
+        }
         console.warn('AI live call failed or timed out, activating kitchen heuristics:', err);
+      }
+
+      // Check if preempted before running heuristics
+      if (activeRequestIdRef.current !== currentReqId) {
+        return;
       }
 
       // High-context kitchen fallback logic
@@ -377,10 +540,12 @@ export default function KitchenAIModal({
           'Grill Station is at 75% capacity with 8 active items. Fryer Station has spare capacity. Shift sides to the fryer station to shave approximately 3 minutes off ticket completion.';
       }
 
-      setLastAiResponse(reply);
-      speakResponse(reply);
+      if (activeRequestIdRef.current === currentReqId) {
+        setLastAiResponse(reply);
+        speakResponse(reply);
+      }
     },
-    [speakResponse]
+    [speakResponse, stopSpeaking]
   );
 
   // Setup Web Speech Recognition
@@ -506,9 +671,12 @@ export default function KitchenAIModal({
     }
   }, [processVoiceCommand]);
 
-  // Auto-start listening on open
+  // Auto-start listening and reset session on open
   useEffect(() => {
     if (isOpen) {
+      setSessionId(`kitchen_${activeStation.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`);
+      setLastUserVoice('');
+      setLastAiResponse('Chef Marco, I am ready on the Grill Station. Speak any command hands-free.');
       const timer = setTimeout(() => {
         startListening();
       }, 350);
@@ -517,7 +685,7 @@ export default function KitchenAIModal({
       stopListening();
       stopSpeaking();
     }
-  }, [isOpen, startListening, stopListening, stopSpeaking]);
+  }, [isOpen, startListening, stopListening, stopSpeaking, activeStation]);
 
   if (!isOpen) return null;
 
@@ -568,6 +736,20 @@ export default function KitchenAIModal({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                stopSpeaking();
+                setSessionId(`kitchen_${activeStation.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`);
+                setLastUserVoice('');
+                setLastAiResponse('Chef Marco, I am ready on the Grill Station. Speak any command hands-free.');
+                toast.success('Conversation reset');
+              }}
+              className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-yellow-400 hover:border-yellow-400/60 transition cursor-pointer"
+              title="Reset conversation"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -782,7 +964,10 @@ export default function KitchenAIModal({
                 </span>
                 <button
                   type="button"
-                  onClick={() => speakResponse(lastAiResponse)}
+                  onClick={() => {
+                    stopSpeaking();
+                    speakResponse(lastAiResponse);
+                  }}
                   className="text-[11px] text-yellow-400 hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <RotateCcw className="w-3 h-3" />
@@ -806,7 +991,10 @@ export default function KitchenAIModal({
             <button
               key={idx}
               type="button"
-              onClick={() => processVoiceCommand(preset.prompt)}
+              onClick={() => {
+                stopSpeaking();
+                processVoiceCommand(preset.prompt);
+              }}
               className="px-3.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-yellow-400 hover:border-yellow-400/60 text-xs font-medium whitespace-nowrap transition cursor-pointer shrink-0 active:scale-95"
             >
               {preset.label}

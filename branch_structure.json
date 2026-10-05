@@ -1,0 +1,42 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "dev",
+    "devops",
+    "euhan",
+    "feat/ai-dietary-menu-and-chat",
+    "feat/customer",
+    "feat/database-and-waiter-frontend",
+    "feat/waiter",
+    "feature/TAVN-AI-jarvis-agent",
+    "main",
+    "origin",
+    "prod"
+  ],
+  "parent": {
+    "dev": "main",
+    "devops": "main",
+    "euhan": "main",
+    "feat/ai-dietary-menu-and-chat": "main",
+    "feat/customer": "main",
+    "feat/database-and-waiter-frontend": "main",
+    "feat/waiter": "main",
+    "feature/TAVN-AI-jarvis-agent": "main",
+    "main": null,
+    "origin": "main",
+    "prod": "main"
+  },
+  "order": [
+    "main",
+    "dev",
+    "devops",
+    "euhan",
+    "feat/ai-dietary-menu-and-chat",
+    "feat/customer",
+    "feat/database-and-waiter-frontend",
+    "feat/waiter",
+    "feature/TAVN-AI-jarvis-agent",
+    "origin",
+    "prod"
+  ]
+}

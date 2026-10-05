@@ -36,3 +36,13 @@ resource "aws_instance" "this" {
     Name = var.instance_name
   })
 }
+
+resource "aws_eip" "this" {
+  count    = var.assign_eip ? 1 : 0
+  instance = aws_instance.this.id
+  domain   = "vpc"
+
+  tags = merge(var.tags, {
+    Name = "${var.instance_name}-eip"
+  })
+}

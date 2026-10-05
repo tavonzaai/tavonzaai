@@ -24,7 +24,12 @@ def authorize_tool_call(tool_def: dict, actor: ActorContext, tool_name: str) -> 
             )
 
     # 2. Capability permission check
-    if required_perm not in actor.permissions and "*" not in actor.permissions:
+    has_perm = (
+        required_perm in actor.permissions
+        or "*" in actor.permissions
+        or (tool_name == "get_kitchen_queue" and "orders.read" in actor.permissions)
+    )
+    if not has_perm:
         actor_id = actor.ai_agent_id or actor.acting_user_id or actor.actor_type
         role_info = f" (role: '{actor.role}')" if actor.role else ""
         raise ToolAuthorizationError(

@@ -9,6 +9,7 @@ import CreateAccountView from '@/components/auth/CreateAccountView';
 import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 import BottomNav from '@/components/dashboard/BottomNav';
 import JarvisChatView from '@/components/dashboard/JarvisChatView';
+import MenuPage from './menu/page';
  
 function LandingPageContent() {
   const router = useRouter();
@@ -71,17 +72,19 @@ function LandingPageContent() {
     router.push(target);
   };
 
-  // Not authenticated: render create account form directly
+  // Not authenticated: render customer landing menu page directly
   return (
-    <AuthDesktopLayout>
-      <CreateAccountView
-        onAccountCreated={handleAccountCreated}
-        onGoBackToLogin={handleGoBackToLogin}
-      />
-      {/* <div className="">
-        <JarvisChatView />
-      </div> */}
-    </AuthDesktopLayout>
+    <>
+      <MenuPage />
+      {/* 
+      <AuthDesktopLayout>
+        <CreateAccountView
+          onAccountCreated={handleAccountCreated}
+          onGoBackToLogin={handleGoBackToLogin}
+        />
+      </AuthDesktopLayout> 
+      */}
+    </>
   );
 }
 

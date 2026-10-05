@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class ActorContext(BaseModel):
@@ -14,7 +14,10 @@ class ActorContext(BaseModel):
     ai_agent_id: str | None = None
     role: str | None = None
     organization_id: str
-    restaurant_id: str | None = None
+    restaurant_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("restaurant_id", "restaurantId"),
+    )
     branch_id: str
     permissions: list[str] = Field(default_factory=list)
     resource_scope: dict[str, Any] = Field(default_factory=dict)
