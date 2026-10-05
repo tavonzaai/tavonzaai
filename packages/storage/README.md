@@ -65,7 +65,7 @@ AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...
 
 # Production Private Bucket
-S3_BUCKET_NAME=tavonzaai-prod-storage-bucket
+S3_BUCKET_NAME=tavonzaai-live-storage-bucket
 AWS_REGION=eu-west-2
 
 # Optional CDN Domain (CloudFront OAC fronting private bucket)
@@ -133,7 +133,7 @@ You can use `S3StorageService` in workers, scripts, or non-NestJS services:
 import { S3StorageService, loadStorageConfig } from '@tavonza/storage';
 
 const config = loadStorageConfig({
-  bucket: 'tavonzaai-prod-storage-bucket',
+  bucket: 'tavonzaai-live-storage-bucket',
   region: 'eu-west-2',
 });
 

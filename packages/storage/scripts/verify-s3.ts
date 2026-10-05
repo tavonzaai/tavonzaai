@@ -157,13 +157,10 @@ async function main() {
     process.exit(1);
   }
 
-  // Test prod bucket
-  await testBucket('tavonzaai-prod-storage-bucket', 'PROD');
-
   // Test live bucket
   await testBucket('tavonzaai-live-storage-bucket', 'LIVE');
 
-  console.log('🎉 ALL S3 BUCKET OPERATIONS PASSED VERIFICATION ON BOTH PROD AND LIVE!');
+  console.log('🎉 ALL S3 BUCKET OPERATIONS PASSED VERIFICATION ON LIVE!');
 }
 
 main().catch((err) => {
