@@ -202,6 +202,18 @@ resource "aws_security_group_rule" "rds_ingress_from_backend" {
   security_group_id        = aws_security_group.rds.id
 }
 
+# Allow PostgreSQL traffic from public Internet when allow_public_rds is true
+resource "aws_security_group_rule" "rds_ingress_public" {
+  count             = var.allow_public_rds ? 1 : 0
+  type              = "ingress"
+  description       = "Allow PostgreSQL access from the public Internet"
+  from_port         = var.postgres_port
+  to_port           = var.postgres_port
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.rds.id
+}
+
 # Security Group: ElastiCache Redis / Valkey
 resource "aws_security_group" "redis" {
   name        = "${var.project_name}-${var.environment}-redis-sg"
