@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Loader2, UtensilsCrossed } from 'lucide-react';
+import { Search, Loader2, UtensilsCrossed, ChevronLeft } from 'lucide-react';
 import { YellowSparkleIcon, FuchsiaCookingPanIcon, GreenClockIcon } from './orderIcons';
 import { OrderItemData, OrderStatus } from './orderData';
 import BottomDock from '../navigation/BottomDock';
@@ -17,6 +17,8 @@ interface OrdersListViewProps {
   activeBottomTab?: string;
   isStandaloneRoute?: boolean;
   embedded?: boolean;
+  showBackButton?: boolean;
+  onBack?: () => void;
 }
 
 export default function OrdersListView({
@@ -26,6 +28,8 @@ export default function OrdersListView({
   activeBottomTab = 'order',
   isStandaloneRoute = false,
   embedded = false,
+  showBackButton = false,
+  onBack,
 }: OrdersListViewProps) {
   const router = useRouter();
   const [filter, setFilter] = useState<'ALL' | 'Pending' | 'Active' | 'Completed'>('ALL');
@@ -251,10 +255,22 @@ export default function OrdersListView({
   const listContent = (
     <div className="flex flex-col gap-3.5 pb-6 animate-fadeIn">
       {/* Header Title: Orders */}
-      <div className="px-6 pt-3 pb-1 flex items-center justify-center relative">
+      <div className="px-5 pt-3 pb-1 flex items-center justify-between relative">
+        {showBackButton && onBack ? (
+          <button
+            onClick={onBack}
+            className="w-7 h-7 bg-neutral-900 hover:bg-neutral-800 rounded-full flex justify-center items-center cursor-pointer transition border border-white/10 text-amber-400"
+            title="Back to Floor"
+          >
+            <ChevronLeft className="w-4 h-4 text-amber-400" />
+          </button>
+        ) : (
+          <div className="w-7" />
+        )}
         <h1 className="text-white text-xl font-medium font-['Inter'] leading-6 text-center">
           Orders
         </h1>
+        <div className="w-7" />
       </div>
 
       {/* Backend Real-time Search Input */}
