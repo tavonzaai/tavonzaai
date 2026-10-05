@@ -60,6 +60,7 @@ module "security_groups" {
   cashier_port            = var.cashier_port
   admin_port              = var.admin_port
   manager_port            = var.manager_port
+  waiter_port             = var.waiter_port
   postgres_port           = 5432
   redis_port              = 6379
   alb_ingress_cidr_blocks = var.alb_ingress_cidr_blocks
@@ -98,12 +99,12 @@ module "secrets_manager" {
   secret_name = local.secret_name
   description = "Application secrets for ${local.name_prefix}"
   initial_secret_keys = {
-    DATABASE_URL          = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
-    DATABASE_PASSWORD     = var.rds_db_password
-    JWT_SECRET            = ""
-    JWT_REFRESH_SECRET    = ""
-    REDIS_URL             = var.enable_elasticache && length(module.elasticache) > 0 ? "rediss://${module.elasticache[0].valkey_endpoint}:${module.elasticache[0].valkey_port}" : "redis://:tavonzaaiPass2026Live@redis.${var.domain_name}:6379"
-    THIRD_PARTY_API_KEYS  = ""
+    DATABASE_URL         = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
+    DATABASE_PASSWORD    = var.rds_db_password
+    JWT_SECRET           = ""
+    JWT_REFRESH_SECRET   = ""
+    REDIS_URL            = var.enable_elasticache && length(module.elasticache) > 0 ? "rediss://${module.elasticache[0].valkey_endpoint}:${module.elasticache[0].valkey_port}" : "redis://:tavonzaaiPass2026Live@redis.${var.domain_name}:6379"
+    THIRD_PARTY_API_KEYS = ""
 
     SMTP_HOST             = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.${var.aws_region}.amazonaws.com"
     SMTP_PORT             = "587"
@@ -256,6 +257,7 @@ module "alb" {
   cashier_subdomain    = var.cashier_subdomain
   admin_subdomain      = var.admin_subdomain
   manager_subdomain    = var.manager_subdomain
+  waiter_subdomain     = var.waiter_subdomain
   target_type          = "instance"
   backend_instance_id  = module.backend_ec2.instance_id
   frontend_instance_id = module.frontend_ec2.instance_id
@@ -267,6 +269,7 @@ module "alb" {
   cashier_port                     = var.cashier_port
   admin_port                       = var.admin_port
   manager_port                     = var.manager_port
+  waiter_port                      = var.waiter_port
   backend_health_check_path        = var.backend_health_check_path
   nextjs_health_check_path         = var.nextjs_health_check_path
   ai_health_check_path             = var.ai_health_check_path
@@ -274,6 +277,7 @@ module "alb" {
   cashier_health_check_path        = var.cashier_health_check_path
   admin_health_check_path          = var.admin_health_check_path
   manager_health_check_path        = var.manager_health_check_path
+  waiter_health_check_path         = var.waiter_health_check_path
   health_check_interval            = var.health_check_interval
   health_check_timeout             = var.health_check_timeout
   health_check_healthy_threshold   = var.health_check_healthy_threshold
@@ -293,6 +297,7 @@ module "route53" {
   cashier_subdomain   = var.cashier_subdomain
   admin_subdomain     = var.admin_subdomain
   manager_subdomain   = var.manager_subdomain
+  waiter_subdomain    = var.waiter_subdomain
   alb_dns_name        = module.alb.alb_dns_name
   alb_zone_id         = module.alb.alb_zone_id
   extra_txt_records   = var.extra_txt_records

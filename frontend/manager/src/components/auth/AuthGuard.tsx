@@ -25,9 +25,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const isAuth = isAuthenticated && hasManagerRole && isManagerAuthenticated();
 
   useEffect(() => {
+    /*
     if (isInitialized && !isAuth) {
       router.replace('/login');
     }
+    */
   }, [isInitialized, isAuth, router]);
 
   // Loading state while session check completes
@@ -45,10 +47,12 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
+  /*
   // Block rendering while redirecting
   if (!isAuth) {
     return null;
   }
+  */
 
   return <>{children}</>;
 }
