@@ -64,17 +64,12 @@ export function removeAuthToken() {
 }
 
 export function getApiBaseUrl(): string {
-  let url =
-    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) ||
-    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
-    (typeof process !== 'undefined' && process.env?.API_BASE_URL) ||
-    'https://prod-api.tavonza.com';
-
-  url = String(url).trim().replace(/\/docs(-json)?\/?$/i, '').replace(/\/$/, '');
-  return url || 'https://prod-api.tavonza.com';
+  return 'https://api.tavonza.com';
 }
 
-export const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = 'https://api.tavonza.com';
+
+
 
 export interface ApiResponse<T = any> {
   statusCode?: number;
