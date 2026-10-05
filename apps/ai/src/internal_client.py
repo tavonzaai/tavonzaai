@@ -154,12 +154,8 @@ class InternalClient:
                 return self._mock_tool_result(tool_name, args)
             return res
         except Exception as exc:
-            logger.warning(
-                "Backend tool execution failed for '%s': %s. Falling back to resilient mock fixture.",
-                tool_name,
-                exc,
-            )
-            return self._mock_tool_result(tool_name, args)
+            logger.error("Backend tool execution failed for '%s': %s", tool_name, exc)
+            return {"ok": False, "error": f"Tool execution failed: {exc}"}
 
     # ---- 4. Confirmation handshake (high-risk tools) ----
     async def confirm_tool(self, pending_confirmation_id: str, actor: ActorContext) -> dict[str, Any]:
