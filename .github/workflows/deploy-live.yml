@@ -137,11 +137,13 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --region ${{ env.AWS_REGION }} \
             --parameters 'commands=[
+              "docker system prune -af --volumes=false 2>/dev/null || true",
               "aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 558567543994.dkr.ecr.eu-west-2.amazonaws.com",
               "docker pull 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-backend:latest",
               "docker stop tavonzaai-backend 2>/dev/null || true",
               "docker rm tavonzaai-backend 2>/dev/null || true",
-              "docker run -d --name tavonzaai-backend --restart always --env-file /opt/tavonzaai/backend.env -p 5000:5000 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-backend:latest"
+              "docker run -d --name tavonzaai-backend --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env -p 5000:5000 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-backend:latest",
+              "docker image prune -af 2>/dev/null || true"
             ]' \
             --query "Command.CommandId" --output text)
 
@@ -212,11 +214,13 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --region ${{ env.AWS_REGION }} \
             --parameters 'commands=[
+              "docker system prune -af --volumes=false 2>/dev/null || true",
               "aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 558567543994.dkr.ecr.eu-west-2.amazonaws.com",
               "docker pull 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-worker:latest",
               "docker stop tavonzaai-worker 2>/dev/null || true",
               "docker rm tavonzaai-worker 2>/dev/null || true",
-              "docker run -d --name tavonzaai-worker --restart always --env-file /opt/tavonzaai/backend.env 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-worker:latest"
+              "docker run -d --name tavonzaai-worker --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-worker:latest",
+              "docker image prune -af 2>/dev/null || true"
             ]' \
             --query "Command.CommandId" --output text)
 
@@ -241,6 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - app: customer
@@ -363,11 +368,13 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --region ${{ env.AWS_REGION }} \
             --parameters "commands=[
+              \"docker system prune -af --volumes=false 2>/dev/null || true\",
               \"aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 558567543994.dkr.ecr.eu-west-2.amazonaws.com\",
               \"docker pull $IMAGE\",
               \"docker stop $CONTAINER 2>/dev/null || true\",
               \"docker rm $CONTAINER 2>/dev/null || true\",
-              \"docker run -d --name $CONTAINER --restart always -e NODE_ENV=production -e PORT=$PORT -p $PORT:$PORT $IMAGE\"
+              \"docker run -d --name $CONTAINER --restart always --log-opt max-size=20m --log-opt max-file=3 -e NODE_ENV=production -e PORT=$PORT -p $PORT:$PORT $IMAGE\",
+              \"docker image prune -af 2>/dev/null || true\"
             ]" \
             --query "Command.CommandId" --output text)
 
