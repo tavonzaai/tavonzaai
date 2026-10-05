@@ -60,8 +60,8 @@ frontend_instance_type    = "t3.small"
 backend_ami_id            = ""
 frontend_ami_id           = ""
 ssh_key_name              = ""
-backend_root_volume_size  = 20
-frontend_root_volume_size = 20
+backend_root_volume_size  = 30
+frontend_root_volume_size = 40
 
 # S3 Storage Settings
 s3_bucket_name = "tavonzaai-live-storage-bucket"
