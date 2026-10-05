@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { DatabaseModule } from "@tavonza/database";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { AuthorizationModule } from "./modules/authorization/authorization.module";
@@ -20,6 +20,7 @@ import { ShiftsModule } from "./modules/shifts/shifts.module";
 import { InventoryModule } from "./modules/inventory/inventory.module";
 import { AiModule } from "./modules/ai/ai.module";
 import { ApiStorageModule } from "./modules/storage/storage.module";
+import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 
 import { AppController } from "./app.controller";
 
@@ -52,4 +53,9 @@ import { AppController } from "./app.controller";
   controllers: [AppController],
   providers: [],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}
+

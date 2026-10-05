@@ -13,6 +13,10 @@ import type {
   PaymentAllocationEntity,
   DiscountEntity,
 } from '../../domain/entities/payment.entity';
+import {
+  ResourceNotFoundException,
+  InternalOperationException,
+} from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzlePaymentRepository implements IPaymentRepository {
@@ -40,7 +44,7 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
       })
       .returning();
 
-    if (!created) throw new Error('Failed to create payment');
+    if (!created) throw new InternalOperationException('Failed to create payment record');
     return this.mapPayment(created);
   }
 
@@ -96,7 +100,7 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
       .where(eq(payments.id, id))
       .returning();
 
-    if (!updated) throw new Error(`Payment ${id} not found`);
+    if (!updated) throw new ResourceNotFoundException('Payment', id);
     return this.mapPayment(updated);
   }
 

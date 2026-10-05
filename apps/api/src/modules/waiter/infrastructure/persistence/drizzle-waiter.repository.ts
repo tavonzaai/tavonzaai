@@ -17,6 +17,7 @@ import type {
   BranchStaffAssignment,
   WaiterTableAssignment,
 } from '../../domain/entities/waiter.entity';
+import { InternalOperationException } from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzleWaiterRepository {
@@ -38,7 +39,7 @@ export class DrizzleWaiterRepository {
       })
       .returning();
 
-    if (!result) throw new Error('Failed to create staff profile');
+    if (!result) throw new InternalOperationException('Failed to create staff profile');
 
     return {
       id: result.id,
@@ -89,7 +90,7 @@ export class DrizzleWaiterRepository {
       })
       .returning();
 
-    if (!result) throw new Error('Failed to assign staff to branch');
+    if (!result) throw new InternalOperationException('Failed to assign staff to branch');
 
     return {
       id: result.id,
@@ -189,7 +190,7 @@ export class DrizzleWaiterRepository {
       })
       .returning();
 
-    if (!result) throw new Error('Failed to assign table to waiter');
+    if (!result) throw new InternalOperationException('Failed to assign table to waiter');
 
     return {
       id: result.id,

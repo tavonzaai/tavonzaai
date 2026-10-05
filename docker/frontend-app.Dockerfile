@@ -34,6 +34,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/frontend/${APP_NAME}/.next ./frontend/${APP_NAME}/.next
 COPY --from=builder /app/frontend/${APP_NAME}/public ./frontend/${APP_NAME}/public
+COPY --from=builder /app/frontend/${APP_NAME}/next.config.js ./frontend/${APP_NAME}/next.config.js
 COPY --from=builder /app/frontend/${APP_NAME}/package.json ./frontend/${APP_NAME}/package.json
 COPY --from=builder /app/frontend/${APP_NAME}/node_modules ./frontend/${APP_NAME}/node_modules
 
