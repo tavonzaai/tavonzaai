@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Loader2 } from 'lucide-react';
 import { OrderItemRow } from '../types';
-import { INITIAL_ORDERS } from '../data';
+import { branchManagerService, getActiveBranchId } from '../../../redux/features/branchManagerApi';
 
 interface OrdersListViewProps {
   onSelectOrder: (orderId: string) => void;
@@ -12,32 +12,82 @@ interface OrdersListViewProps {
 export default function OrdersListView({ onSelectOrder }: OrdersListViewProps) {
   const [filter, setFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-
+  const [orders, setOrders] = useState<OrderItemRow[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const filterTabs = ['ALL', 'Active', 'Preparing', 'Ready', 'Payment Pending', 'Completed'];
 
-  const filteredOrders = INITIAL_ORDERS.filter((order) => {
-    if (filter === 'Active') {
-      if (order.status === 'Completed') return false;
-    } else if (filter === 'Preparing') {
-      if (order.status !== 'Preparing') return false;
-    } else if (filter === 'Ready') {
-      if (order.status !== 'Ready') return false;
-    } else if (filter === 'Payment Pending') {
-      if (order.status !== 'Payment Pending') return false;
-    } else if (filter === 'Completed') {
-      if (order.status !== 'Completed') return false;
+  useEffect(() => {
+    let isMounted = true;
+    async function loadOrders() {
+      try {
+        setIsLoading(true);
+        const branchId = getActiveBranchId();
+
+        let backendStatus: string | undefined = undefined;
+        if (filter === 'Preparing') backendStatus = 'PREPARING';
+        else if (filter === 'Ready') backendStatus = 'READY';
+        else if (filter === 'Payment Pending') backendStatus = 'PAYMENT_PENDING';
+        else if (filter === 'Completed') backendStatus = 'SERVED';
+
+        const liveOrders = await branchManagerService.getOrders(branchId, {
+          status: backendStatus,
+          search: searchQuery.trim() || undefined,
+        });
+
+        if (isMounted) {
+          if (liveOrders && liveOrders.length > 0) {
+            const mapped: OrderItemRow[] = liveOrders.map((o: any, idx: number) => {
+              const st = String(o.status || '').toUpperCase();
+              let uiStatus: OrderItemRow['status'] = 'Pending';
+              if (st === 'PREPARING') uiStatus = 'Preparing';
+              else if (st === 'READY') uiStatus = 'Ready';
+              else if (st === 'SERVED') uiStatus = 'Completed';
+              else if (st === 'PAYMENT_PENDING') uiStatus = 'Payment Pending';
+              else if (st === 'NEEDS_ATTENTION') uiStatus = 'Needs Attention';
+
+              const formattedTime = o.submittedAt || o.createdAt
+                ? new Date(o.submittedAt || o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Just now';
+
+              const itemsStr = o.items && o.items.length > 0
+                ? o.items.map((i: any) => `${i.quantity}x ${i.name || i.productNameSnapshot || i.productName || 'Dish'}`).join(', ')
+                : `${o.itemCount || 1} items`;
+
+              return {
+                id: o.orderId || o.id,
+                orderNumber: o.orderNumber || `#1000${idx + 1}`,
+                waiterLocation: o.tableLabel || `Table T-${String(idx + 1).padStart(2, '0')}`,
+                items: itemsStr,
+                timeElapsed: formattedTime,
+                status: uiStatus,
+                total: `$${Number(o.total || o.totalAmount || 0).toFixed(2)}`,
+              };
+            });
+
+            if (filter === 'Active') {
+              setOrders(mapped.filter((o) => o.status !== 'Completed'));
+            } else {
+              setOrders(mapped);
+            }
+          } else {
+            setOrders([]);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load live orders:', err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchNumber = order.orderNumber.toLowerCase().includes(q);
-      const matchLocation = order.waiterLocation.toLowerCase().includes(q);
-      const matchItems = order.items.toLowerCase().includes(q);
-      if (!matchNumber && !matchLocation && !matchItems) return false;
-    }
+    const timer = setTimeout(loadOrders, searchQuery ? 250 : 0);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [filter, searchQuery]);
 
-    return true;
-  });
+  const filteredOrders = orders;
 
   const getStatusBadge = (status: OrderItemRow['status']) => {
     switch (status) {

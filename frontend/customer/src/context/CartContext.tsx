@@ -33,22 +33,11 @@ interface CartContextType {
   totalAmount: number;
 }
 
-const defaultCartItems: CartItem[] = [
-  {
-    id: 'potato-corn-burger-1',
-    name: 'Potato Corn Burger',
-    subtitle: 'With Sauce',
-    price: 26.0,
-    quantity: 4,
-    image: '/images/burger.jpg',
-  },
-];
-
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [cart, setCart] = useState<CartItem[]>(defaultCartItems);
-  const [tableNumber, setTableNumberState] = useState('Table 8');
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [tableNumber, setTableNumberState] = useState('');
 
   const setTableNumber = (table: string) => {
     setTableNumberState(table);
@@ -63,7 +52,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         try {
           const parsed = JSON.parse(savedCart);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setCart(parsed);
+            const isUUID = (val?: string | null) =>
+              Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+            const sanitized = parsed.map((item: CartItem) => {
+              if (item.dishId === 'item' || !isUUID(item.dishId)) {
+                return {
+                  ...item,
+                  dishId: '4455110d-db04-4cef-92c6-46bcd6a4c7e2',
+                };
+              }
+              return item;
+            });
+            setCart(sanitized);
           }
         } catch {
           // ignore parsing error

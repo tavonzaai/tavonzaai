@@ -80,6 +80,34 @@ export interface CloseSessionResponse {
   message: string;
 }
 
+export interface RequestTableOtpPayload {
+  branchId: string;
+  tableId: string;
+  contact: string;
+  tableSessionId?: string;
+}
+
+export interface RequestTableOtpResponse {
+  success: boolean;
+  message: string;
+  expiresInSeconds: number;
+}
+
+export interface VerifyTableOtpPayload {
+  branchId: string;
+  tableId: string;
+  contact: string;
+  code: string;
+  displayName?: string;
+  tableNumber?: string;
+}
+
+export interface VerifyTableOtpResponse {
+  session: TableSession;
+  guestSession: CustomerSession;
+  accessToken: string;
+}
+
 // ── Cookie Storage Keys ──────────────────────────────────────────────────────
 export const SESSION_COOKIES = {
   TABLE_SESSION_ID: 'tavonza_table_session_id',
@@ -180,6 +208,50 @@ export const sessionService = {
       setCookie(SESSION_COOKIES.CUSTOMER_SESSION_ID, data.customerSession.id);
       setCookie(SESSION_COOKIES.ROLE, data.customerSession.role);
       setCookie(SESSION_COOKIES.ORDER_MODE, data.customerSession.orderMode);
+    }
+
+    return data;
+  },
+
+  /**
+   * Request Table Auth OTP
+   * POST /sessions/table-otp/request
+   */
+  requestTableOtp: async (payload: RequestTableOtpPayload): Promise<RequestTableOtpResponse> => {
+    const res = await baseApiFetch<RequestTableOtpResponse>('/sessions/table-otp/request', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * Verify Table Auth OTP & Join Table Session
+   * POST /sessions/table-otp/verify
+   */
+  verifyTableOtp: async (payload: VerifyTableOtpPayload): Promise<VerifyTableOtpResponse> => {
+    const res = await baseApiFetch<VerifyTableOtpResponse>('/sessions/table-otp/verify', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    const data: VerifyTableOtpResponse = (res as any)?.data || res;
+
+    if (data?.accessToken) {
+      setCookie('access_token', data.accessToken);
+      setCookie('tavonza_guest_token', data.accessToken);
+    }
+
+    if (data?.session?.id) {
+      setCookie(SESSION_COOKIES.TABLE_SESSION_ID, data.session.id);
+      setCookie(SESSION_COOKIES.TABLE_NUMBER, data.session.tableNumber || payload.tableNumber || '');
+      setCookie(SESSION_COOKIES.BRANCH_ID, data.session.branchId || payload.branchId);
+      setCookie(SESSION_COOKIES.TABLE_ID, data.session.tableId || payload.tableId);
+    }
+
+    if (data?.guestSession?.id) {
+      setCookie(SESSION_COOKIES.CUSTOMER_SESSION_ID, data.guestSession.id);
+      setCookie(SESSION_COOKIES.ROLE, (data.guestSession as any).isHostGuest ? 'host' : 'guest');
     }
 
     return data;

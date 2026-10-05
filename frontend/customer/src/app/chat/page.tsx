@@ -60,6 +60,19 @@ function ChatContent() {
     scrollToBottom();
   }, [messages, isTyping]);
 
+  // Automatically refocus the input field when AI finishes responding
+  useEffect(() => {
+    if (isTyping) {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isTyping]);
+
   // Handle initial query from URL if passed
   useEffect(() => {
     if (initialQuery && initialQuery.trim()) {
@@ -74,6 +87,7 @@ function ChatContent() {
   };
 
   const handleSendMessage = async (textToSend?: string) => {
+    if (isTyping) return;
     const content = (textToSend !== undefined ? textToSend : inputText).trim();
     if (!content) return;
 
@@ -435,8 +449,13 @@ function ChatContent() {
             <button
               key={idx}
               type="button"
+              disabled={isTyping}
               onClick={() => handleSendMessage(chip.query)}
-              className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-yellow-400/40 active:scale-95 text-xs text-zinc-300 hover:text-white rounded-full whitespace-nowrap transition cursor-pointer shadow-sm flex items-center gap-1 font-inter shrink-0"
+              className={`px-3 py-1.5 rounded-full whitespace-nowrap transition shadow-sm flex items-center gap-1 font-inter shrink-0 text-xs ${
+                isTyping
+                  ? 'bg-neutral-900/50 border border-neutral-850 text-zinc-600 cursor-not-allowed opacity-50'
+                  : 'bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-yellow-400/40 active:scale-95 text-zinc-300 hover:text-white cursor-pointer'
+              }`}
             >
               <span>{chip.label}</span>
             </button>
@@ -456,9 +475,14 @@ function ChatContent() {
           {/* Menu / Voice Button */}
           <button
             type="button"
+            disabled={isTyping}
             onClick={() => handleSendMessage("What's your chef special for today?")}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-neutral-800/90 hover:bg-neutral-700 text-zinc-300 hover:text-white flex items-center justify-center transition active:scale-95 shrink-0 cursor-pointer"
-            title="Chef Recommendation"
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition shrink-0 ${
+              isTyping
+                ? 'bg-neutral-850 text-zinc-600 opacity-40 cursor-not-allowed'
+                : 'bg-neutral-800/90 hover:bg-neutral-700 text-zinc-300 hover:text-white active:scale-95 cursor-pointer'
+            }`}
+            title={isTyping ? 'AI is replying...' : 'Chef Recommendation'}
           >
             <Mic className="w-4 h-4" />
           </button>
@@ -469,22 +493,23 @@ function ChatContent() {
               ref={inputRef}
               type="text"
               value={inputText}
+              disabled={isTyping}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Ask anything (allergens, wine, dishes)..."
-              className="w-full py-2 sm:py-2.5 pl-3.5 sm:pl-4 pr-3.5 sm:pr-4 bg-neutral-950 border border-neutral-800 focus:border-yellow-400/60 rounded-full text-xs sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none transition font-inter min-w-0"
+              placeholder={isTyping ? 'AI is formulating response...' : 'Ask anything (allergens, wine, dishes)...'}
+              className="w-full py-2 sm:py-2.5 pl-3.5 sm:pl-4 pr-3.5 sm:pr-4 bg-neutral-950 border border-neutral-800 focus:border-yellow-400/60 rounded-full text-xs sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none transition font-inter min-w-0 disabled:cursor-not-allowed disabled:placeholder:text-yellow-400/60"
             />
           </div>
 
           {/* Send Button */}
           <button
             type="submit"
-            disabled={!inputText.trim()}
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition active:scale-95 shrink-0 cursor-pointer shadow-md ${
-              inputText.trim()
-                ? 'bg-yellow-400 hover:bg-yellow-300 text-neutral-950 shadow-yellow-500/20'
-                : 'bg-neutral-800 text-zinc-600 cursor-not-allowed'
+            disabled={isTyping || !inputText.trim()}
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition shrink-0 shadow-md ${
+              isTyping || !inputText.trim()
+                ? 'bg-neutral-800 text-zinc-600 opacity-40 cursor-not-allowed'
+                : 'bg-yellow-400 hover:bg-yellow-300 text-neutral-950 active:scale-95 cursor-pointer shadow-yellow-500/20'
             }`}
-            title="Send message"
+            title={isTyping ? 'AI is replying...' : 'Send message'}
           >
             <Send className="w-4 h-4 stroke-[2.5]" />
           </button>

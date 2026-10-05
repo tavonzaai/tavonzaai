@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Monitor } from 'lucide-react';
-import { mockPendingOrders } from '../data';
+import { cashierService, getActiveBranchId } from '@/redux/features/cashierApi';
+import { PendingCheckoutOrder } from '../types';
 import { toast } from 'sonner';
 
 interface PendingCheckoutProps {
@@ -10,6 +11,40 @@ interface PendingCheckoutProps {
 }
 
 export default function PendingCheckoutSection({ onOpenPOS }: PendingCheckoutProps) {
+  const [pendingOrders, setPendingOrders] = useState<PendingCheckoutOrder[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadPending = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const raw = await cashierService.getOrders(branchId);
+        if (mounted && Array.isArray(raw)) {
+          const pending = raw
+            .filter((o: any) => o.paymentStatus !== 'PAID')
+            .map((o: any) => ({
+              id: o.orderId || o.id,
+              table: o.tableLabel || (o.tableId ? 'Table' : 'Takeaway'),
+              customerName: o.customerName || 'Walk-in Guest',
+              orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
+              amount: Number(o.totalAmount || o.total || 0),
+              itemCount: Array.isArray(o.items) ? o.items.length : 1,
+              timeWaiting: 'Active',
+            }));
+          setPendingOrders(pending);
+        }
+      } catch (err) {
+        console.error('Failed to load pending checkout orders:', err);
+      }
+    };
+    loadPending();
+    const interval = setInterval(loadPending, 8000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
     <div className="bg-white/10 rounded-[10px] outline outline-1 outline-offset-[-1px] outline-white/10 backdrop-blur-xl p-6 font-['Inter'] shadow-lg flex flex-col justify-between">
       {/* Top Header */}
@@ -25,43 +60,49 @@ export default function PendingCheckoutSection({ onOpenPOS }: PendingCheckoutPro
           </div>
 
           <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-sm font-semibold rounded-[5px] font-['Inter']">
-            3 orders
+            {pendingOrders.length} {pendingOrders.length === 1 ? 'order' : 'orders'}
           </span>
         </div>
 
         {/* Order Items List */}
         <div className="space-y-2.5">
-          {mockPendingOrders.map((order) => (
-            <div
-              key={order.id}
-              onClick={() => toast.info(`Checkout order ${order.orderNumber} for ${order.customerName}`)}
-              className="h-12 px-3 bg-white/5 hover:bg-white/10 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-white/10 flex items-center justify-between transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                {/* Table Badge */}
-                <div className="w-8 h-6 bg-white/10 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-white/10 flex items-center justify-center">
-                  <span className="text-white text-xs font-normal font-['Inter']">
-                    {order.table}
-                  </span>
-                </div>
-
-                {/* Name & Order Number */}
-                <div>
-                  <div className="text-slate-200 text-sm font-semibold font-['Inter'] leading-tight">
-                    {order.customerName}
-                  </div>
-                  <div className="text-slate-500 text-sm font-normal font-['Inter'] leading-tight">
-                    {order.orderNumber}
-                  </div>
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div className="text-teal-500 text-sm font-semibold font-['Inter']">
-                ${order.amount.toFixed(2)}
-              </div>
+          {pendingOrders.length === 0 ? (
+            <div className="py-6 text-center text-neutral-400 text-sm">
+              All orders are fully settled.
             </div>
-          ))}
+          ) : (
+            pendingOrders.slice(0, 5).map((order) => (
+              <div
+                key={order.id}
+                onClick={() => toast.info(`Checkout order ${order.orderNumber} for ${order.customerName}`)}
+                className="h-12 px-3 bg-white/5 hover:bg-white/10 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-white/10 flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  {/* Table Badge */}
+                  <div className="w-8 h-6 bg-white/10 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-white/10 flex items-center justify-center">
+                    <span className="text-white text-xs font-normal font-['Inter']">
+                      {order.table}
+                    </span>
+                  </div>
+
+                  {/* Name & Order Number */}
+                  <div>
+                    <div className="text-slate-200 text-sm font-semibold font-['Inter'] leading-tight">
+                      {order.customerName}
+                    </div>
+                    <div className="text-slate-500 text-sm font-normal font-['Inter'] leading-tight">
+                      {order.orderNumber}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div className="text-teal-500 text-sm font-semibold font-['Inter']">
+                  ${order.amount.toFixed(2)}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

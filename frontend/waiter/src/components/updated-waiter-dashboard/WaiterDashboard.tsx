@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Clock,
   Sparkles,
@@ -33,7 +33,7 @@ import TakingOrderView from './orders';
 import OrderStatusView from './order-status';
 import BillCheckoutView from './checkout';
 import { DashboardTable, ShiftKPIs, TableStatus, OrderTicketItem } from './types';
-import { initialTables, initialShiftKPIs } from './data';
+import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
 
 export interface WaiterDashboardProps {
   initialTab?: string;
@@ -46,10 +46,107 @@ export default function WaiterDashboard({ initialTab = 'floor-view' }: WaiterDas
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Tables and KPIs live state
-  const [tables, setTables] = useState<DashboardTable[]>(initialTables);
-  const [kpis, setKpis] = useState<ShiftKPIs>(initialShiftKPIs);
+  const [tables, setTables] = useState<DashboardTable[]>([]);
+  const [kpis, setKpis] = useState<ShiftKPIs>({
+    allTables: 0,
+    ready: 0,
+    attention: 0,
+    bill: 0,
+    seated: 0,
+    shiftStatus: 'Connecting...',
+    ordersInProgress: 0,
+    nextPriorityTable: 'None',
+    nextPriorityOrder: 'None',
+  });
   const [statusFilter, setStatusFilter] = useState<'all' | TableStatus>('all');
-  const [lastSyncTime, setLastSyncTime] = useState<string>('8s Ago');
+  const [lastSyncTime, setLastSyncTime] = useState<string>('Live');
+
+  useEffect(() => {
+    let mounted = true;
+    const loadWaiterData = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const [apiTables, apiOrders] = await Promise.all([
+          waiterService.getAllTables(branchId).catch(() => []),
+          waiterService.getActiveOrders(branchId).catch(() => []),
+        ]);
+
+        if (mounted && Array.isArray(apiTables)) {
+          const mapped: DashboardTable[] = apiTables.map((t: any, idx: number) => {
+            const tableOrder = (apiOrders || []).find(
+              (o: any) => o.tableId === t.id || o.tableLabel === t.label
+            );
+            const isReady = tableOrder?.status === 'READY_TO_SERVE';
+            const isPreparing = tableOrder?.status === 'ACCEPTED' || tableOrder?.status === 'PREPARING';
+            const isPayment = t.serviceStatus === 'PAYMENT_PENDING' || tableOrder?.paymentStatus === 'UNPAID';
+            const isSeated = t.serviceStatus === 'OCCUPIED' || Boolean(t.activeSessionId);
+
+            let status: TableStatus = 'seated';
+            let statusLabel = 'Available';
+            if (isReady) {
+              status = 'ready';
+              statusLabel = 'Food Ready';
+            } else if (isPayment) {
+              status = 'bill';
+              statusLabel = 'Waiting for Bill';
+            } else if (isPreparing) {
+              status = 'preparing';
+              statusLabel = 'Preparing';
+            } else if (isSeated) {
+              status = 'seated';
+              statusLabel = 'Dining';
+            }
+
+            const num = parseInt(t.label?.replace(/\D/g, '') || String(idx + 1), 10) || idx + 1;
+
+            return {
+              id: t.id,
+              tableNumber: num,
+              tableName: t.label || `Table ${num}`,
+              zone: 'Main Dining',
+              timeElapsed: tableOrder ? 'Active' : '—',
+              status,
+              statusLabel,
+              guestsCount: `${t.capacity || 4} guests`,
+              waiterName: tableOrder?.waiterName || 'Staff Assigned',
+              notes: tableOrder?.specialInstructions || 'Standard floor service',
+              trayItems: (tableOrder?.items || []).map((it: any, iIdx: number) => ({
+                id: `tray-${iIdx}`,
+                name: `${it.quantity}x ${it.name}`,
+                source: 'KITCHEN',
+                verified: isReady,
+              })),
+              orderId: tableOrder?.orderNumber,
+              billAmount: tableOrder?.total ? `$${Number(tableOrder.total).toFixed(2)}` : undefined,
+            };
+          });
+
+          setTables(mapped);
+          setLastSyncTime('Just now');
+          setKpis({
+            allTables: mapped.length,
+            ready: mapped.filter((t) => t.status === 'ready').length,
+            attention: mapped.filter((t) => t.status === 'attention').length,
+            bill: mapped.filter((t) => t.status === 'bill').length,
+            seated: mapped.filter((t) => t.status === 'seated').length,
+            shiftStatus: 'Active Operations',
+            ordersInProgress: (apiOrders || []).length,
+            nextPriorityTable: mapped.find((t) => t.status === 'ready')?.tableName || 'None',
+            nextPriorityOrder: mapped.find((t) => t.status === 'ready')?.orderId || 'None',
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load live waiter dashboard data:', err);
+      }
+    };
+
+    loadWaiterData();
+    const interval = setInterval(loadWaiterData, 8000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Modals state
   const [selectedTable, setSelectedTable] = useState<DashboardTable | null>(null);

@@ -1,9 +1,9 @@
 FROM node:20-alpine AS base
+RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
 WORKDIR /app
 
 FROM base AS builder
-RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json tsconfig.json ./
@@ -13,7 +13,7 @@ COPY apps/worker/ ./apps/worker/
 RUN pnpm install --frozen-lockfile
 RUN npx turbo run build --filter=@tavonza/worker...
 
-FROM node:20-alpine AS runner
+FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 

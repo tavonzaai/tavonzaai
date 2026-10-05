@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { kitchenService, getActiveBranchId } from '@/redux/features/kitchenApi';
 import {
   Flame,
   Clock,
@@ -27,140 +28,60 @@ export interface ActiveTicket {
   progressPercent: number;
 }
 
-const initialHighPriorityTickets: ActiveTicket[] = [
-  {
-    id: 'apt-1',
-    orderNumber: '#10582',
-    items: 'Burger ×2 · Fries ×2',
-    table: 'T-12',
-    station: 'Grill',
-    priority: 'High',
-    status: 'Preparing',
-    eta: '8 min',
-    progressPercent: 75,
-  },
-  {
-    id: 'apt-2',
-    orderNumber: '#10579',
-    items: 'Burger Combo',
-    table: 'Takeaway',
-    station: 'Fry',
-    priority: 'High',
-    status: 'Quality Check',
-    eta: '6 min',
-    progressPercent: 90,
-  },
-  {
-    id: 'apt-3',
-    orderNumber: '#10576',
-    items: 'Steak · Mash · Greens',
-    table: 'T-11',
-    station: 'Grill',
-    priority: 'High',
-    status: 'Preparing',
-    eta: '10 min',
-    progressPercent: 65,
-  },
-  {
-    id: 'apt-4',
-    orderNumber: '#10571',
-    items: 'BBQ Ribs · Coleslaw',
-    table: 'T-14',
-    station: 'Grill',
-    priority: 'High',
-    status: 'Delayed',
-    eta: 'Delayed',
-    progressPercent: 100,
-  },
-];
-
-const initialMediumPriorityTickets: ActiveTicket[] = [
-  {
-    id: 'apt-5',
-    orderNumber: '#10581',
-    items: 'Chicken Pizza',
-    table: 'T-08',
-    station: 'Pizza',
-    priority: 'Medium',
-    status: 'Preparing',
-    eta: '12 min',
-    progressPercent: 60,
-  },
-  {
-    id: 'apt-6',
-    orderNumber: '#10577',
-    items: 'Margherita Pizza ×2',
-    table: 'T-03',
-    station: 'Pizza',
-    priority: 'Medium',
-    status: 'New',
-    eta: '18 min',
-    progressPercent: 30,
-  },
-  {
-    id: 'apt-7',
-    orderNumber: '#10573',
-    items: 'Chicken Wrap · Fries',
-    table: 'Takeaway',
-    station: 'Fry',
-    priority: 'Medium',
-    status: 'Preparing',
-    eta: '9 min',
-    progressPercent: 70,
-  },
-];
-
-const initialNormalPriorityTickets: ActiveTicket[] = [
-  {
-    id: 'apt-8',
-    orderNumber: '#10580',
-    items: 'Alfredo Pasta ×2',
-    table: 'T-15',
-    station: 'Grill',
-    priority: 'Normal',
-    status: 'Preparing',
-    eta: '15 min',
-    progressPercent: 50,
-  },
-  {
-    id: 'apt-9',
-    orderNumber: '#10578',
-    items: 'Caesar Salad · Soup',
-    table: 'T-06',
-    station: 'Dessert',
-    priority: 'Normal',
-    status: 'Delayed',
-    eta: 'Delayed',
-    progressPercent: 100,
-  },
-  {
-    id: 'apt-10',
-    orderNumber: '#10575',
-    items: 'Fish & Chips',
-    table: 'T-09',
-    station: 'Fry',
-    priority: 'Normal',
-    status: 'Delayed',
-    eta: 'Delayed',
-    progressPercent: 100,
-  },
-  {
-    id: 'apt-11',
-    orderNumber: '#10572',
-    items: 'Veg Risotto',
-    table: 'T-07',
-    station: 'Grill',
-    priority: 'Normal',
-    status: 'New',
-    eta: '14 min',
-    progressPercent: 40,
-  },
-];
-
 export default function ActiveOrdersView() {
-  const [highTickets, setHighTickets] = useState<ActiveTicket[]>(initialHighPriorityTickets);
-  const [mediumTickets, setMediumTickets] = useState<ActiveTicket[]>(initialMediumPriorityTickets);
-  const [normalTickets, setNormalTickets] = useState<ActiveTicket[]>(initialNormalPriorityTickets);
+  const [highTickets, setHighTickets] = useState<ActiveTicket[]>([]);
+  const [mediumTickets, setMediumTickets] = useState<ActiveTicket[]>([]);
+  const [normalTickets, setNormalTickets] = useState<ActiveTicket[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadTickets = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const rawTickets = await kitchenService.getActiveTickets(branchId);
+        if (mounted && Array.isArray(rawTickets)) {
+          const mapped: ActiveTicket[] = rawTickets.map((t: any) => {
+            let status: ActiveTicket['status'] = 'New';
+            if (t.status === 'PREPARING') status = 'Preparing';
+            else if (t.status === 'READY') status = 'Ready';
+            else if (t.status === 'SERVED') status = 'Ready';
+
+            const createdDate = new Date(t.createdAt);
+            const elapsed = !isNaN(createdDate.getTime())
+              ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 60000))
+              : 0;
+
+            const isHigh = elapsed > 15;
+            const priority: ActiveTicket['priority'] = isHigh ? 'High' : status === 'Preparing' ? 'Medium' : 'Normal';
+
+            return {
+              id: t.id,
+              orderNumber: t.orderNumber || '#Ticket',
+              items: `${t.quantity}x ${t.productName}`,
+              table: t.tableLabel || 'Table',
+              station: t.stationType === 'BAR' ? 'Bar Station' : 'Grill',
+              priority,
+              status: isHigh ? 'Delayed' : status,
+              eta: `${Math.max(2, 15 - elapsed)} min`,
+              progressPercent: status === 'Ready' ? 100 : status === 'Preparing' ? 65 : 20,
+            };
+          });
+
+          setHighTickets(mapped.filter((t) => t.priority === 'High'));
+          setMediumTickets(mapped.filter((t) => t.priority === 'Medium'));
+          setNormalTickets(mapped.filter((t) => t.priority === 'Normal'));
+        }
+      } catch (err) {
+        console.error('Failed to load active tickets for kitchen view:', err);
+      }
+    };
+    loadTickets();
+    const interval = setInterval(loadTickets, 7000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
   const [stationFilter, setStationFilter] = useState<string>('All');
   const [selectedTicket, setSelectedTicket] = useState<ActiveTicket | null>(null);
 

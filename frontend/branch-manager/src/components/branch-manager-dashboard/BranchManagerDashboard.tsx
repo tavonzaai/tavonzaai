@@ -21,9 +21,9 @@ import ReassignWaiterModal from './modals/ReassignWaiterModal';
 import AskAiModal from './modals/AskAiModal';
 import OtherViews from './other/OtherViews';
 import { TableItem } from './types';
-import { INITIAL_TABLES } from './data';
 import { navToRoute, routeToNav } from './routes';
 import { Sparkles, CheckCircle2 } from 'lucide-react';
+import { branchManagerService, getActiveBranchId } from '../../redux/features/branchManagerApi';
 
 export interface BranchManagerDashboardProps {
   initialNav?: string;
@@ -51,7 +51,44 @@ export default function BranchManagerDashboard({
   const [activeNav, setActiveNav] = useState<string>(() => getNavFromPath(pathname) || initialNav);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [tables, setTables] = useState<TableItem[]>(INITIAL_TABLES);
+  const [tables, setTables] = useState<TableItem[]>([]);
+
+  const loadLiveTables = useCallback(async () => {
+    try {
+      const branchId = getActiveBranchId();
+      const apiTables = await branchManagerService.getTables(branchId);
+      if (apiTables) {
+        const mappedTables: TableItem[] = apiTables.map((t: any, idx: number) => {
+          let status: any = 'available';
+          const serv = String(t.serviceStatus || '').toUpperCase();
+          if (serv === 'PREPARING') status = 'preparing';
+          else if (serv === 'ORDERING' || serv === 'OCCUPIED') status = 'occupied';
+          else if (serv === 'SERVING' || serv === 'READY') status = 'ready';
+          else if (serv === 'PAYMENT_PENDING') status = 'payment';
+          else if (serv === 'NEEDS_ATTENTION') status = 'need_attention';
+
+          return {
+            id: t.id,
+            number: t.label || `T-${String(idx + 1).padStart(2, '0')}`,
+            status,
+            capacity: t.capacity || 4,
+            waiter: 'Floor Staff',
+            itemsCount: status === 'available' ? 0 : 2,
+            orderNumber: status === 'available' ? undefined : `#1000${idx + 1}`,
+            orderTime: status === 'available' ? undefined : 'Active',
+            subtotal: status === 'available' ? 0 : 35.0,
+          };
+        });
+        setTables(mappedTables);
+      }
+    } catch (err) {
+      console.warn('Could not fetch live tables:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLiveTables();
+  }, [loadLiveTables]);
 
   // Drilldown selection states
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -103,26 +140,40 @@ export default function BranchManagerDashboard({
 
   const handleSelectTable = (tableId: string) => {
     setSelectedTableId(tableId);
-    handleSetActiveNav('Table');
+    setActiveNav('Table');
+    const targetRoute = navToRoute['Table'] || '/branch-manager-dashboard/tables';
+    router.push(targetRoute);
   };
 
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrderId(orderId);
-    handleSetActiveNav('Orders');
+    setActiveNav('Orders');
+    const targetRoute = navToRoute['Orders'] || '/branch-manager-dashboard/orders';
+    router.push(targetRoute);
   };
 
   const handleSelectStaff = (staffId: string) => {
     setSelectedStaffId(staffId);
-    handleSetActiveNav('Staff');
+    setActiveNav('Staff');
+    const targetRoute = navToRoute['Staff'] || '/branch-manager-dashboard/staff';
+    router.push(targetRoute);
   };
 
   const handleSelectPayment = (paymentId: string) => {
     setSelectedPaymentId(paymentId);
-    handleSetActiveNav('Payments');
+    setActiveNav('Payments');
+    const targetRoute = navToRoute['Payments'] || '/branch-manager-dashboard/payments';
+    router.push(targetRoute);
   };
 
   const currentTable: TableItem =
-    tables.find((t) => t.id === selectedTableId) || INITIAL_TABLES[2]!;
+    tables.find((t) => t.id === selectedTableId) ||
+    tables[0] || {
+      id: '',
+      number: 'T-01',
+      status: 'available',
+      capacity: 4,
+    };
 
   const handleConfirmReassign = (newWaiterName: string) => {
     if (selectedTableId) {

@@ -1,18 +1,14 @@
 // ============================================================================
-// Drizzle Alert Repository — Customer Alert Persistence
+// Alert Repository — Ephemeral Customer Operational Alerts
 // ============================================================================
 
-import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, inArray } from 'drizzle-orm';
-import { DRIZZLE } from '@tavonza/database';
-import { customerAlerts } from '@tavonza/database';
+import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import type { CustomerAlert, AlertType } from '../../domain/entities/waiter.entity';
-
-type DrizzleDb = any;
 
 @Injectable()
 export class DrizzleAlertRepository {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDb) {}
+  private alerts: Map<string, CustomerAlert> = new Map();
 
   async create(data: {
     branchId: string;
@@ -22,61 +18,52 @@ export class DrizzleAlertRepository {
     type: AlertType;
     message?: string;
   }): Promise<CustomerAlert> {
-    const result = await this.db
-      .insert(customerAlerts)
-      .values({
-        branchId: data.branchId,
-        tableId: data.tableId,
-        tableSessionId: data.tableSessionId,
-        customerSessionId: data.customerSessionId ?? null,
-        type: data.type,
-        message: data.message ?? null,
-        status: 'pending',
-      })
-      .returning();
-    return result[0];
+    const alert: CustomerAlert = {
+      id: randomUUID(),
+      branchId: data.branchId,
+      tableId: data.tableId,
+      tableSessionId: data.tableSessionId,
+      customerSessionId: data.customerSessionId ?? null,
+      type: data.type,
+      message: data.message ?? null,
+      status: 'pending',
+      createdAt: new Date(),
+    };
+
+    this.alerts.set(alert.id, alert);
+    return alert;
   }
 
   async findPendingForBranch(branchId: string): Promise<CustomerAlert[]> {
-    return this.db
-      .select()
-      .from(customerAlerts)
-      .where(
-        and(
-          eq(customerAlerts.branchId, branchId),
-          inArray(customerAlerts.status, ['pending', 'acknowledged']),
-        ),
-      )
-      .orderBy(customerAlerts.createdAt);
+    const branchAlerts: CustomerAlert[] = [];
+    for (const alert of this.alerts.values()) {
+      if (alert.branchId === branchId && (alert.status === 'pending' || alert.status === 'acknowledged')) {
+        branchAlerts.push(alert);
+      }
+    }
+    return branchAlerts.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
   async findById(alertId: string): Promise<CustomerAlert | null> {
-    const result = await this.db
-      .select()
-      .from(customerAlerts)
-      .where(eq(customerAlerts.id, alertId))
-      .limit(1);
-    return result[0] ?? null;
+    return this.alerts.get(alertId) ?? null;
   }
 
   async acknowledge(alertId: string, waiterId: string): Promise<void> {
-    await this.db
-      .update(customerAlerts)
-      .set({
-        status: 'acknowledged',
-        acknowledgedById: waiterId,
-        acknowledgedAt: new Date(),
-      })
-      .where(eq(customerAlerts.id, alertId));
+    const alert = this.alerts.get(alertId);
+    if (alert) {
+      alert.status = 'acknowledged';
+      alert.acknowledgedById = waiterId;
+      alert.acknowledgedAt = new Date();
+      this.alerts.set(alertId, alert);
+    }
   }
 
   async resolve(alertId: string): Promise<void> {
-    await this.db
-      .update(customerAlerts)
-      .set({
-        status: 'resolved',
-        resolvedAt: new Date(),
-      })
-      .where(eq(customerAlerts.id, alertId));
+    const alert = this.alerts.get(alertId);
+    if (alert) {
+      alert.status = 'resolved';
+      alert.resolvedAt = new Date();
+      this.alerts.set(alertId, alert);
+    }
   }
 }

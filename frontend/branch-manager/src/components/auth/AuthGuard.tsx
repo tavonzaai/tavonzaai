@@ -16,13 +16,13 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   const roleUpper = String(user?.role || '').toUpperCase();
   const hasManagerRole =
-    !user ||
-    roleUpper.includes('MANAGER') ||
-    roleUpper === 'ADMIN' ||
-    roleUpper === 'OWNER' ||
-    user?.assignments?.some((a: any) => String(a?.role || '').toUpperCase().includes('MANAGER'));
+    Boolean(user) &&
+    (roleUpper.includes('MANAGER') ||
+      roleUpper === 'ADMIN' ||
+      roleUpper === 'OWNER' ||
+      user?.assignments?.some((a: any) => String(a?.role || '').toUpperCase().includes('MANAGER')));
 
-  const isAuth = (isAuthenticated && hasManagerRole) || isManagerAuthenticated();
+  const isAuth = isAuthenticated && hasManagerRole && isManagerAuthenticated();
 
   useEffect(() => {
     if (isInitialized && !isAuth) {

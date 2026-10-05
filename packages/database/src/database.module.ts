@@ -15,6 +15,8 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
 
+import { OutboxService } from './outbox.service';
+
 @Global()
 @Module({
   providers: [
@@ -27,6 +29,11 @@ import { existsSync } from 'fs';
         }
         return createDrizzleDatabase(url);
       },
+    },
+    {
+      provide: OutboxService,
+      inject: [DRIZZLE],
+      useFactory: (db: DrizzleDatabase) => new OutboxService(db),
     },
     {
       provide: 'DATABASE_MIGRATION',
@@ -53,6 +60,6 @@ import { existsSync } from 'fs';
       },
     },
   ],
-  exports: [DRIZZLE],
+  exports: [DRIZZLE, OutboxService],
 })
 export class DatabaseModule {}

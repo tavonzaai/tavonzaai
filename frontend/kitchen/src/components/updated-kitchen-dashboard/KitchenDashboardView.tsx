@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import AuthGuard from "@/components/auth/AuthGuard";
+import { TavonzaLogoIcon } from "../TavonzaLogo";
+import KitchenAIModal from "./KitchenAIModal";
 import Sidebar, { updatedKitchenNavItems } from "./Sidebar";
 import {
   ChefHat,
@@ -11,69 +14,105 @@ import {
   Plus,
   X,
   Flame,
-  UtensilsCrossed,
   Search,
   Check,
   ChevronDown,
   Volume2,
   VolumeX,
-  Menu as MenuIcon,
-  BookOpen,
-  Package,
-  FileSpreadsheet,
+  Bell,
+  Bot,
   Sparkles,
-  Settings,
+  Menu as MenuIcon,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { INITIAL_ORDERS, KITCHEN_STATIONS, INITIAL_INVENTORY, RECIPES, SHIFT_STATS, FLAG_REASONS } from "./data";
+import { KITCHEN_STATIONS, INITIAL_INVENTORY, RECIPES, SHIFT_STATS, FLAG_REASONS } from "./data";
 import { KitchenOrder, OrderStatus } from "./types";
+import { kitchenService, getActiveBranchId } from "@/redux/features/kitchenApi";
 
 export interface KitchenDashboardViewProps {
   initialNav?: string;
 }
 
-const getInitialNav = (initialNav?: string): string => {
-  if (initialNav && initialNav !== "Dashboard") {
-    const found = updatedKitchenNavItems.find(
-      (item) => item.name.toLowerCase() === initialNav.toLowerCase()
-    );
-    if (found) return found.name;
-    return initialNav;
-  }
-  if (typeof window !== "undefined") {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get("tab");
-    if (tabParam) {
-      const found = updatedKitchenNavItems.find(
-        (item) => item.name.toLowerCase().replace(/\s+/g, "-") === tabParam.toLowerCase()
-      );
-      if (found) return found.name;
-    }
-  }
-  return initialNav || "Dashboard";
-};
-
 export default function KitchenDashboardView({ initialNav = "Dashboard" }: KitchenDashboardViewProps) {
-  const [activeNav, setActiveNav] = useState<string>(() => getInitialNav(initialNav));
+  const [activeNav, setActiveNav] = useState<string>(initialNav);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  const [orders, setOrders] = useState<KitchenOrder[]>(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<KitchenOrder[]>([]);
   const [selectedStation, setSelectedStation] = useState<string>("Grill Station");
-  const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeTabFilter, setActiveTabFilter] = useState<string>("ALL");
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [stationDropdownOpen, setStationDropdownOpen] = useState<boolean>(false);
 
+  useEffect(() => {
+    let mounted = true;
+    const loadKitchenData = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const rawOrders = await kitchenService.getOrders(branchId);
+        if (mounted && Array.isArray(rawOrders)) {
+          const mapped: KitchenOrder[] = rawOrders
+            .filter(
+              (o: any) =>
+                o.status === "ACCEPTED" ||
+                o.status === "PREPARING" ||
+                o.status === "READY_TO_SERVE"
+            )
+            .map((o: any) => {
+              let status: OrderStatus = "NEW";
+              if (o.status === "PREPARING") status = "PREPARING";
+              else if (o.status === "READY_TO_SERVE") status = "READY";
+
+              const createdDate = new Date(o.createdAt);
+              const elapsed = !isNaN(createdDate.getTime())
+                ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 60000))
+                : 0;
+
+              return {
+                id: o.orderId || o.id,
+                orderNumber: o.orderNumber,
+                table: o.tableLabel || (o.tableId ? `Table` : "Takeaway"),
+                orderType: "DINE_IN",
+                waiter: o.waiterName || "Staff Assigned",
+                status,
+                timeElapsedMinutes: elapsed,
+                station: "Grill Station",
+                createdAt: o.createdAt,
+                items: (o.items || []).map((it: any, idx: number) => ({
+                  id: it.id || `item-${idx}`,
+                  name: it.name,
+                  quantity: it.quantity,
+                  options: it.notes ? [it.notes] : [],
+                  isCompleted: status === "READY",
+                })),
+              };
+            });
+          setOrders(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load kitchen dashboard orders:", err);
+      }
+    };
+    loadKitchenData();
+    const interval = setInterval(loadKitchenData, 7000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Flag Issue Modal State
   const [flagModalOpen, setFlagModalOpen] = useState<boolean>(false);
+  const [aiModalOpen, setAiModalOpen] = useState<boolean>(false);
   const [selectedOrderForFlag, setSelectedOrderForFlag] = useState<KitchenOrder | null>(null);
   const [selectedFlagReason, setSelectedFlagReason] = useState<string>("Food Quality / Problem");
 
-  // Notification Banner for Ready Orders
+  // Notifications Popover State
+  const [alertsOpen, setAlertsOpen] = useState<boolean>(false);
   const [readyNotification, setReadyNotification] = useState<string | null>(null);
 
-  // Live Clock
-  const [currentTime, setCurrentTime] = useState<string>("");
-  const [currentDate, setCurrentDate] = useState<string>("");
+  // Live Real-Time Clock
+  const [currentTime, setCurrentTime] = useState<string>("3:50:07 PM");
+  const [currentDate, setCurrentDate] = useState<string>("SEP 23,2026");
 
   useEffect(() => {
     const updateTime = () => {
@@ -87,11 +126,14 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
         })
       );
       setCurrentDate(
-        now.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })
+        now
+          .toLocaleDateString("en-US", {
+            month: "short",
+            day: "2-digit",
+            year: "numeric",
+          })
+          .toUpperCase()
+          .replace(" ", " ")
       );
     };
     updateTime();
@@ -99,72 +141,63 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     return () => clearInterval(interval);
   }, []);
 
-  // Sync active tab to URL
-  const handleNavChange = (navName: string) => {
-    setActiveNav(navName);
-    if (typeof window !== "undefined") {
-      const slug = navName.toLowerCase().replace(/\s+/g, "-");
-      const newUrl = slug === "dashboard" ? "/updated-kitchen-dashboard/dashboard" : `/updated-kitchen-dashboard/${slug}`;
-      window.history.pushState({}, "", newUrl);
-    }
+  // Audio chime player
+  const playChime = (type: "new" | "ready" | "alert") => {
+    if (!soundEnabled || typeof window === "undefined") return;
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === "new") {
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5
+      } else if (type === "ready") {
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12); // E5
+        osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.24); // G5
+      } else {
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.setValueAtTime(349.23, ctx.currentTime + 0.18);
+      }
+
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.45);
+    } catch {}
   };
 
   // Counters
   const newCount = orders.filter((o) => o.status === "NEW").length;
   const preparingCount = orders.filter((o) => o.status === "PREPARING").length;
   const readyCount = orders.filter((o) => o.status === "READY").length;
-  const overdueCount = orders.filter((o) => o.status === "OVERDUE" || o.flaggedIssue).length;
+  const overdueCount = orders.filter((o) => o.status === "OVERDUE" || !!o.flaggedIssue).length;
 
   // Filtered orders
   const filteredOrders = orders.filter((order) => {
     if (selectedStation !== "All Stations" && order.station !== selectedStation) {
       return false;
     }
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const matchNumber = order.orderNumber.toLowerCase().includes(query);
-      const matchTable = order.table.toLowerCase().includes(query);
-      const matchWaiter = order.waiter.toLowerCase().includes(query);
-      const matchItem = order.items.some((i) => i.name.toLowerCase().includes(query));
-      if (!matchNumber && !matchTable && !matchWaiter && !matchItem) return false;
-    }
     if (activeTabFilter === "NEW") return order.status === "NEW";
     if (activeTabFilter === "PREPARING") return order.status === "PREPARING";
     if (activeTabFilter === "READY") return order.status === "READY";
     if (activeTabFilter === "OVERDUE") return order.status === "OVERDUE" || !!order.flaggedIssue;
-
     return true;
   });
 
-  // Handlers
+  // Action Handlers
   const handleStartPreparing = (orderId: string) => {
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: "PREPARING" as OrderStatus } : o))
     );
+    playChime("new");
     toast.success("Order status updated to Preparing");
   };
 
-  const handleMarkReady = (order: KitchenOrder) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === order.id
-          ? {
-              ...o,
-              status: "READY" as OrderStatus,
-              items: o.items.map((i) => ({ ...i, isCompleted: true })),
-            }
-          : o
-      )
-    );
-    const notifMsg = `Order ${order.orderNumber} is Ready to Serve Table ${order.table}`;
-    setReadyNotification(notifMsg);
-    toast.success(notifMsg);
-    setTimeout(() => {
-      setReadyNotification(null);
-    }, 6000);
-  };
-
-  const handleToggleItemComplete = (orderId: string, itemId: string) => {
+  const handleToggleItem = (orderId: string, itemId: string) => {
     setOrders((prev) =>
       prev.map((order) => {
         if (order.id !== orderId) return order;
@@ -172,10 +205,23 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           item.id === itemId ? { ...item, isCompleted: !item.isCompleted } : item
         );
         const allCompleted = updatedItems.every((i) => i.isCompleted);
+        const newStatus: OrderStatus = allCompleted
+          ? "READY"
+          : order.status === "NEW"
+          ? "PREPARING"
+          : order.status;
+
+        if (allCompleted && order.status !== "READY") {
+          playChime("ready");
+          const notif = `Ticket ${order.orderNumber} items completed! Table ${order.table} ready.`;
+          setReadyNotification(notif);
+          toast.success(notif);
+        }
+
         return {
           ...order,
           items: updatedItems,
-          status: allCompleted ? ("READY" as OrderStatus) : order.status,
+          status: newStatus,
         };
       })
     );
@@ -200,13 +246,14 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           : o
       )
     );
-    toast.error(`Escalated issue for Order ${selectedOrderForFlag.orderNumber}: ${selectedFlagReason}`);
+    playChime("alert");
+    toast.error(`Escalated issue for Ticket ${selectedOrderForFlag.orderNumber}: ${selectedFlagReason}`);
     setFlagModalOpen(false);
     setSelectedOrderForFlag(null);
   };
 
   const handleSimulateOrder = () => {
-    const newNum = Math.floor(1000 + Math.random() * 9000);
+    const newNum = Math.floor(1520 + Math.random() * 80);
     const tableNum = `T-0${Math.floor(1 + Math.random() * 9)}`;
     const newOrder: KitchenOrder = {
       id: `ord-sim-${Date.now()}`,
@@ -220,517 +267,576 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
       createdAt: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       items: [
         {
-          id: `item-sim-1-${Date.now()}`,
+          id: `item-1-${Date.now()}`,
           name: "Classic Burger",
           quantity: 1,
           options: ["Medium Well", "No Onions"],
           isCompleted: false,
         },
         {
-          id: `item-sim-2-${Date.now()}`,
-          name: "Truffle Fries & Dip",
+          id: `item-2-${Date.now()}`,
+          name: "Classic Burger",
           quantity: 1,
-          options: ["Extra Aioli"],
+          options: ["Medium Well", "No Onions"],
           isCompleted: false,
         },
       ],
     };
     setOrders((prev) => [newOrder, ...prev]);
-    toast.info(`Simulated new incoming order ${newOrder.orderNumber} at ${newOrder.table}`);
+    playChime("new");
+    toast.info(`New incoming order ${newOrder.orderNumber} for Table ${newOrder.table}`);
   };
 
   return (
     <AuthGuard allowedRoles={["KITCHEN"]}>
-      <div className="min-h-screen w-full bg-black text-white font-sans flex flex-col md:flex-row selection:bg-yellow-400 selection:text-black overflow-x-hidden">
+      <div className="min-h-screen w-full bg-black text-white font-sans flex flex-col selection:bg-yellow-400 selection:text-black overflow-x-hidden relative">
         
-        {/* Sidebar */}
+        {/* Optional Slide-over Sidebar (hidden by default for pure KDS view) */}
         <Sidebar
           activeNav={activeNav}
-          setActiveNav={handleNavChange}
+          setActiveNav={(tab) => {
+            setActiveNav(tab);
+            setSidebarOpen(false);
+          }}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
         />
 
-        {/* Main Workspace */}
-        <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+        {/* TOP NAVIGATION BAR MATCHING USER IMAGE */}
+        <header className="w-full bg-black border-b border-zinc-900 px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4 z-30 shrink-0">
           
-          {/* Header Bar */}
-          <header className="w-full min-h-[90px] bg-black border-b border-zinc-900 px-4 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4 shrink-0 relative z-40">
-            
-            {/* Left: Title */}
+          {/* Left: Tavonza Logo & Branch / Staff Info */}
+          <div className="flex items-center gap-4 lg:gap-6">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden text-zinc-400 hover:text-white p-2 rounded-xl bg-zinc-900 border border-zinc-800"
+              title="Open Navigation"
+            >
+              <MenuIcon className="w-5 h-5" />
+            </button>
+
+            {/* Tavonza Brand Logo */}
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setSidebarOpen(true)}
-                className="md:hidden text-zinc-300 hover:text-white p-2 rounded-xl bg-zinc-900 border border-zinc-800"
-              >
-                <MenuIcon className="w-5 h-5" />
-              </button>
-              <div>
-                <span className="text-xs font-semibold text-amber-400 uppercase tracking-widest block">
-                  Kitchen Terminal • {activeNav}
+              <TavonzaLogoIcon className="w-10 h-10 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-white font-bold text-lg leading-tight tracking-tight font-['Inter']">
+                  Tavonza
                 </span>
-                <h1 className="text-lg lg:text-xl font-bold text-white font-['Inter']">
-                  Branch 4 ( Downtown )
-                </h1>
+                <span className="text-[9px] font-bold text-yellow-400 tracking-widest uppercase">
+                  AI HOSPITALITY
+                </span>
               </div>
             </div>
 
-            {/* Middle: Station & Counters */}
-            <div className="flex items-center gap-3 py-1 relative z-50">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setStationDropdownOpen(!stationDropdownOpen)}
-                  className="h-9 px-3 bg-zinc-900 border border-yellow-400 rounded-lg flex items-center justify-between gap-2 text-xs font-normal text-white uppercase font-['Inter'] min-w-[140px] cursor-pointer hover:bg-zinc-800 transition"
-                >
-                  <span>{selectedStation}</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-zinc-300" />
-                </button>
-                {stationDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40 bg-transparent"
-                      onClick={() => setStationDropdownOpen(false)}
-                    />
-                    <div className="absolute left-0 top-full mt-2 w-52 bg-zinc-900 border border-amber-500/50 rounded-xl shadow-2xl py-1.5 z-50 space-y-0.5">
-                      {["Grill Station", "Fryer Station", "Salad & Cold Prep", "Bar & Beverages", "All Stations"].map((st) => (
-                        <button
-                          key={st}
-                          type="button"
-                          onClick={() => {
-                            setSelectedStation(st);
-                            setStationDropdownOpen(false);
-                          }}
-                          className={`w-full text-left px-3.5 py-2 text-xs font-['Inter'] flex items-center justify-between cursor-pointer transition ${
-                            selectedStation === st
-                              ? "bg-yellow-400/20 text-yellow-400 font-semibold"
-                              : "text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                          }`}
-                        >
-                          <span>{st}</span>
-                          {selectedStation === st && <Check className="w-3.5 h-3.5 text-yellow-400" />}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
+            <div className="h-8 w-px bg-zinc-800 hidden sm:block" />
 
-              {/* Stat Counters */}
-              <div className="flex items-center gap-2">
-                <div className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-center">
-                  <span className="text-amber-500 font-bold text-sm leading-none block">{newCount}</span>
-                  <span className="text-[10px] text-zinc-400 font-medium uppercase">New</span>
-                </div>
-                <div className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-center">
-                  <span className="text-yellow-400 font-bold text-sm leading-none block">{preparingCount}</span>
-                  <span className="text-[10px] text-zinc-400 font-medium uppercase">Prep</span>
-                </div>
-                <div className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-center">
-                  <span className="text-emerald-400 font-bold text-sm leading-none block">{readyCount}</span>
-                  <span className="text-[10px] text-zinc-400 font-medium uppercase">Ready</span>
-                </div>
+            {/* Branch & Staff Info */}
+            <div className="flex flex-col">
+              <span className="text-white font-bold text-sm lg:text-base leading-tight font-['Inter']">
+                Branch 4 ( Downtown )
+              </span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse shrink-0" />
+                <span className="text-[11px] font-semibold text-zinc-400 tracking-wider uppercase">
+                  STAFF : MARCO VANCE
+                </span>
               </div>
+            </div>
+          </div>
 
-              {/* Simulate Button */}
+          {/* Center: Section Selector & 4 Stat Cards */}
+          <div className="flex flex-wrap items-center gap-3 lg:gap-4">
+            
+            {/* Section Dropdown */}
+            <div className="flex flex-col relative">
+              <span className="text-[10px] text-zinc-400 font-medium mb-0.5">Section</span>
               <button
                 type="button"
-                onClick={handleSimulateOrder}
-                className="h-9 px-3 bg-amber-400 hover:bg-amber-300 text-black font-semibold text-xs rounded-lg shadow-md shadow-amber-500/20 flex items-center gap-1 transition active:scale-95 cursor-pointer shrink-0"
+                onClick={() => setStationDropdownOpen(!stationDropdownOpen)}
+                className="h-9 px-3 bg-black border border-yellow-400 rounded-md flex items-center justify-between gap-3 text-xs font-semibold text-white uppercase tracking-wider min-w-[145px] hover:bg-zinc-900 transition cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Order</span>
+                <span>
+                  {selectedStation === "Grill Station"
+                    ? "GRILL SATION"
+                    : selectedStation.toUpperCase()}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
               </button>
-            </div>
 
-            {/* Right: Sound & Time */}
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setSoundEnabled(!soundEnabled)}
-                className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white transition cursor-pointer"
-                title={soundEnabled ? "Mute chimes" : "Enable chimes"}
-              >
-                {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-zinc-500" />}
-              </button>
-              <div className="text-right">
-                <span className="text-white text-xs font-bold block">{currentTime || "3:50:07 PM"}</span>
-                <span className="text-zinc-500 text-[10px] block">{currentDate || "Sep 23, 2026"}</span>
-              </div>
-            </div>
-          </header>
-
-          {/* Sub-View Component Router */}
-          <div className="flex-1 overflow-y-auto">
-            {activeNav === "Dashboard" || activeNav === "Kitchen Queue" || activeNav === "Active Orders" ? (
-              /* FIGMA KDS CARDS GRID VIEW */
-              <div className="p-4 lg:p-8 flex flex-col gap-6">
-                
-                {/* Search & Filter Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 bg-zinc-900/60 p-3 rounded-xl border border-zinc-800">
-                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                    {["ALL", "NEW", "PREPARING", "READY", "OVERDUE"].map((t) => (
+              {/* Station Dropdown Menu */}
+              {stationDropdownOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40 bg-transparent"
+                    onClick={() => setStationDropdownOpen(false)}
+                  />
+                  <div className="absolute left-0 top-full mt-1.5 w-52 bg-[#121214] border border-yellow-400/50 rounded-xl shadow-2xl py-1.5 z-50 space-y-0.5">
+                    {["Grill Station", "Fryer Station", "Salad & Cold Prep", "Bar & Beverages", "All Stations"].map((st) => (
                       <button
-                        key={t}
+                        key={st}
                         type="button"
-                        onClick={() => setActiveTabFilter(t)}
-                        className={`px-3 py-1 rounded-lg text-xs font-semibold tracking-wider transition cursor-pointer ${
-                          activeTabFilter === t
-                            ? "bg-yellow-400 text-black shadow-md shadow-yellow-400/10"
-                            : "bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800"
+                        onClick={() => {
+                          setSelectedStation(st);
+                          setStationDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3.5 py-2 text-xs font-['Inter'] flex items-center justify-between cursor-pointer transition ${
+                          selectedStation === st
+                            ? "bg-yellow-400/20 text-yellow-400 font-semibold"
+                            : "text-zinc-300 hover:bg-zinc-800 hover:text-white"
                         }`}
                       >
-                        {t}
+                        <span>{st}</span>
+                        {selectedStation === st && <Check className="w-3.5 h-3.5 text-yellow-400" />}
                       </button>
                     ))}
                   </div>
+                </>
+              )}
+            </div>
 
-                  <div className="relative w-full sm:w-64">
-                    <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search tickets, table, dish..."
-                      className="w-full h-8 pl-8 pr-3 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-                </div>
+            {/* 4 Metric / Counter Cards */}
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              
+              {/* Card 1: 08 New Orders */}
+              <button
+                type="button"
+                onClick={() => setActiveTabFilter(activeTabFilter === "NEW" ? "ALL" : "NEW")}
+                className={`px-4 py-1.5 rounded-xl text-center min-w-[80px] transition cursor-pointer border ${
+                  activeTabFilter === "NEW"
+                    ? "bg-[#27272a] border-yellow-400"
+                    : "bg-[#18181b] border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <span className="text-[#f59e0b] font-bold text-base sm:text-lg leading-tight block">
+                  {newCount.toString().padStart(2, "0")}
+                </span>
+                <span className="text-[11px] text-zinc-400 font-medium block">New Orders</span>
+              </button>
 
-                {/* Ready Notification Banner */}
-                {readyNotification && (
-                  <div className="w-full p-4 bg-emerald-950/80 border border-emerald-500/40 rounded-xl flex items-center justify-between text-sm text-white animate-in fade-in duration-200">
-                    <div className="flex items-center gap-2.5">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                      <span>{readyNotification}</span>
-                    </div>
-                    <button type="button" onClick={() => setReadyNotification(null)} className="text-zinc-400 hover:text-white">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
+              {/* Card 2: 04 Preparing */}
+              <button
+                type="button"
+                onClick={() => setActiveTabFilter(activeTabFilter === "PREPARING" ? "ALL" : "PREPARING")}
+                className={`px-4 py-1.5 rounded-xl text-center min-w-[80px] transition cursor-pointer border ${
+                  activeTabFilter === "PREPARING"
+                    ? "bg-[#27272a] border-yellow-400"
+                    : "bg-[#18181b] border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <span className="text-[#f59e0b] font-bold text-base sm:text-lg leading-tight block">
+                  {preparingCount.toString().padStart(2, "0")}
+                </span>
+                <span className="text-[11px] text-zinc-400 font-medium block">Preparing</span>
+              </button>
 
-                {/* Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-                  {filteredOrders.map((order) => {
-                    const isOverdue = order.status === "OVERDUE";
-                    const isPreparing = order.status === "PREPARING";
-                    const isReady = order.status === "READY";
-                    const isNew = order.status === "NEW";
+              {/* Card 3: 04 Preparing (Ready to Serve) */}
+              <button
+                type="button"
+                onClick={() => setActiveTabFilter(activeTabFilter === "READY" ? "ALL" : "READY")}
+                className={`px-4 py-1.5 rounded-xl text-center min-w-[80px] transition cursor-pointer border ${
+                  activeTabFilter === "READY"
+                    ? "bg-[#27272a] border-yellow-400"
+                    : "bg-[#18181b] border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <span className="text-[#f59e0b] font-bold text-base sm:text-lg leading-tight block">
+                  {readyCount.toString().padStart(2, "0")}
+                </span>
+                <span className="text-[11px] text-zinc-400 font-medium block">Preparing</span>
+              </button>
 
-                    return (
-                      <div
-                        key={order.id}
-                        className={`w-full bg-zinc-900 rounded-xl p-5 border flex flex-col justify-between gap-4 transition-all shadow-xl relative overflow-hidden ${
-                          isOverdue || order.flaggedIssue
-                            ? "border-red-500/80 bg-zinc-900/95"
-                            : isReady
-                            ? "border-emerald-500/60"
-                            : isPreparing
-                            ? "border-amber-500/40"
-                            : "border-zinc-800"
-                        }`}
+              {/* Card 4: 04 Preparing (Overdue) */}
+              <button
+                type="button"
+                onClick={() => setActiveTabFilter(activeTabFilter === "OVERDUE" ? "ALL" : "OVERDUE")}
+                className={`px-4 py-1.5 rounded-xl text-center min-w-[80px] transition cursor-pointer border ${
+                  activeTabFilter === "OVERDUE"
+                    ? "bg-[#27272a] border-yellow-400"
+                    : "bg-[#18181b] border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <span className="text-[#f59e0b] font-bold text-base sm:text-lg leading-tight block">
+                  {overdueCount.toString().padStart(2, "0")}
+                </span>
+                <span className="text-[11px] text-zinc-400 font-medium block">Preparing</span>
+              </button>
+            </div>
+
+            {/* Quick Simulate Order Button */}
+            <button
+              type="button"
+              onClick={handleSimulateOrder}
+              className="h-9 px-2.5 bg-zinc-900 border border-zinc-800 hover:border-yellow-400 text-zinc-400 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition"
+              title="Simulate incoming ticket"
+            >
+              <Plus className="w-3.5 h-3.5 text-yellow-400" />
+              <span className="hidden xl:inline">Simulate</span>
+            </button>
+          </div>
+
+          {/* Right: Notification Bell, Speaker, Live Clock & Date */}
+          <div className="flex items-center gap-3 lg:gap-4">
+            
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setAlertsOpen(!alertsOpen)}
+                className="w-10 h-10 rounded-xl bg-[#18181b] border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-800 transition cursor-pointer relative"
+                title="Kitchen Alerts"
+              >
+                <Bell className="w-4 h-4" />
+                <span className="absolute -top-1 -right-1 bg-yellow-400 text-black text-[10px] font-bold px-1.5 py-0.2 rounded-full border border-black shadow">
+                  02
+                </span>
+              </button>
+
+              {/* Alerts Dropdown */}
+              {alertsOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40 bg-transparent"
+                    onClick={() => setAlertsOpen(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-[#121214] border border-zinc-800 rounded-2xl shadow-2xl p-4 z-50 space-y-3">
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">Kitchen Alerts (2)</span>
+                      <button
+                        onClick={() => setAlertsOpen(false)}
+                        className="text-zinc-500 hover:text-white text-xs"
                       >
-                        <div className="flex flex-col gap-2.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <div>
-                              <span className="text-white text-base font-bold font-['Inter'] leading-none block">
-                                {order.orderNumber}
-                              </span>
-                              <span className="text-neutral-400 text-xs font-medium font-['Inter'] block mt-1">
-                                {order.table} . {order.orderType} . Waiter: {order.waiter}
-                              </span>
-                            </div>
-                            {isNew && <span className="px-2.5 py-1 bg-amber-400 text-black rounded-lg text-xs font-bold">New Order</span>}
-                            {isPreparing && !order.flaggedIssue && <span className="px-2.5 py-1 bg-amber-700 text-white rounded-lg text-xs font-bold">Preparing</span>}
-                            {isReady && <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold">Ready</span>}
-                            {isOverdue && !order.flaggedIssue && <span className="px-2.5 py-1 bg-red-600 text-white rounded-lg text-xs font-bold">Overdue</span>}
-                            {order.flaggedIssue && <span className="px-2.5 py-1 bg-red-600 text-white rounded-lg text-xs font-bold">Issue Flagged</span>}
-                          </div>
-
-                          {order.flaggedIssue && (
-                            <div className="p-2 bg-red-950/90 border border-red-500/40 rounded-lg text-xs text-white flex items-center gap-2">
-                              <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                              <span>Issue: {order.flaggedIssue}</span>
-                            </div>
-                          )}
-
-                          <div className="flex flex-col gap-2.5 pt-1">
-                            {order.items.map((item) => (
-                              <div
-                                key={item.id}
-                                onClick={() => handleToggleItemComplete(order.id, item.id)}
-                                className={`p-2.5 rounded-xl border transition flex flex-col gap-1.5 cursor-pointer ${
-                                  item.isCompleted
-                                    ? "bg-neutral-800/40 border-emerald-500/30"
-                                    : "bg-neutral-900/90 border-zinc-800"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div
-                                    className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition shrink-0 ${
-                                      item.isCompleted ? "bg-emerald-500 border-emerald-500 text-white" : "border-zinc-500 bg-neutral-800"
-                                    }`}
-                                  >
-                                    {item.isCompleted && <Check className="w-2.5 h-2.5 text-black stroke-[3]" />}
-                                  </div>
-                                  <span className={`text-xs font-medium ${item.isCompleted ? "text-zinc-400 line-through" : "text-zinc-100"}`}>
-                                    {item.quantity}X {item.name}
-                                  </span>
-                                </div>
-                                {item.options && item.options.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 pl-5">
-                                    {item.options.map((opt, i) => (
-                                      <span key={i} className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-300">
-                                        {opt}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="pt-2 border-t border-zinc-800/80 flex items-center gap-2">
-                          {isNew && (
-                            <button
-                              type="button"
-                              onClick={() => handleStartPreparing(order.id)}
-                              className="w-full h-9 bg-amber-400 hover:bg-amber-300 text-black font-semibold text-xs rounded-lg transition active:scale-95"
-                            >
-                              Start Preparing
-                            </button>
-                          )}
-                          {isPreparing && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleMarkReady(order)}
-                                className="flex-1 h-9 bg-amber-400 hover:bg-amber-300 text-black font-semibold text-xs rounded-lg transition active:scale-95"
-                              >
-                                Mark Ready
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => openFlagModal(order)}
-                                className="px-2.5 h-9 bg-zinc-800 hover:bg-red-500/20 text-zinc-300 hover:text-red-400 border border-zinc-700 text-xs rounded-lg flex items-center gap-1"
-                              >
-                                <AlertTriangle className="w-3.5 h-3.5" />
-                                <span>Flag</span>
-                              </button>
-                            </>
-                          )}
-                          {isReady && (
-                            <div className="w-full h-9 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center gap-2 text-emerald-400 text-xs font-semibold">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                              <span>Waiter Notified</span>
-                            </div>
-                          )}
-                        </div>
+                        ✕
+                      </button>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200">
+                        <span className="font-bold block text-red-400">Order #1524 Overdue</span>
+                        Table T-01 burger wait time exceeded 15 mins.
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : activeNav === "Stations" ? (
-              /* STATIONS VIEW */
-              <div className="p-4 lg:p-8 flex flex-col gap-6">
-                <h2 className="text-xl font-bold text-white font-['Inter']">Kitchen Workstation Load</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {KITCHEN_STATIONS.map((st) => (
-                    <div key={st.id} className="p-5 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-white font-bold text-sm">{st.name}</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${st.status === "BUSY" ? "bg-amber-500/20 text-amber-400" : "bg-emerald-500/20 text-emerald-400"}`}>
-                          {st.status}
+                      <div className="p-2.5 rounded-xl bg-yellow-950/60 border border-yellow-500/40 text-yellow-200">
+                        <span className="font-bold block text-yellow-400">Special Request: No Onions</span>
+                        Verified for Classic Burger on Grill Station.
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Volume Speaker Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                setSoundEnabled(!soundEnabled);
+                toast.info(soundEnabled ? "Audio alert chimes muted" : "Audio alert chimes enabled");
+              }}
+              className="w-10 h-10 rounded-xl bg-[#18181b] border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+              title={soundEnabled ? "Mute chimes" : "Enable chimes"}
+            >
+              {soundEnabled ? (
+                <Volume2 className="w-4 h-4 text-zinc-300" />
+              ) : (
+                <VolumeX className="w-4 h-4 text-zinc-500" />
+              )}
+            </button>
+
+            {/* Live Clock & Date */}
+            <div className="flex flex-col text-right pl-1">
+              <span className="text-white font-bold text-sm lg:text-base tracking-tight font-['Inter']">
+                {currentTime}
+              </span>
+              <span className="text-[10px] font-semibold text-zinc-400 tracking-wider uppercase">
+                {currentDate}
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* READY NOTIFICATION TOAST BANNER */}
+        {readyNotification && (
+          <div className="w-full bg-emerald-950/90 border-b border-emerald-500/50 px-6 py-2.5 flex items-center justify-between text-xs text-white z-20 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span className="font-medium">{readyNotification}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReadyNotification(null)}
+              className="text-zinc-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* MAIN KDS TICKETS WORKSPACE MATCHING USER SCREENSHOT */}
+        <main className="flex-1 p-6 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
+            {filteredOrders.map((order, idx) => {
+              const isOverdue = order.status === "OVERDUE" || !!order.flaggedIssue;
+              const isPreparing = order.status === "PREPARING";
+              const isReady = order.status === "READY";
+              const isNew = order.status === "NEW";
+
+              return (
+                <div
+                  key={order.id}
+                  className="w-full bg-[#18181b] border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between shadow-2xl transition hover:border-zinc-700 min-h-[360px]"
+                >
+                  {/* Card Header */}
+                  <div>
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <div>
+                        <span className="text-white text-lg font-bold font-['Inter'] leading-none block">
+                          {order.orderNumber}
+                        </span>
+                        <span className="text-zinc-400 text-xs font-medium block mt-1.5">
+                          {order.table} . {order.orderType} . Waiter : {order.waiter}
                         </span>
                       </div>
-                      <span className="text-xs text-zinc-400">Assigned: {st.chefAssigned}</span>
-                      <div className="flex items-center justify-between text-xs text-zinc-300 pt-2 border-t border-zinc-800">
-                        <span>Active Tickets:</span>
-                        <span className="font-bold text-amber-400">{st.activeTickets}</span>
-                      </div>
+
+                      {/* Status Badges Matching Mockup */}
+                      {isNew && (
+                        <span className="px-3 py-1 bg-[#f59e0b] text-black font-bold rounded-md text-xs tracking-wide shadow-sm">
+                          New Order
+                        </span>
+                      )}
+                      {isPreparing && (
+                        <span className="px-3 py-1 bg-[#d97706] text-white font-bold rounded-md text-xs tracking-wide shadow-sm">
+                          Preparing
+                        </span>
+                      )}
+                      {isOverdue && (
+                        <span className="px-3 py-1 bg-[#b91c1c] text-white font-bold rounded-md text-xs tracking-wide shadow-sm">
+                          OverDue
+                        </span>
+                      )}
+                      {isReady && (
+                        <span className="px-3 py-1 bg-[#15803d] text-white font-bold rounded-md text-xs tracking-wide shadow-sm">
+                          Ready
+                        </span>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            ) : activeNav === "Recipes" ? (
-              /* RECIPES VIEW */
-              <div className="p-4 lg:p-8 flex flex-col gap-6">
-                <h2 className="text-xl font-bold text-white font-['Inter']">Standard Culinary Recipes</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {RECIPES.map((rec) => (
-                    <div key={rec.id} className="p-5 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-white font-bold text-base">{rec.name}</span>
-                        <span className="text-xs text-amber-400 font-semibold">{rec.prepTimeMinutes} mins prep</span>
+
+                    {/* Flagged Issue Sub-banner if any */}
+                    {order.flaggedIssue && (
+                      <div className="mb-3 p-2 bg-red-950/80 border border-red-500/40 rounded-lg text-xs text-red-200 flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                        <span>Issue: {order.flaggedIssue}</span>
                       </div>
-                      <span className="text-xs text-zinc-400">Station: {rec.station}</span>
-                      <div className="flex flex-col gap-1 pt-2 border-t border-zinc-800">
-                        <span className="text-xs font-semibold text-zinc-300">Ingredients & Spec:</span>
-                        <ul className="text-xs text-zinc-400 list-disc list-inside space-y-1">
-                          {rec.ingredients.map((ing, i) => (
-                            <li key={i}>{ing}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : activeNav === "Inventory" ? (
-              /* INVENTORY VIEW */
-              <div className="p-4 lg:p-8 flex flex-col gap-6">
-                <h2 className="text-xl font-bold text-white font-['Inter']">Kitchen Ingredient Stock</h2>
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-zinc-800 text-zinc-300 font-semibold uppercase">
-                      <tr>
-                        <th className="p-3">Ingredient</th>
-                        <th className="p-3">Category</th>
-                        <th className="p-3">Stock Level</th>
-                        <th className="p-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-800 text-zinc-200">
-                      {INITIAL_INVENTORY.map((inv) => (
-                        <tr key={inv.id}>
-                          <td className="p-3 font-medium text-white">{inv.name}</td>
-                          <td className="p-3 text-zinc-400">{inv.category}</td>
-                          <td className="p-3 font-bold">{inv.stock} {inv.unit}</td>
-                          <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${inv.status === "LOW_STOCK" ? "bg-rose-500/20 text-rose-400" : "bg-emerald-500/20 text-emerald-400"}`}>
-                              {inv.status}
+                    )}
+
+                    {/* Food Items List */}
+                    <div className="space-y-3">
+                      {order.items.map((item) => (
+                        <div
+                          key={item.id}
+                          onClick={() => handleToggleItem(order.id, item.id)}
+                          className="bg-[#121214] border border-zinc-800/80 rounded-xl p-3 flex flex-col gap-2 cursor-pointer transition hover:border-zinc-700"
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* Checkbox Icon */}
+                            <div
+                              className={`w-4 h-4 rounded border flex items-center justify-center transition shrink-0 ${
+                                item.isCompleted
+                                  ? "bg-emerald-500 border-emerald-500 text-black font-bold"
+                                  : "border-zinc-600 bg-zinc-900 hover:border-yellow-400"
+                              }`}
+                            >
+                              {item.isCompleted && (
+                                <Check className="w-3 h-3 text-black stroke-[3.5]" />
+                              )}
+                            </div>
+
+                            {/* Item Name */}
+                            <span
+                              className={`text-xs font-semibold ${
+                                item.isCompleted
+                                  ? "text-emerald-400 line-through"
+                                  : "text-zinc-100"
+                              }`}
+                            >
+                              {item.quantity}X {item.name}
                             </span>
-                          </td>
-                        </tr>
+                          </div>
+
+                          {/* Options Pills (e.g. Medium Well, No Onions) */}
+                          {item.options && item.options.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pl-7">
+                              {item.options.map((opt, i) => (
+                                <span
+                                  key={i}
+                                  className={`px-2.5 py-0.5 rounded text-[11px] font-medium border ${
+                                    item.isCompleted
+                                      ? "bg-emerald-950/40 text-emerald-400/80 border-emerald-900/60"
+                                      : "bg-[#202024] text-zinc-300 border-zinc-700/50"
+                                  }`}
+                                >
+                                  {opt}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : activeNav === "Shift Report" ? (
-              /* SHIFT REPORT VIEW */
-              <div className="p-4 lg:p-8 flex flex-col gap-6">
-                <h2 className="text-xl font-bold text-white font-['Inter']">Daily Kitchen Shift Performance</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="p-5 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col gap-1">
-                    <span className="text-xs text-zinc-400">Tickets Completed</span>
-                    <span className="text-2xl font-bold text-white">{SHIFT_STATS.ticketsCompleted}</span>
-                  </div>
-                  <div className="p-5 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col gap-1">
-                    <span className="text-xs text-zinc-400">Avg Prep Time</span>
-                    <span className="text-2xl font-bold text-amber-400">{SHIFT_STATS.avgPrepTimeMinutes} mins</span>
-                  </div>
-                  <div className="p-5 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col gap-1">
-                    <span className="text-xs text-zinc-400">Flagged Issues</span>
-                    <span className="text-2xl font-bold text-red-400">{SHIFT_STATS.flaggedIssuesCount}</span>
-                  </div>
-                  <div className="p-5 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col gap-1">
-                    <span className="text-xs text-zinc-400">Efficiency Score</span>
-                    <span className="text-2xl font-bold text-emerald-400">{SHIFT_STATS.efficiencyScorePct}%</span>
-                  </div>
-                </div>
-              </div>
-            ) : activeNav === "AI Insights" ? (
-              /* AI INSIGHTS VIEW */
-              <div className="p-4 lg:p-8 flex flex-col gap-6">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-400" />
-                  <h2 className="text-xl font-bold text-white font-['Inter']">AI Culinary Forecasting & Analytics</h2>
-                </div>
-                <div className="p-6 bg-gradient-to-br from-zinc-900 to-amber-950/30 border border-amber-500/30 rounded-2xl flex flex-col gap-3">
-                  <span className="text-xs font-semibold text-amber-400 uppercase tracking-widest">Predictive Peak Demand Alert</span>
-                  <p className="text-sm text-zinc-200 leading-relaxed">
-                    Based on historical Friday dinner patterns, Tavonza AI forecasts a 34% surge in Grill Station orders between 7:00 PM - 8:30 PM. We recommend pre-searing 20 burger patties and replenishing brioche bun stock.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              /* SETTINGS VIEW */
-              <div className="p-4 lg:p-8 flex flex-col gap-6">
-                <h2 className="text-xl font-bold text-white font-['Inter']">KDS Terminal Configuration</h2>
-                <div className="p-5 bg-zinc-900 border border-zinc-800 rounded-xl flex flex-col gap-4 max-w-xl">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-sm font-semibold text-white block">Audio Order Chimes</span>
-                      <span className="text-xs text-zinc-400 block">Play sound when new ticket arrives</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setSoundEnabled(!soundEnabled)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold ${soundEnabled ? "bg-emerald-500 text-black" : "bg-zinc-800 text-zinc-400"}`}
-                    >
-                      {soundEnabled ? "ENABLED" : "MUTED"}
-                    </button>
+                  </div>
+
+                  {/* Card Bottom Action Button */}
+                  <div className="pt-4">
+                    {isNew && (
+                      <button
+                        type="button"
+                        onClick={() => handleStartPreparing(order.id)}
+                        className="w-full bg-[#facc15] hover:bg-yellow-400 text-black font-bold py-3 rounded-xl transition text-sm shadow-md flex items-center justify-center cursor-pointer active:scale-98"
+                      >
+                        Start Preparing
+                      </button>
+                    )}
+
+                    {(isPreparing || isOverdue) && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openFlagModal(order)}
+                          className="flex-1 bg-[#27272a] hover:bg-zinc-700 text-zinc-300 hover:text-white font-medium py-3 rounded-xl transition text-sm flex items-center justify-center gap-2 border border-zinc-700/50 cursor-pointer active:scale-98"
+                        >
+                          <AlertTriangle className="w-4 h-4 text-zinc-400" />
+                          <span>Flag issue</span>
+                        </button>
+                        {isPreparing && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Mark all items complete
+                              order.items.forEach((it) => {
+                                if (!it.isCompleted) handleToggleItem(order.id, it.id);
+                              });
+                            }}
+                            className="px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition text-xs cursor-pointer"
+                            title="Mark ticket ready"
+                          >
+                            Ready
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {isReady && (
+                      <div className="w-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 text-sm">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Ready to Serve (Waiter Alerted)</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })}
           </div>
+        </main>
+
+        {/* FLOATING AI ROBOT BUTTON IN BOTTOM CORNER MATCHING USER SPEC */}
+        <div className="fixed bottom-8 right-8 z-40">
+          <button
+            type="button"
+            onClick={() => setAiModalOpen(true)}
+            className="w-14 h-14 rounded-full border-2 border-yellow-400 bg-zinc-900 shadow-[0_0_25px_rgba(250,204,21,0.5)] flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all group relative overflow-hidden"
+            title="Ask Tavonza AI Kitchen Co-Pilot"
+          >
+            {/* Robot Image */}
+            <Image
+              src="/images/jarvis-robot.jpg"
+              alt="Tavonza AI Robot"
+              width={56}
+              height={56}
+              className="w-full h-full object-cover rounded-full"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+            {/* Fallback Icon */}
+            <Bot className="w-7 h-7 text-yellow-400 absolute" />
+            
+            {/* Sparkling pulse indicator */}
+            <div className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-black animate-pulse" />
+          </button>
         </div>
 
-        {/* Flag Kitchen Issue Modal */}
+        {/* FLAG ISSUE MODAL */}
         {flagModalOpen && selectedOrderForFlag && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="w-full max-w-xl bg-zinc-900 rounded-2xl border border-zinc-700 shadow-2xl overflow-hidden flex flex-col gap-6 p-6 sm:p-8">
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
-                    <AlertTriangle className="w-5 h-5 text-red-500" />
-                  </div>
-                  <h3 className="text-xl font-bold text-red-500 capitalize font-['Inter']">Flag Kitchen Issue</h3>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+            onClick={() => setFlagModalOpen(false)}
+          >
+            <div
+              className="w-full max-w-md bg-[#18181b] border border-red-500/40 rounded-2xl p-6 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2 text-red-400 font-bold text-base">
+                  <AlertTriangle className="w-5 h-5" />
+                  <span>Flag Ticket {selectedOrderForFlag.orderNumber}</span>
                 </div>
-                <button type="button" onClick={() => setFlagModalOpen(false)} className="text-zinc-400 hover:text-white p-1">
+                <button
+                  type="button"
+                  onClick={() => setFlagModalOpen(false)}
+                  className="text-zinc-400 hover:text-white"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <p className="text-sm text-zinc-300 leading-relaxed font-['Inter']">
-                Flagging order <span className="text-white font-bold">{selectedOrderForFlag.orderNumber}</span> will notify the assistant manager & floor waiter immediately for resolution.
+              <p className="text-zinc-300 text-xs leading-relaxed">
+                Select the operational issue for Table {selectedOrderForFlag.table}. This will notify
+                the expediter, floor waiter ({selectedOrderForFlag.waiter}), and manager.
               </p>
 
-              <div className="flex flex-col gap-2.5">
-                {FLAG_REASONS.map((reason) => {
-                  const isSelected = selectedFlagReason === reason;
-                  return (
-                    <div
-                      key={reason}
-                      onClick={() => setSelectedFlagReason(reason)}
-                      className={`w-full p-4 rounded-xl border transition cursor-pointer flex items-center gap-3 ${
-                        isSelected ? "bg-black border-red-600 text-white" : "bg-black/60 border-zinc-800 text-zinc-400 hover:text-white"
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? "border-red-600 bg-red-600/20" : "border-zinc-600"}`}>
-                        {isSelected && <div className="w-2 h-2 rounded-full bg-red-600" />}
-                      </div>
-                      <span className="text-sm font-medium capitalize font-['Inter']">{reason}</span>
-                    </div>
-                  );
-                })}
+              <div className="space-y-2">
+                {FLAG_REASONS.map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => setSelectedFlagReason(reason)}
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl border text-xs font-medium transition cursor-pointer flex items-center justify-between ${
+                      selectedFlagReason === reason
+                        ? "bg-red-950/70 border-red-500 text-white"
+                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-800"
+                    }`}
+                  >
+                    <span>{reason}</span>
+                    {selectedFlagReason === reason && <Check className="w-4 h-4 text-red-400" />}
+                  </button>
+                ))}
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setFlagModalOpen(false)}
-                  className="px-5 h-11 border border-zinc-700 hover:bg-zinc-800 text-white font-semibold text-sm rounded-xl"
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={submitFlagIssue}
-                  className="px-6 h-11 bg-red-600 hover:bg-red-500 text-white font-semibold text-sm rounded-xl shadow-lg shadow-red-600/20"
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition shadow-lg shadow-red-600/20"
                 >
-                  Dispatch Issue Escalation
+                  Submit & Escalate
                 </button>
               </div>
             </div>
           </div>
         )}
+
+        {/* KITCHEN AI CO-PILOT MODAL CONNECTED TO AI ENGINE */}
+        <KitchenAIModal
+          isOpen={aiModalOpen}
+          onClose={() => setAiModalOpen(false)}
+          activeStation={selectedStation}
+        />
+
       </div>
     </AuthGuard>
   );
