@@ -39,4 +39,4 @@ COPY --from=builder /app/frontend/${APP_NAME}/node_modules ./frontend/${APP_NAME
 
 USER nextjs
 EXPOSE ${APP_PORT}
-CMD pnpm --filter "@frontend/${APP_TARGET}" start
+CMD ["sh", "-c", "pnpm --filter @frontend/${APP_TARGET} start"]
