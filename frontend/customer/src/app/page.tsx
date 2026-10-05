@@ -29,8 +29,8 @@ function LandingPageContent() {
   const isCustomer = isAuthenticated && userRole === 'CUSTOMER';
 
   useEffect(() => {
-    if (mounted && isInitialized && isCustomer) {
-      // User is verified as CUSTOMER via session - redirect directly to menu
+    if (mounted && isInitialized) {
+      // Unauthenticated or customer - redirect directly to menu so address bar displays /menu
       if (tableParam) {
         if (typeof window !== 'undefined') {
           const formatted = tableParam.toLowerCase().startsWith('table')
@@ -43,15 +43,15 @@ function LandingPageContent() {
         router.replace('/menu');
       }
     }
-  }, [mounted, isInitialized, isCustomer, tableParam, router]);
+  }, [mounted, isInitialized, tableParam, router]);
 
   // While rendering on server or checking session, show uniform loading state (prevents hydration mismatch)
-  if (!mounted || !isInitialized || isCustomer) {
+  if (!mounted || !isInitialized) {
     return (
       <div className="w-full min-h-screen bg-black flex flex-col items-center justify-center text-white p-4">
         <div className="w-10 h-10 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-stone-300 text-sm font-medium tracking-wide">
-          {isCustomer ? 'Redirecting to menu...' : 'Loading Tavonza...'}
+          Loading Tavonza...
         </p>
       </div>
     );

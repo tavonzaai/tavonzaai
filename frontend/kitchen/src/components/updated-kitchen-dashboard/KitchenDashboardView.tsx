@@ -30,13 +30,43 @@ import { KITCHEN_STATIONS, INITIAL_INVENTORY, RECIPES, SHIFT_STATS, FLAG_REASONS
 import { KitchenOrder, OrderStatus } from "./types";
 import { kitchenService, getActiveBranchId } from "@/redux/features/kitchenApi";
 
+import { useRouter, usePathname } from "next/navigation";
+
 export interface KitchenDashboardViewProps {
   initialNav?: string;
 }
 
 export default function KitchenDashboardView({ initialNav = "Dashboard" }: KitchenDashboardViewProps) {
-  const [activeNav, setActiveNav] = useState<string>(initialNav);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const getNavFromPath = React.useCallback(() => {
+    if (!pathname) return initialNav;
+    const slug = pathname.split('/').filter(Boolean).pop();
+    const slugToNavMap: Record<string, string> = {
+      'dashboard': 'Dashboard',
+      'kitchen-queue': 'Kitchen Queue',
+      'active-orders': 'Active Orders',
+      'stations': 'Stations',
+      'recipes': 'Recipes',
+      'inventory': 'Inventory',
+      'shift-report': 'Shift Report',
+      'ai-insights': 'AI Insights',
+      'settings': 'Settings',
+    };
+    return (slug && slugToNavMap[slug]) || initialNav;
+  }, [pathname, initialNav]);
+
+  const [activeNav, setActiveNav] = useState<string>(() => getNavFromPath());
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (initialNav) {
+      setActiveNav(initialNav);
+    } else {
+      setActiveNav(getNavFromPath());
+    }
+  }, [initialNav, getNavFromPath]);
   const [orders, setOrders] = useState<KitchenOrder[]>([]);
   const [selectedStation, setSelectedStation] = useState<string>("Grill Station");
   const [activeTabFilter, setActiveTabFilter] = useState<string>("ALL");

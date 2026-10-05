@@ -47,8 +47,12 @@ function DishDetailContent() {
   const searchParams = useSearchParams();
   const { cart, upsertCartItem } = useCart();
 
-  const dishParam = searchParams.get('dish');
+  const searchDish = searchParams.get('dish');
+  const nameParam = searchParams.get('name');
   const tableParam = searchParams.get('table') || 'Table 8';
+
+  const pathSlug = typeof window !== 'undefined' ? window.location.pathname.split('/dish-detail/')[1] : null;
+  const dishParam = searchDish || pathSlug;
 
   const { items: backendItems, selectedItem } = useAppSelector((state) => state.menuItems);
 
@@ -65,7 +69,7 @@ function DishDetailContent() {
 
   // Find dish from dynamic backend data or fallback
   const dish: MenuItem = useMemo(() => {
-    if (selectedItem && (selectedItem.id === dishParam || !dishParam)) {
+    if (selectedItem && (selectedItem.id === dishParam || !dishParam || selectedItem.id === searchDish)) {
       const addOns: { id: string; name: string; price: number }[] = [];
       if (selectedItem.modifierGroups) {
         for (const grp of selectedItem.modifierGroups) {
@@ -94,7 +98,15 @@ function DishDetailContent() {
       };
     }
 
-    const foundBackend = backendItems?.find((i) => i.id === dishParam) || (backendItems && backendItems.length > 0 ? backendItems[0] : null);
+    const foundBackend =
+      backendItems?.find(
+        (i) =>
+          i.id === dishParam ||
+          i.id === searchDish ||
+          (dishParam && i.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === dishParam.toLowerCase()) ||
+          (nameParam && i.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === nameParam.toLowerCase())
+      ) || (backendItems && backendItems.length > 0 ? backendItems[0] : null);
+
     if (foundBackend) {
       return {
         id: foundBackend.id,
@@ -126,7 +138,26 @@ function DishDetailContent() {
         { id: 'addon-truffle-oil', name: 'Truffle Oil Drizzle', price: 2.0 },
       ],
     };
-  }, [dishParam, selectedItem, backendItems]);
+  }, [dishParam, searchDish, nameParam, selectedItem, backendItems]);
+
+  // Synchronize browser address bar route path & product name in query params dynamically
+  useEffect(() => {
+    if (typeof window === 'undefined' || !dish) return;
+    const slugName = dish.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const params = new URLSearchParams();
+    params.set('dish', dish.id);
+    params.set('name', slugName);
+    if (tableParam) params.set('table', tableParam);
+
+    const targetPath = window.location.pathname.startsWith('/dish-detail/')
+      ? window.location.pathname
+      : '/dish-detail';
+
+    const newUrl = `${targetPath}?${params.toString()}`;
+    if (window.location.pathname + window.location.search !== newUrl) {
+      window.history.pushState(null, '', newUrl);
+    }
+  }, [dish, tableParam]);
 
   // Find previously added/saved configuration for this dish in cart state
   const previousItem = useMemo(() => {

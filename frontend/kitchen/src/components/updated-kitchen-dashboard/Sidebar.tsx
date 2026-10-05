@@ -37,15 +37,15 @@ export interface KitchenSidebarProps {
 }
 
 export const updatedKitchenNavItems = [
-  { name: "Dashboard", icon: LayoutDashboard },
-  { name: "Kitchen Queue", icon: Clock, badge: "8", badgeColor: "text-amber-400 bg-amber-500/10" },
-  { name: "Active Orders", icon: UtensilsCrossed, badge: "4", badgeColor: "text-yellow-400 bg-yellow-500/10" },
-  { name: "Stations", icon: Flame },
-  { name: "Recipes", icon: BookOpen },
-  { name: "Inventory", icon: Package, badge: "1 Low", badgeColor: "text-rose-400 bg-rose-500/10" },
-  { name: "Shift Report", icon: FileSpreadsheet },
-  { name: "AI Insights", icon: Sparkles, isPro: true },
-  { name: "Settings", icon: Settings },
+  { name: "Dashboard", icon: LayoutDashboard, href: "/updated-kitchen-dashboard/dashboard" },
+  { name: "Kitchen Queue", icon: Clock, badge: "8", badgeColor: "text-amber-400 bg-amber-500/10", href: "/updated-kitchen-dashboard/kitchen-queue" },
+  { name: "Active Orders", icon: UtensilsCrossed, badge: "4", badgeColor: "text-yellow-400 bg-yellow-500/10", href: "/updated-kitchen-dashboard/active-orders" },
+  { name: "Stations", icon: Flame, href: "/updated-kitchen-dashboard/stations" },
+  { name: "Recipes", icon: BookOpen, href: "/updated-kitchen-dashboard/recipes" },
+  { name: "Inventory", icon: Package, badge: "1 Low", badgeColor: "text-rose-400 bg-rose-500/10", href: "/updated-kitchen-dashboard/inventory" },
+  { name: "Shift Report", icon: FileSpreadsheet, href: "/updated-kitchen-dashboard/shift-report" },
+  { name: "AI Insights", icon: Sparkles, isPro: true, href: "/updated-kitchen-dashboard/ai-insights" },
+  { name: "Settings", icon: Settings, href: "/updated-kitchen-dashboard/settings" },
 ];
 
 export default function Sidebar({
@@ -93,7 +93,7 @@ export default function Sidebar({
       >
         {/* Brand Logo Header */}
         <div className="h-20 px-5 border-b border-white/15 flex items-center justify-between shrink-0 bg-black">
-          <Link href="/" title="Back to Landing Page" className="flex items-center gap-3 group cursor-pointer">
+          <Link href="/updated-kitchen-dashboard/kitchen-queue" title="Back to Kitchen Display" className="flex items-center gap-3 group cursor-pointer">
             <div className="w-10 h-10 bg-zinc-900 border border-white/10 rounded-xl flex items-center justify-center overflow-hidden p-1.5 shrink-0 shadow-inner group-hover:border-amber-500/50 transition-colors">
               <TavonzaLogoIcon className="w-full h-full text-yellow-400" />
             </div>
@@ -123,9 +123,9 @@ export default function Sidebar({
             const isActive = activeNav === item.name;
 
             return (
-              <button
+              <Link
                 key={item.name}
-                type="button"
+                href={item.href}
                 onClick={() => {
                   setActiveNav(item.name);
                   setSidebarOpen(false);
@@ -159,7 +159,7 @@ export default function Sidebar({
                     AI PRO
                   </span>
                 )}
-              </button>
+              </Link>
             );
           })}
         </div>

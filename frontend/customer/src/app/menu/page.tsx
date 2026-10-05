@@ -170,8 +170,61 @@ function MenuContent() {
     }
   };
 
+  const viewParam = searchParams.get('view');
+  const catParam = searchParams.get('category');
+  const qParam = searchParams.get('q') || searchParams.get('search');
+
+  // Initialize view state from URL query parameters & pathname on mount
+  useEffect(() => {
+    const isAllItemsPath = typeof window !== 'undefined' && window.location.pathname.endsWith('/all-items');
+    if (isAllItemsPath || viewParam === 'all' || viewParam === 'all-items') {
+      setShowAllItemsView(true);
+    }
+    if (catParam) {
+      setSelectedCategory(catParam);
+    }
+    if (qParam) {
+      setSearchQuery(qParam);
+    }
+  }, [viewParam, catParam, qParam]);
+
+  // Synchronize browser address bar route path & query parameters dynamically
+  useEffect(() => {
+    if (!mounted || typeof window === 'undefined') return;
+    const params = new URLSearchParams();
+    if (tableParam) params.set('table', tableParam);
+    if (selectedCategory && selectedCategory !== 'all') {
+      params.set('category', selectedCategory);
+    }
+    if (searchQuery.trim()) params.set('search', searchQuery.trim());
+
+    const basePath = showAllItemsView ? '/menu/all-items' : '/menu';
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const newPath = `${basePath}${queryString}`;
+    if (window.location.pathname + window.location.search !== newPath) {
+      window.history.pushState(null, '', newPath);
+    }
+  }, [mounted, showAllItemsView, selectedCategory, searchQuery, tableParam]);
+
+  // Handle browser back/forward buttons (popstate)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handlePopState = () => {
+      const isAllItemsPath = window.location.pathname.endsWith('/all-items');
+      const sp = new URLSearchParams(window.location.search);
+      const v = sp.get('view');
+      setShowAllItemsView(isAllItemsPath || v === 'all' || v === 'all-items');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const openDishDetail = (dishId: string) => {
-    router.push(`/dish-detail?dish=${encodeURIComponent(dishId)}&table=${encodeURIComponent(activeTable)}`);
+    const itemObj = allItems.find((i) => i.id === dishId);
+    const slugName = itemObj ? itemObj.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'dish-detail';
+    router.push(
+      `/dish-detail?dish=${encodeURIComponent(dishId)}&name=${encodeURIComponent(slugName)}&table=${encodeURIComponent(activeTable)}`
+    );
   };
 
   const isDataLoading = (categoriesLoading || itemsLoading) && allItems.length === 0;
