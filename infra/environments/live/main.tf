@@ -102,8 +102,9 @@ module "secrets_manager" {
     DATABASE_PASSWORD     = var.rds_db_password
     JWT_SECRET            = ""
     JWT_REFRESH_SECRET    = ""
-    REDIS_URL             = "rediss://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
+    REDIS_URL             = var.enable_elasticache && length(module.elasticache) > 0 ? "rediss://${module.elasticache[0].valkey_endpoint}:${module.elasticache[0].valkey_port}" : "redis://:tavonzaaiPass2026Live@redis.${var.domain_name}:6379"
     THIRD_PARTY_API_KEYS  = ""
+
     SMTP_HOST             = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.${var.aws_region}.amazonaws.com"
     SMTP_PORT             = "587"
     SMTP_USER             = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
@@ -176,9 +177,11 @@ module "rds_postgres" {
   multi_az                   = var.rds_multi_az
 }
 
-# 8. ElastiCache Redis / Valkey Module
+# 8. ElastiCache Redis / Valkey Module (Optional; disabled by default to save costs)
 module "elasticache" {
+  count  = var.enable_elasticache ? 1 : 0
   source = "../../modules/elasticache"
+
 
   cache_name               = var.elasticache_cache_name
   engine                   = var.elasticache_engine
@@ -191,7 +194,7 @@ module "elasticache" {
   environment              = var.environment
 }
 
-# 9. Backend EC2 Instance Module (Deployed into Private App Subnet)
+# 9. Backend EC2 Instance Module (Deployed with Static Elastic IP)
 module "backend_ec2" {
   source = "../../modules/ec2"
 
@@ -204,9 +207,10 @@ module "backend_ec2" {
   key_name             = var.ssh_key_name
   root_volume_size     = var.backend_root_volume_size
   user_data            = local.ec2_bootstrap_user_data
+  assign_eip           = true
 }
 
-# 10. Frontend EC2 Instance Module (Hosts Next.js & React Admin in Private App Subnet)
+# 10. Frontend EC2 Instance Module (Hosts Next.js & React Admin with Static Elastic IP)
 module "frontend_ec2" {
   source = "../../modules/ec2"
 
@@ -219,7 +223,9 @@ module "frontend_ec2" {
   key_name             = var.ssh_key_name
   root_volume_size     = var.frontend_root_volume_size
   user_data            = local.ec2_bootstrap_user_data
+  assign_eip           = true
 }
+
 
 # 11. ACM Certificate Module (DNS Validated)
 module "acm" {

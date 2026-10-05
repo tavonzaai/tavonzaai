@@ -411,10 +411,17 @@ variable "rds_multi_az" {
 }
 
 # ElastiCache Redis / Valkey Configuration
+variable "enable_elasticache" {
+  description = "Enable AWS ElastiCache Serverless cache (set to false when using standalone Valkey on EC2)"
+  type        = bool
+  default     = false
+}
+
 variable "elasticache_cache_name" {
   description = "Name for the ElastiCache Serverless cache"
   type        = string
 }
+
 
 variable "elasticache_engine" {
   description = "Cache engine (valkey or redis)"
