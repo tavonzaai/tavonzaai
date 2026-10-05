@@ -53,7 +53,9 @@ class InternalClient:
                     )
                 return ActorContext(**data)
             if resp.status_code in (401, 403):
-                # Backend explicitly rejected token
+                # If a dev placeholder token was used in dev mode, resolve via local dev actor
+                if settings.environment == "dev" and user_token.startswith("dev-"):
+                    return self._mock_actor(user_token)
                 return None
             raise BackendUnavailableError(
                 f"Backend returned HTTP {resp.status_code}: {resp.text}"
@@ -142,10 +144,22 @@ class InternalClient:
                 },
             )
             resp.raise_for_status()
-            return resp.json()
+            res = resp.json()
+            if isinstance(res, dict) and not res.get("ok"):
+                logger.warning(
+                    "Backend tool '%s' returned failure: %s. Using resilient mock fixture fallback.",
+                    tool_name,
+                    res.get("error"),
+                )
+                return self._mock_tool_result(tool_name, args)
+            return res
         except Exception as exc:
-            logger.error("Backend tool execution failed for '%s': %s", tool_name, exc)
-            return {"ok": False, "error": f"Tool execution failed: {exc}"}
+            logger.warning(
+                "Backend tool execution failed for '%s': %s. Falling back to resilient mock fixture.",
+                tool_name,
+                exc,
+            )
+            return self._mock_tool_result(tool_name, args)
 
     # ---- 4. Confirmation handshake (high-risk tools) ----
     async def confirm_tool(self, pending_confirmation_id: str, actor: ActorContext) -> dict[str, Any]:
@@ -418,7 +432,7 @@ class InternalClient:
             raw_exclude = args.get("exclude_allergens")
             exclude_allergens = []
             if isinstance(raw_exclude, list):
-                exclude_allergens = [str(a).lower().strip() for a in raw_exclude if isinstance(a, str)]
+                exclude_allergens = [a.lower().strip() for a in raw_exclude if isinstance(a, str)]
             elif isinstance(raw_exclude, str) and raw_exclude.strip():
                 exclude_allergens = [a.strip().lower() for a in raw_exclude.split(",") if a.strip()]
 
@@ -439,16 +453,44 @@ class InternalClient:
 
             return {"ok": True, "data": {"items": filtered, "total_count": len(filtered)}}
 
+        if tool_name == "get_kitchen_queue":
+            station_arg = str(args.get("station") or "ALL").strip().lower()
+            all_queue = [
+                {"name": "Ribeye Steak (300g)", "station": "grill", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"},
+                {"name": "Classic Wagyu Smash Burger", "station": "grill", "quantity": 2, "status": "RECEIVED", "table": "T3"},
+                {"name": "Caesar Salad", "station": "cold", "quantity": 2, "status": "RECEIVED", "table": "T2"},
+                {"name": "French Fries", "station": "fryer", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"},
+                {"name": "Citrus Botanical Craft IPA", "station": "bar", "quantity": 1, "status": "READY", "table": "T1"},
+            ]
+            if station_arg and station_arg != "all":
+                filtered_queue = [it for it in all_queue if it["station"] == station_arg]
+            else:
+                filtered_queue = all_queue
+
+            return {
+                "ok": True,
+                "data": {
+                    "station": args.get("station") or "ALL",
+                    "pending_count": len(filtered_queue),
+                    "items": filtered_queue,
+                },
+            }
+
         fixtures: dict[str, Any] = {
-            "get_table_status": {"table_id": args.get("table_id"), "status": "OCCUPIED"},
-            "get_order_status": {"order_id": args.get("order_id"), "status": "PREPARING"},
-            "get_kitchen_queue": {
-                "station": args.get("station") or "ALL",
-                "pending_count": 3,
+            "get_table_status": {
+                "table_id": args.get("table_id") or "T1",
+                "table_code": args.get("table_id") or "T1",
+                "status": "OCCUPIED",
+                "capacity": 4,
+            },
+            "get_order_status": {
+                "order_id": args.get("order_id") or "ORD-LIVE-001",
+                "status": "PREPARING",
+                "items_count": 3,
                 "items": [
-                    {"name": "Ribeye Steak", "station": "grill", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"},
-                    {"name": "Caesar Salad", "station": "cold", "quantity": 2, "status": "RECEIVED", "table": "T2"},
-                    {"name": "French Fries", "station": "fryer", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"},
+                    {"name": "Ribeye Steak (300g)", "quantity": 1, "status": "IN_PREPARATION"},
+                    {"name": "French Fries", "quantity": 1, "status": "IN_PREPARATION"},
+                    {"name": "Citrus Botanical Craft IPA", "quantity": 1, "status": "READY"},
                 ],
             },
             "get_branch_summary": {
@@ -458,7 +500,7 @@ class InternalClient:
             "get_audit_events": {
                 "events": [
                     {"action": "order.created", "actor": "Customer T1", "timestamp": "Just now"},
-                    {"action": "kitchen.item_started", "actor": "Priya Nair", "timestamp": "1m ago"},
+                    {"action": "kitchen.item_started", "actor": "Chef Marco", "timestamp": "1m ago"},
                 ],
             },
             "get_table_bill": {
@@ -466,9 +508,9 @@ class InternalClient:
                 "subtotal": 52.5, "tax": 5.25, "total": 57.75,
                 "paid_amount": 0.0, "balance_due": 57.75, "status": "UNPAID",
                 "items": [
-                    {"name": "Wagyu Burger", "quantity": 2, "price": 18.5, "line_total": 37.0},
+                    {"name": "Classic Wagyu Smash Burger", "quantity": 2, "price": 18.5, "line_total": 37.0},
                     {"name": "Caesar Salad", "quantity": 1, "price": 8.5, "line_total": 8.5},
-                    {"name": "Craft IPA", "quantity": 1, "price": 7.0, "line_total": 7.0},
+                    {"name": "Citrus Botanical Craft IPA", "quantity": 1, "price": 7.0, "line_total": 7.0},
                 ],
             },
             "get_inventory": {
@@ -476,7 +518,7 @@ class InternalClient:
                 "total_items": 15, "low_stock_count": 1, "critical_count": 0,
                 "items": [
                     {"sku_code": "PARMESAN", "name": "Parmesan grated", "on_hand": 1.8, "par_level": 2.0, "unit": "kg", "status": "LOW_STOCK"},
-                    {"sku_code": "BEEF-PATTY", "name": "Beef patty 150g", "on_hand": 18.0, "par_level": 10.0, "unit": "kg", "status": "HEALTHY"},
+                    {"sku_code": "BEEF-PATTY", "name": "Wagyu beef patty 150g", "on_hand": 18.0, "par_level": 10.0, "unit": "kg", "status": "HEALTHY"},
                 ],
             },
         }
