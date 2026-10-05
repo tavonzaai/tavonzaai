@@ -21,6 +21,35 @@ export function cleanTextForSpeech(text: string): string {
     .trim();
 }
 
+/**
+ * Splits spoken text into natural sentence chunks for rapid initial speech streaming.
+ */
+export function splitSentencesForSpeech(text: string): string[] {
+  if (!text) return [];
+  const protectedText = text.replace(
+    /\b(e\.g\.|i\.e\.|etc\.|mr\.|ms\.|mrs\.|dr\.|approx\.)/gi,
+    (m) => m.replace(/\./g, '@DOT@')
+  );
+  const raw = protectedText.split(/(?<=[.!?])\s+|\n+/);
+  const cleaned = raw.map((s) => s.replace(/@DOT@/g, '.').trim()).filter(Boolean);
+  if (!cleaned.length) return [text];
+
+  const merged: string[] = [];
+  let buffer = '';
+  for (const s of cleaned) {
+    buffer = buffer ? `${buffer} ${s}` : s;
+    if (buffer.length >= 35 || s === cleaned[cleaned.length - 1]) {
+      merged.push(buffer);
+      buffer = '';
+    }
+  }
+  if (buffer) {
+    if (merged.length) merged[merged.length - 1] += ` ${buffer}`;
+    else merged.push(buffer);
+  }
+  return merged;
+}
+
 export interface UseJarvisVoiceOptions {
   onTranscriptComplete?: (finalText: string) => void;
   persona?: string;
@@ -202,54 +231,76 @@ export function useJarvisVoice({
       setSpeakingId(messageId || null);
       setSpeakingText(cleaned);
 
-      // Attempt 1: High quality Neural TTS from AI backend
-      try {
-        const audioBlob = await rawChatApi.fetchVoiceAudioBlob(cleaned, persona, abortController.signal);
+      const sentences = splitSentencesForSpeech(cleaned);
+      if (!sentences.length) {
+        setIsSpeaking(false);
+        setSpeakingId(null);
+        setSpeakingText(null);
+        return;
+      }
 
-        // Discard result if user stopped or started another message while fetching
-        if (sessionId !== speechSessionIdRef.current) {
+      // Attempt 1: High quality Neural TTS from AI backend streamed sentence-by-sentence
+      let currentIdx = 0;
+
+      const playNextSentence = async () => {
+        if (sessionId !== speechSessionIdRef.current) return;
+
+        if (currentIdx >= sentences.length) {
+          setIsSpeaking(false);
+          setSpeakingId(null);
+          setSpeakingText(null);
+          currentAudioRef.current = null;
           return;
         }
 
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        currentAudioRef.current = audio;
-
-        audio.onended = () => {
+        const sentence = sentences[currentIdx++];
+        if (!sentence) {
           if (sessionId === speechSessionIdRef.current) {
-            setIsSpeaking(false);
-            setSpeakingId(null);
-            setSpeakingText(null);
-            currentAudioRef.current = null;
+            playNextSentence();
           }
-          URL.revokeObjectURL(audioUrl);
-        };
+          return;
+        }
 
-        audio.onerror = () => {
-          // If stopped intentionally, sessionId will no longer match
-          if (sessionId !== speechSessionIdRef.current) {
+        try {
+          const audioBlob = await rawChatApi.fetchVoiceAudioBlob(sentence, persona, abortController.signal);
+
+          if (sessionId !== speechSessionIdRef.current) return;
+
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          currentAudioRef.current = audio;
+
+          audio.onended = () => {
             URL.revokeObjectURL(audioUrl);
+            if (sessionId === speechSessionIdRef.current) {
+              playNextSentence();
+            }
+          };
+
+          audio.onerror = () => {
+            URL.revokeObjectURL(audioUrl);
+            if (sessionId === speechSessionIdRef.current) {
+              if (currentIdx < sentences.length) {
+                playNextSentence();
+              } else {
+                fallbackBrowserSpeech(cleaned, sessionId);
+              }
+            }
+          };
+
+          await audio.play();
+        } catch (err: any) {
+          if (err?.name === 'AbortError' || sessionId !== speechSessionIdRef.current) {
             return;
           }
-          URL.revokeObjectURL(audioUrl);
-          currentAudioRef.current = null;
-          // Fallback to browser synthesis ONLY if session is still active
-          fallbackBrowserSpeech(cleaned, sessionId);
-        };
-
-        await audio.play();
-        return;
-      } catch (err: any) {
-        if (err?.name === 'AbortError' || sessionId !== speechSessionIdRef.current) {
-          return;
+          console.warn('Backend neural voice unavailable, using browser speech synthesis fallback:', err);
+          if (sessionId === speechSessionIdRef.current) {
+            fallbackBrowserSpeech(cleaned, sessionId);
+          }
         }
-        console.warn('Backend neural voice unavailable, using browser speech synthesis fallback:', err);
-      }
+      };
 
-      // Attempt 2: Native Web SpeechSynthesis API fallback
-      if (sessionId === speechSessionIdRef.current) {
-        fallbackBrowserSpeech(cleaned, sessionId);
-      }
+      await playNextSentence();
     },
     [isMuted, persona, stopSpeaking, stopListening, fallbackBrowserSpeech]
   );

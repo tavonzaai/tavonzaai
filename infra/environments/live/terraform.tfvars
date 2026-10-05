@@ -20,6 +20,7 @@ ai_subdomain       = "ai"
 kitchen_subdomain  = "kitchen"
 cashier_subdomain  = "cashier"
 admin_subdomain    = "admin"
+waiter_subdomain   = "waiter"
 enable_https       = true
 
 # Custom DNS Records
@@ -47,6 +48,8 @@ cashier_port              = 3104
 cashier_health_check_path = "/"
 admin_port                = 3043
 admin_health_check_path   = "/"
+waiter_port               = 3101
+waiter_health_check_path  = "/"
 
 # Health Check Timings (AWS ALB enforces maximum interval of 300 seconds / 5 minutes)
 health_check_interval            = 300

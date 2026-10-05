@@ -18,16 +18,16 @@ export class TenantScopedRepository<T extends PgTable & { branchId: any }> {
    */
   async findMany(branchId: string, conditions?: any) {
     if (conditions) {
-      return this.db.select().from(this.table as any).where(and(eq(this.table.branchId, branchId), conditions));
+      return (this.db.select().from(this.table as any) as any).where(and(eq(this.table.branchId, branchId), conditions));
     }
-    return this.db.select().from(this.table as any).where(eq(this.table.branchId, branchId));
+    return (this.db.select().from(this.table as any) as any).where(eq(this.table.branchId, branchId));
   }
 
   /**
    * Automatically scopes any `findOne` operation to the branchId.
    */
   async findOne(branchId: string, conditions: any) {
-    const result = await this.db.select().from(this.table as any).where(and(eq(this.table.branchId, branchId), conditions)).limit(1);
+    const result = await (this.db.select().from(this.table as any) as any).where(and(eq(this.table.branchId, branchId), conditions)).limit(1);
     return result[0] || null;
   }
 

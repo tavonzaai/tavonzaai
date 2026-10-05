@@ -169,6 +169,17 @@ resource "aws_security_group_rule" "frontend_ingress_manager_from_alb" {
   security_group_id        = aws_security_group.frontend.id
 }
 
+# Allow Waiter frontend traffic from ALB security group only
+resource "aws_security_group_rule" "frontend_ingress_waiter_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Waiter frontend traffic from ALB SG only"
+  from_port                = var.waiter_port
+  to_port                  = var.waiter_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.frontend.id
+}
+
 # Allow outbound traffic for package manager, docker registries, SSM, and AWS APIs
 resource "aws_security_group_rule" "frontend_egress_all" {
   type              = "egress"

@@ -118,3 +118,61 @@ class TestBackendReadiness:
             assert "lacks permission" in kwargs["result"]["error"]
 
         await client.aclose()
+
+    def test_backend_restaurant_id_alias_compatibility(self):
+        """ActorContext parses camelCase restaurantId returned by NestJS backend."""
+        actor = ActorContext(
+            actor_type="USER",
+            organization_id="org-123",
+            restaurantId="rest-456",
+            branch_id="branch-789",
+        )
+        assert actor.restaurant_id == "rest-456"
+
+    def test_backend_branch_manager_role_normalization(self):
+        """Backend enum BRANCH_MANAGER maps to manager with full tool access."""
+        from src.policies.roles import get_allowed_tools_for_role, normalize_role
+        assert normalize_role("BRANCH_MANAGER") == "manager"
+        allowed = get_allowed_tools_for_role("BRANCH_MANAGER")
+        assert len(allowed) == 8
+        assert "get_branch_summary" in allowed
+        assert "get_inventory" in allowed
+
+    def test_backend_kitchen_staff_role_normalization_and_orders_read_perm(self):
+        """Backend enum KITCHEN_STAFF maps to kitchen and accepts orders.read capability."""
+        from src.policies.roles import get_allowed_tools_for_role, normalize_role
+        from src.tools.authorization.auth_gate import authorize_tool_call
+        from src.tools.definitions.restaurant_tools import TOOLS
+
+        assert normalize_role("KITCHEN_STAFF") == "kitchen"
+        allowed = get_allowed_tools_for_role("KITCHEN_STAFF")
+        assert "get_kitchen_queue" in allowed
+        assert "get_order_status" in allowed
+
+        actor = ActorContext(
+            actor_type="USER",
+            role="KITCHEN_STAFF",
+            organization_id="org-1",
+            branch_id="branch-1",
+            permissions=["orders.read", "orders.update"],
+        )
+        # Authorize should succeed because kitchen staff has orders.read
+        authorize_tool_call(TOOLS["get_kitchen_queue"], actor, "get_kitchen_queue")
+
+    @pytest.mark.asyncio
+    async def test_backend_actor_role_inference_when_backend_drops_role(self):
+        """If backend resolveActor omits role, AI client infers it from permissions or JWT."""
+        client = InternalClient()
+        inferred_mgr = client._infer_role_from_payload_or_perms("", ["reports.read", "orders.read"], {})
+        assert inferred_mgr == "manager"
+
+        inferred_waiter = client._infer_role_from_payload_or_perms("", ["orders.serve", "tables.read"], {})
+        assert inferred_waiter == "waiter"
+
+        inferred_kitchen = client._infer_role_from_payload_or_perms("", ["orders.read", "orders.update"], {})
+        assert inferred_kitchen == "kitchen"
+
+        inferred_cashier = client._infer_role_from_payload_or_perms("", ["payments.create", "payments.read"], {})
+        assert inferred_cashier == "cashier"
+        await client.aclose()
+
