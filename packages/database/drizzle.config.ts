@@ -41,6 +41,8 @@ function getDbCredentials() {
     url: dbUrl,
   };
 }
+// Allow cloud PostgreSQL providers (e.g. Neon, Supabase, RDS) with self-signed certificate chains
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 export default defineConfig({
   schema: './src/schema/index.ts',
