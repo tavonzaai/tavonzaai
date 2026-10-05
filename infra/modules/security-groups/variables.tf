@@ -78,3 +78,10 @@ variable "alb_ingress_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "allow_public_rds" {
+  description = "Allow inbound PostgreSQL traffic from 0.0.0.0/0"
+  type        = bool
+  default     = false
+}
+

@@ -63,6 +63,7 @@ module "security_groups" {
   postgres_port           = 5432
   redis_port              = 6379
   alb_ingress_cidr_blocks = var.alb_ingress_cidr_blocks
+  allow_public_rds        = var.rds_publicly_accessible
 }
 
 # 3. AWS Elastic Container Registry (ECR) Repositories Module
@@ -83,9 +84,11 @@ module "ecr" {
 module "s3" {
   source = "../../modules/s3"
 
-  bucket_name  = var.s3_bucket_name
-  environment  = var.environment
-  project_name = var.project_name
+  bucket_name         = var.s3_bucket_name
+  environment         = var.environment
+  project_name        = var.project_name
+  block_public_access = false
+  allow_public_read   = true
 }
 
 # 5. AWS Secrets Manager Module

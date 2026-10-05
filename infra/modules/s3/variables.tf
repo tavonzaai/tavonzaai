@@ -68,3 +68,15 @@ variable "s3_user_name" {
   default     = ""
 }
 
+variable "block_public_access" {
+  description = "Block all public access on the S3 bucket"
+  type        = bool
+  default     = false
+}
+
+variable "allow_public_read" {
+  description = "Attach a public read bucket policy allowing anonymous GetObject on objects"
+  type        = bool
+  default     = true
+}
+
