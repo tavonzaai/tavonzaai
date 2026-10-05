@@ -317,10 +317,7 @@ echo -e "  • Version ID:  ${BOLD}${VERSION_ID}${NC}"
 echo -e "  • Total Keys:  ${BOLD}$(node -e 'console.log(Object.keys(JSON.parse(process.argv[1])).length)' "$FINAL_JSON")${NC}"
 
 # Optional reminder for running services
-if [[ "$TARGET_ENV" == "prod" ]]; then
-  echo -e "\n${YELLOW}${BOLD}Tip:${NC} For ECS containers to pick up updated secrets, trigger a rolling deployment:"
-  echo -e "  ${BOLD}aws ecs update-service --cluster tavonzaai-prod-cluster --service tavonzaai-prod-backend --force-new-deployment --region ${REGION}${NC}"
-elif [[ "$TARGET_ENV" == "live" ]]; then
+if [[ "$TARGET_ENV" == "live" ]]; then
   echo -e "\n${YELLOW}${BOLD}Tip:${NC} For EC2 containers on live to pick up updated secrets, restart the container:"
   echo -e "  ${BOLD}git push origin main${NC} (or trigger .github/workflows/deploy-live.yml)"
 fi
