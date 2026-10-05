@@ -57,7 +57,9 @@ Be polite, concise, hospitable, and specific."""
 
 
 def _format_role_context(actor: ActorContext) -> tuple[str, str]:
-    role = (actor.role or "").lower()
+    from ..policies.roles import normalize_role
+
+    role = normalize_role(actor.role)
     table_code = (actor.resource_scope or {}).get("table_code")
 
     if role == "customer" or table_code:

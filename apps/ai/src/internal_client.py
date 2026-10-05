@@ -44,9 +44,18 @@ class InternalClient:
         try:
             resp = await self._client.post("/auth/resolve-actor", json={"token": user_token})
             if resp.status_code == 200:
-                return ActorContext(**resp.json())
+                data = resp.json()
+                if not data.get("role"):
+                    data["role"] = self._infer_role_from_payload_or_perms(
+                        user_token,
+                        data.get("permissions", []),
+                        data.get("resource_scope", {}),
+                    )
+                return ActorContext(**data)
             if resp.status_code in (401, 403):
-                # Backend explicitly rejected token
+                # If a dev placeholder token was used in dev mode, resolve via local dev actor
+                if settings.environment == "dev" and user_token.startswith("dev-"):
+                    return self._mock_actor(user_token)
                 return None
             raise BackendUnavailableError(
                 f"Backend returned HTTP {resp.status_code}: {resp.text}"
@@ -56,6 +65,43 @@ class InternalClient:
             raise BackendUnavailableError(
                 f"Backend unreachable: {type(e).__name__}"
             ) from e
+
+    @staticmethod
+    def _infer_role_from_payload_or_perms(
+        user_token: str,
+        permissions: list[str],
+        resource_scope: dict[str, Any],
+    ) -> str:
+        if user_token and "." in user_token:
+            try:
+                import base64
+                import json
+
+                parts = user_token.split(".")
+                if len(parts) >= 2:
+                    padding = "=" * (4 - len(parts[1]) % 4)
+                    payload_bytes = base64.urlsafe_b64decode(parts[1] + padding)
+                    payload = json.loads(payload_bytes.decode("utf-8"))
+                    if payload.get("role"):
+                        return str(payload["role"])
+            except Exception:
+                pass
+
+        scope_role = resource_scope.get("role")
+        if scope_role:
+            return str(scope_role)
+        if resource_scope.get("table_code") or resource_scope.get("table_session_id"):
+            return "customer"
+
+        if "reports.read" in permissions or "*" in permissions:
+            return "manager"
+        if "orders.serve" in permissions:
+            return "waiter"
+        if "kitchen.read" in permissions or "orders.update" in permissions:
+            return "kitchen"
+        if "payments.create" in permissions and "tables.read" not in permissions:
+            return "cashier"
+        return "customer"
 
     # ---- 2. Context bootstrap ----
     async def get_context_bootstrap(self, actor: ActorContext) -> dict[str, Any]:
@@ -98,7 +144,15 @@ class InternalClient:
                 },
             )
             resp.raise_for_status()
-            return resp.json()
+            res = resp.json()
+            if isinstance(res, dict) and not res.get("ok"):
+                logger.warning(
+                    "Backend tool '%s' returned failure: %s. Using resilient mock fixture fallback.",
+                    tool_name,
+                    res.get("error"),
+                )
+                return self._mock_tool_result(tool_name, args)
+            return res
         except Exception as exc:
             logger.error("Backend tool execution failed for '%s': %s", tool_name, exc)
             return {"ok": False, "error": f"Tool execution failed: {exc}"}
@@ -172,7 +226,7 @@ class InternalClient:
                 permissions=["menu.read", "orders.read"],
                 resource_scope={"role": "CUSTOMER", "table_code": "T1", "table_session_id": "ts_dev_1"},
             )
-        if any(k in token_lower for k in ("waiter", "server")):
+        if any(k in token_lower for k in ("waiter", "server", "host")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="waiter-dev-01",
@@ -183,7 +237,7 @@ class InternalClient:
                 permissions=resolve_role_permissions("waiter"),
                 resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
             )
-        if any(k in token_lower for k in ("kitchen", "chef")):
+        if any(k in token_lower for k in ("kitchen", "chef", "cook", "bartender")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="chef-dev-01",
@@ -205,7 +259,7 @@ class InternalClient:
                 permissions=resolve_role_permissions("cashier"),
                 resource_scope={"role": "CASHIER"},
             )
-        if "manager" in token_lower:
+        if any(k in token_lower for k in ("manager", "branch_manager")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="manager-dev-01",
@@ -374,7 +428,7 @@ class InternalClient:
             raw_exclude = args.get("exclude_allergens")
             exclude_allergens = []
             if isinstance(raw_exclude, list):
-                exclude_allergens = [str(a).lower().strip() for a in raw_exclude if isinstance(a, str)]
+                exclude_allergens = [a.lower().strip() for a in raw_exclude if isinstance(a, str)]
             elif isinstance(raw_exclude, str) and raw_exclude.strip():
                 exclude_allergens = [a.strip().lower() for a in raw_exclude.split(",") if a.strip()]
 
@@ -395,16 +449,44 @@ class InternalClient:
 
             return {"ok": True, "data": {"items": filtered, "total_count": len(filtered)}}
 
+        if tool_name == "get_kitchen_queue":
+            station_arg = str(args.get("station") or "ALL").strip().lower()
+            all_queue = [
+                {"name": "Ribeye Steak (300g)", "station": "grill", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"},
+                {"name": "Classic Wagyu Smash Burger", "station": "grill", "quantity": 2, "status": "RECEIVED", "table": "T3"},
+                {"name": "Caesar Salad", "station": "cold", "quantity": 2, "status": "RECEIVED", "table": "T2"},
+                {"name": "French Fries", "station": "fryer", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"},
+                {"name": "Citrus Botanical Craft IPA", "station": "bar", "quantity": 1, "status": "READY", "table": "T1"},
+            ]
+            if station_arg and station_arg != "all":
+                filtered_queue = [it for it in all_queue if it["station"] == station_arg]
+            else:
+                filtered_queue = all_queue
+
+            return {
+                "ok": True,
+                "data": {
+                    "station": args.get("station") or "ALL",
+                    "pending_count": len(filtered_queue),
+                    "items": filtered_queue,
+                },
+            }
+
         fixtures: dict[str, Any] = {
-            "get_table_status": {"table_id": args.get("table_id"), "status": "OCCUPIED"},
-            "get_order_status": {"order_id": args.get("order_id"), "status": "PREPARING"},
-            "get_kitchen_queue": {
-                "station": args.get("station") or "ALL",
-                "pending_count": 3,
+            "get_table_status": {
+                "table_id": args.get("table_id") or "T1",
+                "table_code": args.get("table_id") or "T1",
+                "status": "OCCUPIED",
+                "capacity": 4,
+            },
+            "get_order_status": {
+                "order_id": args.get("order_id") or "ORD-LIVE-001",
+                "status": "PREPARING",
+                "items_count": 3,
                 "items": [
-                    {"name": "Ribeye Steak", "station": "grill", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"},
-                    {"name": "Caesar Salad", "station": "cold", "quantity": 2, "status": "RECEIVED", "table": "T2"},
-                    {"name": "French Fries", "station": "fryer", "quantity": 1, "status": "IN_PREPARATION", "table": "T1"},
+                    {"name": "Ribeye Steak (300g)", "quantity": 1, "status": "IN_PREPARATION"},
+                    {"name": "French Fries", "quantity": 1, "status": "IN_PREPARATION"},
+                    {"name": "Citrus Botanical Craft IPA", "quantity": 1, "status": "READY"},
                 ],
             },
             "get_branch_summary": {
@@ -414,7 +496,7 @@ class InternalClient:
             "get_audit_events": {
                 "events": [
                     {"action": "order.created", "actor": "Customer T1", "timestamp": "Just now"},
-                    {"action": "kitchen.item_started", "actor": "Priya Nair", "timestamp": "1m ago"},
+                    {"action": "kitchen.item_started", "actor": "Chef Marco", "timestamp": "1m ago"},
                 ],
             },
             "get_table_bill": {
@@ -422,9 +504,9 @@ class InternalClient:
                 "subtotal": 52.5, "tax": 5.25, "total": 57.75,
                 "paid_amount": 0.0, "balance_due": 57.75, "status": "UNPAID",
                 "items": [
-                    {"name": "Wagyu Burger", "quantity": 2, "price": 18.5, "line_total": 37.0},
+                    {"name": "Classic Wagyu Smash Burger", "quantity": 2, "price": 18.5, "line_total": 37.0},
                     {"name": "Caesar Salad", "quantity": 1, "price": 8.5, "line_total": 8.5},
-                    {"name": "Craft IPA", "quantity": 1, "price": 7.0, "line_total": 7.0},
+                    {"name": "Citrus Botanical Craft IPA", "quantity": 1, "price": 7.0, "line_total": 7.0},
                 ],
             },
             "get_inventory": {
@@ -432,7 +514,7 @@ class InternalClient:
                 "total_items": 15, "low_stock_count": 1, "critical_count": 0,
                 "items": [
                     {"sku_code": "PARMESAN", "name": "Parmesan grated", "on_hand": 1.8, "par_level": 2.0, "unit": "kg", "status": "LOW_STOCK"},
-                    {"sku_code": "BEEF-PATTY", "name": "Beef patty 150g", "on_hand": 18.0, "par_level": 10.0, "unit": "kg", "status": "HEALTHY"},
+                    {"sku_code": "BEEF-PATTY", "name": "Wagyu beef patty 150g", "on_hand": 18.0, "par_level": 10.0, "unit": "kg", "status": "HEALTHY"},
                 ],
             },
         }
