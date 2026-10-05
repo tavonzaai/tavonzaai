@@ -70,6 +70,7 @@ export function getApiBaseUrl(): string {
 export const API_BASE_URL = 'https://api.tavonza.com';
 
 
+
 export interface ApiResponse<T = any> {
   statusCode?: number;
   success?: boolean;
@@ -108,7 +109,8 @@ export async function baseApiFetch<T = any>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const token = getAuthToken();
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -135,7 +137,7 @@ export async function baseApiFetch<T = any>(
     const refreshToken = getRefreshToken();
     if (refreshToken && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
       try {
-        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+        const refreshRes = await fetch(`${baseUrl}/auth/refresh-token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
