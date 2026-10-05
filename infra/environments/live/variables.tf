@@ -106,6 +106,12 @@ variable "manager_subdomain" {
   default     = "manager"
 }
 
+variable "waiter_subdomain" {
+  description = "Subdomain prefix for Waiter frontend (e.g. waiter)"
+  type        = string
+  default     = "waiter"
+}
+
 variable "enable_https" {
   description = "Whether to configure HTTPS with ACM certificate validation in Route 53"
   type        = bool
@@ -219,6 +225,12 @@ variable "manager_port" {
   default     = 3103
 }
 
+variable "waiter_port" {
+  description = "Port the Waiter Docker container listens on"
+  type        = number
+  default     = 3101
+}
+
 variable "backend_health_check_path" {
   description = "Health check HTTP endpoint for backend service"
   type        = string
@@ -257,6 +269,12 @@ variable "admin_health_check_path" {
 
 variable "manager_health_check_path" {
   description = "Health check HTTP endpoint for Manager dashboard service"
+  type        = string
+  default     = "/"
+}
+
+variable "waiter_health_check_path" {
+  description = "Health check HTTP endpoint for Waiter service"
   type        = string
   default     = "/"
 }

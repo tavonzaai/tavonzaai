@@ -56,6 +56,7 @@ output "application_urls" {
     cashier      = var.enable_https ? "https://${module.route53.cashier_fqdn}" : "http://${module.alb.alb_dns_name}/cashier"
     admin        = var.admin_subdomain != "" ? (var.enable_https ? "https://${module.route53.admin_fqdn}" : "http://${module.alb.alb_dns_name}/admin") : null
     manager      = var.manager_subdomain != "" ? (var.enable_https ? "https://${module.route53.manager_fqdn}" : "http://${module.alb.alb_dns_name}/manager") : null
+    waiter       = var.waiter_subdomain != "" ? (var.enable_https ? "https://${module.route53.waiter_fqdn}" : "http://${module.alb.alb_dns_name}/waiter") : null
   }
 }
 
