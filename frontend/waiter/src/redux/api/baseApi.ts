@@ -64,11 +64,21 @@ export function getApiBaseUrl(): string {
     return String(url).trim().replace(/\/docs(-json)?\/?$/, '').replace(/\/$/, '');
   }
 
-  if (typeof window !== 'undefined' && (window.location.hostname.includes('tavonza.com') || window.location.protocol === 'https:')) {
+  // Browser client
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
     return 'https://api.tavonza.com';
   }
 
-  return 'http://localhost:3000';
+  // Server-side / Build-time default
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+    return 'http://localhost:5000';
+  }
+
+  return 'https://api.tavonza.com';
 }
 
 export const API_BASE_URL = getApiBaseUrl();

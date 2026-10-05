@@ -13,7 +13,7 @@ import {
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
 import { orderService } from '@/redux/features/orderApi';
-import { getCookie } from '@/redux/api/baseApi';
+import { getCookie, getApiBaseUrl } from '@/redux/api/baseApi';
 
 function CartContent() {
   const router = useRouter();
@@ -86,7 +86,7 @@ function CartContent() {
       // Pre-fetch catalog to resolve any non-UUID identifiers (from local storage or client state)
       let catalogItems: any[] = [];
       try {
-        const catRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/menus/${branchId}/items`);
+        const catRes = await fetch(`${getApiBaseUrl()}/menus/${branchId}/items`);
         const catData = await catRes.json();
         catalogItems = Array.isArray(catData) ? catData : catData?.data || [];
       } catch (err) {
