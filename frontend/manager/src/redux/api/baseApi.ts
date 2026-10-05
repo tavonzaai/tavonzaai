@@ -72,9 +72,11 @@ export function getApiBaseUrl(): string {
 
   url = String(url).trim().replace(/\/docs(-json)?\/?$/i, '').replace(/\/$/, '');
   return url || 'https://prod-api.tavonza.com';
+  return 'https://api.tavonza.com';
 }
 
-export const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = 'https://api.tavonza.com';
+
 
 export interface ApiResponse<T = any> {
   statusCode?: number;

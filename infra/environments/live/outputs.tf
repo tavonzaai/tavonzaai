@@ -80,6 +80,11 @@ output "backend_private_ip" {
   value       = module.backend_ec2.private_ip
 }
 
+output "backend_public_ip" {
+  description = "Static Elastic IP address of the Backend EC2 host"
+  value       = module.backend_ec2.public_ip
+}
+
 output "frontend_instance_id" {
   description = "EC2 Instance ID of the Frontend host"
   value       = module.frontend_ec2.instance_id
@@ -89,6 +94,12 @@ output "frontend_private_ip" {
   description = "Private IP address of the Frontend EC2 instance"
   value       = module.frontend_ec2.private_ip
 }
+
+output "frontend_public_ip" {
+  description = "Static Elastic IP address of the Frontend EC2 host"
+  value       = module.frontend_ec2.public_ip
+}
+
 
 # Database & Cache Outputs
 output "rds_endpoint" {
@@ -112,14 +123,15 @@ output "rds_database_name" {
 }
 
 output "elasticache_endpoint" {
-  description = "ElastiCache Redis / Valkey endpoint address"
-  value       = module.elasticache.valkey_endpoint
+  description = "Redis / Valkey endpoint address"
+  value       = var.enable_elasticache && length(module.elasticache) > 0 ? module.elasticache[0].valkey_endpoint : "redis.${var.domain_name}"
 }
 
 output "elasticache_port" {
-  description = "ElastiCache Redis / Valkey port"
-  value       = module.elasticache.valkey_port
+  description = "Redis / Valkey port"
+  value       = var.enable_elasticache && length(module.elasticache) > 0 ? module.elasticache[0].valkey_port : 6379
 }
+
 
 # Storage & Secrets Outputs
 output "s3_bucket_name" {
