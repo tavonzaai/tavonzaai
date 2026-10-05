@@ -2,68 +2,85 @@ import {
   ExceptionFilter,
   Catch,
   ArgumentsHost,
-  HttpException,
-  HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AppLogger } from '@tavonza/observability';
+import { type ApiErrorResponse } from '@tavonza/contracts';
+import { normalizeError } from '../errors/normalize-error';
 
 /**
  * AllExceptionsFilter
  *
- * Global catch-all for every thrown exception.
- * - HttpExceptions  → structured warn/error log + correct HTTP response
- * - Unknown errors  → structured error log with stack + 500 response
- *
- * Prod JSON output example:
- *   {"level":"error","context":"ExceptionFilter","message":"Internal server error",
- *    "status":500,"method":"POST","path":"/auth/register","stack":"..."}
+ * Catches all thrown exceptions across the NestJS API application,
+ * normalizes them (including PostgreSQL database constraint violations),
+ * logs them with structured metadata, and returns a consistent ApiErrorResponse.
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new AppLogger('ExceptionFilter');
 
   catch(exception: unknown, host: ArgumentsHost): void {
-    const ctx    = host.switchToHttp();
-    const req    = ctx.getRequest<Request>();
-    const res    = ctx.getResponse<Response>();
+    const ctx = host.switchToHttp();
+    const req = ctx.getRequest<Request>();
+    const res = ctx.getResponse<Response>();
 
-    const isHttp  = exception instanceof HttpException;
-    const status  = isHttp
-      ? exception.getStatus()
-      : HttpStatus.INTERNAL_SERVER_ERROR;
-
-    const response = isHttp ? exception.getResponse() : null;
-
-    const message =
-      typeof response === 'string'
-        ? response
-        : (response as any)?.message ?? 'Internal server error';
-
-    const meta: Record<string, unknown> = {
-      status,
-      method:    req.method,
-      path:      req.originalUrl,
-      requestId: req.headers['x-request-id'],
-    };
-
-    if (status >= 500) {
-      // Server errors — log full stack
-      meta.stack = (exception as any)?.stack;
-      meta.error = (exception as any)?.message;
-      this.logger.error(Array.isArray(message) ? message.join(', ') : String(message), meta);
-    } else if (status >= 400) {
-      // Client errors — just a warning, no stack noise
-      this.logger.warn(Array.isArray(message) ? message.join(', ') : String(message), meta);
+    // If headers were already sent, delegate to Express default handler
+    if (res.headersSent) {
+      return;
     }
 
-    // Return a clean, consistent error payload to the client
-    res.status(status).json({
-      success:   false,
-      statusCode: status,
-      message,
-      path:      req.originalUrl,
+    const normalized = normalizeError(exception);
+    const requestId =
+      (req.headers['x-request-id'] as string) ||
+      (res.getHeader('x-request-id') as string) ||
+      'unknown-req-id';
+
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    // Structured logging payload
+    const logMeta: Record<string, unknown> = {
+      statusCode: normalized.status,
+      errorCode: normalized.errorCode,
+      method: req.method,
+      path: req.originalUrl,
+      requestId,
+      clientIp: req.ip,
+      ...(normalized.details || {}),
+      ...(normalized.diagnostics || {}),
+    };
+
+    if (normalized.status >= 500) {
+      const stack = (exception as any)?.stack || (normalized.cause as any)?.stack;
+      logMeta.stack = stack;
+      this.logger.error(`[${normalized.errorCode}] ${normalized.message}`, logMeta);
+    } else {
+      this.logger.warn(`[${normalized.errorCode}] ${normalized.message}`, logMeta);
+    }
+
+    const responsePayload: ApiErrorResponse = {
+      success: false,
+      statusCode: normalized.status,
+      errorCode: normalized.errorCode,
+      message: normalized.message,
+      errorMessages: normalized.errorMessages,
+      path: req.originalUrl,
+      method: req.method,
+      requestId,
       timestamp: new Date().toISOString(),
-    });
+      ...(!isProduction
+        ? {
+            debug: {
+              name: (exception as any)?.name,
+              detail: normalized.diagnostics?.detail,
+              sqlState: normalized.diagnostics?.sqlState,
+              constraint: normalized.diagnostics?.constraint,
+              table: normalized.diagnostics?.table,
+              stack: (exception as any)?.stack,
+            },
+          }
+        : {}),
+    };
+
+    res.status(normalized.status).json(responsePayload);
   }
 }

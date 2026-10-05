@@ -18,6 +18,10 @@ import type {
   BranchOperatingHours,
   BranchHoliday,
 } from '../../domain/entities/branch.entity';
+import {
+  ResourceConflictException,
+  InternalOperationException,
+} from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzleBranchRepository {
@@ -44,7 +48,7 @@ export class DrizzleBranchRepository {
       .returning();
 
     if (!created) {
-      throw new Error('Failed to create branch');
+      throw new InternalOperationException('Failed to create branch record');
     }
 
     // Automatically create default branch settings
@@ -218,7 +222,7 @@ export class DrizzleBranchRepository {
       .returning();
 
     if (!created) {
-      throw new Error('Failed to create holiday schedule');
+      throw new InternalOperationException('Failed to create holiday schedule');
     }
 
     return {
@@ -336,7 +340,9 @@ export class DrizzleBranchRepository {
           .where(eq(users.contactNo, cleanPhone))
           .limit(1);
         if (existingPhone) {
-          throw new Error(`Phone number "${cleanPhone}" is already in use by another user.`);
+          throw new ResourceConflictException(`Phone number "${cleanPhone}" is already in use by another user.`, {
+            errorMessages: [{ path: 'phone', message: 'This phone number is already in use.' }],
+          });
         }
       }
 
@@ -352,7 +358,7 @@ export class DrizzleBranchRepository {
           status: 'ACTIVE',
         })
         .returning();
-      if (!newUser) throw new Error('Failed to create user record');
+      if (!newUser) throw new InternalOperationException('Failed to create user record');
       userId = newUser.id;
     }
 
@@ -371,7 +377,7 @@ export class DrizzleBranchRepository {
           userId,
         })
         .returning();
-      if (!newStaff) throw new Error('Failed to create staff record');
+      if (!newStaff) throw new InternalOperationException('Failed to create staff record');
       staffId = newStaff.id;
     }
 
@@ -396,7 +402,7 @@ export class DrizzleBranchRepository {
       })
       .returning();
 
-    if (!assignment) throw new Error('Failed to assign staff to branch');
+    if (!assignment) throw new InternalOperationException('Failed to assign staff to branch');
 
     return {
       id: assignment.id,
