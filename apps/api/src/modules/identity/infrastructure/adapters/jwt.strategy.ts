@@ -12,6 +12,8 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: string;
+  globalRole?: string;
+  branchId?: string | null;
   permissions?: Permission[];
   scopes?: Scope[];
   organizationId?: string | null;

@@ -18,51 +18,43 @@ Resource
 Domain Rules
 ```
 
-A role may be used as a reusable permission bundle, but roles are not the final security decision.
+A role may be used as a reusable permission bundle, but roles are not the final security decision. Every cell beyond fixed defaults can be adjusted through the granular `permissionActionEnum` grant system on a `StaffAssignment`.
 
-## Actor Types
+## Role Hierarchy & Mapping
 
-The platform recognizes conceptual actor types such as:
+Tavonza defines two tiers of users:
+
+1. **Platform-Level Users:**
+   - `GlobalRole.SUPER_ADMIN`: Cross-organization, platform/support console. Access to client data is strictly logged, permissioned, and time-limited.
+   - `GlobalRole.ADMIN` / `RESTAURANT_OWNER`: Owns the `Organization`, with full control across all brands (Restaurants) and branches under that organization.
+   - `GlobalRole.CUSTOMER`: End customer, bound per visit to a `GuestSession` inside a `TableSession`.
+
+2. **Branch-Level Staff (`StaffAssignment`):**
+   - `BRANCH_MANAGER`: Assigned to a branch.
+     - *Regional Manager*: Multiple `StaffAssignment` rows (one per overseen branch) with full manager permissions.
+     - *General Manager / Shift Manager / Assistant Manager*: A single-branch `StaffAssignment` instantiated with specific `permissions[]` templates (e.g., Assistant Manager has no staff creation or branch settings by default).
+   - `WAITER`: Time-bound `WaiterTableAssignment` at an assigned branch.
+   - `BARTENDER`: Station scope `stationType = 'BAR'` at an assigned branch.
+   - `KITCHEN_STAFF`: Station scope `stationType = 'KITCHEN'` at an assigned branch.
+   - `CASHIER`: Payment settlement scope at an assigned branch.
+   - `HOST`: Table seating and reservation greeting scope.
+
+## Granular Permission Actions (`permissionActionEnum`)
+
+Staff capabilities can be fine-tuned per assignment using:
 
 ```text
-USER
-AI_AGENT
-SYSTEM
-INTEGRATION
+MANAGE_MENU
+MANAGE_TABLES
+MANAGE_STAFF
+MANAGE_RESERVATIONS
+VIEW_ORDERS
+UPDATE_ORDER_STATUS
+MANAGE_PAYMENTS
+APPLY_DISCOUNTS
+VIEW_REPORTS
+MANAGE_BRANCH_SETTINGS
 ```
-
-Each actor must have an explicit security context.
-
-## Permissions
-
-Permissions should represent business capabilities.
-
-Examples:
-
-```text
-orders.read
-orders.accept
-orders.reject
-orders.update
-orders.serve
-
-tables.read
-tables.update
-
-payments.read
-payments.create
-payments.refund
-
-menu.read
-menu.update
-
-staff.read
-staff.manage
-
-reports.read
-```
-
-This list is illustrative architecture guidance, not a permission inventory to invent beyond the product requirements.
 
 ## Scope
 

@@ -47,37 +47,13 @@ interface DishDetailModalProps {
   onAskAI?: (dishTitle: string) => void;
 }
 
-const DEFAULT_DISH: DishData = {
-  id: 'arancini-1',
-  title: 'Arancini al Tartufo',
-  restaurant: 'Maison Verde - Tuscan Trattoria',
-  price: 30.5,
-  rating: '4.5',
-  reviewsCount: 142,
-  description:
-    'Crispy risotto balls filled with black truffle, melted mozzarella, and fresh garden herbs served with warm garlic reduction.',
-  isVegetarian: true,
-  containsAllergens: 'Gluten, Dairy, Nuts',
-  winePairing: {
-    wine: 'Chardonnay',
-    description: "Oaked Chardonnay echoes the truffle's earthy richness.",
-  },
-  prepTime: '12 min',
-  calories: '480 kcal',
-  image: '/images/slide1.jpg',
-  addOns: [
-    { name: 'Extra Parmigiano', price: 1.5 },
-    { name: 'Truffle Butter', price: 1.5 },
-    { name: 'Rosemary Fries', price: 1.5 },
-  ],
-};
-
 export default function DishDetailModal({
-  dish = DEFAULT_DISH,
+  dish,
   onClose,
   onAddToCart,
   onAskAI,
 }: DishDetailModalProps) {
+  if (!dish) return null;
   const router = useRouter();
   const { cart, upsertCartItem } = useCart();
 

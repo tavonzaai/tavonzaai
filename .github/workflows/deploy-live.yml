@@ -22,6 +22,7 @@ on:
           - admin
           - kitchen
           - cashier
+          - manager
           - branch-manager
           - waiter
 
@@ -44,7 +45,8 @@ jobs:
       admin: ${{ steps.filter.outputs.admin }}
       kitchen: ${{ steps.filter.outputs.kitchen }}
       cashier: ${{ steps.filter.outputs.cashier }}
-      branch_manager: ${{ steps.filter.outputs.branch_manager }}
+      manager: ${{ steps.filter.outputs.manager }}
+      branch_manager: ${{ steps.filter.outputs.manager }}
       waiter: ${{ steps.filter.outputs.waiter }}
     steps:
       - uses: actions/checkout@v4
@@ -74,8 +76,8 @@ jobs:
               - 'frontend/cashier/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
-            branch_manager:
-              - 'frontend/branch-manager/**'
+            manager:
+              - 'frontend/manager/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
             waiter:
@@ -261,11 +263,11 @@ jobs:
             container: tavonzaai-cashier
             port: 3104
             changed_key: cashier
-          - app: branch-manager
-            ecr_name: branch-manager
-            container: tavonzaai-branch-manager
+          - app: manager
+            ecr_name: manager
+            container: tavonzaai-manager
             port: 3103
-            changed_key: branch_manager
+            changed_key: manager
           - app: waiter
             ecr_name: waiter
             container: tavonzaai-waiter
@@ -283,20 +285,23 @@ jobs:
           ADMIN_CHANGED: ${{ needs.detect-changes.outputs.admin }}
           KITCHEN_CHANGED: ${{ needs.detect-changes.outputs.kitchen }}
           CASHIER_CHANGED: ${{ needs.detect-changes.outputs.cashier }}
-          BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.branch_manager }}
+          MANAGER_CHANGED: ${{ needs.detect-changes.outputs.manager }}
+          BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.manager }}
           WAITER_CHANGED: ${{ needs.detect-changes.outputs.waiter }}
         run: |
           SHOULD_DEPLOY="false"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ] && SHOULD_DEPLOY="true"
+            if [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ] || [ "$INPUT_SERVICE" = "branch-manager" -a "$APP" = "manager" ]; then
+              SHOULD_DEPLOY="true"
+            fi
           else
             case "$APP" in
-              customer)       [ "$CUSTOMER_CHANGED"       = "true" ] && SHOULD_DEPLOY="true" ;;
-              admin)          [ "$ADMIN_CHANGED"          = "true" ] && SHOULD_DEPLOY="true" ;;
-              kitchen)        [ "$KITCHEN_CHANGED"        = "true" ] && SHOULD_DEPLOY="true" ;;
-              cashier)        [ "$CASHIER_CHANGED"        = "true" ] && SHOULD_DEPLOY="true" ;;
-              branch-manager) [ "$BRANCH_MANAGER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              waiter)         [ "$WAITER_CHANGED"         = "true" ] && SHOULD_DEPLOY="true" ;;
+              customer)               [ "$CUSTOMER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              admin)                  [ "$ADMIN_CHANGED"    = "true" ] && SHOULD_DEPLOY="true" ;;
+              kitchen)                [ "$KITCHEN_CHANGED"  = "true" ] && SHOULD_DEPLOY="true" ;;
+              cashier)                [ "$CASHIER_CHANGED"  = "true" ] && SHOULD_DEPLOY="true" ;;
+              manager|branch-manager) [ "$MANAGER_CHANGED"  = "true" ] && SHOULD_DEPLOY="true" ;;
+              waiter)                 [ "$WAITER_CHANGED"   = "true" ] && SHOULD_DEPLOY="true" ;;
             esac
           fi
           echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT

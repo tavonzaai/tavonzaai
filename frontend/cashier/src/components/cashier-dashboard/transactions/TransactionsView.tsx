@@ -1,22 +1,66 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   TransactionsHeader,
   TransactionsFilterBar,
   TransactionsTable,
   TransactionDetailModal,
 } from './components';
-import { INITIAL_TRANSACTIONS } from './transactionsData';
 import { TransactionItem, TransactionStatus } from './types';
 import { toast } from 'sonner';
+import { cashierService, getActiveBranchId } from '@/redux/features/cashierApi';
 
 export default function TransactionsView() {
-  const [transactions, setTransactions] = useState<TransactionItem[]>(INITIAL_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [activeStatus, setActiveStatus] = useState<TransactionStatus>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTx, setSelectedTx] = useState<TransactionItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadTx = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const raw = await cashierService.getOrders(branchId);
+        if (mounted && Array.isArray(raw)) {
+          const mapped: TransactionItem[] = raw.map((o: any) => {
+            let status: TransactionStatus = 'Pending';
+            if (o.paymentStatus === 'PAID') status = 'Paid';
+            else if (o.status === 'CANCELLED') status = 'Failed';
+
+            const createdDate = new Date(o.createdAt);
+            const time = !isNaN(createdDate.getTime())
+              ? createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '12:00 PM';
+
+            return {
+              id: o.orderId || o.id,
+              txId: `TX-${(o.orderId || o.id).slice(0, 8).toUpperCase()}`,
+              orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
+              method: o.paymentMethod || 'Credit Card',
+              cashier: o.waiterName || 'Shift Cashier',
+              status,
+              amount: o.totalAmount || o.total || 0,
+              time,
+              customerName: o.customerName || 'Walk-in Guest',
+              itemsCount: Array.isArray(o.items) ? o.items.length : 1,
+            };
+          });
+          setTransactions(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load transactions:', err);
+      }
+    };
+    loadTx();
+    const interval = setInterval(loadTx, 8000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Dynamic counts for tabs
   const statusCounts = useMemo(() => {

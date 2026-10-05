@@ -59,6 +59,7 @@ module "security_groups" {
   kitchen_port            = var.kitchen_port
   cashier_port            = var.cashier_port
   admin_port              = var.admin_port
+  manager_port            = var.manager_port
   postgres_port           = 5432
   redis_port              = 6379
   alb_ingress_cidr_blocks = var.alb_ingress_cidr_blocks
@@ -82,8 +83,9 @@ module "ecr" {
 module "s3" {
   source = "../../modules/s3"
 
-  bucket_name = var.s3_bucket_name
-  environment = var.environment
+  bucket_name  = var.s3_bucket_name
+  environment  = var.environment
+  project_name = var.project_name
 }
 
 # 5. AWS Secrets Manager Module
@@ -109,6 +111,8 @@ module "secrets_manager" {
     SES_CONFIGURATION_SET = var.enable_ses && length(module.ses) > 0 ? module.ses[0].configuration_set_name : ""
     AWS_ACCESS_KEY_ID     = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
     AWS_SECRET_ACCESS_KEY = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_raw_secret_key : ""
+    S3_ACCESS_KEY_ID      = module.s3.s3_access_key_id
+    S3_SECRET_ACCESS_KEY  = module.s3.s3_secret_access_key
     COMPANY_NAME          = "tavonzaai"
     S3_BUCKET_NAME        = var.s3_bucket_name
     AWS_S3_BUCKET         = var.s3_bucket_name
@@ -242,6 +246,7 @@ module "alb" {
   kitchen_subdomain    = var.kitchen_subdomain
   cashier_subdomain    = var.cashier_subdomain
   admin_subdomain      = var.admin_subdomain
+  manager_subdomain    = var.manager_subdomain
   target_type          = "instance"
   backend_instance_id  = module.backend_ec2.instance_id
   frontend_instance_id = module.frontend_ec2.instance_id
@@ -252,12 +257,14 @@ module "alb" {
   kitchen_port                     = var.kitchen_port
   cashier_port                     = var.cashier_port
   admin_port                       = var.admin_port
+  manager_port                     = var.manager_port
   backend_health_check_path        = var.backend_health_check_path
   nextjs_health_check_path         = var.nextjs_health_check_path
   ai_health_check_path             = var.ai_health_check_path
   kitchen_health_check_path        = var.kitchen_health_check_path
   cashier_health_check_path        = var.cashier_health_check_path
   admin_health_check_path          = var.admin_health_check_path
+  manager_health_check_path        = var.manager_health_check_path
   health_check_interval            = var.health_check_interval
   health_check_timeout             = var.health_check_timeout
   health_check_healthy_threshold   = var.health_check_healthy_threshold
@@ -276,6 +283,7 @@ module "route53" {
   kitchen_subdomain   = var.kitchen_subdomain
   cashier_subdomain   = var.cashier_subdomain
   admin_subdomain     = var.admin_subdomain
+  manager_subdomain   = var.manager_subdomain
   alb_dns_name        = module.alb.alb_dns_name
   alb_zone_id         = module.alb.alb_zone_id
   extra_txt_records   = var.extra_txt_records

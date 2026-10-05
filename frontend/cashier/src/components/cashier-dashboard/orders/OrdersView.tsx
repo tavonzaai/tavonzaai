@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -11,20 +11,66 @@ import {
   X as XIcon,
 } from 'lucide-react';
 import { CashierOrder, OrderStatus } from './types';
-import { INITIAL_ORDERS, ORDER_STATUS_TABS } from './ordersData';
+import { ORDER_STATUS_TABS } from './ordersData';
 import OrderDetailModal from './components/OrderDetailModal';
 import { toast } from 'sonner';
+import { cashierService, getActiveBranchId } from '@/redux/features/cashierApi';
 
 interface OrdersViewProps {
   onNavigateToPOS?: () => void;
 }
 
 export default function OrdersView({ onNavigateToPOS }: OrdersViewProps) {
-  const [orders, setOrders] = useState<CashierOrder[]>(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<CashierOrder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeStatus, setActiveStatus] = useState<OrderStatus>('All');
   const [selectedOrder, setSelectedOrder] = useState<CashierOrder | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadOrders = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const raw = await cashierService.getOrders(branchId);
+        if (mounted && Array.isArray(raw)) {
+          const mapped: CashierOrder[] = raw.map((o: any) => {
+            let status: OrderStatus = 'Pending';
+            if (o.paymentStatus === 'PAID') status = 'Paid';
+            else if (o.status === 'PREPARING') status = 'Preparing';
+            else if (o.status === 'READY_TO_SERVE') status = 'Ready';
+            else if (o.status === 'CANCELLED') status = 'Cancelled';
+
+            const createdDate = new Date(o.createdAt);
+            const time = !isNaN(createdDate.getTime())
+              ? createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Recently';
+
+            return {
+              id: o.orderId || o.id,
+              orderNumber: o.orderNumber,
+              table: o.tableLabel || (o.tableId ? `Table` : 'Takeaway'),
+              customer: o.customerName || 'Walk-in Guest',
+              itemsCount: o.itemCount || (o.items?.length ?? 1),
+              method: o.paymentMethod || 'Visa Card',
+              status,
+              total: o.totalAmount || o.total || 0,
+              time,
+            };
+          });
+          setOrders(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load cashier orders:', err);
+      }
+    };
+    loadOrders();
+    const interval = setInterval(loadOrders, 8000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Filter orders
   const filteredOrders = useMemo(() => {

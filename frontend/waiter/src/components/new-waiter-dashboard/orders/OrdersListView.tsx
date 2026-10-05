@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Home, UtensilsCrossed, Bell, User, Clock, CheckCircle2, ChevronRight } from 'lucide-react';
-import { TavonzaLogoIcon } from '@/components/TavonzaLogo';
+import { Search, Loader2, UtensilsCrossed } from 'lucide-react';
 import { YellowSparkleIcon, FuchsiaCookingPanIcon, GreenClockIcon } from './orderIcons';
-import { INITIAL_ORDERS, OrderItemData, OrderStatus } from './orderData';
+import { OrderItemData, OrderStatus } from './orderData';
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
+import { waiterService, getActiveBranchId, WaiterOrderSummary } from '@/redux/features/waiterApi';
 import { toast } from 'sonner';
 
 interface OrdersListViewProps {
@@ -29,22 +29,130 @@ export default function OrdersListView({
 }: OrdersListViewProps) {
   const router = useRouter();
   const [filter, setFilter] = useState<'ALL' | 'Pending' | 'Active' | 'Completed'>('ALL');
-  const [orders, setOrders] = useState<OrderItemData[]>(INITIAL_ORDERS);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [orders, setOrders] = useState<OrderItemData[]>([]);
+  const [loading, setLoading] = useState(false);
 
+  const mapBackendStatus = (backendStatus: string): OrderStatus => {
+    switch (backendStatus?.toUpperCase()) {
+      case 'PENDING':
+        return 'Pending';
+      case 'CONFIRMED':
+      case 'PREPARING':
+        return 'Cooking';
+      case 'READY':
+        return 'Ready to Serve';
+      case 'SERVED':
+      case 'COMPLETED':
+        return 'Served';
+      default:
+        return 'Pending';
+    }
+  };
 
-  // Filter orders based on active tab
-  const filteredOrders = orders.filter((order) => {
-    if (filter === 'ALL') return true;
-    if (filter === 'Pending') return order.status === 'Pending' || order.status === 'New Add On';
-    if (filter === 'Active')
-      return (
-        order.status === 'Ready to Serve' ||
-        order.status === 'Cooking' ||
-        order.status === 'Customer Calling'
-      );
-    if (filter === 'Completed') return order.status === 'Served';
-    return true;
-  });
+  const prevPendingIdsRef = React.useRef<Set<string>>(new Set());
+  const isInitialLoadRef = React.useRef(true);
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      const branchId = getActiveBranchId();
+      let statusParam: string | undefined = undefined;
+      if (filter === 'Pending') statusParam = 'PENDING';
+      if (filter === 'Active') statusParam = 'CONFIRMED,PREPARING,READY';
+      if (filter === 'Completed') statusParam = 'SERVED,COMPLETED';
+
+      const backendOrders = await waiterService.queryOrders({
+        branchId,
+        status: statusParam,
+        search: searchQuery.trim() || undefined,
+      });
+
+      // Detect newly arrived customer orders
+      const currentPending = backendOrders.filter((bo: any) => bo.status?.toUpperCase() === 'PENDING');
+      const currentPendingIds = new Set(currentPending.map((bo: any) => bo.id || bo.orderId));
+
+      if (!isInitialLoadRef.current) {
+        const newlyArrived = currentPending.filter((bo: any) => !prevPendingIdsRef.current.has(bo.id || bo.orderId));
+        const latest = newlyArrived[0];
+        if (latest) {
+          const tbl = latest.tableLabel || latest.tableNumber || 'Table';
+          const num = latest.orderNumber || (latest.id ? latest.id.slice(0, 5) : 'New');
+          toast.info(`🔔 New order #${num} arrived for ${tbl}!`, {
+            duration: 6000,
+          });
+        }
+      }
+      isInitialLoadRef.current = false;
+      prevPendingIdsRef.current = currentPendingIds;
+
+      const mapped: OrderItemData[] = backendOrders.map((bo: WaiterOrderSummary) => {
+        const orderNumber = bo.orderNumber || (bo.id ? bo.id.slice(0, 8) : 'ORD');
+        const displayStatus = mapBackendStatus(bo.status);
+        const placed = bo.placedAt ? new Date(bo.placedAt) : new Date();
+        const timeStr = !isNaN(placed.getTime())
+          ? placed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '10:00';
+
+        const items = Array.isArray(bo.items) && bo.items.length > 0
+          ? bo.items.map((it: any, idx: number) => ({
+              id: it.id || `it-${idx}`,
+              name: it.productName || it.name || 'Menu Dish',
+              subtitle: '',
+              price: `$${Number(it.unitPrice || 0).toFixed(2)}`,
+              priceNum: Number(it.unitPrice || 0),
+              quantity: it.quantity || 1,
+              image: '/images/burger.jpg',
+              iconType: (displayStatus === 'Ready to Serve' ? 'ready' : displayStatus === 'Cooking' ? 'cooking' : 'sparkle') as any,
+            }))
+          : [
+              {
+                id: 'item-default',
+                name: `${bo.itemsCount || 1} Item(s)`,
+                subtitle: '',
+                price: `$${Number(bo.totalAmount || bo.total || 0).toFixed(2)}`,
+                priceNum: Number(bo.totalAmount || bo.total || 0),
+                quantity: bo.itemsCount || 1,
+                image: '/images/burger.jpg',
+                iconType: 'sparkle' as any,
+              },
+            ];
+
+        return {
+          id: orderNumber.startsWith('#') ? orderNumber : `#${orderNumber}`,
+          orderNumber: orderNumber.replace(/^#+/, ''),
+          realId: bo.id || bo.orderId,
+          table: bo.tableLabel || bo.tableNumber || 'Table',
+          status: displayStatus,
+          time: timeStr,
+          targetTime: displayStatus === 'Served' ? 'Completed' : 'Target 15min',
+          items,
+          subtotal: `$${Number(bo.totalAmount || bo.total || 0).toFixed(2)}`,
+          serviceCharge: '$0.00',
+          tax: '$0.00',
+          totalAmount: `$${Number(bo.totalAmount || bo.total || 0).toFixed(2)}`,
+          specialInstructions: bo.specialInstructions || undefined,
+        };
+      });
+
+      setOrders(mapped);
+    } catch (err: any) {
+      console.error('Failed to fetch waiter orders:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [filter, searchQuery]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchOrders();
+
+    // Auto-refresh every 3 seconds for real-time live customer order updates
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
 
   const actionNeededCount = orders.filter(
     (o) => o.status === 'Pending' || o.status === 'Ready to Serve'
@@ -58,43 +166,41 @@ export default function OrdersListView({
     }
   };
 
-  const handleAcceptOrder = (orderId: string, table: string, e: React.MouseEvent) => {
+  const handleAcceptOrder = async (orderId: string, table: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.table === table ? { ...o, status: 'Cooking' as OrderStatus } : o
-      )
-    );
-    toast.success(`Order accepted for ${table}! Sent to Kitchen.`, {
-      description: 'Items moved to Cooking queue',
-    });
+    try {
+      await waiterService.acceptOrder(orderId);
+      toast.success(`Order accepted for ${table}! Sent to Kitchen.`);
+      await fetchOrders();
+    } catch (err: any) {
+      toast.error(`Failed to accept order: ${err.message || 'Error occurred'}`);
+    }
   };
 
-  const handleRejectOrder = (orderId: string, table: string, e: React.MouseEvent) => {
+  const handleRejectOrder = async (orderId: string, table: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    toast.error(`Order for ${table} rejected`, {
-      description: 'Kitchen and customer table notified',
-    });
+    try {
+      await waiterService.rejectOrder({
+        orderId,
+        reason: 'Kitchen capacity reached',
+        reasonCode: 'KITCHEN_CAPACITY',
+      });
+      toast.success(`Order for ${table} rejected.`);
+      await fetchOrders();
+    } catch (err: any) {
+      toast.error(`Failed to reject order: ${err.message || 'Error occurred'}`);
+    }
   };
 
-  const handleMarkServed = (table: string, e: React.MouseEvent) => {
+  const handleMarkServed = async (orderId: string, table: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.table === table ? { ...o, status: 'Served' as OrderStatus } : o
-      )
-    );
-    toast.success(`Table ${table} marked as Served! 🎉`);
-  };
-
-  const handleMarkResolved = (table: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.table === table ? { ...o, status: 'Served' as OrderStatus } : o
-      )
-    );
-    toast.success(`Alert for ${table} marked as Resolved!`);
+    try {
+      await waiterService.serveOrder(orderId);
+      toast.success(`Table ${table} marked as Served! 🎉`);
+      await fetchOrders();
+    } catch (err: any) {
+      toast.error(`Failed to mark served: ${err.message || 'Error occurred'}`);
+    }
   };
 
   const renderStatusBadge = (status: OrderStatus) => {
@@ -131,19 +237,11 @@ export default function OrdersListView({
             </span>
           </div>
         );
-      case 'New Add On':
+      default:
         return (
-          <div className="h-6 px-3.5 py-1 bg-blue-500/10 rounded-[5px] flex justify-center items-center">
-            <span className="text-center text-blue-500 text-xs font-medium font-['Inter'] leading-4">
-              New Add On
-            </span>
-          </div>
-        );
-      case 'Customer Calling':
-        return (
-          <div className="h-6 px-3.5 py-1 bg-orange-700/10 rounded-[5px] flex justify-center items-center">
-            <span className="text-center text-orange-700 text-xs font-medium font-['Inter'] leading-4">
-              Customer Calling
+          <div className="h-6 px-3.5 py-1 bg-stone-800 rounded-[5px] flex justify-center items-center">
+            <span className="text-center text-amber-500 text-xs font-medium font-['Inter'] leading-4">
+              {status}
             </span>
           </div>
         );
@@ -157,6 +255,20 @@ export default function OrdersListView({
         <h1 className="text-white text-xl font-medium font-['Inter'] leading-6 text-center">
           Orders
         </h1>
+      </div>
+
+      {/* Backend Real-time Search Input */}
+      <div className="px-5">
+        <div className="relative w-full">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by order # or table..."
+            className="w-full pl-10 pr-4 py-2 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-400/50 transition"
+          />
+        </div>
       </div>
 
       {/* Filter Bar & Action Needed Badge */}
@@ -191,23 +303,38 @@ export default function OrdersListView({
         )}
       </div>
 
+      {/* Loading state */}
+      {loading && orders.length === 0 && (
+        <div className="w-full py-16 flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-6 h-6 text-yellow-400 animate-spin" />
+          <span className="text-xs text-zinc-400">Loading orders...</span>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && orders.length === 0 && (
+        <div className="w-full py-16 flex flex-col items-center justify-center gap-3 text-center px-4">
+          <div className="w-12 h-12 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+            <UtensilsCrossed className="w-5 h-5 text-zinc-500" />
+          </div>
+          <p className="text-sm text-white font-medium">No orders found</p>
+          <p className="text-xs text-zinc-400">
+            {searchQuery ? `No orders matching "${searchQuery}"` : `No orders in "${filter}" status right now.`}
+          </p>
+        </div>
+      )}
+
       {/* Order Cards List */}
       <div className="px-5 flex flex-col gap-4">
-        {filteredOrders.map((order) => {
-          const isCustomerCalling = order.status === 'Customer Calling';
+        {orders.map((order) => {
           const isPending = order.status === 'Pending';
           const isReadyToServe = order.status === 'Ready to Serve';
-          const isNewAddOn = order.status === 'New Add On';
 
           return (
             <div
-              key={`${order.table}-${order.status}`}
+              key={`${order.realId || order.id}`}
               onClick={() => handleOrderClick(order)}
-              className={`w-full p-3 rounded-xl flex flex-col gap-4 transition duration-200 cursor-pointer ${
-                isCustomerCalling
-                  ? 'bg-orange-700/10 outline outline-1 outline-offset-[-1px] outline-orange-700/25 hover:outline-orange-700/50'
-                  : 'bg-neutral-900 hover:bg-neutral-900/90 outline outline-1 outline-offset-[-1px] outline-white/5 hover:outline-white/15'
-              }`}
+              className="w-full p-3 rounded-xl flex flex-col gap-4 transition duration-200 cursor-pointer bg-neutral-900 hover:bg-neutral-900/90 outline outline-1 outline-offset-[-1px] outline-white/5 hover:outline-white/15"
             >
               <div className="flex flex-col gap-2">
                 {/* Top Row: Table Box + Status Badge */}
@@ -243,7 +370,6 @@ export default function OrdersListView({
                   {order.items.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        {/* Icon type based on status */}
                         {order.status === 'Pending' || order.status === 'Ready to Serve' ? (
                           <YellowSparkleIcon className="w-5 h-5 text-yellow-400" />
                         ) : (
@@ -271,17 +397,17 @@ export default function OrdersListView({
                 </div>
               </div>
 
-              {/* Card Action Buttons matching Figma */}
+              {/* Card Action Buttons: Real Backend Mutations */}
               {isPending && (
                 <div className="flex items-center gap-2 pt-1">
                   <button
-                    onClick={(e) => handleRejectOrder(order.id, order.table, e)}
+                    onClick={(e) => handleRejectOrder(order.realId || order.orderNumber, order.table, e)}
                     className="flex-1 py-1.5 px-2 bg-neutral-900 rounded-md outline outline-1 outline-offset-[-1px] outline-red-400 text-red-400 text-xs font-medium font-['Poppins'] hover:bg-red-500/10 transition cursor-pointer"
                   >
                     Reject Order
                   </button>
                   <button
-                    onClick={(e) => handleAcceptOrder(order.id, order.table, e)}
+                    onClick={(e) => handleAcceptOrder(order.realId || order.orderNumber, order.table, e)}
                     className="flex-1 py-1.5 px-2 bg-green-500 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-800 text-zinc-900 text-xs font-medium font-['Poppins'] hover:bg-green-400 transition cursor-pointer font-semibold shadow-sm"
                   >
                     Accept Order
@@ -291,36 +417,10 @@ export default function OrdersListView({
 
               {isReadyToServe && (
                 <button
-                  onClick={(e) => handleMarkServed(order.table, e)}
+                  onClick={(e) => handleMarkServed(order.realId || order.orderNumber, order.table, e)}
                   className="w-full h-9 bg-yellow-400 hover:bg-yellow-300 rounded-lg flex items-center justify-center text-black text-sm font-medium font-['Inter'] leading-5 transition cursor-pointer font-semibold shadow-sm"
                 >
                   Mark as Served
-                </button>
-              )}
-
-              {isNewAddOn && (
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={(e) => handleRejectOrder(order.id, order.table, e)}
-                    className="flex-1 py-1.5 px-2 bg-neutral-900 rounded-md outline outline-1 outline-offset-[-1px] outline-red-400 text-red-400 text-xs font-medium font-['Poppins'] hover:bg-red-500/10 transition cursor-pointer"
-                  >
-                    Reject Order
-                  </button>
-                  <button
-                    onClick={(e) => handleAcceptOrder(order.id, order.table, e)}
-                    className="flex-1 py-1.5 px-2 bg-green-500 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-800 text-zinc-900 text-xs font-medium font-['Poppins'] hover:bg-green-400 transition cursor-pointer font-semibold shadow-sm"
-                  >
-                    Accept Order
-                  </button>
-                </div>
-              )}
-
-              {isCustomerCalling && (
-                <button
-                  onClick={(e) => handleMarkResolved(order.table, e)}
-                  className="w-full py-1.5 px-2 bg-yellow-400 hover:bg-yellow-300 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-800 text-zinc-900 text-xs font-medium font-['Poppins'] flex items-center justify-center transition cursor-pointer font-semibold shadow-sm"
-                >
-                  Mark as Resolved
                 </button>
               )}
             </div>
@@ -338,15 +438,10 @@ export default function OrdersListView({
 
   return (
     <div className="w-full min-h-screen bg-neutral-950 flex flex-col items-center justify-start p-0 sm:p-4 md:p-6 font-sans selection:bg-amber-400 selection:text-black">
-      {/* Central Mobile Frame (Figma: w-96 / 384px - 420px) */}
       <div className="w-full max-w-[420px] min-h-screen sm:min-h-[868px] sm:max-h-[94vh] sm:rounded-[36px] bg-black relative flex flex-col justify-between overflow-hidden sm:border sm:border-white/10 sm:shadow-[0_0_50px_rgba(0,0,0,0.9)]">
-        
-        {/* Scrollable Content Container */}
         <div className="flex-1 overflow-y-auto pb-28 custom-scrollbar relative">
           {listContent}
         </div>
-
-        {/* ──────────────── FROSTED BOTTOM DOCK WITH ACTIVE ORDER TAB ──────────────── */}
         <BottomDock
           activeTab="order"
           onNavigateTab={onNavigateTab}

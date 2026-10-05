@@ -191,10 +191,19 @@ importers:
       '@tavonza/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
       ws:
         specifier: ^8.16.0
         version: 8.21.3
     devDependencies:
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
       '@types/node':
         specifier: ^20.12.7
         version: 20.19.43
@@ -237,6 +246,12 @@ importers:
       '@tavonza/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      drizzle-orm:
+        specifier: '>=0.45.2'
+        version: 0.45.3(@types/pg@8.23.1)(pg@8.23.0)
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0
     devDependencies:
       '@types/node':
         specifier: ^20.12.7
@@ -289,61 +304,6 @@ importers:
       sweetalert2:
         specifier: ^11.26.25
         version: 11.26.25
-      tailwind-merge:
-        specifier: ^3.7.0
-        version: 3.7.0
-    devDependencies:
-      '@types/node':
-        specifier: ^20.12.7
-        version: 20.19.43
-      '@types/react':
-        specifier: ^18.3.1
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.3.0
-        version: 18.3.7(@types/react@18.3.31)
-      autoprefixer:
-        specifier: ^10.4.19
-        version: 10.6.1(postcss@8.5.28)
-      postcss:
-        specifier: '>=8.5.18'
-        version: 8.5.28
-      tailwindcss:
-        specifier: ^3.4.1
-        version: 3.4.19(tsx@4.23.15)
-      typescript:
-        specifier: ^5.4.5
-        version: 5.9.3
-
-  frontend/branch-manager:
-    dependencies:
-      '@reduxjs/toolkit':
-        specifier: ^2.13.0
-        version: 2.13.0(react-redux@9.3.0(@types/react@18.3.31)(react@18.3.1)(redux@5.0.1))(react@18.3.1)
-      '@tavonza/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@tavonza/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      lucide-react:
-        specifier: ^1.49.0
-        version: 1.49.0(@types/react@18.3.31)(react@18.3.1)
-      next:
-        specifier: '>=15.5.24'
-        version: 16.3.8(@types/node@20.19.43)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.3.1
-        version: 18.3.1(react@18.3.1)
-      react-redux:
-        specifier: ^9.3.0
-        version: 9.3.0(@types/react@18.3.31)(react@18.3.1)(redux@5.0.1)
       tailwind-merge:
         specifier: ^3.7.0
         version: 3.7.0
@@ -550,6 +510,64 @@ importers:
         specifier: ^5.4.5
         version: 5.9.3
 
+  frontend/manager:
+    dependencies:
+      '@reduxjs/toolkit':
+        specifier: ^2.13.0
+        version: 2.13.0(react-redux@9.3.0(@types/react@18.3.31)(react@18.3.1)(redux@5.0.1))(react@18.3.1)
+      '@tavonza/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@tavonza/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^1.49.0
+        version: 1.49.0(@types/react@18.3.31)(react@18.3.1)
+      next:
+        specifier: '>=15.5.24'
+        version: 16.3.8(@types/node@20.19.43)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      react-redux:
+        specifier: ^9.3.0
+        version: 9.3.0(@types/react@18.3.31)(react@18.3.1)(redux@5.0.1)
+      tailwind-merge:
+        specifier: ^3.7.0
+        version: 3.7.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.19.43
+      '@types/react':
+        specifier: ^18.3.1
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.0
+        version: 18.3.7(@types/react@18.3.31)
+      autoprefixer:
+        specifier: ^10.4.19
+        version: 10.6.1(postcss@8.5.28)
+      playwright:
+        specifier: ^1.63.0
+        version: 1.63.0
+      postcss:
+        specifier: '>=8.5.18'
+        version: 8.5.28
+      tailwindcss:
+        specifier: ^3.4.1
+        version: 3.4.19(tsx@4.23.15)
+      typescript:
+        specifier: ^5.4.5
+        version: 5.9.3
+
   frontend/waiter:
     dependencies:
       '@reduxjs/toolkit':
@@ -642,6 +660,16 @@ importers:
         version: 5.9.3
 
   packages/contracts:
+    dependencies:
+      '@tavonza/database':
+        specifier: workspace:^
+        version: link:../database
+      drizzle-zod:
+        specifier: ^0.8.3
+        version: 0.8.3(drizzle-orm@0.45.3(@types/pg@8.23.1)(pg@8.23.0))(zod@4.6.5)
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@types/node':
         specifier: ^20.12.7
@@ -2748,6 +2776,12 @@ packages:
       sqlite3:
         optional: true
 
+  drizzle-zod@0.8.3:
+    resolution: {integrity: sha512-66yVOuvGhKJnTdiqj1/Xaaz9/qzOdRJADpDa68enqS6g3t0kpNkwNYjUuaeXgZfO/UWuIM9HIhSlJ6C5ZraMww==}
+    peerDependencies:
+      drizzle-orm: '>=0.45.2'
+      zod: ^3.25.0 || ^4.0.0
+
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -3999,6 +4033,16 @@ packages:
     resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
     engines: {node: '>= 6'}
 
+  playwright-core@1.63.0:
+    resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.63.0:
+    resolution: {integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
@@ -4755,6 +4799,9 @@ packages:
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
+
+  zod@4.6.5:
+    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
 snapshots:
 
@@ -6619,6 +6666,11 @@ snapshots:
       '@types/pg': 8.23.1
       pg: 8.23.0
 
+  drizzle-zod@0.8.3(drizzle-orm@0.45.3(@types/pg@8.23.1)(pg@8.23.0))(zod@4.6.5):
+    dependencies:
+      drizzle-orm: 0.45.3(@types/pg@8.23.1)(pg@8.23.0)
+      zod: 4.6.5
+
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -8071,6 +8123,12 @@ snapshots:
 
   pirates@4.0.7: {}
 
+  playwright-core@1.63.0: {}
+
+  playwright@1.63.0:
+    dependencies:
+      playwright-core: 1.63.0
+
   pluralize@8.0.0: {}
 
   possible-typed-array-names@1.1.0: {}
@@ -8960,3 +9018,5 @@ snapshots:
   yargs-parser@21.1.1: {}
 
   yocto-queue@0.1.0: {}
+
+  zod@4.6.5: {}

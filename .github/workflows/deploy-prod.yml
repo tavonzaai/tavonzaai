@@ -22,6 +22,7 @@ on:
           - admin
           - kitchen
           - cashier
+          - manager
           - branch-manager
           - waiter
 
@@ -51,7 +52,8 @@ jobs:
       admin: ${{ steps.filter.outputs.admin }}
       kitchen: ${{ steps.filter.outputs.kitchen }}
       cashier: ${{ steps.filter.outputs.cashier }}
-      branch_manager: ${{ steps.filter.outputs.branch_manager }}
+      manager: ${{ steps.filter.outputs.manager }}
+      branch_manager: ${{ steps.filter.outputs.manager }}
       waiter: ${{ steps.filter.outputs.waiter }}
       any_frontend: ${{ steps.check-frontend.outputs.any }}
     steps:
@@ -85,8 +87,8 @@ jobs:
               - 'frontend/cashier/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
-            branch_manager:
-              - 'frontend/branch-manager/**'
+            manager:
+              - 'frontend/manager/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
             waiter:
@@ -101,7 +103,7 @@ jobs:
              [ "${{ steps.filter.outputs.admin }}" = "true" ] || \
              [ "${{ steps.filter.outputs.kitchen }}" = "true" ] || \
              [ "${{ steps.filter.outputs.cashier }}" = "true" ] || \
-             [ "${{ steps.filter.outputs.branch_manager }}" = "true" ] || \
+             [ "${{ steps.filter.outputs.manager }}" = "true" ] || \
              [ "${{ steps.filter.outputs.waiter }}" = "true" ]; then
             echo "any=true" >> $GITHUB_OUTPUT
           else
@@ -231,6 +233,11 @@ jobs:
             ecs_service: tavonzaai-prod-cashier
             port: 3104
             subdomain: "prod-cashier.tavonza.com"
+          - app: manager
+            ecr_name: manager
+            ecs_service: tavonzaai-prod-manager
+            port: 3103
+            subdomain: "prod-manager.tavonza.com"
     if: |
       github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.any_frontend == 'true'
@@ -246,22 +253,23 @@ jobs:
           ADMIN_CHANGED: ${{ needs.detect-changes.outputs.admin }}
           KITCHEN_CHANGED: ${{ needs.detect-changes.outputs.kitchen }}
           CASHIER_CHANGED: ${{ needs.detect-changes.outputs.cashier }}
-          BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.branch_manager }}
+          MANAGER_CHANGED: ${{ needs.detect-changes.outputs.manager }}
+          BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.manager }}
           WAITER_CHANGED: ${{ needs.detect-changes.outputs.waiter }}
         run: |
           SHOULD_DEPLOY="false"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ]; then
+            if [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ] || [ "$INPUT_SERVICE" = "branch-manager" -a "$APP" = "manager" ]; then
               SHOULD_DEPLOY="true"
             fi
           else
             case "$APP" in
-              customer) [ "$CUSTOMER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              admin) [ "$ADMIN_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              kitchen) [ "$KITCHEN_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              cashier) [ "$CASHIER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              branch-manager) [ "$BRANCH_MANAGER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              waiter) [ "$WAITER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              customer)               [ "$CUSTOMER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              admin)                  [ "$ADMIN_CHANGED"    = "true" ] && SHOULD_DEPLOY="true" ;;
+              kitchen)                [ "$KITCHEN_CHANGED"  = "true" ] && SHOULD_DEPLOY="true" ;;
+              cashier)                [ "$CASHIER_CHANGED"  = "true" ] && SHOULD_DEPLOY="true" ;;
+              manager|branch-manager) [ "$MANAGER_CHANGED"  = "true" ] && SHOULD_DEPLOY="true" ;;
+              waiter)                 [ "$WAITER_CHANGED"   = "true" ] && SHOULD_DEPLOY="true" ;;
             esac
           fi
           echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
