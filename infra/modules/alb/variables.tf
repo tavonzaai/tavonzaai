@@ -76,6 +76,12 @@ variable "admin_subdomain" {
   default     = "admin"
 }
 
+variable "manager_subdomain" {
+  description = "Subdomain prefix for Manager frontend (e.g. manager or prod-manager)"
+  type        = string
+  default     = "manager"
+}
+
 variable "target_type" {
   description = "Target type for ALB target groups (ip for ECS Fargate, instance for EC2)"
   type        = string
@@ -108,6 +114,12 @@ variable "kitchen_instance_id" {
 
 variable "cashier_instance_id" {
   description = "EC2 Instance ID for Cashier frontend (defaults to frontend_instance_id if null)"
+  type        = string
+  default     = null
+}
+
+variable "manager_instance_id" {
+  description = "EC2 Instance ID for Manager frontend (defaults to frontend_instance_id if null)"
   type        = string
   default     = null
 }
@@ -148,6 +160,12 @@ variable "admin_port" {
   default     = 3043
 }
 
+variable "manager_port" {
+  description = "Port the Manager application listens on"
+  type        = number
+  default     = 3103
+}
+
 variable "backend_health_check_path" {
   description = "Health check path for backend service"
   type        = string
@@ -180,6 +198,12 @@ variable "cashier_health_check_path" {
 
 variable "admin_health_check_path" {
   description = "Health check path for Admin service"
+  type        = string
+  default     = "/"
+}
+
+variable "manager_health_check_path" {
+  description = "Health check path for Manager service"
   type        = string
   default     = "/"
 }

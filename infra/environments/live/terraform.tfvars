@@ -60,8 +60,8 @@ frontend_instance_type    = "t3.small"
 backend_ami_id            = ""
 frontend_ami_id           = ""
 ssh_key_name              = ""
-backend_root_volume_size  = 20
-frontend_root_volume_size = 20
+backend_root_volume_size  = 30
+frontend_root_volume_size = 40
 
 # S3 Storage Settings
 s3_bucket_name = "tavonzaai-live-storage-bucket"
@@ -77,7 +77,7 @@ rds_storage_type               = "gp3"
 rds_db_name                    = "tavonzaai_db"
 rds_db_username                = "tavonzaai_user"
 rds_db_password                = "tavonzaaiPass2026Live"
-rds_publicly_accessible        = false
+rds_publicly_accessible        = true
 rds_skip_final_snapshot        = false
 rds_deletion_protection        = true
 rds_backup_retention_period    = 1
@@ -102,10 +102,14 @@ ecr_repository_names = [
   "kitchen",
   "cashier",
   "admin-dashboard",
+  "manager",
   "branch-manager",
   "waiter",
   "worker"
 ]
+
+manager_subdomain = "manager"
+manager_port      = 3103
 
 # ALB Ingress Access (Public Internet)
 alb_ingress_cidr_blocks = [

@@ -50,3 +50,33 @@ variable "cors_allowed_origins" {
   default     = ["*"]
 }
 
+variable "project_name" {
+  description = "Project name"
+  type        = string
+  default     = "tavonzaai"
+}
+
+variable "create_s3_user" {
+  description = "Whether to create a dedicated IAM user and access key for S3 bucket operations"
+  type        = bool
+  default     = true
+}
+
+variable "s3_user_name" {
+  description = "Custom name for the S3 IAM user. Defaults to {project_name}-{environment}-s3-user"
+  type        = string
+  default     = ""
+}
+
+variable "block_public_access" {
+  description = "Block all public access on the S3 bucket"
+  type        = bool
+  default     = false
+}
+
+variable "allow_public_read" {
+  description = "Attach a public read bucket policy allowing anonymous GetObject on objects"
+  type        = bool
+  default     = true
+}
+

@@ -49,6 +49,12 @@ variable "cashier_port" {
   default     = 3104
 }
 
+variable "manager_port" {
+  description = "Port the Manager application listens on"
+  type        = number
+  default     = 3103
+}
+
 variable "postgres_port" {
   description = "Port PostgreSQL database listens on"
   type        = number
@@ -72,3 +78,10 @@ variable "alb_ingress_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "allow_public_rds" {
+  description = "Allow inbound PostgreSQL traffic from 0.0.0.0/0"
+  type        = bool
+  default     = false
+}
+

@@ -100,6 +100,12 @@ variable "admin_subdomain" {
   default     = "admin"
 }
 
+variable "manager_subdomain" {
+  description = "Subdomain prefix for Manager frontend (e.g. manager)"
+  type        = string
+  default     = "manager"
+}
+
 variable "enable_https" {
   description = "Whether to configure HTTPS with ACM certificate validation in Route 53"
   type        = bool
@@ -207,6 +213,12 @@ variable "admin_port" {
   default     = 3043
 }
 
+variable "manager_port" {
+  description = "Port the Manager Docker container listens on"
+  type        = number
+  default     = 3103
+}
+
 variable "backend_health_check_path" {
   description = "Health check HTTP endpoint for backend service"
   type        = string
@@ -239,6 +251,12 @@ variable "cashier_health_check_path" {
 
 variable "admin_health_check_path" {
   description = "Health check HTTP endpoint for Admin dashboard service"
+  type        = string
+  default     = "/"
+}
+
+variable "manager_health_check_path" {
+  description = "Health check HTTP endpoint for Manager dashboard service"
   type        = string
   default     = "/"
 }
@@ -393,10 +411,17 @@ variable "rds_multi_az" {
 }
 
 # ElastiCache Redis / Valkey Configuration
+variable "enable_elasticache" {
+  description = "Enable AWS ElastiCache Serverless cache (set to false when using standalone Valkey on EC2)"
+  type        = bool
+  default     = false
+}
+
 variable "elasticache_cache_name" {
   description = "Name for the ElastiCache Serverless cache"
   type        = string
 }
+
 
 variable "elasticache_engine" {
   description = "Cache engine (valkey or redis)"

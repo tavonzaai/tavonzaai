@@ -22,6 +22,7 @@ on:
           - admin
           - kitchen
           - cashier
+          - manager
           - branch-manager
           - waiter
 
@@ -44,7 +45,8 @@ jobs:
       admin: ${{ steps.filter.outputs.admin }}
       kitchen: ${{ steps.filter.outputs.kitchen }}
       cashier: ${{ steps.filter.outputs.cashier }}
-      branch_manager: ${{ steps.filter.outputs.branch_manager }}
+      manager: ${{ steps.filter.outputs.manager }}
+      branch_manager: ${{ steps.filter.outputs.manager }}
       waiter: ${{ steps.filter.outputs.waiter }}
     steps:
       - uses: actions/checkout@v4
@@ -74,8 +76,8 @@ jobs:
               - 'frontend/cashier/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
-            branch_manager:
-              - 'frontend/branch-manager/**'
+            manager:
+              - 'frontend/manager/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
             waiter:
@@ -135,11 +137,13 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --region ${{ env.AWS_REGION }} \
             --parameters 'commands=[
+              "docker system prune -af --volumes=false 2>/dev/null || true",
               "aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 558567543994.dkr.ecr.eu-west-2.amazonaws.com",
               "docker pull 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-backend:latest",
               "docker stop tavonzaai-backend 2>/dev/null || true",
               "docker rm tavonzaai-backend 2>/dev/null || true",
-              "docker run -d --name tavonzaai-backend --restart always --env-file /opt/tavonzaai/backend.env -p 5000:5000 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-backend:latest"
+              "docker run -d --name tavonzaai-backend --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env -p 5000:5000 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-backend:latest",
+              "docker image prune -af 2>/dev/null || true"
             ]' \
             --query "Command.CommandId" --output text)
 
@@ -210,11 +214,13 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --region ${{ env.AWS_REGION }} \
             --parameters 'commands=[
+              "docker system prune -af --volumes=false 2>/dev/null || true",
               "aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 558567543994.dkr.ecr.eu-west-2.amazonaws.com",
               "docker pull 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-worker:latest",
               "docker stop tavonzaai-worker 2>/dev/null || true",
               "docker rm tavonzaai-worker 2>/dev/null || true",
-              "docker run -d --name tavonzaai-worker --restart always --env-file /opt/tavonzaai/backend.env 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-worker:latest"
+              "docker run -d --name tavonzaai-worker --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env 558567543994.dkr.ecr.eu-west-2.amazonaws.com/tavonzaai-live-worker:latest",
+              "docker image prune -af 2>/dev/null || true"
             ]' \
             --query "Command.CommandId" --output text)
 
@@ -239,6 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - app: customer
@@ -261,11 +268,11 @@ jobs:
             container: tavonzaai-cashier
             port: 3104
             changed_key: cashier
-          - app: branch-manager
-            ecr_name: branch-manager
-            container: tavonzaai-branch-manager
+          - app: manager
+            ecr_name: manager
+            container: tavonzaai-manager
             port: 3103
-            changed_key: branch_manager
+            changed_key: manager
           - app: waiter
             ecr_name: waiter
             container: tavonzaai-waiter
@@ -283,20 +290,23 @@ jobs:
           ADMIN_CHANGED: ${{ needs.detect-changes.outputs.admin }}
           KITCHEN_CHANGED: ${{ needs.detect-changes.outputs.kitchen }}
           CASHIER_CHANGED: ${{ needs.detect-changes.outputs.cashier }}
-          BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.branch_manager }}
+          MANAGER_CHANGED: ${{ needs.detect-changes.outputs.manager }}
+          BRANCH_MANAGER_CHANGED: ${{ needs.detect-changes.outputs.manager }}
           WAITER_CHANGED: ${{ needs.detect-changes.outputs.waiter }}
         run: |
           SHOULD_DEPLOY="false"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ] && SHOULD_DEPLOY="true"
+            if [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$APP" ] || [ "$INPUT_SERVICE" = "branch-manager" -a "$APP" = "manager" ]; then
+              SHOULD_DEPLOY="true"
+            fi
           else
             case "$APP" in
-              customer)       [ "$CUSTOMER_CHANGED"       = "true" ] && SHOULD_DEPLOY="true" ;;
-              admin)          [ "$ADMIN_CHANGED"          = "true" ] && SHOULD_DEPLOY="true" ;;
-              kitchen)        [ "$KITCHEN_CHANGED"        = "true" ] && SHOULD_DEPLOY="true" ;;
-              cashier)        [ "$CASHIER_CHANGED"        = "true" ] && SHOULD_DEPLOY="true" ;;
-              branch-manager) [ "$BRANCH_MANAGER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
-              waiter)         [ "$WAITER_CHANGED"         = "true" ] && SHOULD_DEPLOY="true" ;;
+              customer)               [ "$CUSTOMER_CHANGED" = "true" ] && SHOULD_DEPLOY="true" ;;
+              admin)                  [ "$ADMIN_CHANGED"    = "true" ] && SHOULD_DEPLOY="true" ;;
+              kitchen)                [ "$KITCHEN_CHANGED"  = "true" ] && SHOULD_DEPLOY="true" ;;
+              cashier)                [ "$CASHIER_CHANGED"  = "true" ] && SHOULD_DEPLOY="true" ;;
+              manager|branch-manager) [ "$MANAGER_CHANGED"  = "true" ] && SHOULD_DEPLOY="true" ;;
+              waiter)                 [ "$WAITER_CHANGED"   = "true" ] && SHOULD_DEPLOY="true" ;;
             esac
           fi
           echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
@@ -358,11 +368,13 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --region ${{ env.AWS_REGION }} \
             --parameters "commands=[
+              \"docker system prune -af --volumes=false 2>/dev/null || true\",
               \"aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 558567543994.dkr.ecr.eu-west-2.amazonaws.com\",
               \"docker pull $IMAGE\",
               \"docker stop $CONTAINER 2>/dev/null || true\",
               \"docker rm $CONTAINER 2>/dev/null || true\",
-              \"docker run -d --name $CONTAINER --restart always -e NODE_ENV=production -e PORT=$PORT -p $PORT:$PORT $IMAGE\"
+              \"docker run -d --name $CONTAINER --restart always --log-opt max-size=20m --log-opt max-file=3 -e NODE_ENV=production -e PORT=$PORT -p $PORT:$PORT $IMAGE\",
+              \"docker image prune -af 2>/dev/null || true\"
             ]" \
             --query "Command.CommandId" --output text)
 

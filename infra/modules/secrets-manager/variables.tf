@@ -32,6 +32,8 @@ variable "initial_secret_keys" {
     SMTP_SECURE          = "false"
     COMPANY_NAME         = "tavonzaai"
     EC2_ADMIN_PASSWORD   = ""
+    S3_ACCESS_KEY_ID     = ""
+    S3_SECRET_ACCESS_KEY = ""
   }
 }
 
