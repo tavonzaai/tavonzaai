@@ -44,7 +44,14 @@ class InternalClient:
         try:
             resp = await self._client.post("/auth/resolve-actor", json={"token": user_token})
             if resp.status_code == 200:
-                return ActorContext(**resp.json())
+                data = resp.json()
+                if not data.get("role"):
+                    data["role"] = self._infer_role_from_payload_or_perms(
+                        user_token,
+                        data.get("permissions", []),
+                        data.get("resource_scope", {}),
+                    )
+                return ActorContext(**data)
             if resp.status_code in (401, 403):
                 # Backend explicitly rejected token
                 return None
@@ -56,6 +63,43 @@ class InternalClient:
             raise BackendUnavailableError(
                 f"Backend unreachable: {type(e).__name__}"
             ) from e
+
+    @staticmethod
+    def _infer_role_from_payload_or_perms(
+        user_token: str,
+        permissions: list[str],
+        resource_scope: dict[str, Any],
+    ) -> str:
+        if user_token and "." in user_token:
+            try:
+                import base64
+                import json
+
+                parts = user_token.split(".")
+                if len(parts) >= 2:
+                    padding = "=" * (4 - len(parts[1]) % 4)
+                    payload_bytes = base64.urlsafe_b64decode(parts[1] + padding)
+                    payload = json.loads(payload_bytes.decode("utf-8"))
+                    if payload.get("role"):
+                        return str(payload["role"])
+            except Exception:
+                pass
+
+        scope_role = resource_scope.get("role")
+        if scope_role:
+            return str(scope_role)
+        if resource_scope.get("table_code") or resource_scope.get("table_session_id"):
+            return "customer"
+
+        if "reports.read" in permissions or "*" in permissions:
+            return "manager"
+        if "orders.serve" in permissions:
+            return "waiter"
+        if "kitchen.read" in permissions or "orders.update" in permissions:
+            return "kitchen"
+        if "payments.create" in permissions and "tables.read" not in permissions:
+            return "cashier"
+        return "customer"
 
     # ---- 2. Context bootstrap ----
     async def get_context_bootstrap(self, actor: ActorContext) -> dict[str, Any]:
@@ -172,7 +216,7 @@ class InternalClient:
                 permissions=["menu.read", "orders.read"],
                 resource_scope={"role": "CUSTOMER", "table_code": "T1", "table_session_id": "ts_dev_1"},
             )
-        if any(k in token_lower for k in ("waiter", "server")):
+        if any(k in token_lower for k in ("waiter", "server", "host")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="waiter-dev-01",
@@ -183,7 +227,7 @@ class InternalClient:
                 permissions=resolve_role_permissions("waiter"),
                 resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
             )
-        if any(k in token_lower for k in ("kitchen", "chef")):
+        if any(k in token_lower for k in ("kitchen", "chef", "cook", "bartender")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="chef-dev-01",
@@ -205,7 +249,7 @@ class InternalClient:
                 permissions=resolve_role_permissions("cashier"),
                 resource_scope={"role": "CASHIER"},
             )
-        if "manager" in token_lower:
+        if any(k in token_lower for k in ("manager", "branch_manager")):
             return ActorContext(
                 actor_type="USER",
                 acting_user_id="manager-dev-01",
