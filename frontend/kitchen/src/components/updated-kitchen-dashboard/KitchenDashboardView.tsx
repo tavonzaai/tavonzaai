@@ -102,7 +102,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
 
   // Flag Issue Modal State
   const [flagModalOpen, setFlagModalOpen] = useState<boolean>(false);
-  const [aiModalOpen, setAiModalOpen] = useState<boolean>(false);
   const [selectedOrderForFlag, setSelectedOrderForFlag] = useState<KitchenOrder | null>(null);
   const [selectedFlagReason, setSelectedFlagReason] = useState<string>("Food Quality / Problem");
 
