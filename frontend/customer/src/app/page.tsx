@@ -75,15 +75,15 @@ function LandingPageContent() {
   // Not authenticated: render customer landing menu page directly
   return (
     <>
-      <MenuPage />
-      {/* 
+      {/* <MenuPage /> */}
+      
       <AuthDesktopLayout>
         <CreateAccountView
           onAccountCreated={handleAccountCreated}
           onGoBackToLogin={handleGoBackToLogin}
         />
       </AuthDesktopLayout> 
-      */}
+     
     </>
   );
 }

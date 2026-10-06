@@ -35,6 +35,7 @@ function LoginContent() {
     <AuthDesktopLayout>
       <LoginView
         onLoginSuccess={() => router.replace(returnUrl)}
+        onForgotPassword={() => router.push('/forgot-password')}
       />
     </AuthDesktopLayout>
   );

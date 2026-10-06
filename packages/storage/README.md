@@ -40,6 +40,7 @@ Provides full-featured file upload methods, presigned URLs, streaming downloads,
 The package automatically loads from `process.env`. It works seamlessly with both local **MinIO** emulation and **AWS S3 Private Buckets** in production/live:
 
 #### 1. Local Development (MinIO)
+
 ```env
 # MinIO Local Endpoint & Path-Style
 S3_ENDPOINT=http://localhost:9000
@@ -55,6 +56,7 @@ AWS_REGION=eu-west-2
 ```
 
 #### 2. Production & Live (AWS S3 Private Bucket)
+
 ```env
 # Leave endpoint and forcePathStyle unset/commented out for native AWS S3
 # S3_ENDPOINT=
@@ -79,8 +81,8 @@ CDN_BASE_URL=https://cdn.tavonza.com
 ### 1. Register Module in `app.module.ts`
 
 ```typescript
-import { Module } from '@nestjs/common';
-import { StorageModule } from '@tavonza/storage';
+import { Module } from "@nestjs/common";
+import { StorageModule } from "@tavonza/storage";
 
 @Module({
   imports: [
@@ -93,15 +95,15 @@ export class AppModule {}
 ### 2. Inject `StorageService`
 
 ```typescript
-import { Injectable } from '@nestjs/common';
-import { StorageService, generateKey } from '@tavonza/storage';
+import { Injectable } from "@nestjs/common";
+import { StorageService, generateKey } from "@tavonza/storage";
 
 @Injectable()
 export class MenusService {
   constructor(private readonly storageService: StorageService) {}
 
   async uploadMenuItemPhoto(branchId: string, file: Express.Multer.File) {
-    const key = generateKey('menus', file.originalname, {
+    const key = generateKey("menus", file.originalname, {
       folder: `branches/${branchId}`,
       addTimestamp: true,
       addRandomSuffix: true,
@@ -130,40 +132,40 @@ export class MenusService {
 You can use `S3StorageService` in workers, scripts, or non-NestJS services:
 
 ```typescript
-import { S3StorageService, loadStorageConfig } from '@tavonza/storage';
+import { S3StorageService, loadStorageConfig } from "@tavonza/storage";
 
 const config = loadStorageConfig({
-  bucket: 'tavonzaai-live-storage-bucket',
-  region: 'eu-west-2',
+  bucket: "tavonzaai-live-storage-bucket",
+  region: "eu-west-2",
 });
 
 const storage = new S3StorageService(config);
 
 // 1. Upload Buffer
 const upload = await storage.uploadFile({
-  key: 'reports/2026-summary.pdf',
+  key: "reports/2026-summary.pdf",
   file: pdfBuffer,
-  contentType: 'application/pdf',
-  cacheControl: 'max-age=86400',
+  contentType: "application/pdf",
+  cacheControl: "max-age=86400",
 });
 
 // 2. Generate Presigned Upload URL for Frontend
 const presigned = await storage.getPresignedUploadUrl({
-  key: 'avatars/user-123.jpg',
-  contentType: 'image/jpeg',
+  key: "avatars/user-123.jpg",
+  contentType: "image/jpeg",
   expiresIn: 900, // 15 mins
 });
 
 // 3. Generate Presigned Download URL for Private Invoice
 const invoiceUrl = await storage.getPresignedDownloadUrl({
-  key: 'invoices/inv-001.pdf',
+  key: "invoices/inv-001.pdf",
   expiresIn: 3600,
   responseContentDisposition: 'attachment; filename="invoice.pdf"',
 });
 
 // 4. Multipart Streaming for Large Files
 await storage.uploadMultipart({
-  key: 'backups/db-dump.tar.gz',
+  key: "backups/db-dump.tar.gz",
   file: fileStream,
   onProgress: (p) => console.log(`Uploaded ${p.loaded} of ${p.total} bytes`),
 });
@@ -175,27 +177,28 @@ await storage.uploadMultipart({
 
 Mounted under `/storage`:
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/storage/upload` | Multipart file upload (`form-data`, field `file`) |
-| `POST` | `/storage/upload/base64` | Upload base64 encoded data URI or raw string |
-| `POST` | `/storage/presigned-upload-url` | Generate presigned PUT URL for client-side direct upload |
-| `POST` | `/storage/presigned-post` | Generate presigned POST form policy with size limits |
-| `POST` | `/storage/presigned-download-url` | Generate temporary presigned GET URL for private file |
-| `GET` | `/storage/file` | Proxy/stream file directly from S3 to HTTP client |
-| `GET` | `/storage/file/info` | Fetch metadata, size, MIME type, and ETag |
-| `GET` | `/storage/file/exists` | Check if a file exists in the bucket |
-| `GET` | `/storage/files` | List files and folders by prefix with pagination |
-| `DELETE` | `/storage/file` | Delete a single file |
-| `POST` | `/storage/files/delete-batch` | Batch delete multiple files |
+| Method   | Endpoint                          | Description                                              |
+| -------- | --------------------------------- | -------------------------------------------------------- |
+| `POST`   | `/storage/upload`                 | Multipart file upload (`form-data`, field `file`)        |
+| `POST`   | `/storage/upload/base64`          | Upload base64 encoded data URI or raw string             |
+| `POST`   | `/storage/presigned-upload-url`   | Generate presigned PUT URL for client-side direct upload |
+| `POST`   | `/storage/presigned-post`         | Generate presigned POST form policy with size limits     |
+| `POST`   | `/storage/presigned-download-url` | Generate temporary presigned GET URL for private file    |
+| `GET`    | `/storage/file`                   | Proxy/stream file directly from S3 to HTTP client        |
+| `GET`    | `/storage/file/info`              | Fetch metadata, size, MIME type, and ETag                |
+| `GET`    | `/storage/file/exists`            | Check if a file exists in the bucket                     |
+| `GET`    | `/storage/files`                  | List files and folders by prefix with pagination         |
+| `DELETE` | `/storage/file`                   | Delete a single file                                     |
+| `POST`   | `/storage/files/delete-batch`     | Batch delete multiple files                              |
 
-Interactive Swagger documentation is available at `http://localhost:3000/docs` under the **System \| Storage** tag.
+Interactive Swagger documentation is available at `https://api.tavonza.com/docs` under the **System \| Storage** tag.
 
 ---
 
 ## Verification Tests
 
 ### 1. Local MinIO Test
+
 Verify connectivity and all upload/presign/delete operations against local MinIO:
 
 ```bash
@@ -207,6 +210,7 @@ pnpm storage:test:minio
 ```
 
 ### 2. AWS S3 Production & Live Test
+
 Verify connectivity and all operations against real AWS S3 private buckets:
 
 ```bash

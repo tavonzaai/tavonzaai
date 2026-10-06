@@ -162,14 +162,14 @@ export default function ProfileView({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
+                {/* <div className="flex flex-col gap-1">
                   <span className="text-stone-300 text-xs font-normal">Employee ID</span>
                   <div className="w-full h-10 px-3 bg-neutral-900 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-neutral-500/10 flex items-center">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
                       EMP-00247
                     </span>
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
 
@@ -227,13 +227,12 @@ export default function ProfileView({
             </div>
 
             {/* Performance Overview matching Figma */}
-            <div className="flex flex-col gap-3">
+            {/* <div className="flex flex-col gap-3">
               <span className="text-white text-sm font-medium font-['Inter']">
                 Performance Overview
               </span>
 
-              {/* 3 Metric Cards */}
-              <div className="grid grid-cols-3 gap-2">
+               <div className="grid grid-cols-3 gap-2">
                 <div className="p-3 bg-stone-950 rounded-[8px] outline outline-1 outline-offset-[-1px] outline-white/10 flex flex-col items-center justify-center gap-0.5">
                   <span className="text-indigo-100 text-base font-semibold font-['Inter']">
                     124
@@ -262,10 +261,8 @@ export default function ProfileView({
                 </div>
               </div>
 
-              {/* Progress Bars */}
-              <div className="flex flex-col gap-3 pt-1">
-                {/* 1. Completion Rate */}
-                <div className="flex flex-col gap-1.5">
+               <div className="flex flex-col gap-3 pt-1">
+                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-stone-300 font-normal">Completion Rate</span>
                     <span className="text-stone-300 font-semibold">96%</span>
@@ -275,8 +272,7 @@ export default function ProfileView({
                   </div>
                 </div>
 
-                {/* 2. Customer Satisfaction */}
-                <div className="flex flex-col gap-1.5">
+                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-stone-300 font-normal">Customer Satisfaction</span>
                     <span className="text-stone-300 font-semibold">4.8 / 5</span>
@@ -286,7 +282,7 @@ export default function ProfileView({
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Account Settings List matching Figma */}
             <div className="flex flex-col gap-3 pt-1">

@@ -18,6 +18,7 @@ export interface AuthState {
   isInitialized: boolean;
   error: string | null;
   successMessage: string | null;
+  pendingEmail: string | null;
   forgotEmail: string | null;
   otpCode: string | null;
 }
@@ -29,6 +30,7 @@ const initialState: AuthState = {
   isInitialized: false,
   error: null,
   successMessage: null,
+  pendingEmail: null,
   forgotEmail: null,
   otpCode: null,
 };
@@ -54,6 +56,9 @@ const authSlice = createSlice({
     },
     clearSuccessMessage: (state) => {
       state.successMessage = null;
+    },
+    setPendingEmail: (state, action: PayloadAction<string | null>) => {
+      state.pendingEmail = action.payload;
     },
     setForgotEmail: (state, action: PayloadAction<string | null>) => {
       state.forgotEmail = action.payload;
@@ -198,6 +203,7 @@ export const {
   setInitialized,
   clearAuthError,
   clearSuccessMessage,
+  setPendingEmail,
   setForgotEmail,
   setOtpCode,
 } = authSlice.actions;

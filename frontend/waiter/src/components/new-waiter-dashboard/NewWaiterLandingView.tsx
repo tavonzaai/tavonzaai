@@ -1415,7 +1415,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                 <span className="text-amber-400 text-xs font-semibold tracking-wide uppercase mt-0.5">
                   Senior Service Staff
                 </span>
-                <span className="text-zinc-400 text-xs mt-1">{user?.email || 'waiter@tavonza.demo'}</span>
+                <span className="text-zinc-400 text-xs mt-1">{user?.email || ' '}</span>
 
                 <div className="w-full grid grid-cols-2 gap-2 mt-5 pt-4 border-t border-white/10">
                   <div className="p-2.5 bg-black/40 rounded-xl">
