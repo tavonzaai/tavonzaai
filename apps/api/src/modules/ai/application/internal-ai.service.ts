@@ -275,22 +275,32 @@ export class InternalAiService {
    * Route 5: POST /internal/audit
    */
   async recordAudit(dto: InternalAuditRequestDto) {
-    await this.db.insert(auditLogs).values({
-      branchId: dto.branchId ?? null,
-      actorId: dto.actingUserId ?? '00000000-0000-0000-0000-000000000000',
-      action: dto.action,
-      entityType: 'AI_ACTION',
-      entityId: dto.actingUserId ?? '00000000-0000-0000-0000-000000000000',
-      metadata: {
-        aiAgentId: dto.aiAgentId,
-        source: dto.source,
-        authorizationResult: dto.authorizationResult,
-        resource: dto.resource,
-        before: dto.before,
-        after: dto.after,
-        timestamp: dto.timestamp,
-      },
-    });
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dto.actingUserId ?? '');
+      const validActorId = isUuid ? dto.actingUserId! : '00000000-0000-0000-0000-000000000000';
+      const isBranchUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dto.branchId ?? '');
+
+      await this.db.insert(auditLogs).values({
+        branchId: isBranchUuid ? dto.branchId! : null,
+        actorId: validActorId,
+        action: dto.action,
+        entityType: 'AI_ACTION',
+        entityId: validActorId,
+        metadata: {
+          actingUserId: dto.actingUserId,
+          aiAgentId: dto.aiAgentId,
+          role: dto.role,
+          source: dto.source,
+          authorizationResult: dto.authorizationResult,
+          resource: dto.resource,
+          before: dto.before,
+          after: dto.after,
+          timestamp: dto.timestamp,
+        },
+      });
+    } catch (err: any) {
+      this.logger.warn(`Failed to write AI audit log: ${err.message}`);
+    }
 
     return { ok: true };
   }
