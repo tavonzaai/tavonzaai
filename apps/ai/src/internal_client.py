@@ -22,6 +22,18 @@ class BackendUnavailableError(Exception):
     """Raised when the backend is unreachable and we are NOT in dev mock mode."""
 
 
+DEFAULT_BRANCH_ID = "ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27"
+DEFAULT_USER_ID = "00000001-0000-4000-8000-000000000011"
+
+
+def _clean_uuid(val: Any, default: str) -> str:
+    import re
+    s = str(val or "").strip()
+    if re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", s, re.I):
+        return s
+    return default
+
+
 class InternalClient:
     def __init__(self) -> None:
         headers = {}
@@ -132,11 +144,12 @@ class InternalClient:
                 "active_sessions": ["TS_dev_001"],
             }
         try:
+            branch_id = _clean_uuid(actor.branch_id, DEFAULT_BRANCH_ID)
             resp = await self._client.get(
                 "/context/bootstrap",
                 params={
                     "actor_id": actor.acting_user_id or actor.ai_agent_id,
-                    "branch_id": actor.branch_id,
+                    "branch_id": branch_id,
                 },
             )
             resp.raise_for_status()
@@ -152,16 +165,19 @@ class InternalClient:
         if settings.dev_mode_mock_backend:
             return self._mock_tool_result(tool_name, args)
         try:
+            branch_id = _clean_uuid(actor.branch_id, DEFAULT_BRANCH_ID)
+            actor_dict = actor.model_dump()
+            actor_dict["branch_id"] = branch_id
             resp = await self._client.post(
                 "/tools/execute",
                 json={
                     "tool": tool_name,
                     "args": args,
                     "scope": {
-                        "organization_id": actor.organization_id,
-                        "branch_id": actor.branch_id,
+                        "organization_id": actor.organization_id or "org_default",
+                        "branch_id": branch_id,
                     },
-                    "actor": actor.model_dump(),
+                    "actor": actor_dict,
                 },
             )
             resp.raise_for_status()
@@ -197,10 +213,8 @@ class InternalClient:
         try:
             payload = dict(record)
             payload.pop("role", None)
-            import re
-            user_id = str(payload.get("actingUserId") or "")
-            if not re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", user_id, re.I):
-                payload["actingUserId"] = "00000000-0000-0000-0000-000000000000"
+            payload["actingUserId"] = _clean_uuid(payload.get("actingUserId"), DEFAULT_USER_ID)
+            payload["branchId"] = _clean_uuid(payload.get("branchId"), DEFAULT_BRANCH_ID)
             await self._client.post("/audit", json=payload)
         except Exception as exc:
             logger.error("[AUDIT-FALLBACK] Failed to write audit: %s. Record: %s", exc, record)
@@ -229,12 +243,12 @@ class InternalClient:
                         permissions = resolve_role_permissions(str(role) if role else None)
                     return ActorContext(
                         actor_type=payload.get("actor_type", "USER"),
-                        acting_user_id=str(payload.get("acting_user_id") or payload.get("sub", "dev-user-1")),
+                        acting_user_id=str(payload.get("acting_user_id") or payload.get("sub", DEFAULT_USER_ID)),
                         ai_agent_id=payload.get("ai_agent_id", settings.ai_agent_default_id),
                         role=role,
-                        organization_id=str(payload.get("organization_id", "org_dev")),
-                        restaurant_id=str(payload.get("restaurant_id", "rest_dev")),
-                        branch_id=str(payload.get("branch_id", "branch_dev")),
+                        organization_id=str(payload.get("organization_id", "org_default")),
+                        restaurant_id=str(payload.get("restaurant_id", "rest_default")),
+                        branch_id=_clean_uuid(payload.get("branch_id"), DEFAULT_BRANCH_ID),
                         permissions=permissions,
                         resource_scope=payload.get("resource_scope", {}),
                     )
@@ -245,77 +259,77 @@ class InternalClient:
         if any(k in token_lower for k in ("customer", "guest")):
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="cust-dev-01",
+                acting_user_id=DEFAULT_USER_ID,
                 role="customer",
-                organization_id="org_dev",
-                restaurant_id="rest_dev",
-                branch_id="branch_dev",
+                organization_id="org_default",
+                restaurant_id="rest_default",
+                branch_id=DEFAULT_BRANCH_ID,
                 permissions=["menu.read", "orders.read"],
                 resource_scope={"role": "CUSTOMER", "table_code": "T1", "table_session_id": "ts_dev_1"},
             )
         if any(k in token_lower for k in ("waiter", "server", "host")):
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="waiter-dev-01",
+                acting_user_id=DEFAULT_USER_ID,
                 role="waiter",
-                organization_id="org_dev",
-                restaurant_id="rest_dev",
-                branch_id="branch_dev",
+                organization_id="org_default",
+                restaurant_id="rest_default",
+                branch_id=DEFAULT_BRANCH_ID,
                 permissions=resolve_role_permissions("waiter"),
                 resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
             )
         if any(k in token_lower for k in ("kitchen", "chef", "cook", "bartender")):
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="chef-dev-01",
+                acting_user_id=DEFAULT_USER_ID,
                 role="kitchen",
-                organization_id="org_dev",
-                restaurant_id="rest_dev",
-                branch_id="branch_dev",
+                organization_id="org_default",
+                restaurant_id="rest_default",
+                branch_id=DEFAULT_BRANCH_ID,
                 permissions=resolve_role_permissions("kitchen"),
                 resource_scope={"role": "KITCHEN", "stations": ["grill", "cold", "fryer"]},
             )
         if "cashier" in token_lower:
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="cashier-dev-01",
+                acting_user_id=DEFAULT_USER_ID,
                 role="cashier",
-                organization_id="org_dev",
-                restaurant_id="rest_dev",
-                branch_id="branch_dev",
+                organization_id="org_default",
+                restaurant_id="rest_default",
+                branch_id=DEFAULT_BRANCH_ID,
                 permissions=resolve_role_permissions("cashier"),
                 resource_scope={"role": "CASHIER"},
             )
         if any(k in token_lower for k in ("manager", "branch_manager")):
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="manager-dev-01",
+                acting_user_id=DEFAULT_USER_ID,
                 role="manager",
-                organization_id="org_dev",
-                restaurant_id="rest_dev",
-                branch_id="branch_dev",
+                organization_id="org_default",
+                restaurant_id="rest_default",
+                branch_id=DEFAULT_BRANCH_ID,
                 permissions=resolve_role_permissions("manager"),
                 resource_scope={"role": "MANAGER"},
             )
         if any(k in token_lower for k in ("owner", "admin", "super", "system", "internal")):
             return ActorContext(
                 actor_type="USER",
-                acting_user_id="owner-dev-01",
+                acting_user_id=DEFAULT_USER_ID,
                 role="owner",
-                organization_id="org_dev",
-                restaurant_id="rest_dev",
-                branch_id="branch_dev",
+                organization_id="org_default",
+                restaurant_id="rest_default",
+                branch_id=DEFAULT_BRANCH_ID,
                 permissions=["*"],
                 resource_scope={"role": "ADMIN"},
             )
         return ActorContext(
             actor_type="USER",
-            acting_user_id="waiter-staff",
+            acting_user_id=DEFAULT_USER_ID,
             ai_agent_id=settings.ai_agent_default_id,
-            role="manager",
-            organization_id="org_dev",
-            restaurant_id="rest_dev",
-            branch_id="branch_dev",
+            role="waiter",
+            organization_id="org_default",
+            restaurant_id="rest_default",
+            branch_id=DEFAULT_BRANCH_ID,
             permissions=resolve_role_permissions("waiter"),
             resource_scope={"role": "WAITER", "tables": ["T1", "T2", "T5"]},
         )
