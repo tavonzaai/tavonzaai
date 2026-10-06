@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   User,
@@ -17,6 +17,8 @@ import {
   Sparkles,
   Pencil,
   X,
+  Camera,
+  Loader2,
 } from 'lucide-react';
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
@@ -60,10 +62,13 @@ export default function ProfileView({
 
   const [editForm, setEditForm] = useState(workInfo);
 
-  // Personal Info Form State
+  // Personal Info & Avatar Form State
   const [nameInput, setNameInput] = useState(user?.name || user?.firstName || '');
   const [contactInput, setContactInput] = useState(user?.contactNo || user?.phone || '');
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isSavingPersonalInfo, setIsSavingPersonalInfo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Password Form State
   const [oldPass, setOldPass] = useState('');
@@ -74,6 +79,8 @@ export default function ProfileView({
     if (user) {
       setNameInput(user.name || user.firstName || '');
       setContactInput(user.contactNo || user.phone || '');
+      const u = user as any;
+      setAvatarPreview(u.avatarUrl || u.avatar || null);
       setWorkInfo((prev) => ({
         ...prev,
         role: user.role ? user.role.replace(/_/g, ' ') : prev.role,
@@ -81,6 +88,18 @@ export default function ProfileView({
       }));
     }
   }, [user]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
+    }
+  };
 
   const waiterName = user?.name || user?.firstName || 'Waiter';
   const waiterEmail = user?.email || 'waiter@tavonza.com';
@@ -102,10 +121,32 @@ export default function ProfileView({
     <div className="flex flex-col pb-6 animate-fadeIn">
       {/* Profile Hero Header matching Figma */}
       <div className="w-full px-5 pt-3 pb-6 bg-gradient-to-b from-neutral-900 to-neutral-900/30 border-b border-white/5 flex flex-col items-center gap-3">
-            <div className="w-20 h-20 bg-white/20 rounded-full outline outline-1 outline-neutral-200 flex items-center justify-center shadow-lg shadow-black/50">
-              <span className="text-white text-3xl font-normal font-sans select-none">
-                {waiterName[0] || 'M'}
-              </span>
+            <div className="relative group">
+              <div className="w-20 h-20 bg-neutral-800 rounded-full outline outline-1 outline-neutral-200 flex items-center justify-center shadow-lg shadow-black/50 overflow-hidden relative">
+                {avatarPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-white text-3xl font-normal font-sans select-none">
+                    {waiterName[0] || 'M'}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute bottom-0 right-0 p-1.5 bg-yellow-400 hover:bg-yellow-300 text-black rounded-full shadow-lg transition cursor-pointer"
+                title="Change profile picture"
+              >
+                <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageChange}
+              />
             </div>
 
             <div className="flex flex-col items-center gap-1">
@@ -601,6 +642,28 @@ export default function ProfileView({
         </div>
 
         <div className="flex flex-col gap-3.5">
+          {/* Avatar Photo Picker */}
+          <div className="flex flex-col items-center gap-2 pb-1">
+            <div className="w-16 h-16 rounded-full bg-neutral-800 border border-white/20 overflow-hidden relative flex items-center justify-center">
+              {avatarPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white text-xl font-bold font-sans select-none">
+                  {waiterName[0] || 'W'}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>{avatarFile ? 'Photo Selected' : 'Change Photo'}</span>
+            </button>
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-stone-300">Full Name</label>
             <input
@@ -640,11 +703,19 @@ export default function ProfileView({
               }
               setIsSavingPersonalInfo(true);
               try {
-                const res = await dispatch(updateMe({ name: nameInput.trim(), contactNo: contactInput.trim() }));
+                const res = await dispatch(
+                  updateMe({
+                    name: nameInput.trim(),
+                    contactNo: contactInput.trim(),
+                    avatar: avatarFile || avatarPreview || undefined,
+                  })
+                );
                 setIsSavingPersonalInfo(false);
                 if (updateMe.fulfilled.match(res)) {
                   setIsEditPersonalInfoModalOpen(false);
-                  toast.success('Profile updated successfully!');
+                  toast.success('Profile updated successfully!', {
+                    description: avatarFile ? 'Profile picture uploaded and updated!' : undefined,
+                  });
                 } else {
                   toast.error((res.payload as string) || 'Failed to update profile');
                 }
@@ -653,9 +724,16 @@ export default function ProfileView({
                 toast.error(err?.message || 'Failed to update profile');
               }
             }}
-            className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50 flex items-center gap-2"
           >
-            {isSavingPersonalInfo ? 'Saving...' : 'Save Profile'}
+            {isSavingPersonalInfo ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <span>Save Profile</span>
+            )}
           </button>
         </div>
       </div>

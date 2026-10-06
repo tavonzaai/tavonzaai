@@ -22,7 +22,7 @@ export interface CashierUser {
 export const DEMO_CASHIER_USER: CashierUser = {
   id: 'csh-101',
   name: 'Nobin Mille',
-  email: 'cashier@tavonza.demo',
+  email: ' ',
   role: 'CASHIER',
   station: 'Terminal #1 (Main Cashier)',
   assignments: [
