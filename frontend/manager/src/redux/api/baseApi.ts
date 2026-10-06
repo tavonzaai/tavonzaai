@@ -64,10 +64,33 @@ export function removeAuthToken() {
 }
 
 export function getApiBaseUrl(): string {
+  let url =
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) ||
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
+    (typeof process !== 'undefined' && process.env?.API_BASE_URL);
+
+  if (url) {
+    return String(url).trim().replace(/\/docs(-json)?\/?$/, '').replace(/\/$/, '');
+  }
+
+  // Browser client
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:3000';
+    }
+    return 'https://api.tavonza.com';
+  }
+
+  // Server-side / Build-time default
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+    return 'http://localhost:3000';
+  }
+
   return 'https://api.tavonza.com';
 }
 
-export const API_BASE_URL = 'https://api.tavonza.com';
+export const API_BASE_URL = getApiBaseUrl();
 
 
 
