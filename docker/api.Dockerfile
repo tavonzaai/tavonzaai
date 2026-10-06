@@ -29,5 +29,5 @@ COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
 
 USER nestjs
-EXPOSE 5000
+EXPOSE 3000
 CMD ["node", "apps/api/dist/main.js"]

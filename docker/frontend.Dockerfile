@@ -27,6 +27,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/frontend/customer/.next ./frontend/customer/.next
 COPY --from=builder /app/frontend/customer/public ./frontend/customer/public
+COPY --from=builder /app/frontend/customer/next.config.js ./frontend/customer/next.config.js
 COPY --from=builder /app/frontend/customer/package.json ./frontend/customer/package.json
 COPY --from=builder /app/frontend/customer/node_modules ./frontend/customer/node_modules
 

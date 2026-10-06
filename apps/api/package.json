@@ -5,7 +5,8 @@
   "scripts": {
     "build": "nest build",
     "start": "dotenv -e ../../.env -- nest start",
-    "dev": "dotenv -e ../../.env -- nest start --watch",
+    "dev": "pnpm --filter @tavonza/database db:generate && dotenv -e ../../.env -- nest start --watch",
+    "db:push": "pnpm --filter @tavonza/database db:push",
     "lint": "tsc --noEmit",
     "test": "echo 'No tests yet — add jest to devDependencies when writing tests' && exit 0",
     "typecheck": "tsc --noEmit"

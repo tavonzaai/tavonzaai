@@ -57,9 +57,22 @@ export function createDrizzleDatabase(connectionString: string): DrizzleDatabase
     useSsl = connectionString.includes('rds.amazonaws.com');
   }
 
+  const max = Number(process.env.DB_POOL_MAX || 10);
+  const statementTimeout = Number(process.env.DB_STATEMENT_TIMEOUT_MS || 15000);
+
   const pool = new Pool({
     connectionString: cleanUrl,
     ssl: useSsl ? { rejectUnauthorized: false } : undefined,
+    max,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+    statement_timeout: statementTimeout,
   });
+
+  // Prevent idle connection drops from crashing the Node.js process
+  pool.on('error', (err) => {
+    console.error('[Database Pool] Unexpected error on idle PostgreSQL client:', err?.message || err);
+  });
+
   return drizzle(pool, { schema });
 }
