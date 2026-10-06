@@ -630,7 +630,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
       {activeTab === 'home' && (
             <div className="animate-fadeIn">
               {/* Header Greeting Banner */}
-              <div className="w-full px-5 pt-4 pb-6 bg-gradient-to-b from-neutral-900 to-neutral-900/40 border-b border-white/5">
+              <div className="w-full px-5 pt-4 pb-6 bg-gradient-to-b from-neutral-900 to-neutral-900/40  ">
                 <div className="flex flex-col gap-2.5">
                   <div className="flex flex-col gap-0.5">
                     <h1 className="text-white text-base font-semibold font-['Inter'] tracking-tight">

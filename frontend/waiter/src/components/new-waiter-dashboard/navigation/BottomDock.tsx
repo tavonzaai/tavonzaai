@@ -164,7 +164,7 @@ export default function BottomDock({
 
       <div
         ref={dockRef}
-        className={`w-full h-24 bg-black/85 backdrop-blur-xl border-t border-white/10 shadow-[0px_-10px_30px_rgba(0,0,0,0.8)] flex flex-col justify-between px-3 pt-2 pb-2 absolute bottom-0 left-0 right-0 z-40 select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
+        className={`w-full h-18 bg-black/85 backdrop-blur-xl border-t border-white/10 shadow-[0px_-10px_30px_rgba(0,0,0,0.8)] flex flex-col justify-between px-3 pt-2 pb-2 absolute bottom-0 left-0 right-0 z-40 select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
           isVisible
             ? 'translate-y-0 opacity-100 pointer-events-auto'
             : 'translate-y-[140%] opacity-0 pointer-events-none'
@@ -233,13 +233,13 @@ export default function BottomDock({
             className="flex flex-col items-center justify-center -mt-6 cursor-pointer group transition-transform duration-150 active:scale-95"
           >
             <div
-              className={`w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-active:scale-95 overflow-hidden ${
+              className={`w-12 h-12 rounded-full   flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-active:scale-95 overflow-hidden ${
                 isJarvisActive
                   ? 'border-2 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)] ring-2 ring-yellow-400/30'
                   : 'border-2 border-neutral-500 shadow-[0_0_15px_rgba(0,0,0,0.6)]'
               }`}
             >
-              <div className="relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center">
+              <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
                 <Image
                   src="/images/jarvis-robot.jpg"
                   alt="JARVIS"
@@ -310,9 +310,6 @@ export default function BottomDock({
             </span>
           </button>
         </div>
-
-        {/* iPhone Bottom Home Indicator Bar */}
-        <div className="w-16 h-0.5 bg-stone-300 rounded-[38px] mx-auto mt-2" />
       </div>
     </>
   );
