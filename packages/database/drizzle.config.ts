@@ -1,26 +1,26 @@
-import { defineConfig } from 'drizzle-kit';
-import { config } from 'dotenv';
-import { resolve } from 'path';
+import { defineConfig } from "drizzle-kit";
+import { config } from "dotenv";
+import { resolve } from "path";
 
 // Load environment variables from repository root .env or local
-config({ path: resolve(__dirname, '../../.env') });
+config({ path: resolve(__dirname, "../../.env") });
 config();
 
 const dbUrl = process.env.DATABASE_URL;
 
 function getDbCredentials() {
   if (!dbUrl) {
-    throw new Error('DATABASE_URL is not defined');
+    throw new Error("DATABASE_URL is not defined");
   }
   try {
     const parsed = new URL(dbUrl);
-    const sslParam = parsed.searchParams.get('ssl');
-    const sslMode = parsed.searchParams.get('sslmode');
-    const isRds = parsed.hostname.includes('rds.amazonaws.com');
+    const sslParam = parsed.searchParams.get("ssl");
+    const sslMode = parsed.searchParams.get("sslmode");
+    const isRds = parsed.hostname.includes("rds.amazonaws.com");
     const isSsl =
-      process.env.DATABASE_SSL === 'true' ||
-      sslParam === 'true' ||
-      (sslMode !== null && sslMode !== 'disable') ||
+      process.env.DATABASE_SSL === "true" ||
+      sslParam === "true" ||
+      (sslMode !== null && sslMode !== "disable") ||
       isRds;
 
     if (isSsl) {
@@ -29,8 +29,8 @@ function getDbCredentials() {
         port: Number(parsed.port || 5432),
         user: decodeURIComponent(parsed.username),
         password: decodeURIComponent(parsed.password),
-        database: parsed.pathname.replace(/^\//, ''),
-        ssl: 'require' as const,
+        database: parsed.pathname.replace(/^\//, ""),
+        ssl: "require" as const,
       };
     }
   } catch {
@@ -41,12 +41,10 @@ function getDbCredentials() {
     url: dbUrl,
   };
 }
-// Allow cloud PostgreSQL providers (e.g. Neon, Supabase, RDS) with self-signed certificate chains
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 export default defineConfig({
-  schema: './src/schema/index.ts',
-  out: './drizzle',
-  dialect: 'postgresql',
+  schema: "./src/schema/index.ts",
+  out: "./drizzle",
+  dialect: "postgresql",
   dbCredentials: getDbCredentials(),
 });

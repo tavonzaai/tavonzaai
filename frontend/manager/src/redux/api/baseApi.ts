@@ -67,32 +67,14 @@ export function getApiBaseUrl(): string {
   let url =
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) ||
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
-    (typeof process !== 'undefined' && process.env?.API_BASE_URL);
+    (typeof process !== 'undefined' && process.env?.API_BASE_URL) ||
+    'http://localhost:3000';
 
-  if (url) {
-    return String(url).trim().replace(/\/docs(-json)?\/?$/, '').replace(/\/$/, '');
-  }
-
-  // Browser client
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return 'http://localhost:3000';
-    }
-    return 'https://api.tavonza.com';
-  }
-
-  // Server-side / Build-time default
-  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
-    return 'http://localhost:3000';
-  }
-
-  return 'https://api.tavonza.com';
+  url = String(url).trim().replace(/\/docs(-json)?\/?$/, '').replace(/\/$/, '');
+  return url || 'http://localhost:3000';
 }
 
 export const API_BASE_URL = getApiBaseUrl();
-
-
 
 export interface ApiResponse<T = any> {
   statusCode?: number;
@@ -132,8 +114,7 @@ export async function baseApiFetch<T = any>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const token = getAuthToken();
-  const baseUrl = getApiBaseUrl();
-  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -160,7 +141,7 @@ export async function baseApiFetch<T = any>(
     const refreshToken = getRefreshToken();
     if (refreshToken && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
       try {
-        const refreshRes = await fetch(`${baseUrl}/auth/refresh-token`, {
+        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
