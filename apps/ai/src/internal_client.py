@@ -46,11 +46,22 @@ class InternalClient:
             if resp.status_code == 200:
                 data = resp.json()
                 if not data.get("role"):
-                    data["role"] = self._infer_role_from_payload_or_perms(
-                        user_token,
-                        data.get("permissions", []),
-                        data.get("resource_scope", {}),
-                    )
+                    agent_id = str(data.get("ai_agent_id") or "").lower()
+                    token_lower = (user_token or "").lower()
+                    if "waiter" in agent_id or "waiter" in token_lower or "server" in token_lower:
+                        data["role"] = "waiter"
+                    elif "kitchen" in agent_id or "kitchen" in token_lower or "chef" in token_lower:
+                        data["role"] = "kitchen"
+                    elif "cashier" in agent_id or "cashier" in token_lower:
+                        data["role"] = "cashier"
+                    elif "manager" in agent_id or "manager" in token_lower:
+                        data["role"] = "manager"
+                    else:
+                        data["role"] = self._infer_role_from_payload_or_perms(
+                            user_token,
+                            data.get("permissions", []),
+                            data.get("resource_scope", {}),
+                        )
                 return ActorContext(**data)
             if resp.status_code in (401, 403):
                 # If a dev placeholder token was used in dev mode, resolve via local dev actor
@@ -72,6 +83,16 @@ class InternalClient:
         permissions: list[str],
         resource_scope: dict[str, Any],
     ) -> str:
+        token_lower = (user_token or "").lower()
+        if "waiter" in token_lower or "server" in token_lower:
+            return "waiter"
+        if "kitchen" in token_lower or "chef" in token_lower:
+            return "kitchen"
+        if "cashier" in token_lower:
+            return "cashier"
+        if "manager" in token_lower:
+            return "manager"
+
         if user_token and "." in user_token:
             try:
                 import base64
@@ -95,7 +116,7 @@ class InternalClient:
 
         if "reports.read" in permissions or "*" in permissions:
             return "manager"
-        if "orders.serve" in permissions:
+        if "orders.serve" in permissions or "tables.read" in permissions:
             return "waiter"
         if "kitchen.read" in permissions or "orders.update" in permissions:
             return "kitchen"

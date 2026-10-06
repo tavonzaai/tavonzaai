@@ -62,7 +62,7 @@ def _format_role_context(actor: ActorContext) -> tuple[str, str]:
     role = normalize_role(actor.role)
     table_code = (actor.resource_scope or {}).get("table_code")
 
-    if role == "customer" or table_code:
+    if role == "customer" or (table_code and role not in ("waiter", "kitchen", "cashier", "manager", "owner", "super_admin")):
         role_label = f"Customer / Dining Guest{' (Table ' + table_code + ')' if table_code else ''}"
         role_instructions = (
             "- You are serving a seated guest. Offer hospitality, appetizing menu descriptions, dietary advice, allergen checks, and order status for their table.\n"

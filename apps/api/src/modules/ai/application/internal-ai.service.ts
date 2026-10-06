@@ -51,18 +51,20 @@ export class InternalAiService {
       const isKitchen = token.includes('kitchen') || token.includes('chef');
       const isWaiter = token.includes('waiter');
       const isCashier = token.includes('cashier');
+      const role = isKitchen ? 'kitchen' : isWaiter ? 'waiter' : isCashier ? 'cashier' : 'customer';
 
       return {
         actor_type: 'USER',
         acting_user_id: isKitchen ? 'dev_kitchen_chef' : isWaiter ? 'dev_waiter' : 'dev_customer',
-        ai_agent_id: isKitchen ? 'kitchen_ai_v1' : isWaiter ? 'waiter_ai_v1' : 'customer_ai_v1',
+        role,
+        ai_agent_id: isKitchen ? 'kitchen_ai_v1' : isWaiter ? 'waiter_ai_v1' : isCashier ? 'cashier_ai_v1' : 'customer_ai_v1',
         organization_id: 'org_default',
         restaurantId: null,
         branch_id: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27',
         permissions: isKitchen
-          ? ['orders.read', 'kitchen.read']
+          ? ['orders.read', 'kitchen.read', 'orders.manage']
           : isWaiter
-          ? ['tables.read', 'menu.read', 'orders.read']
+          ? ['tables.read', 'tables.update', 'menu.read', 'orders.read', 'orders.serve']
           : isCashier
           ? ['tables.read', 'orders.read', 'payments.read']
           : ['menu.read', 'orders.read', 'tables.read', 'payments.read'],
@@ -119,10 +121,12 @@ export class InternalAiService {
         .from(tables)
         .where(eq(tables.branchId, assignment.branchId));
 
+      const staffRole = (assignment.role || 'waiter').toLowerCase();
       return {
         actor_type: 'USER',
         acting_user_id: user.id,
-        ai_agent_id: 'waiter_ai_v1',
+        role: staffRole,
+        ai_agent_id: `${staffRole}_ai_v1`,
         organization_id: payload.organizationId ?? '',
         restaurantId: assignment.restaurantId,
         branch_id: assignment.branchId,
@@ -137,6 +141,7 @@ export class InternalAiService {
     return {
       actor_type: 'USER',
       acting_user_id: user.id,
+      role: 'customer',
       ai_agent_id: 'customer_ai_v1',
       organization_id: payload.organizationId ?? '',
       restaurant_id: null,
@@ -348,8 +353,22 @@ export class InternalAiService {
     }
   }
 
+  private getTableMatchCondition(branchId: string, rawInput: string) {
+    const digits = rawInput.replace(/\D/g, '');
+    const formattedWithPad = digits ? `T-${digits.padStart(2, '0')}` : rawInput;
+    const formattedShort = digits ? `T${digits}` : rawInput;
+
+    return and(
+      eq(tables.branchId, branchId),
+      sql`(${tables.id}::text = ${rawInput} 
+        or lower(${tables.label}) = lower(${rawInput}) 
+        or lower(${tables.label}) = lower(${formattedWithPad}) 
+        or lower(${tables.label}) = lower(${formattedShort}))`
+    );
+  }
+
   private async toolGetTableStatus(branchId: string, args: Record<string, any>) {
-    const tableIdOrCode = args.table_id || args.table_code;
+    const tableIdOrCode = String(args.table_id || args.table_code || '').trim();
     if (!tableIdOrCode) {
       return { ok: false, error: 'table_id or table_code argument is required' };
     }
@@ -357,12 +376,7 @@ export class InternalAiService {
     const [table] = await this.db
       .select()
       .from(tables)
-      .where(
-        and(
-          eq(tables.branchId, branchId),
-          sql`(${tables.id}::text = ${tableIdOrCode} or ${tables.label} = ${tableIdOrCode})`
-        )
-      )
+      .where(this.getTableMatchCondition(branchId, tableIdOrCode))
       .limit(1);
 
     if (!table) {
@@ -539,7 +553,7 @@ export class InternalAiService {
   }
 
   private async toolGetTableBill(branchId: string, args: Record<string, any>) {
-    const tableIdOrCode = args.table_id || args.table_code;
+    const tableIdOrCode = String(args.table_id || args.table_code || '').trim();
     if (!tableIdOrCode) {
       return { ok: false, error: 'table_id or table_code argument is required' };
     }
@@ -547,12 +561,7 @@ export class InternalAiService {
     const [table] = await this.db
       .select()
       .from(tables)
-      .where(
-        and(
-          eq(tables.branchId, branchId),
-          sql`(${tables.id}::text = ${tableIdOrCode} or ${tables.label} = ${tableIdOrCode})`
-        )
-      )
+      .where(this.getTableMatchCondition(branchId, tableIdOrCode))
       .limit(1);
 
     if (!table) {
