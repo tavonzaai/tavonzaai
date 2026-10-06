@@ -51,20 +51,18 @@ export class InternalAiService {
       const isKitchen = token.includes('kitchen') || token.includes('chef');
       const isWaiter = token.includes('waiter');
       const isCashier = token.includes('cashier');
-      const role = isKitchen ? 'kitchen' : isWaiter ? 'waiter' : isCashier ? 'cashier' : 'customer';
 
       return {
         actor_type: 'USER',
         acting_user_id: isKitchen ? 'dev_kitchen_chef' : isWaiter ? 'dev_waiter' : 'dev_customer',
-        role,
-        ai_agent_id: isKitchen ? 'kitchen_ai_v1' : isWaiter ? 'waiter_ai_v1' : isCashier ? 'cashier_ai_v1' : 'customer_ai_v1',
+        ai_agent_id: isKitchen ? 'kitchen_ai_v1' : isWaiter ? 'waiter_ai_v1' : 'customer_ai_v1',
         organization_id: 'org_default',
         restaurantId: null,
         branch_id: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27',
         permissions: isKitchen
-          ? ['orders.read', 'kitchen.read', 'orders.manage']
+          ? ['orders.read', 'kitchen.read']
           : isWaiter
-          ? ['tables.read', 'tables.update', 'menu.read', 'orders.read', 'orders.serve']
+          ? ['tables.read', 'menu.read', 'orders.read']
           : isCashier
           ? ['tables.read', 'orders.read', 'payments.read']
           : ['menu.read', 'orders.read', 'tables.read', 'payments.read'],
@@ -121,12 +119,10 @@ export class InternalAiService {
         .from(tables)
         .where(eq(tables.branchId, assignment.branchId));
 
-      const staffRole = (assignment.role || 'waiter').toLowerCase();
       return {
         actor_type: 'USER',
         acting_user_id: user.id,
-        role: staffRole,
-        ai_agent_id: `${staffRole}_ai_v1`,
+        ai_agent_id: 'waiter_ai_v1',
         organization_id: payload.organizationId ?? '',
         restaurantId: assignment.restaurantId,
         branch_id: assignment.branchId,
@@ -141,7 +137,6 @@ export class InternalAiService {
     return {
       actor_type: 'USER',
       acting_user_id: user.id,
-      role: 'customer',
       ai_agent_id: 'customer_ai_v1',
       organization_id: payload.organizationId ?? '',
       restaurant_id: null,
@@ -275,32 +270,22 @@ export class InternalAiService {
    * Route 5: POST /internal/audit
    */
   async recordAudit(dto: InternalAuditRequestDto) {
-    try {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dto.actingUserId ?? '');
-      const validActorId = isUuid ? dto.actingUserId! : '00000000-0000-0000-0000-000000000000';
-      const isBranchUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dto.branchId ?? '');
-
-      await this.db.insert(auditLogs).values({
-        branchId: isBranchUuid ? dto.branchId! : null,
-        actorId: validActorId,
-        action: dto.action,
-        entityType: 'AI_ACTION',
-        entityId: validActorId,
-        metadata: {
-          actingUserId: dto.actingUserId,
-          aiAgentId: dto.aiAgentId,
-          role: dto.role,
-          source: dto.source,
-          authorizationResult: dto.authorizationResult,
-          resource: dto.resource,
-          before: dto.before,
-          after: dto.after,
-          timestamp: dto.timestamp,
-        },
-      });
-    } catch (err: any) {
-      this.logger.warn(`Failed to write AI audit log: ${err.message}`);
-    }
+    await this.db.insert(auditLogs).values({
+      branchId: dto.branchId ?? null,
+      actorId: dto.actingUserId ?? '00000000-0000-0000-0000-000000000000',
+      action: dto.action,
+      entityType: 'AI_ACTION',
+      entityId: dto.actingUserId ?? '00000000-0000-0000-0000-000000000000',
+      metadata: {
+        aiAgentId: dto.aiAgentId,
+        source: dto.source,
+        authorizationResult: dto.authorizationResult,
+        resource: dto.resource,
+        before: dto.before,
+        after: dto.after,
+        timestamp: dto.timestamp,
+      },
+    });
 
     return { ok: true };
   }
@@ -363,22 +348,8 @@ export class InternalAiService {
     }
   }
 
-  private getTableMatchCondition(branchId: string, rawInput: string) {
-    const digits = rawInput.replace(/\D/g, '');
-    const formattedWithPad = digits ? `T-${digits.padStart(2, '0')}` : rawInput;
-    const formattedShort = digits ? `T${digits}` : rawInput;
-
-    return and(
-      eq(tables.branchId, branchId),
-      sql`(${tables.id}::text = ${rawInput} 
-        or lower(${tables.label}) = lower(${rawInput}) 
-        or lower(${tables.label}) = lower(${formattedWithPad}) 
-        or lower(${tables.label}) = lower(${formattedShort}))`
-    );
-  }
-
   private async toolGetTableStatus(branchId: string, args: Record<string, any>) {
-    const tableIdOrCode = String(args.table_id || args.table_code || '').trim();
+    const tableIdOrCode = args.table_id || args.table_code;
     if (!tableIdOrCode) {
       return { ok: false, error: 'table_id or table_code argument is required' };
     }
@@ -386,7 +357,12 @@ export class InternalAiService {
     const [table] = await this.db
       .select()
       .from(tables)
-      .where(this.getTableMatchCondition(branchId, tableIdOrCode))
+      .where(
+        and(
+          eq(tables.branchId, branchId),
+          sql`(${tables.id}::text = ${tableIdOrCode} or ${tables.label} = ${tableIdOrCode})`
+        )
+      )
       .limit(1);
 
     if (!table) {
@@ -563,7 +539,7 @@ export class InternalAiService {
   }
 
   private async toolGetTableBill(branchId: string, args: Record<string, any>) {
-    const tableIdOrCode = String(args.table_id || args.table_code || '').trim();
+    const tableIdOrCode = args.table_id || args.table_code;
     if (!tableIdOrCode) {
       return { ok: false, error: 'table_id or table_code argument is required' };
     }
@@ -571,7 +547,12 @@ export class InternalAiService {
     const [table] = await this.db
       .select()
       .from(tables)
-      .where(this.getTableMatchCondition(branchId, tableIdOrCode))
+      .where(
+        and(
+          eq(tables.branchId, branchId),
+          sql`(${tables.id}::text = ${tableIdOrCode} or ${tables.label} = ${tableIdOrCode})`
+        )
+      )
       .limit(1);
 
     if (!table) {

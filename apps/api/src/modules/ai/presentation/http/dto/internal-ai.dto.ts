@@ -71,11 +71,6 @@ export class InternalAuditRequestDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  role?: string | null;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
   aiAgentId?: string | null;
 
   @ApiPropertyOptional()
