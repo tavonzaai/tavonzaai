@@ -40,6 +40,14 @@ FORMATTING & MOBILE DISPLAY RULES:
     [Short 1-sentence appetizing description]
 - Keep responses warm, appetizing, concise, and beautifully structured with line breaks. Be concise, helpful, and specific.
 
+VOICE & NATURAL SPEECH RULES (CRITICAL):
+- Your responses are read aloud by automated neural voice synthesis to staff headsets and guests.
+- NEVER output raw database UUIDs or long hexadecimal serial numbers (e.g. "00000014-0000-4000-8000-000000000004"). They sound robotic and awful when read aloud.
+- Always use friendly human labels:
+  • For tables: Say "Table 4" or "Table T-04" (NEVER output "Table ID: 00000014-...")
+  • For orders: Say "Order #1003" or "Order ORD-1003" (NEVER output "Order ID: 0000001e-...")
+- Keep sentences concise, conversational, and natural for speech. Avoid awkward jargon, robotic codes, or serial numbers.
+
 DINING CONCIERGE & RECOMMENDATION RULES:
 - When guests or staff ask for "top selling items", "best sellers", "popular dishes", "recommendations", or "what to order" (e.g. "show me the toop seling item in this branch"):
   1. ALWAYS invoke `get_menu` to retrieve the active menu items, popularity tags, and prices.
@@ -49,8 +57,8 @@ DINING CONCIERGE & RECOMMENDATION RULES:
 CRITICAL SECURITY RULES:
 - You have ZERO database write permissions. You CANNOT write, modify, add inventory, cancel orders, or process payments directly.
 - If a user asks you to add inventory, modify stock, change order status, or process refunds, explicitly inform them that JARVIS operates in read-only advisory mode for security, and direct them to the appropriate portal dashboard.
-- You may only use the read-only tools made available to you in this conversation. NEVER attempt to invent or call unauthorized tools outside this list.
 - Never assume, fabricate, or hallucinate dishes, prices, or orders not present in tool results.
+- TABLE & ORDER ACCURACY: If a table is AVAILABLE or empty, or has no active orders, truthfully state that the table is vacant and has no active orders. Never fabricate or invent order numbers or items for empty tables.
 
 Current operational context: {context_summary}
 Be polite, concise, hospitable, and specific."""
@@ -72,6 +80,8 @@ def _format_role_context(actor: ActorContext) -> tuple[str, str]:
         role_label = "Waiter / Floor Staff"
         role_instructions = (
             "- You are assisting floor service staff. You can check table status, menu details, and order progress.\n"
+            "- When asked about orders for a table, if the table is empty or has no active orders, state clearly that the table is available with no active orders. When an order exists, list all ordered items with quantities, preparation status, and totals.\n"
+            "- When asked about pending orders, active orders, orders in progress, or 'what is the order in pending status' (or 'painding status'): ALWAYS call get_order_status with order_id='pending'. Present each pending order with its table name, order number, preparation status, ordered items, and total. NEVER claim there are zero pending orders without checking get_order_status(order_id='pending').\n"
             "- STRICT ROLE ISOLATION: Staff in this role do not have access to kitchen preparation queues, cashier bill settlement, inventory stock levels, or managerial reports. If asked, inform the user these belong to other departments."
         )
     elif role == "kitchen":
@@ -113,6 +123,30 @@ def _build_system_prompt(actor: ActorContext, context_summary: str, tools: list[
     )
 
 
+def clean_speech_and_display_text(text: str) -> str:
+    """Strips raw database UUIDs and serial codes from user-facing text for clean display and natural voice."""
+    if not text:
+        return text
+    import re
+    # Clean patterns like "Table ID: 00000014-0000-4000-8000-000000000004" or "• Table\n  ID: 00000014-..."
+    text = re.sub(
+        r"(?:[-•*]\s*)?(?:Table|Order|Session|Customer)?\s*(?:ID|UUID):\s*[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # Clean standalone UUIDs:
+    text = re.sub(
+        r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+        "",
+        text,
+    )
+    # Clean leftover empty ID lines:
+    text = re.sub(r"(?:[-•*]\s*)?ID:\s*\n", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 class JarvisAgent:
     def __init__(self, internal_client: InternalClient, conversation_store: ConversationStore) -> None:
         self._client = internal_client
@@ -140,10 +174,10 @@ class JarvisAgent:
                 logger.exception("Groq error in handle_message: %s", exc)
                 return "I encountered an issue processing that. Please try again."
 
-
             tool_calls = response.get("tool_calls") or []
             if not tool_calls:
-                final_reply = response.get("content") or "I don't have an answer for that right now."
+                raw_reply = response.get("content") or "I don't have an answer for that right now."
+                final_reply = clean_speech_and_display_text(raw_reply)
                 await self._store.append_async(session_id, {"role": "user", "content": message})
                 await self._store.append_async(session_id, {"role": "assistant", "content": final_reply})
                 return final_reply
@@ -213,7 +247,8 @@ class JarvisAgent:
 
             tool_calls = response.get("tool_calls") or []
             if not tool_calls:
-                content = response.get("content") or "I don't have an answer for that right now."
+                raw_content = response.get("content") or "I don't have an answer for that right now."
+                content = clean_speech_and_display_text(raw_content)
                 words = content.split(" ")
                 for i, w in enumerate(words):
                     piece = w if i == len(words) - 1 else w + " "

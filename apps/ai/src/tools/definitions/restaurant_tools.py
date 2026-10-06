@@ -61,13 +61,13 @@ TOOLS: dict[str, dict] = {
             "type": "function",
             "function": {
                 "name": "get_order_status",
-                "description": "Get the current status of an order. For a table customer asking about their order, pass null or omit order_id to retrieve the active order for their specific table.",
+                "description": "Get the current status of an order, inspect active orders for a specific table, or list all pending and active orders across the dining floor. Pass 'pending' or 'all' to retrieve all pending, preparing, ready, or payment-pending orders across all tables. For a specific table, pass the table identifier (e.g. 'Table 4', 'T-04', '4') or order ID.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "order_id": {
                             "type": ["string", "null"],
-                            "description": "Optional order ID, or null to get active order for the guest's current table.",
+                            "description": "Optional order ID, table identifier (e.g. 'Table 4', 'T-04', '4'), or 'pending' / 'all' to inspect all pending and active floor orders.",
                         }
                     },
                     "required": [],
