@@ -195,7 +195,13 @@ class InternalClient:
             logger.debug("[AUDIT-MOCK] %s", record)
             return
         try:
-            await self._client.post("/audit", json=record)
+            payload = dict(record)
+            payload.pop("role", None)
+            import re
+            user_id = str(payload.get("actingUserId") or "")
+            if not re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", user_id, re.I):
+                payload["actingUserId"] = "00000000-0000-0000-0000-000000000000"
+            await self._client.post("/audit", json=payload)
         except Exception as exc:
             logger.error("[AUDIT-FALLBACK] Failed to write audit: %s. Record: %s", exc, record)
 

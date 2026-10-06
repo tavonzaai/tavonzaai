@@ -34,8 +34,16 @@ class ToolExecutor:
 
         # Enforce table isolation for table guests to prevent prompt injection cross-table inspection
         scoped_table = (actor.resource_scope or {}).get("table_code")
+        raw_table_id = None
         if scoped_table and "table_id" in safe_args:
             safe_args["table_id"] = scoped_table
+        elif tool_name in ("get_table_status", "get_table_bill"):
+            # Normalize table identifiers to match database convention (e.g. "1", "Table 1", "T1" -> "T-01")
+            raw_table_id = str(safe_args.get("table_id") or safe_args.get("table_code") or "").strip()
+            import re
+            m = re.match(r"^(?:table\s*|t)?-?0*(\d+)$", raw_table_id, re.I)
+            if m:
+                safe_args["table_id"] = f"T-{int(m.group(1)):02d}"
 
         # Authorization check
         try:
@@ -52,6 +60,12 @@ class ToolExecutor:
 
         # Execute through backend tool gateway
         result = await self._client.execute_tool(tool_name, safe_args, actor)
+        if not result.get("ok") and raw_table_id and safe_args.get("table_id") != raw_table_id:
+            fallback_args = dict(safe_args)
+            fallback_args["table_id"] = raw_table_id
+            fb_res = await self._client.execute_tool(tool_name, fallback_args, actor)
+            if fb_res.get("ok"):
+                result = fb_res
 
         # Audit recording
         await write_tool_audit(
