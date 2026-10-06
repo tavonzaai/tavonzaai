@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { baseApiFetch, getApiBaseUrl } from '../api/baseApi';
+import { baseApiFetch, getApiBaseUrl, getAuthToken } from '../api/baseApi';
 
 // ─────────────────────────────────────────
 // 📋 Data Models & Interfaces (Mirroring Backend DTOs)
@@ -103,41 +103,52 @@ export const rawUserApi = {
 
   /**
    * 2. Update the Current User Profile (Authenticated)
-   * PATCH /api/v1/users/me
+   * Step 1: POST /storage/upload (if avatar File is provided)
+   * Step 2: PATCH /users/me (update profile attributes and avatar URL)
    */
   updateMe: async (payload: UpdateMePayload): Promise<UserResponse> => {
-    // If an avatar File object is provided, send as multipart/form-data
+    let uploadedAvatarUrl: string | undefined = undefined;
+
+    // Step 1: If an avatar File object is provided, upload to POST /storage/upload first
     if (payload.avatar instanceof File) {
-      const formData = new FormData();
-      formData.append('avatar', payload.avatar);
-      const dataPayload: Record<string, any> = {};
-      if (payload.name !== undefined) dataPayload.name = payload.name;
-      if (payload.contactNo !== undefined) dataPayload.contactNo = payload.contactNo;
-      formData.append('data', JSON.stringify(dataPayload));
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', payload.avatar);
 
       const API_BASE_URL = getApiBaseUrl();
-      const res = await fetch(`${API_BASE_URL}/users/me`, {
-        method: 'PATCH',
-        body: formData,
+      const token = getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const uploadRes = await fetch(`${API_BASE_URL}/storage/upload`, {
+        method: 'POST',
+        headers,
+        body: uploadFormData,
         credentials: 'include',
       });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.message || 'Failed to update profile');
+
+      const uploadJson = await uploadRes.json();
+      if (!uploadRes.ok) {
+        throw new Error(uploadJson.message || 'Failed to upload profile image to storage.');
       }
-      return json.data;
+
+      uploadedAvatarUrl = uploadJson.url || uploadJson.data?.url || uploadJson.location;
+    } else if (typeof payload.avatar === 'string') {
+      uploadedAvatarUrl = payload.avatar;
     }
 
-    // Standard JSON payload
+    // Step 2: Call PATCH /users/me with updated fields and avatar URL
     const body: Record<string, any> = {};
     if (payload.name !== undefined) body.name = payload.name;
     if (payload.contactNo !== undefined) body.contactNo = payload.contactNo;
+    if (uploadedAvatarUrl) body.avatar = uploadedAvatarUrl;
 
     const response = await baseApiFetch<UserResponse>('/users/me', {
       method: 'PATCH',
       body: JSON.stringify(body),
     });
-    return response.data;
+    return response.data || (response as any);
   },
 
   /**
