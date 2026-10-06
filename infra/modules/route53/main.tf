@@ -84,6 +84,36 @@ resource "aws_route53_record" "admin" {
   }
 }
 
+# Route 53 Alias Record: Manager Subdomain (manager.example.com or prod-manager.example.com)
+resource "aws_route53_record" "manager" {
+  count           = var.manager_subdomain != "" ? 1 : 0
+  allow_overwrite = true
+  zone_id         = var.route53_zone_id
+  name            = "${var.manager_subdomain}.${var.domain_name}"
+  type            = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Route 53 Alias Record: Waiter Subdomain (waiter.example.com)
+resource "aws_route53_record" "waiter" {
+  count           = var.waiter_subdomain != "" ? 1 : 0
+  allow_overwrite = true
+  zone_id         = var.route53_zone_id
+  name            = "${var.waiter_subdomain}.${var.domain_name}"
+  type            = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
 # Route 53 Alias Record: WWW Subdomain (www.example.com) - only created when customer_subdomain is empty
 resource "aws_route53_record" "www" {
   count           = var.customer_subdomain == "" ? 1 : 0

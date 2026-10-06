@@ -63,3 +63,13 @@ output "admin_target_group_arn" {
   value       = aws_lb_target_group.admin.arn
 }
 
+output "manager_target_group_arn" {
+  description = "ARN of the Manager frontend target group"
+  value       = aws_lb_target_group.manager.arn
+}
+
+output "waiter_target_group_arn" {
+  description = "ARN of the Waiter frontend target group"
+  value       = aws_lb_target_group.waiter.arn
+}
+

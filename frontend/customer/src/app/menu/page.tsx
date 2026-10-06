@@ -13,7 +13,6 @@ import {
   Loader2,
   UtensilsCrossed,
 } from 'lucide-react';
-import { MENU_CATEGORIES as FALLBACK_CATEGORIES, MENU_ITEMS as FALLBACK_ITEMS } from '@/data/menuData';
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
@@ -63,7 +62,7 @@ function MenuContent() {
   const [showAllItemsView, setShowAllItemsView] = useState(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
 
-  const activeTable = searchParams.get('table') || tableNumber || 'Table 8';
+  const activeTable = searchParams.get('table') || tableNumber || 'T-02';
   const isConnected = searchParams.get('connected') === 'true' || Boolean(searchParams.get('connect'));
 
   const tableParam = searchParams.get('table');
@@ -73,7 +72,8 @@ function MenuContent() {
     setMounted(true);
   }, []);
 
-  // Redirect to login if user is not authenticated
+  /*
+  // Optional: Redirect to login if user is not authenticated
   useEffect(() => {
     if (!mounted) return;
     const token = getAuthToken();
@@ -85,55 +85,52 @@ function MenuContent() {
       router.replace(`/login${forwardParam}`);
     }
   }, [mounted, isInitialized, isAuthenticated, user, forwardParam, router]);
+  */
 
-  // Fetch dynamic categories and items on mount with page and limit (no forced sort)
+  // Fetch dynamic categories on mount
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (mounted) {
       dispatch(fetchMenuCategories({ page: 1, limit: 100 }));
-      dispatch(fetchMenuItems({ page: 1, limit: 100 }));
     }
-  }, [dispatch, isAuthenticated, user]);
+  }, [dispatch, mounted]);
 
-  // Merge dynamic categories with "ALL" and fallbacks if empty
-  const categories: DisplayCategory[] = useMemo(() => {
-    if (backendCategories && backendCategories.length > 0) {
-      const dynamicCats: DisplayCategory[] = backendCategories.map((c) => ({
-        id: c.id,
-        name: c.name,
-        icon: getCategoryIcon(c.name),
-      }));
-      return [{ id: 'all', name: 'ALL', icon: '🍽️' }, ...dynamicCats];
+  // Fetch items via Backend Search and Filter API
+  useEffect(() => {
+    if (mounted) {
+      dispatch(
+        fetchMenuItems({
+          page: 1,
+          limit: 100,
+          searchTerm: searchQuery.trim() || undefined,
+          categoryId: selectedCategory !== 'all' ? selectedCategory : undefined,
+        })
+      );
     }
-    return FALLBACK_CATEGORIES;
+  }, [dispatch, mounted, searchQuery, selectedCategory]);
+
+  // Transform dynamic categories with "ALL" chip
+  const categories: DisplayCategory[] = useMemo(() => {
+    const dynamicCats: DisplayCategory[] = (backendCategories || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      icon: getCategoryIcon(c.name),
+    }));
+    return [{ id: 'all', name: 'ALL', icon: '🍽️' }, ...dynamicCats];
   }, [backendCategories]);
 
-  // Transform backend items to standard display items (with fallback)
+  // Transform backend items to standard display items (zero mock fallback)
   const allItems: DisplayMenuItem[] = useMemo(() => {
-    if (backendItems && backendItems.length > 0) {
-      return backendItems.map((item) => ({
-        id: item.id,
-        name: item.name,
-        subtitle: item.description || item.category?.name || 'Fresh from kitchen',
-        price: item.basePrice,
-        category: item.categoryId,
-        categoryName: item.category?.name || '',
-        image: getItemImage(item.name, item.category?.name, item.imageUrl),
-        popular: item.isAvailable,
-        isVegetarian: item.isVegetarian,
-        spiceLevel: item.spiceLevel,
-      }));
-    }
-    // Fallback if initial load or empty
-    return FALLBACK_ITEMS.map((item) => ({
+    return (backendItems || []).map((item) => ({
       id: item.id,
       name: item.name,
-      subtitle: item.subtitle,
-      price: item.price,
-      category: item.category,
-      categoryName: item.category,
-      image: item.image,
-      popular: item.popular,
-      isVegetarian: item.dietary === 'Vegetarian',
+      subtitle: item.description || item.category?.name || 'Fresh from kitchen',
+      price: item.basePrice || (item as any).price || 0,
+      category: item.categoryId,
+      categoryName: item.category?.name || '',
+      image: getItemImage(item.name, item.category?.name, item.imageUrl),
+      popular: item.isAvailable,
+      isVegetarian: item.isVegetarian,
+      spiceLevel: item.spiceLevel,
     }));
   }, [backendItems]);
 
@@ -142,19 +139,8 @@ function MenuContent() {
     setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Filter items based on category and search query
-  const filteredItems = useMemo(() => {
-    return allItems.filter((item) => {
-      const matchesSearch =
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.subtitle.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory =
-        selectedCategory === 'all' ||
-        item.category === selectedCategory ||
-        item.categoryName.toLowerCase() === selectedCategory.toLowerCase();
-      return matchesSearch && matchesCategory;
-    });
-  }, [allItems, searchQuery, selectedCategory]);
+  // Filtered items are directly supplied by backend API queries
+  const filteredItems = allItems;
 
   const popularItems = useMemo(() => {
     const pops = allItems.filter((item) => item.popular);
@@ -162,7 +148,7 @@ function MenuContent() {
   }, [allItems]);
 
   const getItemCartQty = (id: string) => {
-    const found = cart.find((i) => i.id === id || i.dishId === id);
+    const found = cart.find((i: any) => i.id === id || i.dishId === id);
     return found ? found.quantity : 0;
   };
 
@@ -190,12 +176,12 @@ function MenuContent() {
 
   const isDataLoading = (categoriesLoading || itemsLoading) && allItems.length === 0;
 
-  if (!mounted || !isInitialized || !isAuthenticated || !user) {
+  if (!mounted || !isInitialized) {
     return (
       <div className="w-full min-h-screen bg-black flex flex-col items-center justify-center text-white p-4">
         <div className="w-10 h-10 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-stone-300 text-sm font-medium tracking-wide">
-          {!isAuthenticated && isInitialized ? 'Redirecting to login...' : 'Loading Tavonza Menu...'}
+          Loading Tavonza Menu...
         </p>
       </div>
     );

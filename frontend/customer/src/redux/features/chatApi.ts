@@ -22,6 +22,25 @@ export interface ChatMessageResponse {
 // 🌐 Raw Chat API Client
 // ─────────────────────────────────────────
 
+function getAiBaseUrl(): string {
+  const envUrl = typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL;
+  if (envUrl) return String(envUrl).trim().replace(/\/$/, '');
+
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:8000';
+    }
+    return 'https://ai.tavonza.com';
+  }
+
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
+    return 'http://localhost:8000';
+  }
+
+  return 'https://ai.tavonza.com';
+}
+
 export const rawChatApi = {
   /**
    * Send a message to the AI Dining Concierge service
@@ -29,11 +48,7 @@ export const rawChatApi = {
    */
   sendChatMessage: async (payload: SendChatMessagePayload): Promise<ChatMessageResponse> => {
     const token = getAuthToken() || 'dev-guest-token';
-    const aiBaseUrl =
-      (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
-      'http://localhost:8000';
-
-    const cleanBaseUrl = String(aiBaseUrl).trim().replace(/\/$/, '');
+    const cleanBaseUrl = getAiBaseUrl();
     const cleanSessionId =
       payload.sessionId ||
       `customer_${(payload.tableNumber || 'table_default').replace(/\s+/g, '_').toLowerCase()}`;

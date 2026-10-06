@@ -67,6 +67,49 @@ def humanize_text_for_speech(text: str) -> str:
     return processed
 
 
+def split_sentences_for_speech(text: str) -> list[str]:
+    """Splits text into natural spoken sentence chunks for rapid streaming."""
+    if not text:
+        return []
+
+    # Protect common abbreviations and decimal points
+    protected = text
+    protected = re.sub(
+        r"\b(e\.g\.|i\.e\.|etc\.|mr\.|ms\.|mrs\.|dr\.|approx\.)",
+        lambda m: m.group(0).replace(".", "@DOT@"),
+        protected,
+        flags=re.IGNORECASE,
+    )
+
+    # Split on sentence boundaries: punctuation (. ! ?) followed by whitespace or newline
+    raw_sentences = re.split(r"(?<=[.!?])\s+|\n+", protected)
+
+    cleaned = [s.replace("@DOT@", ".").strip() for s in raw_sentences if s.strip()]
+    if not cleaned:
+        return [text]
+
+    # Merge very short phrases (< 25 chars) with the next sentence to avoid choppy audio
+    merged: list[str] = []
+    buffer = ""
+    for s in cleaned:
+        if buffer:
+            buffer = f"{buffer} {s}"
+        else:
+            buffer = s
+
+        if len(buffer) >= 25 or s == cleaned[-1]:
+            merged.append(buffer)
+            buffer = ""
+
+    if buffer:
+        if merged:
+            merged[-1] = f"{merged[-1]} {buffer}"
+        else:
+            merged.append(buffer)
+
+    return merged
+
+
 class VoiceService:
     def __init__(self) -> None:
         # Use a placeholder key in dev mode to avoid empty Bearer header crash (mirrors GroqProvider guard)
@@ -103,14 +146,16 @@ class VoiceService:
         text: str,
         persona: str = "uk_jarvis",
     ) -> AsyncGenerator[bytes, None]:
-        """Stream high-definition MP3 neural voice from Microsoft Edge Cloud."""
+        """Stream high-definition MP3 neural voice chunked sentence-by-sentence for minimal initial latency."""
         humanized = humanize_text_for_speech(text)
         if not humanized:
             return
 
         voice_name = VOICE_PERSONAS.get(persona, VOICE_PERSONAS["uk_jarvis"])
-        communicate = edge_tts.Communicate(humanized, voice_name)
+        sentences = split_sentences_for_speech(humanized)
 
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                yield chunk["data"]
+        for sentence in sentences:
+            communicate = edge_tts.Communicate(sentence, voice_name)
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    yield chunk["data"]

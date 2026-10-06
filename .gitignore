@@ -14,8 +14,9 @@ out/
 
 # Environment files and credentials
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
 *.pem
 *.key
 
@@ -60,4 +61,3 @@ coverage/
 
 tfplan
 .gitignore
-branch_structure.json

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
+import { orderService } from '@/redux/features/orderApi';
+import { getCookie, getApiBaseUrl } from '@/redux/api/baseApi';
 
 function CartContent() {
   const router = useRouter();
@@ -20,6 +22,7 @@ function CartContent() {
     cart,
     updateQuantity,
     removeFromCart,
+    clearCart,
     totalCount,
     subtotal,
     serviceCharge,
@@ -29,11 +32,103 @@ function CartContent() {
   } = useCart();
 
   const [showPreferenceModal, setShowPreferenceModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const activeTable = searchParams.get('table') || tableNumber || 'Table 8';
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const activeTable = searchParams.get('table') || tableNumber || 'T-02';
 
   const handleOrderPreferenceClick = () => {
     setShowPreferenceModal(true);
+  };
+
+  const handleOrderIndividually = async () => {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      const rawBranchId = getCookie('tavonza_branch_id');
+      const branchId =
+        rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
+          ? rawBranchId
+          : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+
+      const isUUID = (val?: string | null) =>
+        Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
+      const TABLE_MAP: Record<string, string> = {
+        't-01': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
+        't-02': '34489e98-b165-4f29-bc3e-38be762dedb3',
+        't-03': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
+        't-04': '41fe73cd-e275-459b-9533-0b2d5098d927',
+        't-05': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
+        'table 1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
+        'table 2': '34489e98-b165-4f29-bc3e-38be762dedb3',
+        'table 3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
+        'table 4': '41fe73cd-e275-459b-9533-0b2d5098d927',
+        'table 5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
+        '1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
+        '2': '34489e98-b165-4f29-bc3e-38be762dedb3',
+        '3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
+        '4': '41fe73cd-e275-459b-9533-0b2d5098d927',
+        '5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
+      };
+
+      const rawTableCookie = getCookie('tavonza_table_id');
+      const tableId = isUUID(rawTableCookie)
+        ? rawTableCookie!
+        : TABLE_MAP[activeTable.trim().toLowerCase()] || '34489e98-b165-4f29-bc3e-38be762dedb3';
+
+      const draft = await orderService.getCart(branchId, tableId);
+      if (!draft?.id) {
+        throw new Error('Unable to create or retrieve cart for this table.');
+      }
+
+      // Pre-fetch catalog to resolve any non-UUID identifiers (from local storage or client state)
+      let catalogItems: any[] = [];
+      try {
+        const catRes = await fetch(`${getApiBaseUrl()}/menus/${branchId}/items`);
+        const catData = await catRes.json();
+        catalogItems = Array.isArray(catData) ? catData : catData?.data || [];
+      } catch (err) {
+        console.warn('Could not prefetch catalog:', err);
+      }
+      const fallbackUuid = catalogItems[0]?.id || '4455110d-db04-4cef-92c6-46bcd6a4c7e2';
+
+      for (const item of cart) {
+        let validMenuItemId = item.dishId || item.id;
+        if (!isUUID(validMenuItemId)) {
+          const matched = catalogItems.find(
+            (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
+          );
+          validMenuItemId = matched?.id || fallbackUuid;
+        }
+
+        await orderService.addItem({
+          orderId: draft.id,
+          menuItemId: validMenuItemId,
+          quantity: item.quantity || 1,
+          specialInstructions: item.specialInstructions,
+          addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
+        });
+      }
+
+      const submitted = await orderService.submitOrder(draft.id);
+      const submittedId = submitted?.orderNumber || submitted?.id;
+      if (!submittedId) {
+        throw new Error('Order submission returned empty response.');
+      }
+
+      clearCart();
+      setShowPreferenceModal(false);
+      router.push(`/orders/waiting?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(submittedId)}&mode=individual`);
+    } catch (err: any) {
+      console.error('Real backend cart submit failed:', err);
+      const msg = err.message || 'Failed to submit order. Please check network connection.';
+      setErrorMessage(msg);
+      alert(`Order placement failed: ${msg}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -258,13 +353,11 @@ function CartContent() {
             <div className="self-stretch flex flex-col justify-start items-start gap-3.5 w-full">
               <button
                 type="button"
-                onClick={() => {
-                  setShowPreferenceModal(false);
-                  router.push(`/orders/waiting?table=${encodeURIComponent(activeTable)}&mode=individual`);
-                }}
-                className="w-full h-12 bg-yellow-400 hover:bg-yellow-300 active:scale-[0.98] rounded-lg shadow-[0px_4px_10px_0px_rgba(227,172,56,0.35)] flex items-center justify-center text-neutral-950 text-base font-semibold font-['Inter'] leading-5 transition cursor-pointer"
+                disabled={isSubmitting}
+                onClick={handleOrderIndividually}
+                className="w-full h-12 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-70 active:scale-[0.98] rounded-lg shadow-[0px_4px_10px_0px_rgba(227,172,56,0.35)] flex items-center justify-center text-neutral-950 text-base font-semibold font-['Inter'] leading-5 transition cursor-pointer"
               >
-                Order Individually
+                {isSubmitting ? 'Sending to Kitchen...' : 'Order Individually'}
               </button>
 
               <button

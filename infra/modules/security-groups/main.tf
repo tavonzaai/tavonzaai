@@ -158,6 +158,28 @@ resource "aws_security_group_rule" "frontend_ingress_admin_from_alb" {
   security_group_id        = aws_security_group.frontend.id
 }
 
+# Allow Manager frontend traffic from ALB security group only
+resource "aws_security_group_rule" "frontend_ingress_manager_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Manager frontend traffic from ALB SG only"
+  from_port                = var.manager_port
+  to_port                  = var.manager_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.frontend.id
+}
+
+# Allow Waiter frontend traffic from ALB security group only
+resource "aws_security_group_rule" "frontend_ingress_waiter_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Waiter frontend traffic from ALB SG only"
+  from_port                = var.waiter_port
+  to_port                  = var.waiter_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.frontend.id
+}
+
 # Allow outbound traffic for package manager, docker registries, SSM, and AWS APIs
 resource "aws_security_group_rule" "frontend_egress_all" {
   type              = "egress"
@@ -189,6 +211,18 @@ resource "aws_security_group_rule" "rds_ingress_from_backend" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.backend.id
   security_group_id        = aws_security_group.rds.id
+}
+
+# Allow PostgreSQL traffic from public Internet when allow_public_rds is true
+resource "aws_security_group_rule" "rds_ingress_public" {
+  count             = var.allow_public_rds ? 1 : 0
+  type              = "ingress"
+  description       = "Allow PostgreSQL access from the public Internet"
+  from_port         = var.postgres_port
+  to_port           = var.postgres_port
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.rds.id
 }
 
 # Security Group: ElastiCache Redis / Valkey
@@ -287,6 +321,17 @@ resource "aws_security_group_rule" "ecs_ingress_cashier_from_alb" {
   description              = "Allow Cashier frontend traffic from ALB SG to ECS tasks"
   from_port                = var.cashier_port
   to_port                  = var.cashier_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ecs.id
+}
+
+# Allow Manager frontend traffic from ALB SG to ECS tasks
+resource "aws_security_group_rule" "ecs_ingress_manager_from_alb" {
+  type                     = "ingress"
+  description              = "Allow Manager frontend traffic from ALB SG to ECS tasks"
+  from_port                = var.manager_port
+  to_port                  = var.manager_port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.alb.id
   security_group_id        = aws_security_group.ecs.id

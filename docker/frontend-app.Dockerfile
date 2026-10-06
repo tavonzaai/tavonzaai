@@ -8,6 +8,10 @@ WORKDIR /app
 
 FROM base AS builder
 ARG APP_NAME
+ARG NEXT_PUBLIC_API_URL=https://api.tavonza.com
+ARG NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_AI_API_URL=${NEXT_PUBLIC_AI_API_URL}
 WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json tsconfig.json ./
@@ -20,10 +24,15 @@ RUN npx turbo run build --filter=@frontend/${APP_NAME}...
 FROM base AS runner
 ARG APP_NAME
 ARG APP_PORT
+ARG NEXT_PUBLIC_API_URL=https://api.tavonza.com
+ARG NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=${APP_PORT}
 ENV APP_TARGET=${APP_NAME}
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_AI_API_URL=${NEXT_PUBLIC_AI_API_URL}
+ENV API_BASE_URL=${NEXT_PUBLIC_API_URL}
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
@@ -39,4 +48,4 @@ COPY --from=builder /app/frontend/${APP_NAME}/node_modules ./frontend/${APP_NAME
 
 USER nextjs
 EXPOSE ${APP_PORT}
-CMD pnpm --filter "@frontend/${APP_TARGET}" start
+CMD ["sh", "-c", "pnpm --filter @frontend/${APP_TARGET} start"]

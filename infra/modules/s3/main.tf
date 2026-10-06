@@ -18,14 +18,36 @@ resource "aws_s3_bucket_ownership_controls" "this" {
   }
 }
 
-# Block all public access completely
+# Public access block
 resource "aws_s3_bucket_public_access_block" "this" {
+  count  = var.block_public_access ? 1 : 0
   bucket = aws_s3_bucket.this.id
 
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+# Public read policy for web asset access
+resource "aws_s3_bucket_policy" "public_read" {
+  count  = var.allow_public_read && !var.block_public_access ? 1 : 0
+  bucket = aws_s3_bucket.this.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.this.arn}/*"
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }
 
 # Enable Versioning
@@ -60,5 +82,61 @@ resource "aws_s3_bucket_cors_configuration" "this" {
     expose_headers  = ["ETag", "x-amz-server-side-encryption"]
     max_age_seconds = 3600
   }
+}
+
+# ------------------------------------------------------------------------------
+# Dedicated S3 IAM User (Separated from SES SMTP User)
+# ------------------------------------------------------------------------------
+locals {
+  s3_user_name = var.s3_user_name != "" ? var.s3_user_name : "${var.project_name}-${var.environment}-s3-user"
+}
+
+resource "aws_iam_user" "s3_user" {
+  count = var.create_s3_user ? 1 : 0
+  name  = local.s3_user_name
+
+  tags = merge(var.tags, {
+    Name        = local.s3_user_name
+    Environment = var.environment
+  })
+}
+
+resource "aws_iam_access_key" "s3_user" {
+  count = var.create_s3_user ? 1 : 0
+  user  = aws_iam_user.s3_user[0].name
+}
+
+data "aws_iam_policy_document" "s3_user_policy" {
+  count = var.create_s3_user ? 1 : 0
+
+  statement {
+    sid    = "S3BucketAccess"
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket",
+      "s3:GetBucketLocation"
+    ]
+    resources = [aws_s3_bucket.this.arn]
+  }
+
+  statement {
+    sid    = "S3ObjectAccess"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts"
+    ]
+    resources = ["${aws_s3_bucket.this.arn}/*"]
+  }
+}
+
+resource "aws_iam_user_policy" "s3_user_policy" {
+  count  = var.create_s3_user ? 1 : 0
+  name   = "${local.s3_user_name}-policy"
+  user   = aws_iam_user.s3_user[0].name
+  policy = data.aws_iam_policy_document.s3_user_policy[0].json
 }
 

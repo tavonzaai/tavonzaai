@@ -59,9 +59,12 @@ module "security_groups" {
   kitchen_port            = var.kitchen_port
   cashier_port            = var.cashier_port
   admin_port              = var.admin_port
+  manager_port            = var.manager_port
+  waiter_port             = var.waiter_port
   postgres_port           = 5432
   redis_port              = 6379
   alb_ingress_cidr_blocks = var.alb_ingress_cidr_blocks
+  allow_public_rds        = var.rds_publicly_accessible
 }
 
 # 3. AWS Elastic Container Registry (ECR) Repositories Module
@@ -82,8 +85,11 @@ module "ecr" {
 module "s3" {
   source = "../../modules/s3"
 
-  bucket_name = var.s3_bucket_name
-  environment = var.environment
+  bucket_name         = var.s3_bucket_name
+  environment         = var.environment
+  project_name        = var.project_name
+  block_public_access = false
+  allow_public_read   = true
 }
 
 # 5. AWS Secrets Manager Module
@@ -93,12 +99,13 @@ module "secrets_manager" {
   secret_name = local.secret_name
   description = "Application secrets for ${local.name_prefix}"
   initial_secret_keys = {
-    DATABASE_URL          = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
-    DATABASE_PASSWORD     = var.rds_db_password
-    JWT_SECRET            = ""
-    JWT_REFRESH_SECRET    = ""
-    REDIS_URL             = "rediss://${module.elasticache.valkey_endpoint}:${module.elasticache.valkey_port}"
-    THIRD_PARTY_API_KEYS  = ""
+    DATABASE_URL         = "postgresql://${var.rds_db_username}:${var.rds_db_password}@${module.rds_postgres.database_endpoint}/${var.rds_db_name}?schema=public&sslmode=require"
+    DATABASE_PASSWORD    = var.rds_db_password
+    JWT_SECRET           = ""
+    JWT_REFRESH_SECRET   = ""
+    REDIS_URL            = var.enable_elasticache && length(module.elasticache) > 0 ? "rediss://${module.elasticache[0].valkey_endpoint}:${module.elasticache[0].valkey_port}" : "redis://:tavonzaaiPass2026Live@redis.${var.domain_name}:6379"
+    THIRD_PARTY_API_KEYS = ""
+
     SMTP_HOST             = var.enable_ses && length(module.ses) > 0 ? module.ses[0].ses_smtp_host : "email-smtp.${var.aws_region}.amazonaws.com"
     SMTP_PORT             = "587"
     SMTP_USER             = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
@@ -109,6 +116,8 @@ module "secrets_manager" {
     SES_CONFIGURATION_SET = var.enable_ses && length(module.ses) > 0 ? module.ses[0].configuration_set_name : ""
     AWS_ACCESS_KEY_ID     = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_username : ""
     AWS_SECRET_ACCESS_KEY = var.enable_ses && length(module.ses) > 0 && var.ses_create_smtp_user ? module.ses[0].ses_smtp_raw_secret_key : ""
+    S3_ACCESS_KEY_ID      = module.s3.s3_access_key_id
+    S3_SECRET_ACCESS_KEY  = module.s3.s3_secret_access_key
     COMPANY_NAME          = "tavonzaai"
     S3_BUCKET_NAME        = var.s3_bucket_name
     AWS_S3_BUCKET         = var.s3_bucket_name
@@ -169,9 +178,11 @@ module "rds_postgres" {
   multi_az                   = var.rds_multi_az
 }
 
-# 8. ElastiCache Redis / Valkey Module
+# 8. ElastiCache Redis / Valkey Module (Optional; disabled by default to save costs)
 module "elasticache" {
+  count  = var.enable_elasticache ? 1 : 0
   source = "../../modules/elasticache"
+
 
   cache_name               = var.elasticache_cache_name
   engine                   = var.elasticache_engine
@@ -184,7 +195,7 @@ module "elasticache" {
   environment              = var.environment
 }
 
-# 9. Backend EC2 Instance Module (Deployed into Private App Subnet)
+# 9. Backend EC2 Instance Module (Deployed with Static Elastic IP)
 module "backend_ec2" {
   source = "../../modules/ec2"
 
@@ -197,9 +208,10 @@ module "backend_ec2" {
   key_name             = var.ssh_key_name
   root_volume_size     = var.backend_root_volume_size
   user_data            = local.ec2_bootstrap_user_data
+  assign_eip           = true
 }
 
-# 10. Frontend EC2 Instance Module (Hosts Next.js & React Admin in Private App Subnet)
+# 10. Frontend EC2 Instance Module (Hosts Next.js & React Admin with Static Elastic IP)
 module "frontend_ec2" {
   source = "../../modules/ec2"
 
@@ -212,7 +224,9 @@ module "frontend_ec2" {
   key_name             = var.ssh_key_name
   root_volume_size     = var.frontend_root_volume_size
   user_data            = local.ec2_bootstrap_user_data
+  assign_eip           = true
 }
+
 
 # 11. ACM Certificate Module (DNS Validated)
 module "acm" {
@@ -242,6 +256,8 @@ module "alb" {
   kitchen_subdomain    = var.kitchen_subdomain
   cashier_subdomain    = var.cashier_subdomain
   admin_subdomain      = var.admin_subdomain
+  manager_subdomain    = var.manager_subdomain
+  waiter_subdomain     = var.waiter_subdomain
   target_type          = "instance"
   backend_instance_id  = module.backend_ec2.instance_id
   frontend_instance_id = module.frontend_ec2.instance_id
@@ -252,12 +268,16 @@ module "alb" {
   kitchen_port                     = var.kitchen_port
   cashier_port                     = var.cashier_port
   admin_port                       = var.admin_port
+  manager_port                     = var.manager_port
+  waiter_port                      = var.waiter_port
   backend_health_check_path        = var.backend_health_check_path
   nextjs_health_check_path         = var.nextjs_health_check_path
   ai_health_check_path             = var.ai_health_check_path
   kitchen_health_check_path        = var.kitchen_health_check_path
   cashier_health_check_path        = var.cashier_health_check_path
   admin_health_check_path          = var.admin_health_check_path
+  manager_health_check_path        = var.manager_health_check_path
+  waiter_health_check_path         = var.waiter_health_check_path
   health_check_interval            = var.health_check_interval
   health_check_timeout             = var.health_check_timeout
   health_check_healthy_threshold   = var.health_check_healthy_threshold
@@ -276,6 +296,8 @@ module "route53" {
   kitchen_subdomain   = var.kitchen_subdomain
   cashier_subdomain   = var.cashier_subdomain
   admin_subdomain     = var.admin_subdomain
+  manager_subdomain   = var.manager_subdomain
+  waiter_subdomain    = var.waiter_subdomain
   alb_dns_name        = module.alb.alb_dns_name
   alb_zone_id         = module.alb.alb_zone_id
   extra_txt_records   = var.extra_txt_records

@@ -11,21 +11,23 @@ import type { User } from '../../../domain/entities/user.entity';
 export class UserProfileDto {
   @ApiProperty() id!: string;
   @ApiProperty() email!: string;
-  @ApiProperty() firstName!: string;
-  @ApiProperty() lastName!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ required: false }) firstName?: string;
+  @ApiProperty({ required: false }) lastName?: string;
   @ApiProperty({ required: false }) phone?: string | null;
-  @ApiProperty({ example: 'customer', description: 'Role label (convenience bundle)' }) role!: string;
-  @ApiProperty({ type: [String], description: 'Effective capabilities/permissions' }) permissions!: Permission[];
-  @ApiProperty({ type: 'array', description: 'Assigned authorization scopes' }) scopes!: Scope[];
+  @ApiProperty({ example: 'CUSTOMER', description: 'Role label (convenience bundle)' }) role!: string;
+  @ApiProperty({ type: [String], description: 'Effective capabilities/permissions', required: false }) permissions?: Permission[];
+  @ApiProperty({ type: 'array', description: 'Assigned authorization scopes', required: false }) scopes?: Scope[];
   @ApiProperty({ required: false }) organizationId?: string | null;
-  @ApiProperty() isEmailVerified!: boolean;
-  @ApiProperty() isPhoneVerified!: boolean;
-  @ApiProperty() createdAt!: Date;
+  @ApiProperty({ required: false }) isEmailVerified?: boolean;
+  @ApiProperty({ required: false }) isPhoneVerified?: boolean;
+  @ApiProperty({ required: false }) createdAt?: Date;
 
   static fromEntity(user: User): UserProfileDto {
     const dto = new UserProfileDto();
     dto.id = user.id;
     dto.email = user.email;
+    dto.name = (user as any).name ?? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
     dto.firstName = user.firstName;
     dto.lastName = user.lastName;
     dto.phone = user.phone;

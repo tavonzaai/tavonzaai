@@ -27,8 +27,9 @@ import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiCreatedResponse,
+  ApiProperty,
+  ApiPropertyOptional,
 } from '@nestjs/swagger';
-import { ApiProperty } from '@nestjs/swagger';
 import { TableSessionService } from '../application/services/table-session.service';
 import { JwtAuthGuard } from '../.././../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -75,12 +76,84 @@ class OrderModeDto {
   customerSessionId!: string;
 }
 
+export class RequestTableOtpDto {
+  @ApiProperty({ description: 'Branch UUID' })
+  @IsUUID()
+  branchId!: string;
+
+  @ApiProperty({ description: 'Table UUID' })
+  @IsUUID()
+  tableId!: string;
+
+  @ApiProperty({ description: 'Customer phone number or email', example: '+1234567890' })
+  @IsString()
+  @IsNotEmpty()
+  contact!: string;
+
+  @ApiPropertyOptional({ description: 'Optional Table Session UUID if joining active table' })
+  @IsOptional()
+  @IsUUID()
+  tableSessionId?: string;
+}
+
+export class VerifyTableOtpDto {
+  @ApiProperty({ description: 'Branch UUID' })
+  @IsUUID()
+  branchId!: string;
+
+  @ApiProperty({ description: 'Table UUID' })
+  @IsUUID()
+  tableId!: string;
+
+  @ApiProperty({ description: 'Customer phone number or email', example: '+1234567890' })
+  @IsString()
+  @IsNotEmpty()
+  contact!: string;
+
+  @ApiProperty({ description: '5-digit verification code', example: '12345' })
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+
+  @ApiPropertyOptional({ description: 'Optional guest display name', example: 'Alice' })
+  @IsOptional()
+  @IsString()
+  displayName?: string;
+
+  @ApiPropertyOptional({ description: 'Optional human-readable table number', example: 'Table 12' })
+  @IsOptional()
+  @IsString()
+  tableNumber?: string;
+}
+
 // ── Controller ────────────────────────────────────────────────────────
 
 @ApiTags('Customer | Sessions')
 @Controller('sessions')
 export class TableSessionController {
   constructor(private readonly sessionService: TableSessionService) {}
+
+  /**
+   * POST /sessions/table-otp/request
+   * Customer requests OTP after scanning QR code
+   */
+  @Post('table-otp/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Customer] Request OTP for table session authentication' })
+  async requestTableOtp(@Body() dto: RequestTableOtpDto) {
+    return this.sessionService.requestTableAuthOtp(dto);
+  }
+
+  /**
+   * POST /sessions/table-otp/verify
+   * Customer verifies OTP -> opens or joins table session, issues JWT token
+   */
+  @Post('table-otp/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Customer] Verify OTP to create/join table session and receive JWT' })
+  async verifyTableOtp(@Body() dto: VerifyTableOtpDto) {
+    return this.sessionService.verifyTableAuthOtp(dto);
+  }
 
   /**
    * POST /sessions/scan

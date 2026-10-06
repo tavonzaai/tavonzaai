@@ -1,5 +1,5 @@
 import React from 'react';
-import KitchenDashboard from '@/components/kitchen-dashboard/KitchenDashboard';
+import KitchenDashboardView from '@/components/updated-kitchen-dashboard/KitchenDashboardView';
 import AuthGuard from '@/components/auth/AuthGuard';
 
 export const dynamic = 'force-dynamic';
@@ -42,7 +42,7 @@ export default async function KitchenTabPage({
 
   return (
     <AuthGuard>
-      <KitchenDashboard initialNav={tabName} />
+      <KitchenDashboardView initialNav={tabName} />
     </AuthGuard>
   );
 }

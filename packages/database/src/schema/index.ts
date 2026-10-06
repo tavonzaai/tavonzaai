@@ -1,16 +1,11 @@
-// ============================================================================
-// Schema Index — Re-exports all table definitions and relations
-// ============================================================================
-// This single entry point is used by:
-//   1. drizzle.config.ts — for migration generation
-//   2. DrizzleService — for typed query builder
-// ============================================================================
-
-export * from './menu.schema';
-export * from './order.schema';
-export * from './user.schema';
-export * from './session.schema';
-export * from './staff.schema';
-export * from './alert.schema';
-
-
+export * from './enums';
+export * from './hierarchy';
+export * from './users';
+export * from './menu';
+export * from './tables';
+export * from './sessions';
+export * from './orders';
+export * from './billing';
+export * from './operations';
+export * from './audit';
+export * from './events';

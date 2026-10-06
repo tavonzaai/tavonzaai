@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CustomersHeader,
   CustomerStatCards,
@@ -9,21 +9,64 @@ import {
   CustomerDetailModal,
   AddCustomerModal,
 } from './components';
-import { INITIAL_CUSTOMERS } from './customersData';
 import { CashierCustomer, CustomerStats } from './types';
 import { toast } from 'sonner';
+import { cashierService, getActiveBranchId } from '@/redux/features/cashierApi';
 
 interface CustomersViewProps {
   onNavigateToPOS?: () => void;
 }
 
 export default function CustomersView({ onNavigateToPOS }: CustomersViewProps) {
-  const [customers, setCustomers] = useState<CashierCustomer[]>(INITIAL_CUSTOMERS);
+  const [customers, setCustomers] = useState<CashierCustomer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<CashierCustomer | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<CashierCustomer | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadCustomers = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const rawOrders = await cashierService.getOrders(branchId);
+        if (mounted && Array.isArray(rawOrders)) {
+          const map = new Map<string, CashierCustomer>();
+          rawOrders.forEach((o: any, idx: number) => {
+            const name = o.customerName || `Guest ${o.tableLabel || idx + 1}`;
+            const existing = map.get(name);
+            const amt = o.totalAmount || o.total || 0;
+            if (existing) {
+              existing.visits += 1;
+              existing.totalSpent += amt;
+            } else {
+              map.set(name, {
+                id: o.orderId || o.id,
+                name,
+                avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
+                email: `${name.toLowerCase().replace(/\s+/g, '.')}@guest.com`,
+                phone: '+1 555-0199',
+                visits: 1,
+                totalSpent: amt,
+                tier: amt > 100 ? 'Gold' : amt > 50 ? 'Silver' : 'Bronze',
+                lastVisit: 'Today',
+              });
+            }
+          });
+          setCustomers(Array.from(map.values()));
+        }
+      } catch (err) {
+        console.error('Failed to load customers from orders:', err);
+      }
+    };
+    loadCustomers();
+    const interval = setInterval(loadCustomers, 10000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Dynamic statistics
   const stats = useMemo<CustomerStats>(() => {
