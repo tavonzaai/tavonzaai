@@ -8,10 +8,14 @@ export interface User {
   id: string;
   email: string;
   passwordHash: string;
-  firstName: string;
-  lastName: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  contactNo?: string | null;
   phone?: string | null;
   role: string; // Label (e.g. 'customer', 'waiter', 'kitchen', 'cashier', 'manager', 'owner', 'super_admin')
+  avatar?: string | null;
+  status?: string;
   permissions: Permission[];
   scopes: Scope[];
   organizationId?: string | null;
