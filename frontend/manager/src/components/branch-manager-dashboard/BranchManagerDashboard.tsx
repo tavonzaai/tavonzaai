@@ -17,6 +17,7 @@ import PaymentDetailView from './payments/PaymentDetailView';
 import MenuView from './menu/MenuView';
 import ReportsView from './reports/ReportsView';
 import BranchConfigView from './config/BranchConfigView';
+import ManagerProfileView from './profile/ProfileView';
 import ReassignWaiterModal from './modals/ReassignWaiterModal';
 import AskAiModal from './modals/AskAiModal';
 import OtherViews from './other/OtherViews';
@@ -24,6 +25,8 @@ import { TableItem } from './types';
 import { navToRoute, routeToNav } from './routes';
 import { Sparkles, CheckCircle2 } from 'lucide-react';
 import { branchManagerService, getActiveBranchId } from '../../redux/features/branchManagerApi';
+import { useAppDispatch } from '../../redux/hooks';
+import { getMe } from '../../redux/features/authApi';
 
 export interface BranchManagerDashboardProps {
   initialNav?: string;
@@ -34,6 +37,11 @@ export default function BranchManagerDashboard({
 }: BranchManagerDashboardProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    dispatch(getMe());
+  }, [dispatch]);
 
   const getNavFromPath = useCallback(
     (path?: string | null): string => {
@@ -273,6 +281,8 @@ export default function BranchManagerDashboard({
             <ReportsView />
           ) : activeNav.toLowerCase() === 'branch config' || activeNav.toLowerCase() === 'branch-config' ? (
             <BranchConfigView />
+          ) : activeNav.toLowerCase() === 'profile' ? (
+            <ManagerProfileView />
           ) : (
             <OtherViews tab={activeNav} onSelectTable={handleSelectTable} />
           )}

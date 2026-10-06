@@ -41,6 +41,32 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           />
         </div>
 
+        {/* Email */}
+        <div className="space-y-1">
+          <label className="block text-white text-xs font-semibold font-['Plus_Jakarta_Sans'] uppercase tracking-wide">
+            Email Address
+          </label>
+          <input
+            type="email"
+            disabled
+            value={(profile as any).email || ''}
+            className="w-full h-10 px-3 bg-white/5 rounded-lg border border-white/5 text-slate-400 text-sm font-normal font-['Plus_Jakarta_Sans'] cursor-not-allowed"
+          />
+        </div>
+
+        {/* Phone Number */}
+        <div className="space-y-1">
+          <label className="block text-white text-xs font-semibold font-['Plus_Jakarta_Sans'] uppercase tracking-wide">
+            Phone / Contact No
+          </label>
+          <input
+            type="text"
+            value={(profile as any).phone || (profile as any).contactNo || ''}
+            onChange={(e) => onChange({ phone: e.target.value } as any)}
+            className="w-full h-10 px-3 bg-white/5 rounded-lg border border-white/5 text-slate-200 text-sm font-normal font-['Plus_Jakarta_Sans'] focus:outline-yellow-500/50 focus:border-yellow-500/30 transition-colors"
+          />
+        </div>
+
         {/* Branch */}
         <div className="space-y-1">
           <label className="block text-white text-xs font-semibold font-['Plus_Jakarta_Sans'] uppercase tracking-wide">

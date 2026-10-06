@@ -309,7 +309,7 @@ export default function OwnerDashboard({
             <NotificationsView />
           ) : activeNav === 'Tavonza Card' ? (
             <TavonzaCardView />
-          ) : activeNav === 'Settings' ? (
+          ) : activeNav === 'Settings' || activeNav === 'Profile' ? (
             <SettingsView />
           ) : (
             <>

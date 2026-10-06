@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User,
   ChefHat,
@@ -24,25 +24,46 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLogout } from '@/hooks/useLogout';
-import { useAppSelector } from '@/redux/store';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { getMe, changePassword } from '@/redux/features/authApi';
+import { updateMe } from '@/redux/features/userApi';
 
 type SettingsTab = 'Profile' | 'Kitchen' | 'Notifications' | 'AI Assistant' | 'Appearance' | 'Security';
 
 export default function KitchenSettingsView() {
+  const dispatch = useAppDispatch();
   const { user } = useAppSelector((state: any) => state.auth);
   const { handleLogout } = useLogout();
   const [activeTab, setActiveTab] = useState<SettingsTab>('Profile');
 
+  useEffect(() => {
+    dispatch(getMe());
+  }, [dispatch]);
+
   // --- Profile State ---
   const [profileData, setProfileData] = useState({
-    fullName: user?.name || user?.email?.split('@')[0] || 'Michael Torres',
+    fullName: user?.name || user?.email?.split('@')[0] || 'Kitchen Staff',
     shift: 'AM (6:00 AM – 2:00 PM)',
-    role: user?.assignments?.[0]?.role?.replace(/_/g, ' ') || 'Head Chef',
-    branch: user?.assignments?.[0]?.branch?.name || 'Downtown Branch',
-    email: user?.email || 'michael.davis@tavonza.com',
-    phone: user?.phone || '+1 (555) 234-5678',
-    employeeId: user?.id?.substring(0, 8).toUpperCase() || '#CHF-0042',
+    role: user?.role ? user.role.replace(/_/g, ' ') : user?.assignments?.[0]?.role?.replace(/_/g, ' ') || 'Chef',
+    branch: user?.assignments?.[0]?.branch?.name || 'Main Branch',
+    email: user?.email || '',
+    phone: user?.contactNo || user?.phone || '',
+    employeeId: user?.id ? `#${user.id.substring(0, 8).toUpperCase()}` : '#CHF-0042',
   });
+
+  useEffect(() => {
+    if (user) {
+      setProfileData((prev) => ({
+        ...prev,
+        fullName: user.name || user.firstName || prev.fullName,
+        email: user.email || prev.email,
+        phone: user.contactNo || user.phone || prev.phone,
+        role: user.role ? user.role.replace(/_/g, ' ') : prev.role,
+        branch: user.assignments?.[0]?.branch?.name || prev.branch,
+        employeeId: user.id ? `#${user.id.substring(0, 8).toUpperCase()}` : prev.employeeId,
+      }));
+    }
+  }, [user]);
 
   // --- Kitchen Config State ---
   const [kitchenConfig, setKitchenConfig] = useState({
@@ -94,9 +115,23 @@ export default function KitchenSettingsView() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Handlers
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Profile information updated successfully!');
+    try {
+      const res = await dispatch(
+        updateMe({
+          name: profileData.fullName.trim(),
+          contactNo: profileData.phone.trim(),
+        })
+      );
+      if (updateMe.fulfilled.match(res)) {
+        toast.success('Profile information updated successfully!');
+      } else {
+        toast.error((res.payload as string) || 'Failed to update profile');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update profile');
+    }
   };
 
   const handleSaveKitchen = (e: React.FormEvent) => {
@@ -104,7 +139,7 @@ export default function KitchenSettingsView() {
     toast.success('Kitchen configuration thresholds saved!');
   };
 
-  const handleUpdatePassword = (e: React.FormEvent) => {
+  const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordData.current || !passwordData.newPass || !passwordData.confirmPass) {
       toast.error('Please fill in all password fields');
@@ -114,12 +149,26 @@ export default function KitchenSettingsView() {
       toast.error('New passwords do not match');
       return;
     }
-    if (passwordData.newPass.length < 8) {
-      toast.error('Password must be at least 8 characters long');
+    if (passwordData.newPass.length < 6) {
+      toast.error('Password must be at least 6 characters long');
       return;
     }
-    toast.success('Password updated successfully!');
-    setPasswordData({ current: '', newPass: '', confirmPass: '' });
+    try {
+      const res = await dispatch(
+        changePassword({
+          oldPassword: passwordData.current,
+          newPassword: passwordData.newPass,
+        })
+      );
+      if (changePassword.fulfilled.match(res)) {
+        toast.success('Password updated successfully!');
+        setPasswordData({ current: '', newPass: '', confirmPass: '' });
+      } else {
+        toast.error((res.payload as string) || 'Failed to update password');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update password');
+    }
   };
 
   const toggleNotification = (key: keyof typeof notifications) => {

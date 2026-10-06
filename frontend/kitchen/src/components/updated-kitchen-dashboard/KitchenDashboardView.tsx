@@ -6,6 +6,7 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { TavonzaLogoIcon } from "../TavonzaLogo";
 import KitchenAIModal from "./KitchenAIModal";
 import Sidebar, { updatedKitchenNavItems } from "./Sidebar";
+import ProfileView from "./ProfileView";
 import {
   ChefHat,
   Clock,
@@ -591,7 +592,10 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
 
         {/* MAIN KDS TICKETS WORKSPACE MATCHING USER SCREENSHOT */}
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
+          {activeNav === "Profile" ? (
+            <ProfileView onBack={() => setActiveNav("Dashboard")} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
             {filteredOrders.map((order, idx) => {
               const isReady = order.status === "READY";
               const isOverdue = !isReady && (order.status === "OVERDUE" || !!order.flaggedIssue);
@@ -746,6 +750,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
               );
             })}
           </div>
+          )}
         </main>
 
         {/* FLOATING AI ROBOT BUTTON IN BOTTOM CORNER MATCHING USER SPEC */}

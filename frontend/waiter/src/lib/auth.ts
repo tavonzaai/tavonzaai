@@ -22,7 +22,7 @@ export interface WaiterUser {
 export const DEMO_WAITER_USER: WaiterUser = {
   id: 'wtr-101',
   name: 'Michael Davis',
-  email: 'waiter@tavonza.demo',
+  email: ' ',
   role: 'WAITER',
   station: 'Downtown Branch Station A',
   assignments: [

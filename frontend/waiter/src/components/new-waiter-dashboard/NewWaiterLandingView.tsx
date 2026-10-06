@@ -225,7 +225,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const tabToPathMap: Record<string, string> = {
-      'home': '/new-waiter-dashboard/floor',
+      'home': '/new-waiter-dashboard/home',
       'menu': '/new-waiter-dashboard/menu',
       'create-order': '/new-waiter-dashboard/create-order',
       'table-orders': '/new-waiter-dashboard/table-orders',
@@ -233,7 +233,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
       'alert': '/new-waiter-dashboard/alerts',
       'profile': '/new-waiter-dashboard/profile',
     };
-    const targetPath = tabToPathMap[activeTab] || '/new-waiter-dashboard/floor';
+    const targetPath = tabToPathMap[activeTab] || '/new-waiter-dashboard/home';
     const currentPath = window.location.pathname.replace(/\/$/, '');
     if (currentPath !== targetPath) {
       window.history.pushState({ tab: activeTab }, '', targetPath);
@@ -630,7 +630,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
       {activeTab === 'home' && (
             <div className="animate-fadeIn">
               {/* Header Greeting Banner */}
-              <div className="w-full px-5 pt-4 pb-6 bg-gradient-to-b from-neutral-900 to-neutral-900/40 border-b border-white/5">
+              <div className="w-full px-5 pt-4 pb-6 bg-gradient-to-b from-neutral-900 to-neutral-900/40  ">
                 <div className="flex flex-col gap-2.5">
                   <div className="flex flex-col gap-0.5">
                     <h1 className="text-white text-base font-semibold font-['Inter'] tracking-tight">
@@ -1415,7 +1415,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                 <span className="text-amber-400 text-xs font-semibold tracking-wide uppercase mt-0.5">
                   Senior Service Staff
                 </span>
-                <span className="text-zinc-400 text-xs mt-1">{user?.email || 'waiter@tavonza.demo'}</span>
+                <span className="text-zinc-400 text-xs mt-1">{user?.email || ' '}</span>
 
                 <div className="w-full grid grid-cols-2 gap-2 mt-5 pt-4 border-t border-white/10">
                   <div className="p-2.5 bg-black/40 rounded-xl">

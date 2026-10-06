@@ -5,7 +5,7 @@ import * as bcrypt from 'bcrypt';
 import * as schema from '@tavonza/database';
 
 const DB_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/tavonza_db';
-const API_URL = 'http://localhost:3000';
+const API_URL = 'https://api.tavonza.com';
 
 async function main() {
   console.log('--- STARTING WAITER DOMAIN END-TO-END VERIFICATION ---');

@@ -22,7 +22,7 @@ export interface KitchenUser {
 export const DEMO_KITCHEN_USER: KitchenUser = {
   id: 'ktc-101',
   name: 'Chef Marco',
-  email: 'kitchen@tavonza.demo',
+  email: ' ',
   role: 'KITCHEN',
   station: 'Main Kitchen Display (KDS)',
   assignments: [

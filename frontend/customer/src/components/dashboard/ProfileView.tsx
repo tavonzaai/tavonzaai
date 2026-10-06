@@ -19,7 +19,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { logoutUser, changePassword } from '@/redux/features/authApi';
+import { logoutUser, changePassword, getMe } from '@/redux/features/authApi';
 import { updateMe } from '@/redux/features/userApi';
 import { clearAuthError } from '@/redux/slices/authSlice';
 
@@ -33,9 +33,9 @@ export default function ProfileView() {
   const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'password' | 'delivery'>('profile');
   
   // Form State
-  const [fullName, setFullName] = useState(user?.name || 'Avery Morgan');
-  const [email, setEmail] = useState(user?.email || 'alex.mercer@vip.tavonza.com');
-  const [phone, setPhone] = useState(user?.contactNo || '+01 2345 56789');
+  const [fullName, setFullName] = useState(user?.name || user?.firstName || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.contactNo || user?.phone || '');
   const [city, setCity] = useState('London');
 
   // Toggle Switches
@@ -53,7 +53,7 @@ export default function ProfileView() {
   // Delivery & Card
   const [streetAddress, setStreetAddress] = useState('18 Rue du Faubourg');
   const [zipCode, setZipCode] = useState('75008');
-  const [cardHolder, setCardHolder] = useState('Avery Morgan');
+  const [cardHolder, setCardHolder] = useState(fullName || 'Avery Morgan');
   const [cardNumber, setCardNumber] = useState('•••• •••• •••• 8841');
   const [expDate, setExpDate] = useState('12/28');
   const [cvv, setCvv] = useState('•••');
@@ -61,10 +61,14 @@ export default function ProfileView() {
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    dispatch(getMe());
+  }, [dispatch]);
+
+  useEffect(() => {
     if (user) {
-      if (user.name) setFullName(user.name);
+      if (user.name || user.firstName) setFullName(user.name || user.firstName || '');
       if (user.email) setEmail(user.email);
-      if (user.contactNo) setPhone(user.contactNo);
+      if (user.contactNo || user.phone) setPhone(user.contactNo || user.phone || '');
     }
   }, [user]);
 
@@ -96,7 +100,7 @@ export default function ProfileView() {
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
   const handleSaveChanges = async (sectionName: string) => {
-    if (sectionName === 'Profile') {
+    if (sectionName === 'Profile' || sectionName === 'Personal Information') {
       setIsUpdatingProfile(true);
       try {
         const res = await dispatch(updateMe({ name: fullName, contactNo: phone }));
