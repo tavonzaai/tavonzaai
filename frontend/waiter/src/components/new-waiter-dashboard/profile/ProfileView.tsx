@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   User,
@@ -21,7 +21,9 @@ import {
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
 import { useLogout } from '@/hooks/useLogout';
-import { useAppSelector } from '@/redux/store';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { getMe, changePassword } from '@/redux/features/authApi';
+import { updateMe } from '@/redux/features/userApi';
 import { toast } from 'sonner';
 
 interface ProfileViewProps {
@@ -34,24 +36,55 @@ export default function ProfileView({
   isStandaloneRoute = false,
 }: ProfileViewProps) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { handleLogout } = useLogout();
   const { user } = useAppSelector((state) => state.auth);
+
+  useEffect(() => {
+    dispatch(getMe());
+  }, [dispatch]);
 
   const [isClockedOut, setIsClockedOut] = useState(false);
 
   // Dynamic Work Information state
   const [workInfo, setWorkInfo] = useState({
-    role: 'Waiter',
-    assignedTables: '01, 02, 03, 04, 05',
-    branch: 'Main Branch',
+    role: user?.role ? user.role.replace(/_/g, ' ') : 'Waiter',
+    assignedTables: user?.assignments?.map((a: any) => a.tableNumber).join(', ') || '01, 02, 03, 04, 05',
+    branch: user?.assignments?.[0]?.branch?.name || 'Main Branch',
   });
 
   // Modal State
   const [isEditWorkModalOpen, setIsEditWorkModalOpen] = useState(false);
+  const [isEditPersonalInfoModalOpen, setIsEditPersonalInfoModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+
   const [editForm, setEditForm] = useState(workInfo);
 
-  const waiterName = user?.name || user?.firstName || 'John Doe';
-  const waiterEmail = user?.email || 'm.chen@tavonza-waiter.com';
+  // Personal Info Form State
+  const [nameInput, setNameInput] = useState(user?.name || user?.firstName || '');
+  const [contactInput, setContactInput] = useState(user?.contactNo || user?.phone || '');
+  const [isSavingPersonalInfo, setIsSavingPersonalInfo] = useState(false);
+
+  // Password Form State
+  const [oldPass, setOldPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [isChangingPass, setIsChangingPass] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setNameInput(user.name || user.firstName || '');
+      setContactInput(user.contactNo || user.phone || '');
+      setWorkInfo((prev) => ({
+        ...prev,
+        role: user.role ? user.role.replace(/_/g, ' ') : prev.role,
+        branch: user.assignments?.[0]?.branch?.name || prev.branch,
+      }));
+    }
+  }, [user]);
+
+  const waiterName = user?.name || user?.firstName || 'Waiter';
+  const waiterEmail = user?.email || 'waiter@tavonza.com';
+  const waiterPhone = user?.contactNo || user?.phone || 'Not set';
 
   const handleClockOut = () => {
     if (isClockedOut) {
@@ -128,10 +161,20 @@ export default function ProfileView({
             {/* Personal Information Card matching Figma */}
             <div className="w-full bg-stone-950 rounded-[8px] outline outline-1 outline-offset-[-1px] outline-zinc-900 overflow-hidden shadow-sm">
               <div className="w-full px-3 py-2 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center">
-                <span className="text-white text-sm font-medium font-['Inter']">
-                  Personal Information
-                </span>
-                <User className="w-4 h-4 text-white/80" />
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-white/80" />
+                  <span className="text-white text-sm font-medium font-['Inter']">
+                    Personal Information
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditPersonalInfoModalOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 hover:border-yellow-400/50 rounded-[6px] text-xs font-medium transition cursor-pointer active:scale-95 group shadow-xs"
+                >
+                  <Pencil className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  <span>Edit</span>
+                </button>
               </div>
 
               <div className="p-3 flex flex-col gap-2.5">
@@ -157,19 +200,10 @@ export default function ProfileView({
                   <span className="text-stone-300 text-xs font-normal">Phone Number</span>
                   <div className="w-full h-10 px-3 bg-neutral-900 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-neutral-500/10 flex items-center">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
-                      +1 (555) 012-3456
+                      {waiterPhone}
                     </span>
                   </div>
                 </div>
-
-                {/* <div className="flex flex-col gap-1">
-                  <span className="text-stone-300 text-xs font-normal">Employee ID</span>
-                  <div className="w-full h-10 px-3 bg-neutral-900 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-neutral-500/10 flex items-center">
-                    <span className="text-indigo-100 text-sm font-normal font-['Inter']">
-                      EMP-00247
-                    </span>
-                  </div>
-                </div> */}
               </div>
             </div>
 
@@ -314,7 +348,7 @@ export default function ProfileView({
 
                 {/* 2. Change Password */}
                 <div
-                  onClick={() => toast.info('Password change link sent to email')}
+                  onClick={() => setIsChangePasswordModalOpen(true)}
                   className="p-3 bg-neutral-900 hover:bg-neutral-850 rounded-xl border border-white/5 flex items-center justify-between cursor-pointer transition"
                 >
                   <div className="flex items-center gap-3">
@@ -537,11 +571,203 @@ export default function ProfileView({
     </div>
   );
 
+  // Edit Personal Info Modal
+  const editPersonalInfoModalContent = isEditPersonalInfoModalOpen && (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={() => setIsEditPersonalInfoModalOpen(false)}
+    >
+      <div
+        className="w-full max-w-[390px] bg-neutral-900 border border-white/10 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-white relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center text-yellow-400">
+              <User className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-white text-sm font-semibold">Edit Personal Info</h3>
+              <p className="text-neutral-400 text-[11px]">Update your name and phone number</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditPersonalInfoModalOpen(false)}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-300">Full Name</label>
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-300">Phone Number</label>
+            <input
+              type="text"
+              value={contactInput}
+              onChange={(e) => setContactInput(e.target.value)}
+              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => setIsEditPersonalInfoModalOpen(false)}
+            className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={isSavingPersonalInfo}
+            onClick={async () => {
+              if (!nameInput.trim()) {
+                toast.error('Full Name cannot be empty');
+                return;
+              }
+              setIsSavingPersonalInfo(true);
+              try {
+                const res = await dispatch(updateMe({ name: nameInput.trim(), contactNo: contactInput.trim() }));
+                setIsSavingPersonalInfo(false);
+                if (updateMe.fulfilled.match(res)) {
+                  setIsEditPersonalInfoModalOpen(false);
+                  toast.success('Profile updated successfully!');
+                } else {
+                  toast.error((res.payload as string) || 'Failed to update profile');
+                }
+              } catch (err: any) {
+                setIsSavingPersonalInfo(false);
+                toast.error(err?.message || 'Failed to update profile');
+              }
+            }}
+            className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50"
+          >
+            {isSavingPersonalInfo ? 'Saving...' : 'Save Profile'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Change Password Modal
+  const changePasswordModalContent = isChangePasswordModalOpen && (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={() => setIsChangePasswordModalOpen(false)}
+    >
+      <div
+        className="w-full max-w-[390px] bg-neutral-900 border border-white/10 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-white relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center text-yellow-400">
+              <Lock className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-white text-sm font-semibold">Change Password</h3>
+              <p className="text-neutral-400 text-[11px]">Enter your current and new password</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsChangePasswordModalOpen(false)}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-300">Current Password</label>
+            <input
+              type="password"
+              value={oldPass}
+              onChange={(e) => setOldPass(e.target.value)}
+              placeholder="••••••••"
+              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-300">New Password</label>
+            <input
+              type="password"
+              value={newPass}
+              onChange={(e) => setNewPass(e.target.value)}
+              placeholder="••••••••"
+              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => setIsChangePasswordModalOpen(false)}
+            className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={isChangingPass}
+            onClick={async () => {
+              if (!oldPass || !newPass) {
+                toast.error('Please enter both current and new password');
+                return;
+              }
+              if (newPass.length < 6) {
+                toast.error('New password must be at least 6 characters');
+                return;
+              }
+              setIsChangingPass(true);
+              try {
+                const res = await dispatch(changePassword({ oldPassword: oldPass, newPassword: newPass }));
+                setIsChangingPass(false);
+                if (changePassword.fulfilled.match(res)) {
+                  setIsChangePasswordModalOpen(false);
+                  setOldPass('');
+                  setNewPass('');
+                  toast.success('Password updated successfully!');
+                } else {
+                  toast.error((res.payload as string) || 'Failed to change password');
+                }
+              } catch (err: any) {
+                setIsChangingPass(false);
+                toast.error(err?.message || 'Failed to change password');
+              }
+            }}
+            className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50"
+          >
+            {isChangingPass ? 'Updating...' : 'Update Password'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (inShell) {
     return (
       <>
         {profileContent}
         {editModalContent}
+        {editPersonalInfoModalContent}
+        {changePasswordModalContent}
       </>
     );
   }
@@ -559,6 +785,8 @@ export default function ProfileView({
         />
       </div>
       {editModalContent}
+      {editPersonalInfoModalContent}
+      {changePasswordModalContent}
     </div>
   );
 }

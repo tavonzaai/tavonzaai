@@ -83,6 +83,14 @@ export default function Topbar({
               <span className="text-white text-xs font-semibold">{displayName}</span>
               <span className="text-neutral-500 text-[10px]">{reduxUser?.email || 'manager@tavonza.com'}</span>
             </div>
+            <a
+              href="/branch-manager-dashboard/profile"
+              onClick={() => setShowUserDropdown(false)}
+              className="w-full mt-1 px-3 py-2 text-left text-xs text-amber-400 hover:bg-neutral-800 rounded-lg flex items-center gap-2 transition cursor-pointer font-medium"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>My Profile &amp; Settings</span>
+            </a>
             <button
               type="button"
               onClick={handleLogout}

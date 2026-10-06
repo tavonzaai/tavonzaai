@@ -8,6 +8,7 @@ export const navToRoute: Record<string, string> = {
   'Menu': '/branch-manager-dashboard/menu',
   'Reports': '/branch-manager-dashboard/reports',
   'Branch Config': '/branch-manager-dashboard/branch-config',
+  'Profile': '/branch-manager-dashboard/profile',
 };
 
 export const routeToNav: Record<string, string> = {
@@ -22,4 +23,5 @@ export const routeToNav: Record<string, string> = {
   'reports': 'Reports',
   'branch-config': 'Branch Config',
   'config': 'Branch Config',
+  'profile': 'Profile',
 };
