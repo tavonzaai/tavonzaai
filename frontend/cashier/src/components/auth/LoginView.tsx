@@ -20,7 +20,7 @@ export default function LoginView({
   onForgotPassword,
 }: LoginViewProps) {
   const dispatch = useAppDispatch();
-  const [email, setEmail] = useState('cashier@tavonza.demo');
+  const [email, setEmail] = useState(' ');
   const [password, setPassword] = useState(' ');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
