@@ -12,6 +12,7 @@ import {
   BarChart3,
   Settings,
   X,
+  User,
 } from 'lucide-react';
 import { navToRoute } from './routes';
 
@@ -32,6 +33,7 @@ export const managerNavItems: BranchManagerNavItem[] = [
   { name: 'Payments', tabKey: 'Payments', icon: CreditCard, badge: '2', badgeColor: 'bg-orange-400/20 text-orange-400' },
   { name: 'Menu', tabKey: 'Menu', icon: BookOpen, badge: '5', badgeColor: 'bg-yellow-400/20 text-yellow-400' },
   { name: 'Reports', tabKey: 'Reports', icon: BarChart3 },
+  { name: 'Profile', tabKey: 'Profile', icon: User },
 ];
 
 interface SidebarProps {

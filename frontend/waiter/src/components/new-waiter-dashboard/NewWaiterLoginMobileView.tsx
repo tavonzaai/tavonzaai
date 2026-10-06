@@ -36,8 +36,8 @@ export default function NewWaiterLoginMobileView({
   const [splashAutoTransitioned, setSplashAutoTransitioned] = useState(false);
 
   // Form states
-  const [email, setEmail] = useState('waiter@tavonza.demo');
-  const [password, setPassword] = useState('Demo1234!');
+  const [email, setEmail] = useState(' ');
+  const [password, setPassword] = useState(' ');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,7 +137,7 @@ export default function NewWaiterLoginMobileView({
   const handleQuickDemoLogin = () => {
     setIsSubmitting(true);
     setTimeout(() => {
-      handleCompleteSession('Michael Davis', 'waiter@tavonza.demo', 'WAITER');
+      handleCompleteSession('Michael Davis', ' ', 'WAITER');
       setIsSubmitting(false);
     }, 250);
   };

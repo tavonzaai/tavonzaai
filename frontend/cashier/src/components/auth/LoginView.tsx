@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Eye, EyeOff, Loader2, AlertCircle, UserCheck } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { TavonzaLogo } from '../TavonzaLogo';
 import { useAppDispatch } from '@/redux/store';
 import { loginUser } from '@/redux/features/authApi';
@@ -21,7 +21,7 @@ export default function LoginView({
 }: LoginViewProps) {
   const dispatch = useAppDispatch();
   const [email, setEmail] = useState('cashier@tavonza.demo');
-  const [password, setPassword] = useState('Demo1234!');
+  const [password, setPassword] = useState(' ');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,27 +91,15 @@ export default function LoginView({
         userRole,
         userProfile
       );
-    } catch {
-      if (email.toLowerCase().includes('cashier')) {
-        handleCompleteSession(
-          'Nobin Mille',
-          email.trim(),
-          'CASHIER'
-        );
-      } else {
-        setError('Invalid credentials or unauthorized cashier access.');
-      }
+    } catch (err: any) {
+      setError(
+        typeof err === 'string'
+          ? err
+          : err?.message || 'Invalid credentials or unauthorized cashier access. Please check your email and password.'
+      );
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickCashierLogin = () => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      handleCompleteSession('Nobin Mille', 'cashier@tavonza.demo', 'CASHIER');
-      setIsSubmitting(false);
-    }, 250);
   };
 
   return (
@@ -200,16 +188,6 @@ export default function LoginView({
             {isSubmitting ? 'Signing in…' : 'Log In'}
           </button>
 
-          {/* Quick Cashier Login Helper */}
-          <button
-            type="button"
-            onClick={handleQuickCashierLogin}
-            disabled={isSubmitting}
-            className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 text-xs text-amber-300 font-medium rounded-xl transition flex items-center justify-center gap-2 cursor-pointer font-['Inter']"
-          >
-            <UserCheck className="w-3.5 h-3.5 text-yellow-400" />
-            <span>⚡ One-Click Cashier Sign In (<strong>Nobin Mille</strong>)</span>
-          </button>
         </form>
       </div>
 
