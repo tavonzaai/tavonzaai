@@ -28,6 +28,16 @@ output "admin_fqdn" {
   value       = length(aws_route53_record.admin) > 0 ? aws_route53_record.admin[0].fqdn : null
 }
 
+output "manager_fqdn" {
+  description = "FQDN of the Manager subdomain record"
+  value       = length(aws_route53_record.manager) > 0 ? aws_route53_record.manager[0].fqdn : null
+}
+
+output "waiter_fqdn" {
+  description = "FQDN of the Waiter subdomain record"
+  value       = length(aws_route53_record.waiter) > 0 ? aws_route53_record.waiter[0].fqdn : null
+}
+
 output "www_fqdn" {
   description = "FQDN of the WWW subdomain record"
   value       = length(aws_route53_record.www) > 0 ? aws_route53_record.www[0].fqdn : null
