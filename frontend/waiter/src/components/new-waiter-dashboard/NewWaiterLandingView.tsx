@@ -225,7 +225,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const tabToPathMap: Record<string, string> = {
-      'home': '/new-waiter-dashboard/floor',
+      'home': '/new-waiter-dashboard/home',
       'menu': '/new-waiter-dashboard/menu',
       'create-order': '/new-waiter-dashboard/create-order',
       'table-orders': '/new-waiter-dashboard/table-orders',
@@ -233,7 +233,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
       'alert': '/new-waiter-dashboard/alerts',
       'profile': '/new-waiter-dashboard/profile',
     };
-    const targetPath = tabToPathMap[activeTab] || '/new-waiter-dashboard/floor';
+    const targetPath = tabToPathMap[activeTab] || '/new-waiter-dashboard/home';
     const currentPath = window.location.pathname.replace(/\/$/, '');
     if (currentPath !== targetPath) {
       window.history.pushState({ tab: activeTab }, '', targetPath);

@@ -173,11 +173,11 @@ export default function BottomDock({
         <div className="flex items-center justify-around w-full">
           {/* 1. Floor (matching Figma with 4-square LayoutGrid icon) */}
           <button
-            onClick={() => handleNav('floor', '/new-waiter-dashboard/floor')}
+            onClick={() => handleNav('home', '/new-waiter-dashboard/home')}
             className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition-transform duration-150 active:scale-90 group"
           >
             {showFloorLabel ? (
-              <LayoutGrid
+              <Home
                 className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${
                   isFloorActive
                     ? 'text-yellow-400 stroke-[2.2]'
@@ -200,7 +200,7 @@ export default function BottomDock({
                   : 'text-neutral-400'
               }`}
             >
-              {showFloorLabel ? 'Floor' : 'Home'}
+              {showFloorLabel ? 'Home' : 'Floor'}
             </span>
           </button>
 
