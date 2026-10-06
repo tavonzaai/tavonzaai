@@ -180,16 +180,7 @@ class InternalClient:
                     "actor": actor_dict,
                 },
             )
-            resp.raise_for_status()
-            res = resp.json()
-            if isinstance(res, dict) and not res.get("ok"):
-                logger.warning(
-                    "Backend tool '%s' returned failure: %s. Using resilient mock fixture fallback.",
-                    tool_name,
-                    res.get("error"),
-                )
-                return self._mock_tool_result(tool_name, args)
-            return res
+            return resp.json()
         except Exception as exc:
             logger.error("Backend tool execution failed for '%s': %s", tool_name, exc)
             return {"ok": False, "error": f"Tool execution failed: {exc}"}

@@ -43,25 +43,55 @@ def humanize_text_for_speech(text: str) -> str:
             cleaned_lines.append(line)
     processed = " ".join(cleaned_lines)
 
+    # Normalize unicode spaces, non-breaking hyphens, and dashes
+    processed = processed.replace("\u202f", " ").replace("\u00a0", " ")
+    processed = processed.replace("\u2011", "-").replace("–", "-").replace("—", "-")
+
     # Conversational replacements
     processed = re.sub(r"\(kg\)", "in kilograms", processed, flags=re.IGNORECASE)
     processed = re.sub(r"\(ea\)", "in units", processed, flags=re.IGNORECASE)
     processed = re.sub(r"(\d+(?:\.\d+)?)\s*(?:kg|kilos|kilograms?)\b", r"\1 kilograms", processed, flags=re.IGNORECASE)
     processed = re.sub(r"(\d+(?:\.\d+)?)\s*(?:g|grams?)\b", r"\1 grams", processed, flags=re.IGNORECASE)
     processed = re.sub(r"(\d+)\s*(?:ea|pcs|pieces?)\b", r"\1 units", processed, flags=re.IGNORECASE)
+
+    # Clean item line prices: "1 × $18 = $18" or "2 × $14 = $28"
+    processed = re.sub(r"(\d+)\s*[×x]\s*\$(\d+(?:\.\d{2})?)\s*=\s*\$(\d+(?:\.\d{2})?)", r"\1 for $\3", processed)
+
+    # Clean currency
+    processed = re.sub(r"\$(\d+)\.00\b", r"\1 dollars", processed)
     processed = re.sub(r"\$(\d+)\.(\d{2})\b", r"\1 dollars and \2 cents", processed)
     processed = re.sub(r"\$(\d+)\b", r"\1 dollars", processed)
+
+    # Strip raw UUIDs and IDs so voice never reads long serial hexadecimal numbers
+    processed = re.sub(
+        r"(?:[-•*]\s*)?(?:Table|Order|Session|Customer)?\s*(?:ID|UUID):\s*[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+        "",
+        processed,
+        flags=re.IGNORECASE,
+    )
+    processed = re.sub(
+        r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+        "",
+        processed,
+    )
+
+    # Convert table and order codes to natural conversational speech
+    processed = re.sub(r"\bTable\s*T-?0*(\d+)\b", r"Table \1", processed, flags=re.IGNORECASE)
+    processed = re.sub(r"\bT-0*(\d+)\b", r"Table \1", processed)
     processed = re.sub(r"\bT([1-9]\d?)\b", r"Table \1", processed)
+    processed = re.sub(r"\b(?:Order\s+)?#?ORD-?(\d+)\b", r"Order number \1", processed, flags=re.IGNORECASE)
     processed = re.sub(r"\bOrder\s*#(\d+)\b", r"Order number \1", processed, flags=re.IGNORECASE)
     processed = re.sub(r"\b#(\d+)\b", r"number \1", processed)
 
-    # Remove code blocks, markdown symbols, and emojis
+    # Remove code blocks, markdown symbols, bullets, and emojis
     processed = re.sub(r"```[\s\S]*?```", " ", processed)
     processed = re.sub(r"`([^`]+)`", r"\1", processed)
     processed = re.sub(r"#{1,6}\s+", "", processed)
     processed = re.sub(r"[*_~]{1,3}", "", processed)
     processed = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", processed)
+    processed = re.sub(r"[•·]", ", ", processed)
     processed = re.sub(r"[\U00010000-\U0010ffff\u2600-\u27bf\u2b50-\u2b55]", "", processed)
+    processed = re.sub(r"\s+-\s+", ", ", processed)
     processed = re.sub(r"\s+", " ", processed).strip()
 
     return processed
