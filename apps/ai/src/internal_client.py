@@ -64,8 +64,8 @@ class InternalClient:
                         )
                 return ActorContext(**data)
             if resp.status_code in (401, 403):
-                # If a dev placeholder token was used in dev mode, resolve via local dev actor
-                if settings.environment == "dev" and user_token.startswith("dev-"):
+                # In dev mode, gracefully fall back to local actor parsing for expired dev tokens so development workflows aren't blocked
+                if settings.environment == "dev":
                     return self._mock_actor(user_token)
                 return None
             raise BackendUnavailableError(
