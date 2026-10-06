@@ -133,7 +133,15 @@ export const rawUserApi = {
         throw new Error(uploadJson.message || 'Failed to upload profile image to storage.');
       }
 
-      uploadedAvatarUrl = uploadJson.url || uploadJson.data?.url || uploadJson.location;
+      uploadedAvatarUrl =
+        uploadJson.url ||
+        uploadJson.data?.url ||
+        uploadJson.location ||
+        uploadJson.fileUrl ||
+        uploadJson.data?.fileUrl ||
+        uploadJson.path ||
+        uploadJson.data?.path ||
+        uploadJson.key;
     } else if (typeof payload.avatar === 'string') {
       uploadedAvatarUrl = payload.avatar;
     }

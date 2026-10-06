@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import CashierSidebar from "./Sidebar";
+import ProfileView from "./ProfileView";
 import { CashierOrder, BillQueueItem } from "./types";
 import { cashierService, getActiveBranchId } from "@/redux/features/cashierApi";
+import { useAppSelector } from "@/redux/store";
 import {
   Search,
   Clock,
@@ -49,9 +51,11 @@ export default function CashierDashboardView({
   embedded = false,
 }: CashierDashboardViewProps) {
   const pathname = usePathname();
+  const { user } = useAppSelector((state) => state.auth);
 
   // Determine activeNav from pathname or initialNav
   const getNavFromPath = React.useCallback(() => {
+    if (pathname?.includes("/profile")) return "Profile";
     if (pathname?.includes("/create-order")) return "Create Order";
     if (pathname?.includes("/bill-queue")) return "Bill Queue";
     if (pathname?.includes("/table-view") || pathname?.includes("/dashboard")) return "Table View";
@@ -282,6 +286,7 @@ export default function CashierDashboardView({
     );
   };
 
+  const isProfileMode = activeNav.toLowerCase() === "profile";
   const isCreateOrderMode =
     activeNav.toLowerCase() === "create order" ||
     activeNav.toLowerCase() === "select item";
@@ -291,7 +296,9 @@ export default function CashierDashboardView({
   const bodyContent = (
     <>
       {/* Dynamic Body Content */}
-      {isBillQueueMode ? (
+      {isProfileMode ? (
+        <ProfileView onBack={() => setActiveNav("Table View")} />
+      ) : isBillQueueMode ? (
           /* ========================================================================= */
           /* BILL QUEUE MODE (Figma Snippet 4)                                          */
           /* ========================================================================= */
@@ -1547,16 +1554,20 @@ export default function CashierDashboardView({
           </div>
 
           {/* User Profile Pill */}
-          <div className="px-4 py-2 bg-zinc-900 rounded-lg border border-neutral-800 flex items-center gap-2.5">
+          <div
+            onClick={() => setActiveNav("Profile")}
+            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 transition rounded-lg border border-neutral-800 flex items-center gap-2.5 cursor-pointer"
+            title="View Profile"
+          >
             <div className="w-9 h-9 p-2.5 bg-amber-400 rounded-full flex items-center justify-center shrink-0">
               <User className="w-4 h-4 text-black" />
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-medium text-white font-['Poppins'] leading-4">
-                Nobin Mille
+                {user?.name || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Nobin Mille')}
               </span>
               <span className="text-xs font-medium text-slate-500 font-['Poppins'] leading-4">
-                Cashier
+                {user?.role ? String(user.role).charAt(0) + String(user.role).slice(1).toLowerCase() : 'Cashier'}
               </span>
             </div>
           </div>

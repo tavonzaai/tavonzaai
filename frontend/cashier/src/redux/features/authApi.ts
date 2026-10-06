@@ -17,6 +17,8 @@ export interface UserProfile {
   name?: string;
   phone?: string | null;
   contactNo?: string | null;
+  avatarUrl?: string | null;
+  avatar?: string | null;
   role: string;
   permissions?: string[];
   scopes?: any[];
