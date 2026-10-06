@@ -242,8 +242,20 @@ export default function ProfileView() {
               <label className="text-xs text-zinc-400 font-['Inter']">Phone Number</label>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onKeyDown={(e) => {
+                  if (
+                    !/[0-9]/.test(e.key) &&
+                    !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key) &&
+                    !e.ctrlKey &&
+                    !e.metaKey
+                  ) {
+                    e.preventDefault();
+                  }
+                }}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                 className="w-full h-10 px-3 bg-neutral-800 border border-stone-700 rounded-lg text-sm text-amber-50 font-['Inter'] focus:outline-none focus:border-yellow-400"
               />
             </div>
