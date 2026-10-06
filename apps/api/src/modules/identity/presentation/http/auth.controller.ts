@@ -18,6 +18,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   UseGuards,
   HttpCode,
@@ -34,6 +35,7 @@ import {
   ApiConflictResponse,
 } from '@nestjs/swagger';
 import { AuthService } from '../../application/services/auth.service';
+import { UserService } from '../../application/services/user.service';
 import {
   RegisterDto,
   LoginDto,
@@ -43,7 +45,9 @@ import {
   ResetPasswordDto,
   ResendOtpDto,
 } from './dto/auth-request.dto';
+import { UpdateUserProfileDto } from './dto/user-request.dto';
 import { AuthTokensDto, UserProfileDto, MessageResponseDto, RegisterResponseDto } from './dto/auth-response.dto';
+import { UserDetailResponseDto } from './dto/user-response.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../infrastructure/adapters/jwt.strategy';
@@ -51,7 +55,10 @@ import type { JwtPayload } from '../../infrastructure/adapters/jwt.strategy';
 @ApiTags('Customer | Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly userService: UserService,
+  ) {}
 
   /**
    * POST /auth/register
@@ -126,6 +133,23 @@ export class AuthController {
   @ApiUnauthorizedResponse()
   async getMe(@CurrentUser() user: JwtPayload): Promise<UserProfileDto> {
     return this.authService.getMe(user.sub);
+  }
+
+  /**
+   * PATCH /auth/me
+   * Update current user profile
+   */
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: '[Customer] Update current user profile' })
+  @ApiOkResponse({ type: UserDetailResponseDto })
+  @ApiUnauthorizedResponse()
+  async updateMe(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateUserProfileDto,
+  ): Promise<UserDetailResponseDto> {
+    return this.userService.updateMe(user.sub, dto);
   }
 
   /**
