@@ -37,7 +37,7 @@ export default function NewWaiterLoginMobileView({
 
   // Form states
   const [email, setEmail] = useState(' ');
-  const [password, setPassword] = useState('Demo1234!');
+  const [password, setPassword] = useState(' ');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
