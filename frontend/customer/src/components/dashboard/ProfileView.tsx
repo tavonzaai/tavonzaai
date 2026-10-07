@@ -1,22 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
-  User,
-  Bell,
-  Lock,
-  CreditCard,
-  Check,
-  Eye,
-  EyeOff,
   Sparkles,
-  MapPin,
   Shield,
-  SlidersHorizontal,
   LogOut,
   Loader2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { logoutUser, changePassword, getMe } from '@/redux/features/authApi';
@@ -26,23 +18,14 @@ import { clearAuthError } from '@/redux/slices/authSlice';
 export default function ProfileView() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, isAuthenticated, loading, error, successMessage } = useAppSelector(
-    (state) => state.auth
-  );
+  const { user, loading, error } = useAppSelector((state) => state.auth);
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'password' | 'delivery'>('profile');
-  
-  // Form State
-  const [fullName, setFullName] = useState(user?.name || user?.firstName || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.contactNo || user?.phone || '');
-  const [city, setCity] = useState('London');
+  // Dynamic Profile state from API
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
 
-  // Toggle Switches
-  const [orderStatusNotif, setOrderStatusNotif] = useState(true);
-  const [promosNotif, setPromosNotif] = useState(true);
-
-  // Passwords
+  // Password state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -50,15 +33,9 @@ export default function ProfileView() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Delivery & Card
-  const [streetAddress, setStreetAddress] = useState('18 Rue du Faubourg');
-  const [zipCode, setZipCode] = useState('75008');
-  const [cardHolder, setCardHolder] = useState(fullName || 'Avery Morgan');
-  const [cardNumber, setCardNumber] = useState('•••• •••• •••• 8841');
-  const [expDate, setExpDate] = useState('12/28');
-  const [cvv, setCvv] = useState('•••');
-
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null);
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
     dispatch(getMe());
@@ -66,15 +43,33 @@ export default function ProfileView() {
 
   useEffect(() => {
     if (user) {
-      if (user.name || user.firstName) setFullName(user.name || user.firstName || '');
-      if (user.email) setEmail(user.email);
-      if (user.contactNo || user.phone) setPhone(user.contactNo || user.phone || '');
+      setFullName(user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim());
+      setEmail(user.email || '');
+      setPhone(user.contactNo || user.phone || '');
     }
   }, [user]);
 
   const handleLogout = async () => {
     await dispatch(logoutUser());
     router.push('/login');
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingProfile(true);
+    try {
+      const res = await dispatch(updateMe({ name: fullName, contactNo: phone }));
+      setIsUpdatingProfile(false);
+      if (updateMe.fulfilled.match(res)) {
+        setSavedSuccessMsg('Profile details updated successfully!');
+        setTimeout(() => setSavedSuccessMsg(null), 3000);
+      } else {
+        alert((res.payload as string) || 'Failed to update profile');
+      }
+    } catch (err: any) {
+      setIsUpdatingProfile(false);
+      alert(err.message || 'Failed to update profile');
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -84,12 +79,14 @@ export default function ProfileView() {
       alert('New passwords do not match');
       return;
     }
+    setIsChangingPassword(true);
     dispatch(clearAuthError());
     const res = await dispatch(
       changePassword({ oldPassword: currentPassword, newPassword })
     );
+    setIsChangingPassword(false);
     if (changePassword.fulfilled.match(res)) {
-      setSavedSuccessMsg('Password updated successfully!');
+      setSavedSuccessMsg('Password changed successfully!');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -97,40 +94,15 @@ export default function ProfileView() {
     }
   };
 
-  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
-
-  const handleSaveChanges = async (sectionName: string) => {
-    if (sectionName === 'Profile' || sectionName === 'Personal Information') {
-      setIsUpdatingProfile(true);
-      try {
-        const res = await dispatch(updateMe({ name: fullName, contactNo: phone }));
-        setIsUpdatingProfile(false);
-        if (updateMe.fulfilled.match(res)) {
-          setSavedSuccessMsg('Profile updated successfully!');
-          setTimeout(() => setSavedSuccessMsg(null), 3000);
-        } else {
-          alert((res.payload as string) || 'Failed to update profile');
-        }
-      } catch (e: any) {
-        setIsUpdatingProfile(false);
-        alert(e.message || 'Failed to update profile');
-      }
-      return;
-    }
-    setSavedSuccessMsg(`${sectionName} updated successfully!`);
-    setTimeout(() => setSavedSuccessMsg(null), 3000);
-  };
-
   return (
     <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-black text-white flex flex-col justify-between relative overflow-x-hidden font-sans pb-24 pt-2">
-
       <div className="flex flex-col gap-5 px-5 pt-3">
-        {/* 1. Account Settings Header Banner */}
-        <div className="flex items-start justify-between gap-4">
+        {/* Header Banner */}
+        <div className="flex items-center justify-between gap-4 border-b border-neutral-800 pb-4">
           <div className="flex flex-col gap-1">
-            <h2 className="text-xl font-semibold text-white font-['Inter']">Account Settings</h2>
+            <h2 className="text-xl font-semibold text-white font-['Inter']">User Profile</h2>
             <p className="text-xs text-zinc-400 leading-relaxed font-['Inter']">
-              Manage your personal details, notification alerts, password, and delivery/card information.
+              Live Profile Information
             </p>
           </div>
 
@@ -156,64 +128,20 @@ export default function ProfileView() {
           </div>
         )}
 
-        {/* 2. Top Segmented Sub-Nav Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] whitespace-nowrap transition border ${
-              activeTab === 'profile'
-                ? 'bg-amber-50 text-amber-500 border-amber-400 font-semibold shadow-md'
-                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'
-            }`}
-          >
-            Profile Info
-          </button>
-          <button
-            onClick={() => setActiveTab('notifications')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] whitespace-nowrap transition border ${
-              activeTab === 'notifications'
-                ? 'bg-amber-50 text-amber-500 border-amber-400 font-semibold shadow-md'
-                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'
-            }`}
-          >
-            Notifications
-          </button>
-          <button
-            onClick={() => setActiveTab('password')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] whitespace-nowrap transition border ${
-              activeTab === 'password'
-                ? 'bg-amber-50 text-amber-500 border-amber-400 font-semibold shadow-md'
-                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'
-            }`}
-          >
-            Password
-          </button>
-          <button
-            onClick={() => setActiveTab('delivery')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] whitespace-nowrap transition border ${
-              activeTab === 'delivery'
-                ? 'bg-amber-50 text-amber-500 border-amber-400 font-semibold shadow-md'
-                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'
-            }`}
-          >
-            Delivery & Card
-          </button>
-        </div>
-
-        {/* 3. Personal Information Card */}
-        <div className="w-full bg-slate-900 border border-blue-950 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
-          <div className="flex items-center justify-between gap-3 flex-wrap border-b border-neutral-800 pb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 rounded-full bg-yellow-400/20 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-lg font-bold shrink-0">
+        {/* Dynamic API User Profile Card */}
+        <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
+          <div className="flex items-center justify-between gap-3 flex-wrap border-b border-neutral-800 pb-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-14 h-14 rounded-full bg-yellow-400/20 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-lg font-bold shrink-0 shadow-sm">
                 {user?.name ? user.name.slice(0, 2).toUpperCase() : (fullName.slice(0, 2).toUpperCase() || 'CU')}
               </div>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base font-semibold text-white font-['Inter']">
-                    {user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer Profile'}
+                  <h3 className="text-lg font-semibold text-white font-['Inter']">
+                    {user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer Account'}
                   </h3>
                   {user?.role && (
-                    <span className="px-2 py-0.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-[10px] font-bold rounded-md uppercase tracking-wider">
+                    <span className="px-2.5 py-0.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-[10px] font-bold rounded-md uppercase tracking-wider">
                       {user.role}
                     </span>
                   )}
@@ -224,7 +152,7 @@ export default function ProfileView() {
               </div>
             </div>
 
-            {/* Account Status Badges */}
+            {/* Verification Badges */}
             <div className="flex items-center gap-2 flex-wrap text-[11px]">
               <div className={`px-2.5 py-1 rounded-full border flex items-center gap-1.5 font-medium ${
                 user?.isEmailVerified ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
@@ -243,289 +171,161 @@ export default function ProfileView() {
             </div>
           </div>
 
-          {/* Detailed Account Metadata Badges */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 p-3 bg-neutral-950/80 rounded-xl border border-neutral-800/80 text-xs">
+          {/* Backend API Metadata Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3.5 bg-black/60 rounded-xl border border-neutral-800 text-xs">
             <div>
-              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Account Role</span>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Role</span>
               <span className="text-amber-300 font-medium">{user?.role || 'CUSTOMER'}</span>
             </div>
             <div>
               <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Organization</span>
-              <span className="text-zinc-300 font-mono truncate block">{user?.organizationId || 'Default Org'}</span>
+              <span className="text-zinc-300 font-mono truncate block">{user?.organizationId || 'System Default'}</span>
             </div>
             <div>
-              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Member Since</span>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Joined Date</span>
               <span className="text-zinc-300 font-medium">
-                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Active User'}
+                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Active'}
               </span>
             </div>
             <div>
               <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Permissions</span>
               <span className="text-emerald-400 font-medium">
-                {user?.permissions ? `${user.permissions.length} Active` : 'Standard Access'}
+                {user?.permissions ? `${user.permissions.length} Granted` : 'Standard User'}
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {/* Full Name */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Full Name</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full h-10 px-3 bg-neutral-800 border border-stone-700 rounded-lg text-sm text-amber-50 font-['Inter'] focus:outline-none focus:border-yellow-400"
-              />
+          {/* Dynamic Profile Edit Form */}
+          <form onSubmit={handleSaveProfile} className="flex flex-col gap-4 pt-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-zinc-400 font-['Inter']">Full Name</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white font-['Inter'] focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-zinc-400 font-['Inter']">Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  disabled
+                  className="w-full h-10 px-3 bg-neutral-950/60 border border-neutral-800 rounded-xl text-sm text-zinc-400 font-['Inter'] cursor-not-allowed"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1 md:col-span-2">
+                <label className="text-xs text-zinc-400 font-['Inter']">Phone / Contact Number</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Enter contact number"
+                  className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white font-['Inter'] focus:outline-none focus:border-yellow-400"
+                />
+              </div>
             </div>
 
-            {/* Email Address */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-10 px-3 bg-neutral-800 border border-stone-700 rounded-lg text-sm text-amber-50 font-['Inter'] focus:outline-none focus:border-yellow-400"
-              />
-            </div>
-
-            {/* Phone Number */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Phone Number</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={phone}
-                onKeyDown={(e) => {
-                  if (
-                    !/[0-9]/.test(e.key) &&
-                    !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key) &&
-                    !e.ctrlKey &&
-                    !e.metaKey
-                  ) {
-                    e.preventDefault();
-                  }
-                }}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                className="w-full h-10 px-3 bg-neutral-800 border border-stone-700 rounded-lg text-sm text-amber-50 font-['Inter'] focus:outline-none focus:border-yellow-400"
-              />
-            </div>
-
-            {/* City / Region */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">City / Region</label>
-              <input
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full h-10 px-3 bg-neutral-800 border border-stone-700 rounded-lg text-sm text-amber-50 font-['Inter'] focus:outline-none focus:border-yellow-400"
-              />
-            </div>
-          </div>
-
-          <button
-            onClick={() => handleSaveChanges('Personal Information')}
-            className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 text-sm font-semibold rounded-xl flex items-center justify-center transition shadow-md shadow-yellow-500/10 mt-1 cursor-pointer"
-          >
-            Save Changes
-          </button>
-        </div>
-
-        {/* 4. Notification Preferences Card */}
-        <div className="w-full bg-slate-900 border border-blue-950 rounded-2xl p-4 flex flex-col gap-3.5 shadow-xl">
-          <div className="flex flex-col gap-0.5">
-            <h3 className="text-base font-semibold text-white font-['Inter']">Notification Preferences</h3>
-            <p className="text-xs text-zinc-400 font-['Inter']">
-              Choose which updates you want to receive about your reservations and meals
-            </p>
-          </div>
-
-          <div className="flex items-center justify-between py-1">
-            <span className="text-xs font-medium text-white font-['Inter']">
-              Order & Reservation Status Updates
-            </span>
             <button
-              onClick={() => setOrderStatusNotif(!orderStatusNotif)}
-              className={`w-11 h-6 rounded-full transition-colors p-1 flex items-center ${
-                orderStatusNotif ? 'bg-yellow-400 justify-end' : 'bg-neutral-700 justify-start'
-              }`}
+              type="submit"
+              disabled={isUpdatingProfile}
+              className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition shadow-md shadow-yellow-500/10 cursor-pointer disabled:opacity-50"
             >
-              <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+              {isUpdatingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
+              <span>{isUpdatingProfile ? 'Saving...' : 'Save Profile Changes'}</span>
             </button>
-          </div>
+          </form>
         </div>
 
-        {/* 5. Change Password Card */}
-        <form onSubmit={handleChangePassword} className="w-full bg-slate-900 border border-blue-950 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
-          <div className="flex flex-col gap-0.5">
+        {/* Change Password Card */}
+        <form onSubmit={handleChangePassword} className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
+          <div className="flex flex-col gap-0.5 border-b border-neutral-800 pb-3">
             <h3 className="text-base font-semibold text-white font-['Inter']">Change Password</h3>
             <p className="text-xs text-zinc-400 font-['Inter']">
-              Ensure your account is using a strong and secure password
+              Update security credentials for {user?.email || 'your account'}
             </p>
           </div>
 
           <div className="flex flex-col gap-3">
-            {/* Current Password */}
             <div className="flex flex-col gap-1">
               <label className="text-xs text-zinc-400 font-['Inter']">Current Password *</label>
-              <div className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-between">
+              <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
                 <input
                   type={showCurrentPassword ? 'text' : 'password'}
                   required
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="bg-transparent text-sm text-white font-['Hanken_Grotesk'] focus:outline-none w-full pr-2"
+                  className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="text-amber-100 hover:text-white"
+                  className="text-zinc-400 hover:text-white"
                 >
                   {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* New Password */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">New Password *</label>
-              <div className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-between">
-                <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  required
-                  minLength={6}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="bg-transparent text-sm text-white font-['Hanken_Grotesk'] focus:outline-none w-full pr-2"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="text-amber-100 hover:text-white"
-                >
-                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-zinc-400 font-['Inter']">New Password *</label>
+                <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="text-zinc-400 hover:text-white"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Confirm Password */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Confirm Password *</label>
-              <div className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-between">
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  required
-                  minLength={6}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="bg-transparent text-sm text-white font-['Hanken_Grotesk'] focus:outline-none w-full pr-2"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="text-amber-100 hover:text-white"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-zinc-400 font-['Inter']">Confirm Password *</label>
+                <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    minLength={6}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="text-zinc-400 hover:text-white"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-zinc-900 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition shadow-md shadow-yellow-500/10 cursor-pointer"
+            disabled={isChangingPassword}
+            className="w-full h-11 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
           >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            <span>{loading ? 'Updating...' : 'Update Password'}</span>
+            {isChangingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
+            <span>{isChangingPassword ? 'Updating...' : 'Update Password'}</span>
           </button>
         </form>
-
-        {/* 6. Delivery Address & Payment Card Information Card */}
-        <div className="w-full bg-slate-900 border border-blue-950 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
-          {/* Delivery Address Header */}
-          <div className="flex flex-col gap-3">
-            <h3 className="text-base font-semibold text-white font-['Inter']">Delivery Address</h3>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Street Address*</label>
-              <input
-                type="text"
-                value={streetAddress}
-                onChange={(e) => setStreetAddress(e.target.value)}
-                className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Zip Code*</label>
-              <input
-                type="text"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-                className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Payment Card Information Header */}
-          <div className="flex flex-col gap-3 pt-2 border-t border-neutral-800">
-            <h3 className="text-base font-semibold text-white font-['Inter']">Payment Card Information</h3>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Cardholder Name*</label>
-              <input
-                type="text"
-                value={cardHolder}
-                onChange={(e) => setCardHolder(e.target.value)}
-                className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Card Number*</label>
-              <input
-                type="text"
-                value={cardNumber}
-                onChange={(e) => setCardNumber(e.target.value)}
-                className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-zinc-400 font-['Inter']">Expiration Date*</label>
-                <input
-                  type="text"
-                  value={expDate}
-                  onChange={(e) => setExpDate(e.target.value)}
-                  className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-zinc-400 font-['Inter']">CVV</label>
-                <input
-                  type="text"
-                  value={cvv}
-                  onChange={(e) => setCvv(e.target.value)}
-                  className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={() => handleSaveChanges('Delivery & Payment Details')}
-            className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 text-sm font-semibold rounded-xl flex items-center justify-center transition shadow-md shadow-yellow-500/10 mt-2"
-          >
-            Save Changes
-          </button>
-        </div>
       </div>
     </div>
   );
 }
-

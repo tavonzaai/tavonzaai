@@ -12,6 +12,9 @@ import {
   ShoppingBag,
   Loader2,
   UtensilsCrossed,
+  User,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
@@ -20,6 +23,7 @@ import { fetchMenuCategories } from '@/redux/features/menu-category/menuCategory
 import { fetchMenuItems } from '@/redux/features/menu-items/menuItemApi';
 import { getCategoryIcon, getItemImage } from '@/lib/menuUtils';
 import { getAuthToken } from '@/redux/api/baseApi';
+import { TavonzaLogoIcon } from '@/components/TavonzaLogo';
 
 interface DisplayMenuItem {
   id: string;
@@ -53,10 +57,11 @@ function MenuContent() {
   const { categories: backendCategories, loading: categoriesLoading } = useAppSelector(
     (state) => state.menuCategories
   );
-  const { items: backendItems, loading: itemsLoading } = useAppSelector(
+  const { items: backendItems, loading: itemsLoading, meta: itemsMeta } = useAppSelector(
     (state) => state.menuItems
   );
 
+  const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showAllItemsView, setShowAllItemsView] = useState(false);
@@ -72,21 +77,6 @@ function MenuContent() {
     setMounted(true);
   }, []);
 
-  /*
-  // Optional: Redirect to login if user is not authenticated
-  useEffect(() => {
-    if (!mounted) return;
-    const token = getAuthToken();
-    if (!token) {
-      router.replace(`/login${forwardParam}`);
-      return;
-    }
-    if (isInitialized && (!isAuthenticated || !user)) {
-      router.replace(`/login${forwardParam}`);
-    }
-  }, [mounted, isInitialized, isAuthenticated, user, forwardParam, router]);
-  */
-
   // Fetch dynamic categories on mount
   useEffect(() => {
     if (mounted) {
@@ -94,19 +84,24 @@ function MenuContent() {
     }
   }, [dispatch, mounted]);
 
-  // Fetch items via Backend Search and Filter API
+  // Reset pagination to page 1 whenever search query or selected category changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory]);
+
+  // Fetch items via Backend Search, Category Filter, and 10 items per page limit
   useEffect(() => {
     if (mounted) {
       dispatch(
         fetchMenuItems({
-          page: 1,
-          limit: 100,
+          page: currentPage,
+          limit: 10,
           searchTerm: searchQuery.trim() || undefined,
           categoryId: selectedCategory !== 'all' ? selectedCategory : undefined,
         })
       );
     }
-  }, [dispatch, mounted, searchQuery, selectedCategory]);
+  }, [dispatch, mounted, currentPage, searchQuery, selectedCategory]);
 
   // Transform dynamic categories with "ALL" chip
   const categories: DisplayCategory[] = useMemo(() => {
@@ -141,6 +136,9 @@ function MenuContent() {
 
   // Filtered items are directly supplied by backend API queries
   const filteredItems = allItems;
+
+  const totalItems = itemsMeta?.total ?? itemsMeta?.totalCount ?? (itemsMeta?.limit ? (itemsMeta?.totalPages || 1) * itemsMeta.limit : backendItems.length);
+  const totalPages = itemsMeta?.totalPages || Math.max(1, Math.ceil(totalItems / 10));
 
   const popularItems = useMemo(() => {
     const pops = allItems.filter((item) => item.popular);
@@ -192,7 +190,7 @@ function MenuContent() {
       {/* Top Main Container - Centered and fully responsive across mobile, tablet & desktop */}
       <div className="w-full max-w-md sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-32 flex flex-col gap-6">
         
-        {/* HEADER: Greeting / Back Button + Table Badge + Cart Icon */}
+        {/* HEADER: Brand Logo / Back Button + Table Badge + Cart Icon + Profile Avatar */}
         <header className="w-full flex items-center justify-between pt-1">
           {showAllItemsView ? (
             <button
@@ -208,14 +206,14 @@ function MenuContent() {
             </button>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="text-xl">👋</span>
-              <span className="text-white text-base font-semibold font-montserrat">
-                Welcome to Tavonza
+              <TavonzaLogoIcon className="w-6 h-6 sm:w-7 sm:h-7" />
+              <span className="text-white text-base font-bold tracking-tight font-montserrat">
+                Tavonza<span className="text-yellow-400">.</span>
               </span>
             </div>
           )}
 
-          {/* Right Header: Table Number Pill + Cart Icon */}
+          {/* Right Header: Table Number Pill + Cart Icon + Profile Avatar Button */}
           <div className="flex items-center gap-2.5">
             {/* Table Number Pill */}
             <div className="px-2.5 py-1.5 bg-neutral-900 rounded-md border border-neutral-800 flex items-center gap-1.5 shadow-sm">
@@ -235,6 +233,29 @@ function MenuContent() {
                 <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-yellow-400 text-black text-[10px] font-bold rounded-full flex items-center justify-center shadow-md">
                   {totalCount}
                 </span>
+              )}
+            </button>
+
+            {/* Profile Avatar Button (Clicking redirects to Profile Page) */}
+            <button
+              onClick={() => router.push(`/profile${forwardParam}`)}
+              className="relative w-8 h-8 rounded-full bg-neutral-900 border border-yellow-400/60 hover:border-yellow-400 flex items-center justify-center text-yellow-400 transition cursor-pointer overflow-hidden shadow-sm hover:scale-105 active:scale-95 shrink-0"
+              title="View Profile"
+            >
+              {(user as any)?.profileImage || (user as any)?.avatar ? (
+                <Image
+                  src={(user as any).profileImage || (user as any).avatar}
+                  alt="Profile"
+                  width={32}
+                  height={32}
+                  className="w-full h-full object-cover rounded-full"
+                />
+              ) : user?.name || user?.firstName ? (
+                <span className="text-xs font-bold text-yellow-400 font-montserrat">
+                  {(user.name || user.firstName).slice(0, 2).toUpperCase()}
+                </span>
+              ) : (
+                <User className="w-4 h-4 text-yellow-400" />
               )}
             </button>
           </div>
@@ -265,7 +286,13 @@ function MenuContent() {
 
         {/* HERO TITLE (shown on main view) */}
         {!showAllItemsView && (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5 pt-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xl sm:text-2xl">👋</span>
+              <span className="text-white text-base sm:text-lg font-semibold font-montserrat">
+                Welcome to Tavonza
+              </span>
+            </div>
             <h1 className="text-white text-3xl sm:text-4xl font-semibold font-poppins leading-tight tracking-tight">
               What is your <br />
               favorite item?
@@ -471,6 +498,39 @@ function MenuContent() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* PAGINATION CONTROLS (10 items per page limit) */}
+          {allItems.length > 0 && (
+            <div className="w-full flex items-center justify-between pt-3 pb-1 border-t border-neutral-800/80 mt-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1 || itemsLoading}
+                className="px-3.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-medium text-white hover:bg-neutral-800 hover:border-yellow-400/40 disabled:opacity-40 disabled:hover:bg-neutral-900 disabled:hover:border-neutral-800 transition flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4 text-yellow-400" />
+                <span>Previous</span>
+              </button>
+
+              <div className="flex items-center gap-1.5 text-xs font-poppins">
+                <span className="text-zinc-400 font-medium">Page</span>
+                <span className="text-yellow-400 font-bold bg-yellow-400/10 px-2 py-0.5 rounded border border-yellow-400/30">
+                  {currentPage}
+                </span>
+                <span className="text-zinc-400 font-medium">of {totalPages}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages || itemsLoading}
+                className="px-3.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-medium text-white hover:bg-neutral-800 hover:border-yellow-400/40 disabled:opacity-40 disabled:hover:bg-neutral-900 disabled:hover:border-neutral-800 transition flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4 text-yellow-400" />
+              </button>
             </div>
           )}
         </div>

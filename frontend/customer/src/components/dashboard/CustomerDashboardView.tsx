@@ -542,12 +542,7 @@ export default function CustomerDashboardView({
         />
       )}
 
-      {/* Sticky Bottom Nav Bar */}
-      <BottomNav
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        isVisible={isNavVisible}
-      />
+      {/* Sticky Bottom Nav Bar (Removed as requested) */}
     </div>
   );
 }
