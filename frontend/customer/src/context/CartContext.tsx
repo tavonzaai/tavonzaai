@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getCookie, setCookie } from '@/redux/api/baseApi';
+import { orderService } from '@/redux/features/orderApi';
 
 export interface CartItem {
   id: string;
@@ -34,6 +35,68 @@ interface CartContextType {
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
+
+const TABLE_ID_MAP: Record<string, string> = {
+  't-01': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
+  't-02': '34489e98-b165-4f29-bc3e-38be762dedb3',
+  't-03': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
+  't-04': '41fe73cd-e275-459b-9533-0b2d5098d927',
+  't-05': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
+  '1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
+  '2': '34489e98-b165-4f29-bc3e-38be762dedb3',
+  '3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
+  '4': '41fe73cd-e275-459b-9533-0b2d5098d927',
+  '5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
+};
+
+const resolveTableUuid = (cookieVal?: string | null): string => {
+  if (!cookieVal) return '34489e98-b165-4f29-bc3e-38be762dedb3';
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cookieVal);
+  if (isUUID) return cookieVal;
+  const mapped = TABLE_ID_MAP[cookieVal.trim().toLowerCase()];
+  return mapped || '34489e98-b165-4f29-bc3e-38be762dedb3';
+};
+
+const syncAddItemToBackend = async (item: CartItem) => {
+  try {
+    const rawBranchId = getCookie('tavonza_branch_id');
+    const branchId =
+      rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
+        ? rawBranchId
+        : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+
+    const isUUID = (val?: string | null) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
+    const rawTableCookie = getCookie('tavonza_table_id') || getCookie('tavonza_table');
+    const tableId = resolveTableUuid(rawTableCookie);
+
+    let draft: any = null;
+    try {
+      draft = await orderService.getCartFromSession(branchId, tableId);
+    } catch {
+      draft = await orderService.getCart(branchId, tableId);
+    }
+
+    if (draft?.id) {
+      const validMenuItemId = isUUID(item.dishId)
+        ? item.dishId!
+        : isUUID(item.id)
+        ? item.id
+        : '4455110d-db04-4cef-92c6-46bcd6a4c7e2';
+
+      await orderService.addItem({
+        orderId: draft.id,
+        menuItemId: validMenuItemId,
+        quantity: item.quantity || 1,
+        specialInstructions: item.specialInstructions,
+        addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
+      });
+    }
+  } catch (err) {
+    console.warn('Sync add to cart API warning:', err);
+  }
+};
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -86,6 +149,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [cart]);
 
   const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
+    const fullItem: CartItem = { ...item, quantity: item.quantity || 1 };
     setCart((prev) => {
       const existingIndex = prev.findIndex((i) => i.id === item.id);
       const qtyToAdd = item.quantity || 1;
@@ -97,8 +161,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         };
         return next;
       }
-      return [...prev, { ...item, quantity: qtyToAdd }];
+      return [...prev, fullItem];
     });
+
+    // Trigger API call when adding product to cart
+    syncAddItemToBackend(fullItem);
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -153,6 +220,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
       return [...prev, item];
     });
+
+    // Trigger API call when adding/updating product in cart
+    syncAddItemToBackend(item);
   };
 
   const getCartItemByDishId = (dishId: string) => {

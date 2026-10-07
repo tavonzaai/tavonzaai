@@ -38,6 +38,46 @@ function CartContent() {
 
   const activeTable = searchParams.get('table') || tableNumber || 'T-02';
 
+  // Automatically fetch & sync backend cart on page load
+  React.useEffect(() => {
+    async function loadBackendCart() {
+      try {
+        const rawBranchId = getCookie('tavonza_branch_id');
+        const branchId =
+          rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
+            ? rawBranchId
+            : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+
+        const isUUID = (val?: string | null) =>
+          Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
+        const TABLE_MAP: Record<string, string> = {
+          't-01': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
+          't-02': '34489e98-b165-4f29-bc3e-38be762dedb3',
+          't-03': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
+          't-04': '41fe73cd-e275-459b-9533-0b2d5098d927',
+          't-05': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
+        };
+
+        const rawTableCookie = getCookie('tavonza_table_id');
+        const tableId = isUUID(rawTableCookie)
+          ? rawTableCookie!
+          : TABLE_MAP[activeTable.trim().toLowerCase()];
+
+        try {
+          await orderService.getCartFromSession(branchId, tableId);
+        } catch {
+          if (tableId) {
+            await orderService.getCart(branchId, tableId);
+          }
+        }
+      } catch (err) {
+        console.warn('Initial cart fetch on mount warning:', err);
+      }
+    }
+    loadBackendCart();
+  }, [activeTable]);
+
   const handleOrderPreferenceClick = () => {
     setShowPreferenceModal(true);
   };

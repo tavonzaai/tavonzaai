@@ -131,6 +131,8 @@ export const waiterService = {
     status?: string;
     tableId?: string;
     search?: string;
+    page?: number;
+    limit?: number;
   } = {}): Promise<WaiterOrderSummary[]> => {
     const q = new URLSearchParams();
     if (params.branchId) q.append('branchId', params.branchId);
@@ -138,6 +140,8 @@ export const waiterService = {
     if (params.status) q.append('status', params.status);
     if (params.tableId) q.append('tableId', params.tableId);
     if (params.search) q.append('search', params.search);
+    if (params.page) q.append('page', String(params.page));
+    if (params.limit) q.append('limit', String(params.limit));
 
     const res = await baseApiFetch<any[]>(`/waiter/orders?${q.toString()}`, {
       method: 'GET',

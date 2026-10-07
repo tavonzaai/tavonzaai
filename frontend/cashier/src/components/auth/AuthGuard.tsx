@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAppSelector } from '@/redux/store';
 import { isCashierAuthenticated } from '@/lib/auth';
 import { Loader2 } from 'lucide-react';
@@ -13,7 +13,15 @@ interface AuthGuardProps {
 
 export default function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, isInitialized, user } = useAppSelector((state) => state.auth);
+
+  const isLoginPage =
+    pathname === '/login' ||
+    Boolean(pathname?.startsWith('/login')) ||
+    Boolean(pathname?.startsWith('/verify-otp')) ||
+    Boolean(pathname?.startsWith('/forgot-password')) ||
+    Boolean(pathname?.startsWith('/reset-password'));
 
   const roleUpper = String(user?.role || '').toUpperCase();
   const hasCashierRole =
@@ -21,13 +29,16 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const isAuth = (isAuthenticated && hasCashierRole) || isCashierAuthenticated();
 
   useEffect(() => {
-    if (isInitialized && !isAuth) {
+    if (isInitialized && !isAuth && !isLoginPage) {
       router.replace('/login');
     }
-  }, [isInitialized, isAuth, router]);
+  }, [isInitialized, isAuth, isLoginPage, router]);
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
   // Loading state: ALWAYS show loading spinner until session initialization is complete
-  // This guarantees the dashboard will NEVER flash/render before redirecting to login
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center space-y-4">
@@ -49,3 +60,4 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   return <>{children}</>;
 }
+

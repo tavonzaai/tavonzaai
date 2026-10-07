@@ -17,6 +17,9 @@ import {
   Barcode,
   ShoppingBag,
 } from 'lucide-react';
+import { useCart, CartItem } from '@/context/CartContext';
+import { orderService } from '@/redux/features/orderApi';
+import { getCookie } from '@/redux/api/baseApi';
 
 export type CartStep = 'cart' | 'placed' | 'tracking' | 'payment' | 'confirmation';
 
@@ -32,15 +35,11 @@ export default function CartFlowModal({
   onGoHome,
 }: CartFlowModalProps) {
   const [step, setStep] = useState<CartStep>(initialStep);
-  const [quantity, setQuantity] = useState(1);
+  const { cart, updateQuantity, removeFromCart, totalCount, subtotal, serviceCharge, tax, totalAmount, tableNumber } = useCart();
   const [selectedCardIdx, setSelectedCardIdx] = useState(0);
+  const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Cart prices
-  const itemPrice = 28.3;
-  const subtotal = itemPrice * quantity;
-  const serviceCharge = +(subtotal * 0.05).toFixed(2);
-  const tax = +(subtotal * 0.08).toFixed(2);
-  const totalAmount = +(subtotal + serviceCharge + tax).toFixed(2);
 
   // Card details
   const cards = [
@@ -64,9 +63,29 @@ export default function CartFlowModal({
 
   const currentCard = cards[selectedCardIdx];
 
-  const handleNextStep = () => {
-    if (step === 'cart') setStep('placed');
-    else if (step === 'placed') setStep('tracking');
+  const handleNextStep = async () => {
+    if (step === 'cart') {
+      setIsSubmitting(true);
+      try {
+        const rawBranchId = getCookie('tavonza_branch_id');
+        const branchId =
+          rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
+            ? rawBranchId
+            : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+
+        const activeTableId = '34489e98-b165-4f29-bc3e-38be762dedb3';
+        const draft = await orderService.getCart(branchId, activeTableId);
+        if (draft?.id) {
+          const res = await orderService.submitOrder(draft.id);
+          setSubmittedOrderId(res.orderNumber || res.id);
+        }
+      } catch (err) {
+        console.warn('Cart submit in modal:', err);
+      } finally {
+        setIsSubmitting(false);
+        setStep('placed');
+      }
+    } else if (step === 'placed') setStep('tracking');
     else if (step === 'tracking') setStep('payment');
     else if (step === 'payment') setStep('confirmation');
     else if (step === 'confirmation') {
@@ -88,56 +107,70 @@ export default function CartFlowModal({
                 <div className="flex items-center gap-3">
                   <button
                     onClick={onClose}
-                    className="w-9 h-9 rounded-full bg-amber-500/30 border border-white/10 flex items-center justify-center text-white hover:bg-amber-500/50 transition"
+                    className="w-9 h-9 rounded-full bg-amber-500/30 border border-white/10 flex items-center justify-center text-white hover:bg-amber-500/50 transition cursor-pointer"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   <div className="flex items-center gap-1.5">
                     <h2 className="text-xl font-semibold text-white font-['Montserrat']">Your Cart</h2>
-                    <span className="text-sm text-neutral-400 font-['Montserrat']">( {quantity} items )</span>
+                    <span className="text-sm text-neutral-400 font-['Montserrat']">( {totalCount} items )</span>
                   </div>
                 </div>
 
-                <button onClick={onClose} className="text-neutral-400 hover:text-white p-1">
+                <button onClick={onClose} className="text-neutral-400 hover:text-white p-1 cursor-pointer">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Cart Item Card */}
-              <div className="w-full bg-neutral-900 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between shadow-lg relative">
-                <div className="flex items-center gap-3">
-                  <div className="w-16 h-16 relative rounded-xl overflow-hidden shrink-0 border border-white/10">
-                    <Image src="/images/slide1.jpg" alt="Ribeye Steak" fill className="object-cover" />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <h3 className="text-sm font-semibold text-white font-['Montserrat']">Ribeye Steak</h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                        className="w-5 h-5 rounded-full bg-orange-400/30 border border-neutral-700 flex items-center justify-center text-black hover:bg-orange-400/50 transition"
-                      >
-                        <Minus className="w-3 h-3 text-black" />
-                      </button>
-
-                      <span className="text-xs font-bold text-white font-['Inter'] w-4 text-center">
-                        {quantity}
-                      </span>
-
-                      <button
-                        onClick={() => setQuantity((q) => q + 1)}
-                        className="w-5 h-5 rounded-full bg-orange-400 border border-neutral-700 flex items-center justify-center text-black hover:bg-orange-300 transition"
-                      >
-                        <Plus className="w-3 h-3 text-black" />
-                      </button>
-                    </div>
-                  </div>
+              {/* Cart Items List */}
+              {cart.length === 0 ? (
+                <div className="w-full py-12 flex flex-col items-center justify-center gap-3 text-center">
+                  <ShoppingBag className="w-12 h-12 text-zinc-600" />
+                  <p className="text-sm text-zinc-400">Your cart is empty.</p>
                 </div>
+              ) : (
+                <div className="flex flex-col gap-3 max-h-72 overflow-y-auto pr-1">
+                  {cart.map((item) => (
+                    <div
+                      key={item.id}
+                      className="w-full bg-neutral-900 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between shadow-lg relative"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 relative rounded-xl overflow-hidden shrink-0 border border-white/10 bg-neutral-950">
+                          <Image src={item.image || '/images/slide1.jpg'} alt={item.name} fill className="object-cover" />
+                        </div>
 
-                <span className="text-base font-bold text-amber-500 font-['Poppins']">
-                  ${(30.5 * quantity).toFixed(2)}
-                </span>
-              </div>
+                        <div className="flex flex-col gap-1">
+                          <h3 className="text-sm font-semibold text-white font-['Montserrat'] truncate">{item.name}</h3>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => updateQuantity(item.id, -1)}
+                              className="w-5 h-5 rounded-full bg-orange-400/30 border border-neutral-700 flex items-center justify-center text-black hover:bg-orange-400/50 transition cursor-pointer text-white"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+
+                            <span className="text-xs font-bold text-white font-['Inter'] w-4 text-center">
+                              {item.quantity}
+                            </span>
+
+                            <button
+                              onClick={() => updateQuantity(item.id, 1)}
+                              className="w-5 h-5 rounded-full bg-orange-400 border border-neutral-700 flex items-center justify-center text-black hover:bg-orange-300 transition cursor-pointer text-black"
+                            >
+                              <Plus className="w-3 h-3 text-black" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className="text-sm font-bold text-amber-500 font-['Poppins']">
+                        ${(item.price * item.quantity).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Order Summary Box */}
               <div className="w-full bg-neutral-900 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-lg">
@@ -167,10 +200,11 @@ export default function CartFlowModal({
 
             {/* Place Order Button */}
             <button
+              disabled={isSubmitting || cart.length === 0}
               onClick={handleNextStep}
-              className="w-full h-12 bg-orange-400 hover:bg-orange-300 text-neutral-950 text-base font-semibold font-['Montserrat'] rounded-2xl shadow-lg shadow-yellow-500/20 transition active:scale-[0.99]"
+              className="w-full h-12 bg-orange-400 hover:bg-orange-300 disabled:opacity-50 text-neutral-950 text-base font-semibold font-['Montserrat'] rounded-2xl shadow-lg shadow-yellow-500/20 transition active:scale-[0.99] cursor-pointer"
             >
-              Place Order
+              {isSubmitting ? 'Placing Order...' : 'Place Order'}
             </button>
           </div>
         )}

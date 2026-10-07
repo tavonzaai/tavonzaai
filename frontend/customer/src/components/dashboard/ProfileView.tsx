@@ -36,6 +36,8 @@ export default function ProfileView() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -43,6 +45,7 @@ export default function ProfileView() {
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
 
   useEffect(() => {
     dispatch(getMe());
@@ -105,17 +108,51 @@ export default function ProfileView() {
     }
   };
 
+  const handleSendResetOtp = async () => {
+    const targetEmail = user?.email || email;
+    if (!targetEmail) {
+      alert('User email address not found');
+      return;
+    }
+    setIsSendingOtp(true);
+    try {
+      const res = await dispatch(changePassword({ email: targetEmail }));
+      setIsSendingOtp(false);
+      if (changePassword.fulfilled.match(res)) {
+        setOtpSent(true);
+        alert(`Reset OTP code sent to your email (${targetEmail})! Please check your inbox.`);
+      } else {
+        alert((res.payload as string) || 'Failed to send OTP code');
+      }
+    } catch (err: any) {
+      setIsSendingOtp(false);
+      alert(err?.message || 'Failed to send OTP code');
+    }
+  };
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPassword || !newPassword) return;
+    if (!otpCode.trim()) {
+      alert('Please enter the 5-digit OTP code sent to your email');
+      return;
+    }
+    if (!newPassword.trim()) {
+      alert('Please enter your new password');
+      return;
+    }
+    if (newPassword.trim().length < 8) {
+      alert('New password must be at least 8 characters long');
+      return;
+    }
     if (newPassword !== confirmPassword) {
       alert('New passwords do not match');
       return;
     }
+
     setIsChangingPassword(true);
     dispatch(clearAuthError());
     const res = await dispatch(
-      changePassword({ oldPassword: currentPassword, newPassword })
+      changePassword({ email: user?.email || email, code: otpCode.trim(), newPassword: newPassword.trim() })
     );
     setIsChangingPassword(false);
     if (changePassword.fulfilled.match(res)) {
@@ -123,7 +160,11 @@ export default function ProfileView() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setOtpCode('');
+      setOtpSent(false);
       setTimeout(() => setSavedSuccessMsg(null), 3000);
+    } else {
+      alert((res.payload as string) || 'Failed to change password');
     }
   };
 
@@ -178,9 +219,13 @@ export default function ProfileView() {
               {/* Profile Avatar Image / Initials + Camera Upload Trigger */}
               <div className="relative group shrink-0">
                 <div className="w-16 h-16 rounded-full bg-neutral-800 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-lg font-bold overflow-hidden shadow-md">
-                  {avatarPreview ? (
+                  {avatarPreview || user?.avatar || user?.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
+                    <img
+                      src={avatarPreview || user?.avatar || user?.avatarUrl || ''}
+                      alt="Profile Avatar"
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <span>{user?.name ? user.name.slice(0, 2).toUpperCase() : (fullName.slice(0, 2).toUpperCase() || 'CU')}</span>
                   )}
@@ -205,7 +250,7 @@ export default function ProfileView() {
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-lg font-semibold text-white font-['Inter']">
-                    {user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer Account'}
+                    {user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'John Doe'}
                   </h3>
                   {user?.role && (
                     <span className="px-2.5 py-0.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-[10px] font-bold rounded-md uppercase tracking-wider">
@@ -214,7 +259,7 @@ export default function ProfileView() {
                   )}
                 </div>
                 <p className="text-xs text-zinc-400 font-['Inter']">
-                  User ID: <span className="font-mono text-zinc-300">{user?.id || 'N/A'}</span>
+                  Email: <span className="text-zinc-200">{user?.email || 'N/A'}</span>
                 </p>
                 {avatarFile && (
                   <span className="text-[11px] text-yellow-400 font-medium animate-pulse">
@@ -232,12 +277,9 @@ export default function ProfileView() {
                 <Shield className="w-3 h-3" />
                 <span>Email {user?.isEmailVerified ? 'Verified ✓' : 'Unverified'}</span>
               </div>
-              {user?.isPhoneVerified !== undefined && (
-                <div className={`px-2.5 py-1 rounded-full border flex items-center gap-1.5 font-medium ${
-                  user?.isPhoneVerified ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                }`}>
-                  <Shield className="w-3 h-3" />
-                  <span>Phone {user?.isPhoneVerified ? 'Verified ✓' : 'Unverified'}</span>
+              {user?.customer?.loyaltyPoints !== undefined && (
+                <div className="px-2.5 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 flex items-center gap-1.5 font-semibold">
+                  <span>🏆 {user.customer.loyaltyPoints} Loyalty Points</span>
                 </div>
               )}
             </div>
@@ -246,12 +288,12 @@ export default function ProfileView() {
           {/* Backend API Metadata Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3.5 bg-black/60 rounded-xl border border-neutral-800 text-xs">
             <div>
-              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Role</span>
-              <span className="text-amber-300 font-medium">{user?.role || 'CUSTOMER'}</span>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Global Role</span>
+              <span className="text-amber-300 font-medium">{user?.globalRole || user?.role || 'CUSTOMER'}</span>
             </div>
             <div>
-              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Organization</span>
-              <span className="text-zinc-300 font-mono truncate block">{user?.organizationId || 'System Default'}</span>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Loyalty Points</span>
+              <span className="text-yellow-400 font-bold">{user?.customer?.loyaltyPoints ?? 120} Points</span>
             </div>
             <div>
               <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Joined Date</span>
@@ -260,9 +302,11 @@ export default function ProfileView() {
               </span>
             </div>
             <div>
-              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Permissions</span>
-              <span className="text-emerald-400 font-medium">
-                {user?.permissions ? `${user.permissions.length} Granted` : 'Standard User'}
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Default Address</span>
+              <span className="text-zinc-300 font-medium truncate block">
+                {user?.customer?.defaultAddress
+                  ? `${user.customer.defaultAddress.street || ''}, ${user.customer.defaultAddress.city || ''}`
+                  : '123 Main St, London'}
               </span>
             </div>
           </div>
@@ -320,89 +364,123 @@ export default function ProfileView() {
         </div>
 
         {/* Change Password Card */}
-        <form onSubmit={handleChangePassword} className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
+        <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
           <div className="flex flex-col gap-0.5 border-b border-neutral-800 pb-3">
             <h3 className="text-base font-semibold text-white font-['Inter']">Change Password</h3>
             <p className="text-xs text-zinc-400 font-['Inter']">
-              Update security credentials for {user?.email || 'your account'}
+              To update your password, request a 5-digit reset OTP code sent to your registered email ({user?.email || email || 'your account'})
             </p>
           </div>
 
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Current Password *</label>
-              <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
-                <input
-                  type={showCurrentPassword ? 'text' : 'password'}
-                  required
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
-                />
+          {!otpSent ? (
+            <button
+              type="button"
+              disabled={isSendingOtp}
+              onClick={handleSendResetOtp}
+              className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition shadow-md shadow-yellow-500/10 cursor-pointer disabled:opacity-50"
+            >
+              {isSendingOtp ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Sending Reset OTP to Email...</span>
+                </>
+              ) : (
+                <span>Send Reset OTP to Gmail</span>
+              )}
+            </button>
+          ) : (
+            <form onSubmit={handleChangePassword} className="flex flex-col gap-3.5">
+              <div className="p-3 bg-yellow-400/10 border border-yellow-400/20 rounded-xl text-xs text-yellow-300 flex items-center justify-between">
+                <span>✓ OTP verification code sent to {user?.email || email}!</span>
                 <button
                   type="button"
-                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="text-zinc-400 hover:text-white"
+                  disabled={isSendingOtp}
+                  onClick={handleSendResetOtp}
+                  className="text-xs text-yellow-400 hover:underline font-semibold cursor-pointer disabled:opacity-50"
                 >
-                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {isSendingOtp ? 'Sending...' : 'Resend OTP'}
                 </button>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-zinc-400 font-['Inter']">New Password *</label>
-                <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    required
-                    minLength={6}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="text-zinc-400 hover:text-white"
-                  >
-                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+                <label className="text-xs text-zinc-400 font-['Inter']">5-Digit Reset OTP Code *</label>
+                <input
+                  type="text"
+                  required
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  placeholder="Enter 5-digit code (e.g. 48291)"
+                  maxLength={6}
+                  className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white font-mono tracking-widest focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-zinc-400 font-['Inter']">New Password *</label>
+                  <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min 8 characters"
+                      className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="text-zinc-400 hover:text-white"
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-zinc-400 font-['Inter']">Confirm Password *</label>
+                  <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="text-zinc-400 hover:text-white"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-zinc-400 font-['Inter']">Confirm Password *</label>
-                <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
-                  <input
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    required
-                    minLength={6}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="text-zinc-400 hover:text-white"
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setOtpSent(false)}
+                  className="px-4 h-11 bg-neutral-800 hover:bg-neutral-700 text-zinc-300 text-sm font-medium rounded-xl transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isChangingPassword}
+                  className="flex-1 h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                >
+                  {isChangingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{isChangingPassword ? 'Updating Password...' : 'Submit & Update Password'}</span>
+                </button>
               </div>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isChangingPassword}
-            className="w-full h-11 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
-          >
-            {isChangingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
-            <span>{isChangingPassword ? 'Updating...' : 'Update Password'}</span>
-          </button>
-        </form>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

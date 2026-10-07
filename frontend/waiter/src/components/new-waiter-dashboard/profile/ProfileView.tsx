@@ -73,7 +73,11 @@ export default function ProfileView({
   // Password Form State
   const [oldPass, setOldPass] = useState('');
   const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [isChangingPass, setIsChangingPass] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -102,7 +106,7 @@ export default function ProfileView({
   };
 
   const waiterName = user?.name || user?.firstName || 'Waiter';
-  const waiterEmail = user?.email || 'waiter@tavonza.com';
+  const waiterEmail = user?.email || '';
   const waiterPhone = user?.contactNo || user?.phone || 'Not set';
 
   const handleClockOut = () => {
@@ -816,7 +820,7 @@ export default function ProfileView({
             </div>
             <div>
               <h3 className="text-white text-sm font-semibold">Change Password</h3>
-              <p className="text-neutral-400 text-[11px]">Enter your current and new password</p>
+              <p className="text-neutral-400 text-[11px]">Request reset code & update security credentials</p>
             </div>
           </div>
           <button
@@ -828,72 +832,167 @@ export default function ProfileView({
           </button>
         </div>
 
-        <div className="flex flex-col gap-3.5">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-stone-300">Current Password</label>
-            <input
-              type="password"
-              value={oldPass}
-              onChange={(e) => setOldPass(e.target.value)}
-              placeholder="••••••••"
-              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
-            />
+        {!otpSent ? (
+          <div className="flex flex-col gap-4">
+            <p className="text-xs text-zinc-400">
+              Send a 5-digit reset OTP verification code to your registered email (<span className="text-white font-medium">{waiterEmail || 'your account'}</span>) to update password.
+            </p>
+            <button
+              type="button"
+              disabled={isSendingOtp}
+              onClick={async () => {
+                if (!waiterEmail) {
+                  toast.error('User email not found');
+                  return;
+                }
+                setIsSendingOtp(true);
+                try {
+                  const res = await dispatch(changePassword({ email: waiterEmail }));
+                  setIsSendingOtp(false);
+                  if (changePassword.fulfilled.match(res)) {
+                    setOtpSent(true);
+                    toast.success('Reset OTP code sent to your email!', {
+                      description: typeof res.payload === 'string' ? res.payload : undefined,
+                    });
+                  } else {
+                    toast.error((res.payload as string) || 'Failed to send OTP code');
+                  }
+                } catch (err: any) {
+                  setIsSendingOtp(false);
+                  toast.error(err?.message || 'Failed to send OTP code');
+                }
+              }}
+              className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold rounded-xl transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isSendingOtp ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Sending Reset OTP...</span>
+                </>
+              ) : (
+                <span>Send Reset OTP to Gmail</span>
+              )}
+            </button>
           </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-stone-300">New Password</label>
-            <input
-              type="password"
-              value={newPass}
-              onChange={(e) => setNewPass(e.target.value)}
-              placeholder="••••••••"
-              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
-          <button
-            type="button"
-            onClick={() => setIsChangePasswordModalOpen(false)}
-            className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={isChangingPass}
-            onClick={async () => {
-              if (!oldPass || !newPass) {
-                toast.error('Please enter both current and new password');
+        ) : (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!otpCode.trim()) {
+                toast.error('Please enter the 5-digit OTP code sent to your email');
                 return;
               }
-              if (newPass.length < 6) {
-                toast.error('New password must be at least 6 characters');
+              if (!newPass.trim()) {
+                toast.error('Please enter your new password');
+                return;
+              }
+              if (newPass.trim().length < 8) {
+                toast.error('New password must be at least 8 characters');
+                return;
+              }
+              if (confirmPass && newPass !== confirmPass) {
+                toast.error('Passwords do not match');
                 return;
               }
               setIsChangingPass(true);
               try {
-                const res = await dispatch(changePassword({ oldPassword: oldPass, newPassword: newPass }));
+                const res = await dispatch(
+                  changePassword({ email: waiterEmail, code: otpCode.trim(), newPassword: newPass.trim() })
+                );
                 setIsChangingPass(false);
                 if (changePassword.fulfilled.match(res)) {
                   setIsChangePasswordModalOpen(false);
-                  setOldPass('');
                   setNewPass('');
+                  setConfirmPass('');
+                  setOtpCode('');
+                  setOtpSent(false);
                   toast.success('Password updated successfully!');
                 } else {
-                  toast.error((res.payload as string) || 'Failed to change password');
+                  toast.error((res.payload as string) || 'Failed to update password');
                 }
               } catch (err: any) {
                 setIsChangingPass(false);
-                toast.error(err?.message || 'Failed to change password');
+                toast.error(err?.message || 'Failed to update password');
               }
             }}
-            className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50"
+            className="flex flex-col gap-3.5"
           >
-            {isChangingPass ? 'Updating...' : 'Update Password'}
-          </button>
-        </div>
+            <div className="p-2.5 bg-yellow-400/10 border border-yellow-400/20 rounded-lg text-xs text-yellow-300 flex items-center justify-between">
+              <span>✓ OTP code sent to {waiterEmail}!</span>
+              <button
+                type="button"
+                disabled={isSendingOtp}
+                onClick={async () => {
+                  setIsSendingOtp(true);
+                  const res = await dispatch(changePassword({ email: waiterEmail }));
+                  setIsSendingOtp(false);
+                  if (changePassword.fulfilled.match(res)) {
+                    toast.success('New OTP code sent!');
+                  }
+                }}
+                className="text-[11px] text-yellow-400 hover:underline font-semibold cursor-pointer disabled:opacity-50"
+              >
+                {isSendingOtp ? 'Sending...' : 'Resend'}
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">5-Digit Reset OTP Code *</label>
+              <input
+                type="text"
+                required
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value)}
+                placeholder="e.g. 48291"
+                maxLength={6}
+                className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition font-mono tracking-widest"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">New Password *</label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={newPass}
+                onChange={(e) => setNewPass(e.target.value)}
+                placeholder="At least 8 characters"
+                className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">Confirm Password *</label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={confirmPass}
+                onChange={(e) => setConfirmPass(e.target.value)}
+                placeholder="Confirm new password"
+                className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setOtpSent(false)}
+                className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={isChangingPass}
+                className="flex-1 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50"
+              >
+                {isChangingPass ? 'Updating...' : 'Submit & Update Password'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

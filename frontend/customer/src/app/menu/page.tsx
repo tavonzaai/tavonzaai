@@ -253,12 +253,11 @@ function MenuContent() {
               className="relative w-8 h-8 rounded-full bg-neutral-900 border border-yellow-400/60 hover:border-yellow-400 flex items-center justify-center text-yellow-400 transition cursor-pointer overflow-hidden shadow-sm hover:scale-105 active:scale-95 shrink-0"
               title="View Profile"
             >
-              {(user as any)?.profileImage || (user as any)?.avatar ? (
-                <Image
-                  src={(user as any).profileImage || (user as any).avatar}
+              {(user as any)?.profileImage || (user as any)?.avatar || (user as any)?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={(user as any).profileImage || (user as any).avatar || (user as any).avatarUrl}
                   alt="Profile"
-                  width={32}
-                  height={32}
                   className="w-full h-full object-cover rounded-full"
                 />
               ) : user?.name || user?.firstName ? (
