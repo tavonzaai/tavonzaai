@@ -349,6 +349,27 @@ export const waiterService = {
     return (res as any)?.data || res;
   },
 
+  resolveAlert: async (alertId: string): Promise<{ message: string }> => {
+    const res = await baseApiFetch<{ message: string }>(`/waiter/alerts/${encodeURIComponent(alertId)}/resolve`, {
+      method: 'PATCH',
+    });
+    return (res as any)?.data || res;
+  },
+
+  createAlert: async (payload: {
+    branchId: string;
+    tableId: string;
+    tableSessionId: string;
+    type: string;
+    message?: string;
+  }): Promise<CustomerAlert> => {
+    const res = await baseApiFetch<CustomerAlert>('/alerts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
   getAllTables: async (branchId: string): Promise<any[]> => {
     const res = await baseApiFetch<any[]>(`/tables?branchId=${encodeURIComponent(branchId)}`, {
       method: 'GET',
@@ -404,6 +425,30 @@ export const fetchWaiterAlerts = createAsyncThunk<CustomerAlert[], string, { rej
       return await waiterService.getMyAlerts(branchId);
     } catch (err: any) {
       return rejectWithValue(err.message || 'Failed to fetch alerts');
+    }
+  }
+);
+
+export const acknowledgeAlertThunk = createAsyncThunk<{ message: string; alertId: string }, string, { rejectValue: string }>(
+  'waiter/acknowledgeAlert',
+  async (alertId, { rejectWithValue }) => {
+    try {
+      const res = await waiterService.ackAlert(alertId);
+      return { message: res.message || 'Alert acknowledged', alertId };
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to acknowledge alert');
+    }
+  }
+);
+
+export const resolveAlertThunk = createAsyncThunk<{ message: string; alertId: string }, string, { rejectValue: string }>(
+  'waiter/resolveAlert',
+  async (alertId, { rejectWithValue }) => {
+    try {
+      const res = await waiterService.resolveAlert(alertId);
+      return { message: res.message || 'Alert resolved', alertId };
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to resolve alert');
     }
   }
 );

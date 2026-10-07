@@ -109,6 +109,9 @@ export const rawMenuItemApi = {
    */
   findAll: async (query: MenuItemQuery = {}): Promise<ApiResponse<BackendMenuItem[]>> => {
     const branchId = getActiveBranchId(query.branchId);
+    if (!branchId || !branchId.trim()) {
+      return { success: true, message: 'No branch selected', data: [] };
+    }
     const params = new URLSearchParams();
 
     if (query.page) params.append('page', String(query.page));
@@ -129,7 +132,7 @@ export const rawMenuItemApi = {
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return await baseApiFetch<BackendMenuItem[]>(
-      `/menus/${encodeURIComponent(branchId)}/items${queryString}`,
+      `/menus/${encodeURIComponent(branchId.trim())}/items${queryString}`,
       { method: 'GET' }
     );
   },

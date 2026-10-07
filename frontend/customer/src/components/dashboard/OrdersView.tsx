@@ -43,7 +43,7 @@ export default function OrdersView({ onReserveClick, onOpenFeedback }: OrdersVie
       const branchId =
         rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
           ? rawBranchId
-          : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+          : undefined;
 
       // 1. Fetch user session orders from backend GET /orders/me
       const myOrdersList = await orderService.getMyOrders({ branchId });

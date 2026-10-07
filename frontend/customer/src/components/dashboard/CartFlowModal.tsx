@@ -71,13 +71,20 @@ export default function CartFlowModal({
         const branchId =
           rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
             ? rawBranchId
-            : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+            : null;
 
-        const activeTableId = '34489e98-b165-4f29-bc3e-38be762dedb3';
-        const draft = await orderService.getCart(branchId, activeTableId);
-        if (draft?.id) {
-          const res = await orderService.submitOrder(draft.id);
-          setSubmittedOrderId(res.orderNumber || res.id);
+        const rawTableId = getCookie('tavonza_table_id');
+        const activeTableId =
+          rawTableId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawTableId)
+            ? rawTableId
+            : null;
+
+        if (branchId && activeTableId) {
+          const draft = await orderService.getCart(branchId, activeTableId);
+          if (draft?.id) {
+            const res = await orderService.submitOrder(draft.id);
+            setSubmittedOrderId(res.orderNumber || res.id);
+          }
         }
       } catch (err) {
         console.warn('Cart submit in modal:', err);

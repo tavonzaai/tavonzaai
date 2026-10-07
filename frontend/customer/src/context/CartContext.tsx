@@ -36,12 +36,20 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const TABLE_ID_MAP: Record<string, string> = {
+const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+const DEFAULT_FALLBACK_TABLE_ID = '34489e98-b165-4f29-bc3e-38be762dedb3';
+
+const TABLE_NUMBER_MAP: Record<string, string> = {
   't-01': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
   't-02': '34489e98-b165-4f29-bc3e-38be762dedb3',
   't-03': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
   't-04': '41fe73cd-e275-459b-9533-0b2d5098d927',
   't-05': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
+  'table 1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
+  'table 2': '34489e98-b165-4f29-bc3e-38be762dedb3',
+  'table 3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
+  'table 4': '41fe73cd-e275-459b-9533-0b2d5098d927',
+  'table 5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
   '1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
   '2': '34489e98-b165-4f29-bc3e-38be762dedb3',
   '3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
@@ -49,27 +57,32 @@ const TABLE_ID_MAP: Record<string, string> = {
   '5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
 };
 
-const resolveTableUuid = (cookieVal?: string | null): string => {
-  if (!cookieVal) return '34489e98-b165-4f29-bc3e-38be762dedb3';
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cookieVal);
-  if (isUUID) return cookieVal;
-  const mapped = TABLE_ID_MAP[cookieVal.trim().toLowerCase()];
-  return mapped || '34489e98-b165-4f29-bc3e-38be762dedb3';
+const isUUID = (val?: string | null): boolean =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
+const resolveDynamicBranchId = (apiBranchId?: string | null): string => {
+  if (apiBranchId && isUUID(apiBranchId)) return apiBranchId;
+  const cookieBranch = getCookie('tavonza_branch_id');
+  if (cookieBranch && isUUID(cookieBranch)) return cookieBranch;
+  return DEFAULT_FALLBACK_BRANCH_ID;
+};
+
+const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string => {
+  if (apiTableId && isUUID(apiTableId)) return apiTableId;
+  const cookieTable = getCookie('tavonza_table_id');
+  if (cookieTable && isUUID(cookieTable)) return cookieTable;
+  const rawTable = getCookie('tavonza_table');
+  const tableKey = (activeTableNumber || rawTable || '').trim().toLowerCase();
+  if (tableKey && TABLE_NUMBER_MAP[tableKey]) {
+    return TABLE_NUMBER_MAP[tableKey];
+  }
+  return DEFAULT_FALLBACK_TABLE_ID;
 };
 
 const syncAddItemToBackend = async (item: CartItem) => {
   try {
-    const rawBranchId = getCookie('tavonza_branch_id');
-    const branchId =
-      rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
-        ? rawBranchId
-        : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-
-    const isUUID = (val?: string | null) =>
-      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
-
-    const rawTableCookie = getCookie('tavonza_table_id') || getCookie('tavonza_table');
-    const tableId = resolveTableUuid(rawTableCookie);
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
 
     let draft: any = null;
     try {

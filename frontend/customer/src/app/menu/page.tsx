@@ -22,7 +22,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { fetchMenuCategories } from '@/redux/features/menu-category/menuCategoryApi';
 import { fetchMenuItems } from '@/redux/features/menu-items/menuItemApi';
 import { getCategoryIcon, getItemImage } from '@/lib/menuUtils';
-import { getAuthToken } from '@/redux/api/baseApi';
+import { getAuthToken, setCookie } from '@/redux/api/baseApi';
 import { TavonzaLogoIcon } from '@/components/TavonzaLogo';
 
 interface DisplayMenuItem {
@@ -68,7 +68,7 @@ function MenuContent() {
   const [showAllItemsView, setShowAllItemsView] = useState(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
 
-  const activeTable = searchParams.get('table') || tableNumber || 'T-02';
+  const activeTable = searchParams.get('table') || tableNumber || '';
   const isConnected = searchParams.get('connected') === 'true' || Boolean(searchParams.get('connect'));
 
   const tableParam = searchParams.get('table');
@@ -76,7 +76,25 @@ function MenuContent() {
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    const tableVal = searchParams.get('table') || searchParams.get('tableNumber');
+    const tableIdVal = searchParams.get('tableId');
+    const branchIdVal = searchParams.get('branchId');
+
+    const isUUID = (val?: string | null) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
+    if (branchIdVal && isUUID(branchIdVal)) {
+      setCookie('tavonza_branch_id', branchIdVal);
+    }
+    if (tableIdVal && isUUID(tableIdVal)) {
+      setCookie('tavonza_table_id', tableIdVal);
+    } else if (tableVal && isUUID(tableVal)) {
+      setCookie('tavonza_table_id', tableVal);
+    }
+    if (tableVal) {
+      setCookie('tavonza_table_number', tableVal);
+    }
+  }, [searchParams]);
 
   // Fetch dynamic categories via Backend API on mount & on category search
   useEffect(() => {

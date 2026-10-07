@@ -41,6 +41,9 @@ export const rawMenuCategoryApi = {
    */
   findAll: async (query: MenuCategoryQuery = {}): Promise<ApiResponse<MenuCategoryResponseDto[]>> => {
     const branchId = getActiveBranchId(query.branchId);
+    if (!branchId || !branchId.trim()) {
+      return { success: true, message: 'No branch selected', data: [] };
+    }
     const params = new URLSearchParams();
 
     if (query.page) params.append('page', String(query.page));
@@ -55,7 +58,7 @@ export const rawMenuCategoryApi = {
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return await baseApiFetch<MenuCategoryResponseDto[]>(
-      `/menus/${encodeURIComponent(branchId)}/categories${queryString}`,
+      `/menus/${encodeURIComponent(branchId.trim())}/categories${queryString}`,
       { method: 'GET' }
     );
   },
