@@ -202,15 +202,68 @@ export default function ProfileView() {
 
         {/* 3. Personal Information Card */}
         <div className="w-full bg-slate-900 border border-blue-950 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-full bg-yellow-400/20 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-lg font-bold shrink-0">
-              AM
+          <div className="flex items-center justify-between gap-3 flex-wrap border-b border-neutral-800 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded-full bg-yellow-400/20 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-lg font-bold shrink-0">
+                {user?.name ? user.name.slice(0, 2).toUpperCase() : (fullName.slice(0, 2).toUpperCase() || 'CU')}
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-semibold text-white font-['Inter']">
+                    {user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Customer Profile'}
+                  </h3>
+                  {user?.role && (
+                    <span className="px-2 py-0.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-[10px] font-bold rounded-md uppercase tracking-wider">
+                      {user.role}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-400 font-['Inter']">
+                  User ID: <span className="font-mono text-zinc-300">{user?.id || 'N/A'}</span>
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-base font-semibold text-white font-['Inter']">Personal Information</h3>
-              <p className="text-xs text-zinc-400 font-['Inter']">
-                Update your name, contact details, and default location
-              </p>
+
+            {/* Account Status Badges */}
+            <div className="flex items-center gap-2 flex-wrap text-[11px]">
+              <div className={`px-2.5 py-1 rounded-full border flex items-center gap-1.5 font-medium ${
+                user?.isEmailVerified ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+              }`}>
+                <Shield className="w-3 h-3" />
+                <span>Email {user?.isEmailVerified ? 'Verified ✓' : 'Unverified'}</span>
+              </div>
+              {user?.isPhoneVerified !== undefined && (
+                <div className={`px-2.5 py-1 rounded-full border flex items-center gap-1.5 font-medium ${
+                  user?.isPhoneVerified ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                }`}>
+                  <Shield className="w-3 h-3" />
+                  <span>Phone {user?.isPhoneVerified ? 'Verified ✓' : 'Unverified'}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Detailed Account Metadata Badges */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 p-3 bg-neutral-950/80 rounded-xl border border-neutral-800/80 text-xs">
+            <div>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Account Role</span>
+              <span className="text-amber-300 font-medium">{user?.role || 'CUSTOMER'}</span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Organization</span>
+              <span className="text-zinc-300 font-mono truncate block">{user?.organizationId || 'Default Org'}</span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Member Since</span>
+              <span className="text-zinc-300 font-medium">
+                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Active User'}
+              </span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Permissions</span>
+              <span className="text-emerald-400 font-medium">
+                {user?.permissions ? `${user.permissions.length} Active` : 'Standard Access'}
+              </span>
             </div>
           </div>
 
@@ -274,7 +327,7 @@ export default function ProfileView() {
 
           <button
             onClick={() => handleSaveChanges('Personal Information')}
-            className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 text-sm font-semibold rounded-xl flex items-center justify-center transition shadow-md shadow-yellow-500/10 mt-1"
+            className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 text-sm font-semibold rounded-xl flex items-center justify-center transition shadow-md shadow-yellow-500/10 mt-1 cursor-pointer"
           >
             Save Changes
           </button>

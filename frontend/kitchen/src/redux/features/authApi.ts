@@ -9,6 +9,16 @@ import {
 
 // ─── Types & Payloads ──────────────────────────────────────────────────────────
 
+export interface StaffAssignmentItem {
+  id?: string;
+  branchId?: string;
+  branchName?: string;
+  branch?: { id: string; name: string };
+  role: string;
+  permissions?: string[];
+  isActive?: boolean;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -20,13 +30,16 @@ export interface UserProfile {
   avatarUrl?: string;
   avatar?: string;
   role: string;
+  globalRole?: string;
+  branchId?: string;
+  branchName?: string;
   permissions?: string[];
   scopes?: any[];
   organizationId?: string | null;
   isEmailVerified?: boolean;
   isPhoneVerified?: boolean;
   createdAt?: string;
-  assignments?: any[];
+  assignments?: StaffAssignmentItem[];
   staffId?: string | null;
 }
 

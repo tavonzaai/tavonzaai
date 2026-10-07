@@ -149,7 +149,7 @@ export default function ProfileView({
               />
             </div>
 
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-1.5">
               <h1 className="text-white text-base font-medium font-['Inter'] leading-6 text-center">
                 {waiterName}
               </h1>
@@ -158,25 +158,36 @@ export default function ProfileView({
               </span>
 
               {/* Station Tag & Active Indicator */}
-              <div className="h-6 px-3 py-1 bg-neutral-950 rounded-[10px] inline-flex items-center gap-2 border border-white/10 mt-1">
-                <span className="text-white text-xs font-normal font-['Inter']">
-                  Waiter · Main Branch
+              <div className="flex items-center gap-1.5 flex-wrap justify-center mt-1">
+                <span className="px-2.5 py-0.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-xs font-semibold rounded-full uppercase">
+                  {user?.role || 'WAITER'}
                 </span>
-                <div className="flex items-center gap-1">
-                  <div
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isClockedOut ? 'bg-zinc-500' : 'bg-green-500 animate-pulse'
-                    }`}
-                  />
-                  <span
-                    className={`text-xs font-normal font-['Inter'] ${
-                      isClockedOut ? 'text-zinc-500' : 'text-green-500'
-                    }`}
-                  >
-                    {isClockedOut ? 'Off Shift' : 'Active'}
+                <span className="px-2.5 py-0.5 bg-blue-400/10 border border-blue-400/20 text-blue-400 text-xs font-semibold rounded-full uppercase">
+                  {user?.globalRole || 'STAFF'}
+                </span>
+                <div className="h-6 px-3 py-1 bg-neutral-950 rounded-[10px] inline-flex items-center gap-2 border border-white/10">
+                  <span className="text-white text-xs font-normal font-['Inter']">
+                    {user?.branchName || user?.assignments?.[0]?.branchName || 'Main Branch'}
                   </span>
+                  <div className="flex items-center gap-1">
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isClockedOut ? 'bg-zinc-500' : 'bg-green-500 animate-pulse'
+                      }`}
+                    />
+                    <span
+                      className={`text-xs font-normal font-['Inter'] ${
+                        isClockedOut ? 'text-zinc-500' : 'text-green-500'
+                      }`}
+                    >
+                      {isClockedOut ? 'Off Shift' : 'Active'}
+                    </span>
+                  </div>
                 </div>
               </div>
+              <span className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                ID: {user?.id || '00000001-0000-4000-8000-000000000005'}
+              </span>
             </div>
           </div>
 
@@ -219,6 +230,21 @@ export default function ProfileView({
               </div>
 
               <div className="p-3 flex flex-col gap-2.5">
+                {/* Account Badges from getMe */}
+                <div className="flex items-center justify-between gap-2 p-2 bg-neutral-900/90 rounded-[5px] border border-white/5 text-xs">
+                  <span className="text-zinc-400 font-mono text-[11px]">ID: {user?.id || '00000001-0000-4000-8000-000000000005'}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                      user?.isEmailVerified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    }`}>
+                      Email {user?.isEmailVerified ? 'Verified ✓' : 'Unverified'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-yellow-400/10 text-yellow-400 border border-yellow-400/30 uppercase">
+                      {user?.role || 'WAITER'}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-1">
                   <span className="text-stone-300 text-xs font-normal">Full Name</span>
                   <div className="w-full h-10 px-3 bg-neutral-900 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-neutral-500/10 flex items-center">
@@ -254,7 +280,7 @@ export default function ProfileView({
                 <div className="flex items-center gap-2">
                   <Briefcase className="w-4 h-4 text-orange-200" />
                   <span className="text-white text-sm font-medium font-['Inter']">
-                    Work Information
+                    Work Information & Capabilities
                   </span>
                 </div>
                 <button
@@ -272,12 +298,26 @@ export default function ProfileView({
               </div>
 
               <div className="p-3 flex flex-col gap-2.5">
+                <div className="grid grid-cols-2 gap-2 text-xs p-2 bg-neutral-900/90 rounded-[5px] border border-white/5">
+                  <div>
+                    <span className="text-stone-400 text-[10px] uppercase block">Global Role</span>
+                    <span className="text-blue-400 font-semibold">{user?.globalRole || 'STAFF'}</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 text-[10px] uppercase block">Account Created</span>
+                    <span className="text-indigo-100 font-medium text-[11px]">
+                      {user?.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Oct 5, 2026'}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-1">
                   <span className="text-stone-300 text-xs font-normal">Role</span>
-                  <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center">
+                  <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center justify-between">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
                       {workInfo.role}
                     </span>
+                    <span className="text-amber-400 text-xs font-mono">STAFF ROLE</span>
                   </div>
                 </div>
 
@@ -292,10 +332,29 @@ export default function ProfileView({
 
                 <div className="flex flex-col gap-1">
                   <span className="text-stone-300 text-xs font-normal">Branch</span>
-                  <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center">
+                  <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center justify-between">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
-                      {workInfo.branch}
+                      {user?.branchName || user?.assignments?.[0]?.branchName || workInfo.branch}
                     </span>
+                    <span className="text-zinc-500 text-[10px] font-mono">
+                      ID: {user?.branchId || user?.assignments?.[0]?.branchId || 'ce7b4318...'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Granted Permissions List */}
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <span className="text-stone-300 text-xs font-normal">Granted Permissions</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(user?.assignments?.[0]?.permissions || user?.permissions || ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS', 'MANAGE_TABLES', 'SERVE_ORDERS']).map((perm: string) => (
+                      <span
+                        key={perm}
+                        className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono font-medium rounded-[5px] flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span>{perm}</span>
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
