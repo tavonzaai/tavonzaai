@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Sparkles,
@@ -9,6 +9,9 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { logoutUser, changePassword, getMe } from '@/redux/features/authApi';
@@ -20,10 +23,14 @@ export default function ProfileView() {
   const dispatch = useAppDispatch();
   const { user, loading, error } = useAppSelector((state) => state.auth);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Dynamic Profile state from API
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -46,6 +53,8 @@ export default function ProfileView() {
       setFullName(user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim());
       setEmail(user.email || '');
       setPhone(user.contactNo || user.phone || '');
+      const u = user as any;
+      setAvatarPreview(u.avatarUrl || u.avatar || null);
     }
   }, [user]);
 
@@ -54,15 +63,39 @@ export default function ProfileView() {
     router.push('/login');
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        return;
+      }
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUpdatingProfile(true);
     try {
-      const res = await dispatch(updateMe({ name: fullName, contactNo: phone }));
+      const res = await dispatch(
+        updateMe({
+          name: fullName.trim(),
+          contactNo: phone.trim(),
+          avatar: avatarFile || avatarPreview || undefined,
+        })
+      );
       setIsUpdatingProfile(false);
       if (updateMe.fulfilled.match(res)) {
-        setSavedSuccessMsg('Profile details updated successfully!');
-        setTimeout(() => setSavedSuccessMsg(null), 3000);
+        dispatch(getMe());
+        setSavedSuccessMsg(
+          avatarFile
+            ? 'Profile picture & account details updated successfully!'
+            : 'Profile details updated successfully!'
+        );
+        setAvatarFile(null);
+        setTimeout(() => setSavedSuccessMsg(null), 3500);
       } else {
         alert((res.payload as string) || 'Failed to update profile');
       }
@@ -97,13 +130,23 @@ export default function ProfileView() {
   return (
     <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-black text-white flex flex-col justify-between relative overflow-x-hidden font-sans pb-24 pt-2">
       <div className="flex flex-col gap-5 px-5 pt-3">
-        {/* Header Banner */}
+        {/* Header Banner with Back Button */}
         <div className="flex items-center justify-between gap-4 border-b border-neutral-800 pb-4">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-xl font-semibold text-white font-['Inter']">User Profile</h2>
-            <p className="text-xs text-zinc-400 leading-relaxed font-['Inter']">
-              Live Profile Information
-            </p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-white hover:text-yellow-400 hover:border-yellow-400/50 transition cursor-pointer shrink-0 active:scale-95"
+              title="Go Back"
+            >
+              <ArrowLeft className="w-4 h-4 text-white hover:text-yellow-400 transition" />
+            </button>
+            <div className="flex flex-col gap-0.5">
+              <h2 className="text-xl font-semibold text-white font-['Inter']">User Profile</h2>
+              <p className="text-xs text-zinc-400 leading-relaxed font-['Inter']">
+                Live Profile Information
+              </p>
+            </div>
           </div>
 
           <button
@@ -132,9 +175,33 @@ export default function ProfileView() {
         <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
           <div className="flex items-center justify-between gap-3 flex-wrap border-b border-neutral-800 pb-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-14 h-14 rounded-full bg-yellow-400/20 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-lg font-bold shrink-0 shadow-sm">
-                {user?.name ? user.name.slice(0, 2).toUpperCase() : (fullName.slice(0, 2).toUpperCase() || 'CU')}
+              {/* Profile Avatar Image / Initials + Camera Upload Trigger */}
+              <div className="relative group shrink-0">
+                <div className="w-16 h-16 rounded-full bg-neutral-800 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-lg font-bold overflow-hidden shadow-md">
+                  {avatarPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{user?.name ? user.name.slice(0, 2).toUpperCase() : (fullName.slice(0, 2).toUpperCase() || 'CU')}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 p-1.5 bg-yellow-400 hover:bg-yellow-300 text-black rounded-full shadow-lg transition cursor-pointer active:scale-95"
+                  title="Change profile picture"
+                >
+                  <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageChange}
+                />
               </div>
+
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-lg font-semibold text-white font-['Inter']">
@@ -149,6 +216,11 @@ export default function ProfileView() {
                 <p className="text-xs text-zinc-400 font-['Inter']">
                   User ID: <span className="font-mono text-zinc-300">{user?.id || 'N/A'}</span>
                 </p>
+                {avatarFile && (
+                  <span className="text-[11px] text-yellow-400 font-medium animate-pulse">
+                    New photo selected ({avatarFile.name})
+                  </span>
+                )}
               </div>
             </div>
 
@@ -235,8 +307,14 @@ export default function ProfileView() {
               disabled={isUpdatingProfile}
               className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition shadow-md shadow-yellow-500/10 cursor-pointer disabled:opacity-50"
             >
-              {isUpdatingProfile && <Loader2 className="w-4 h-4 animate-spin" />}
-              <span>{isUpdatingProfile ? 'Saving...' : 'Save Profile Changes'}</span>
+              {isUpdatingProfile ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Saving Profile & Picture...</span>
+                </>
+              ) : (
+                <span>Save Profile Changes</span>
+              )}
             </button>
           </form>
         </div>

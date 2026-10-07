@@ -63,6 +63,7 @@ function MenuContent() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showAllItemsView, setShowAllItemsView] = useState(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
@@ -77,12 +78,18 @@ function MenuContent() {
     setMounted(true);
   }, []);
 
-  // Fetch dynamic categories on mount
+  // Fetch dynamic categories via Backend API on mount & on category search
   useEffect(() => {
     if (mounted) {
-      dispatch(fetchMenuCategories({ page: 1, limit: 100 }));
+      dispatch(
+        fetchMenuCategories({
+          page: 1,
+          limit: 10,
+          searchTerm: categorySearchQuery.trim() || undefined,
+        })
+      );
     }
-  }, [dispatch, mounted]);
+  }, [dispatch, mounted, categorySearchQuery]);
 
   // Reset pagination to page 1 whenever search query or selected category changes
   useEffect(() => {
@@ -110,8 +117,12 @@ function MenuContent() {
       name: c.name,
       icon: getCategoryIcon(c.name),
     }));
-    return [{ id: 'all', name: 'ALL', icon: '🍽️' }, ...dynamicCats];
-  }, [backendCategories]);
+    const allCats = [{ id: 'all', name: 'ALL', icon: '🍽️' }, ...dynamicCats];
+    if (!categorySearchQuery.trim()) return allCats;
+    return allCats.filter((cat) =>
+      cat.name.toLowerCase().includes(categorySearchQuery.trim().toLowerCase())
+    );
+  }, [backendCategories, categorySearchQuery]);
 
   // Transform backend items to standard display items (zero mock fallback)
   const allItems: DisplayMenuItem[] = useMemo(() => {
@@ -301,7 +312,7 @@ function MenuContent() {
         )}
 
         {/* SEARCH BAR */}
-        <div className="w-full py-3 px-3.5 bg-neutral-900 rounded-[10px] border border-neutral-800 flex items-center gap-2.5 shadow-inner focus-within:border-yellow-400/50 transition">
+        {/* <div className="w-full py-3 px-3.5 bg-neutral-900 rounded-[10px] border border-neutral-800 flex items-center gap-2.5 shadow-inner focus-within:border-yellow-400/50 transition">
           <Search className="w-5 h-5 text-zinc-400 shrink-0" />
           <input
             type="text"
@@ -318,12 +329,12 @@ function MenuContent() {
               Clear
             </button>
           )}
-        </div>
+        </div> */}
 
         {/* DYNAMIC CATEGORIES SECTION */}
         <div className="w-full flex flex-col gap-3">
-          <div className="w-full flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="w-full flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 shrink-0">
               <h2 className="text-white text-base font-semibold font-poppins">
                 Categories
               </h2>
@@ -333,10 +344,31 @@ function MenuContent() {
                 </span>
               )}
             </div>
+
+            {/* Section Input Field beside Categories Title */}
+            <div className="flex-1 max-w-xs px-2.5 py-1 bg-neutral-900 border border-neutral-800 rounded-lg flex items-center gap-1.5 focus-within:border-yellow-400/50 transition">
+              <Search className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              <input
+                type="text"
+                value={categorySearchQuery}
+                onChange={(e) => setCategorySearchQuery(e.target.value)}
+                placeholder="Filter categories..."
+                className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-poppins focus:outline-none"
+              />
+              {categorySearchQuery && (
+                <button
+                  onClick={() => setCategorySearchQuery('')}
+                  className="text-[10px] text-zinc-500 hover:text-white"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
             {!showAllItemsView && (
               <button
                 onClick={() => setShowAllItemsView(true)}
-                className="text-yellow-400 hover:text-yellow-300 text-xs font-medium font-poppins cursor-pointer transition"
+                className="text-yellow-400 hover:text-yellow-300 text-xs font-medium font-poppins cursor-pointer transition shrink-0"
               >
                 See All
               </button>
@@ -408,8 +440,8 @@ function MenuContent() {
         {/* ALL ITEMS SECTION */}
         <div className="w-full flex flex-col gap-3.5">
           {!showAllItemsView && (
-            <div className="w-full flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="w-full flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 shrink-0">
                 <h2 className="text-white text-base font-semibold font-poppins">
                   All Items
                 </h2>
@@ -417,9 +449,30 @@ function MenuContent() {
                   ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
                 </span>
               </div>
+
+              {/* Section Input Field beside All Items Title */}
+              <div className="flex-1 max-w-xs px-2.5 py-1 bg-neutral-900 border border-neutral-800 rounded-lg flex items-center gap-1.5 focus-within:border-yellow-400/50 transition">
+                <Search className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Filter items..."
+                  className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-poppins focus:outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-[10px] text-zinc-500 hover:text-white"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
               <button
                 onClick={() => setShowAllItemsView(true)}
-                className="text-yellow-400 hover:text-yellow-300 text-xs font-medium font-poppins cursor-pointer transition"
+                className="text-yellow-400 hover:text-yellow-300 text-xs font-medium font-poppins cursor-pointer transition shrink-0"
               >
                 See All
               </button>
