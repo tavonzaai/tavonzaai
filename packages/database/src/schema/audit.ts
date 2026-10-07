@@ -95,6 +95,7 @@ export const passwordResetOtps = pgTable('password_reset_otps', {
   id: uuid('id').defaultRandom().primaryKey(),
   email: varchar('email', { length: 255 }).unique().notNull(),
   otp: varchar('otp', { length: 20 }).notNull(),
+  type: varchar('type', { length: 32 }).default('password_reset').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
