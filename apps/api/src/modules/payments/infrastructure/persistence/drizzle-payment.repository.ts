@@ -7,6 +7,7 @@ import {
   paymentAllocations,
   discounts,
 } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import type { IPaymentRepository } from '../../domain/repositories/payment-repository.interface';
 import type {
   PaymentEntity,
@@ -59,20 +60,16 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
   }
 
   async findByOrderId(orderId: string): Promise<PaymentEntity[]> {
-    const rows = await this.db
-      .select()
-      .from(payments)
-      .where(eq(payments.orderId, orderId));
-
+    const qb = new DrizzleQueryBuilder<typeof payments>(this.db, payments)
+      .filterExact({ orderId });
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapPayment(r));
   }
 
   async findByTableSessionId(tableSessionId: string): Promise<PaymentEntity[]> {
-    const rows = await this.db
-      .select()
-      .from(payments)
-      .where(eq(payments.tableSessionId, tableSessionId));
-
+    const qb = new DrizzleQueryBuilder<typeof payments>(this.db, payments)
+      .filterExact({ tableSessionId });
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapPayment(r));
   }
 
@@ -125,11 +122,9 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
   }
 
   async findAllocationsByPaymentId(paymentId: string): Promise<PaymentAllocationEntity[]> {
-    const rows = await this.db
-      .select()
-      .from(paymentAllocations)
-      .where(eq(paymentAllocations.paymentId, paymentId));
-
+    const qb = new DrizzleQueryBuilder<typeof paymentAllocations>(this.db, paymentAllocations)
+      .filterExact({ paymentId });
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapAllocation(r));
   }
 

@@ -1,6 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE, type DrizzleDatabase, restaurants } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import type { Restaurant } from '../../domain/entities/restaurant.entity';
 
 @Injectable()
@@ -48,13 +49,43 @@ export class DrizzleRestaurantRepository {
     return row ? this.mapToEntity(row) : null;
   }
 
-  async findByOrganizationId(organizationId: string): Promise<Restaurant[]> {
-    const rows = await this.db
-      .select()
-      .from(restaurants)
-      .where(eq(restaurants.organizationId, organizationId));
+  async findAll(options?: {
+    organizationId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    includeDeleted?: boolean;
+  }): Promise<{ data: Restaurant[]; meta: any }> {
+    const builder = DrizzleQueryBuilder.from(this.db, restaurants)
+      .paginate({ page: options?.page, limit: options?.limit })
+      .filterExact({ organizationId: options?.organizationId })
+      .search(options?.search, [restaurants.name, restaurants.slug, restaurants.description])
+      .softDelete({
+        column: restaurants.isActive,
+        activeValue: true,
+        includeDeleted: options?.includeDeleted,
+      })
+      .sort(options?.sortBy, options?.sortOrder, restaurants.createdAt);
 
-    return rows.map((r) => this.mapToEntity(r));
+    return builder.execute((r) => this.mapToEntity(r));
+  }
+
+  async findByOrganizationId(organizationId: string, includeDeleted = false): Promise<Restaurant[]> {
+    return DrizzleQueryBuilder.from(this.db, restaurants)
+      .filterExact({ organizationId })
+      .softDelete({
+        column: restaurants.isActive,
+        activeValue: true,
+        includeDeleted,
+      })
+      .sort(restaurants.createdAt, 'desc')
+      .executePlain((r) => this.mapToEntity(r));
+  }
+
+  async softDelete(id: string): Promise<Restaurant | null> {
+    return this.update(id, { isActive: false });
   }
 
   async update(

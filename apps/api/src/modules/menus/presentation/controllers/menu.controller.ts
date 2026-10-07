@@ -16,7 +16,7 @@
 //   GET /menus/items/:itemId            → Item detail ("Add to Cart" screen)
 // ============================================================================
 
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiOkResponse } from '@nestjs/swagger';
 import { MenuService } from '../../application/services/menu.service';
 import {
@@ -24,6 +24,12 @@ import {
   MenuItemListResponseDto,
   MenuItemDetailResponseDto,
 } from '../dtos/menu-response.dto';
+import {
+  CreateMenuCategoryDto,
+  UpdateMenuCategoryDto,
+  CreateMenuItemDto,
+  UpdateMenuItemDto,
+} from '../dtos/menu-mutation.dto';
 
 @ApiTags('Customer | Menus')
 @Controller('menus')
@@ -85,4 +91,77 @@ export class MenuController {
     const item = await this.menuService.getItemDetail(itemId);
     return MenuItemDetailResponseDto.fromEntity(item);
   }
+
+  // ── Category Management Endpoints ─────────────────────────────────────
+
+  @Post('categories')
+  @ApiOperation({ summary: 'Create menu category' })
+  async createCategory(@Body() dto: CreateMenuCategoryDto) {
+    const category = await this.menuService.createCategory(dto);
+    return {
+      success: true,
+      data: MenuCategoryResponseDto.fromEntity(category),
+    };
+  }
+
+  @Patch('categories/:id')
+  @ApiOperation({ summary: 'Update menu category' })
+  async updateCategory(
+    @Param('id') id: string,
+    @Body() dto: UpdateMenuCategoryDto,
+  ) {
+    const category = await this.menuService.updateCategory(id, dto);
+    return {
+      success: true,
+      data: MenuCategoryResponseDto.fromEntity(category),
+    };
+  }
+
+  @Delete('categories/:id')
+  @ApiOperation({ summary: 'Soft delete menu category' })
+  async deleteCategory(@Param('id') id: string) {
+    const category = await this.menuService.softDeleteCategory(id);
+    return {
+      success: true,
+      message: 'Category soft-deleted successfully',
+      data: MenuCategoryResponseDto.fromEntity(category),
+    };
+  }
+
+  // ── Item Management Endpoints ─────────────────────────────────────────
+
+  @Post('items')
+  @ApiOperation({ summary: 'Create menu item' })
+  async createItem(@Body() dto: CreateMenuItemDto) {
+    const item = await this.menuService.createItem(dto);
+    return {
+      success: true,
+      data: MenuItemDetailResponseDto.fromEntity(item),
+    };
+  }
+
+  @Patch('items/:itemId')
+  @ApiOperation({ summary: 'Update menu item' })
+  async updateItem(
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateMenuItemDto,
+  ) {
+    const item = await this.menuService.updateItem(itemId, dto);
+    return {
+      success: true,
+      data: MenuItemDetailResponseDto.fromEntity(item),
+    };
+  }
+
+  @Delete('items/:itemId')
+  @ApiOperation({ summary: 'Soft delete menu item' })
+  async deleteItem(@Param('itemId') itemId: string) {
+    const item = await this.menuService.softDeleteItem(itemId);
+    return {
+      success: true,
+      message: 'Menu item soft-deleted successfully',
+      data: MenuItemDetailResponseDto.fromEntity(item),
+    };
+  }
 }
+

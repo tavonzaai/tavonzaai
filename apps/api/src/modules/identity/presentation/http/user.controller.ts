@@ -7,6 +7,7 @@ import {
   Get,
   Patch,
   Post,
+  Delete,
   Param,
   Body,
   Query,
@@ -164,6 +165,25 @@ export class UserController {
     @Body() body?: UpdateUserStatusDto,
   ): Promise<UserDetailResponseDto> {
     return this.userService.changeStatus(id, body?.status, user);
+  }
+
+  /**
+   * DELETE /users/:id
+   * Soft delete a user by setting status to DELETED.
+   * Restricted to administrators.
+   */
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Soft delete a user account' })
+  @ApiOkResponse({ type: UserDetailResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiForbiddenResponse({ description: 'Administrator privileges required' })
+  async softDelete(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ): Promise<UserDetailResponseDto> {
+    return this.userService.softDelete(id, user);
   }
 
   /**

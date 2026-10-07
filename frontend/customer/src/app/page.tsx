@@ -18,8 +18,13 @@ function LandingPageContent() {
   const [mounted, setMounted] = useState(false);
   const { user, isAuthenticated, isInitialized } = useAppSelector((state) => state.auth);
 
+  const qrParam = searchParams.get('qr');
   const tableParam = searchParams.get('table');
-  const forwardParam = tableParam ? `?table=${encodeURIComponent(tableParam)}` : '';
+  const forwardParam = qrParam
+    ? `?qr=${encodeURIComponent(qrParam)}`
+    : tableParam
+    ? `?table=${encodeURIComponent(tableParam)}`
+    : '';
 
   useEffect(() => {
     setMounted(true);
@@ -29,24 +34,25 @@ function LandingPageContent() {
   const isCustomer = isAuthenticated && userRole === 'CUSTOMER';
 
   useEffect(() => {
-    if (mounted && isInitialized && isCustomer) {
-      // User is verified as CUSTOMER via session - redirect directly to menu
-      if (tableParam) {
-        if (typeof window !== 'undefined') {
+    if (mounted && isInitialized) {
+      if (isCustomer) {
+        // Authenticated customer: redirect to menu
+        if (tableParam && typeof window !== 'undefined') {
           const formatted = tableParam.toLowerCase().startsWith('table')
             ? tableParam
             : `Table ${tableParam.padStart(2, '0')}`;
           setCookie('tavonza_table', formatted);
         }
-        router.replace(`/menu?table=${encodeURIComponent(tableParam)}`);
-      } else {
-        router.replace('/menu');
+        router.replace(`/menu${forwardParam}`);
+      } else if (!isAuthenticated) {
+        // Unauthenticated customer: redirect to login preserving ?qr=
+        router.replace(`/login${forwardParam}`);
       }
     }
-  }, [mounted, isInitialized, isCustomer, tableParam, router]);
+  }, [mounted, isInitialized, isCustomer, isAuthenticated, tableParam, forwardParam, router]);
 
   // While rendering on server or checking session, show uniform loading state (prevents hydration mismatch)
-  if (!mounted || !isInitialized || isCustomer) {
+  if (!mounted || !isInitialized || !isAuthenticated || isCustomer) {
     return (
       <div className="w-full min-h-screen bg-black flex flex-col items-center justify-center text-white p-4">
         <div className="w-10 h-10 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin mb-4" />

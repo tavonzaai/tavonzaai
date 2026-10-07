@@ -3,8 +3,10 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -25,6 +27,7 @@ import {
   CreateOrganizationDto,
   UpdateOrganizationDto,
   OrganizationResponseDto,
+  QueryOrganizationDto,
 } from './dto/organization.dto';
 
 @ApiTags('Organizations')
@@ -43,6 +46,15 @@ export class OrganizationController {
     @Body() dto: CreateOrganizationDto,
   ): Promise<OrganizationResponseDto> {
     return this.orgService.create(user.sub, dto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'List organizations with search, sorting, and pagination' })
+  @ApiOkResponse({ description: 'Paginated list of organizations' })
+  async getAll(
+    @Query() query: QueryOrganizationDto,
+  ) {
+    return this.orgService.findAll(query);
   }
 
   @Get('my')
@@ -70,5 +82,15 @@ export class OrganizationController {
     @Body() dto: UpdateOrganizationDto,
   ): Promise<OrganizationResponseDto> {
     return this.orgService.update(id, user.sub, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete an organization' })
+  @ApiOkResponse({ description: 'Organization deleted' })
+  async delete(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.orgService.delete(id, user.sub);
   }
 }

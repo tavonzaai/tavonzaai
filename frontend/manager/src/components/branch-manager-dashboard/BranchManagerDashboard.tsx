@@ -75,18 +75,25 @@ export default function BranchManagerDashboard({
           else if (serv === 'PAYMENT_PENDING') status = 'payment';
           else if (serv === 'NEEDS_ATTENTION') status = 'need_attention';
 
-          return {
-            id: t.id,
-            number: t.label || `T-${String(idx + 1).padStart(2, '0')}`,
-            status,
-            capacity: t.capacity || 4,
-            waiter: 'Floor Staff',
-            itemsCount: status === 'available' ? 0 : 2,
-            orderNumber: status === 'available' ? undefined : `#1000${idx + 1}`,
-            orderTime: status === 'available' ? undefined : 'Active',
-            subtotal: status === 'available' ? 0 : 35.0,
-          };
-        });
+            const qrToken = t.qrCodeToken || t.id;
+            const qrCodeUrl = t.qrCodeUrl || (qrToken ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrToken)}` : undefined);
+            const assignedWaiterName = t.assignedWaiter?.name || t.waiterName || (t.waiter ? t.waiter : undefined);
+            const waiterId = t.assignedWaiter?.id || t.waiterId;
+            return {
+              id: t.id,
+              number: t.label || `T-${String(idx + 1).padStart(2, '0')}`,
+              status,
+              capacity: t.capacity || 4,
+              waiter: assignedWaiterName || 'Floor Staff',
+              waiterId,
+              itemsCount: status === 'available' ? 0 : 2,
+              orderNumber: status === 'available' ? undefined : `#1000${idx + 1}`,
+              orderTime: status === 'available' ? undefined : 'Active',
+              subtotal: status === 'available' ? 0 : 35.0,
+              qrCodeUrl,
+              qrCodeToken: qrToken,
+            };
+          });
         setTables(mappedTables);
       }
     } catch (err) {
@@ -146,32 +153,35 @@ export default function BranchManagerDashboard({
     if (filter) setTableFilter(filter);
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const tableIdParam = params.get('tableId');
+    if (tableIdParam) setSelectedTableId(tableIdParam);
+    const orderIdParam = params.get('orderId');
+    if (orderIdParam) setSelectedOrderId(orderIdParam);
+    const staffIdParam = params.get('staffId');
+    if (staffIdParam) setSelectedStaffId(staffIdParam);
+  }, [pathname]);
+
   const handleSelectTable = (tableId: string) => {
     setSelectedTableId(tableId);
     setActiveNav('Table');
-    const targetRoute = navToRoute['Table'] || '/branch-manager-dashboard/tables';
-    router.push(targetRoute);
   };
 
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrderId(orderId);
     setActiveNav('Orders');
-    const targetRoute = navToRoute['Orders'] || '/branch-manager-dashboard/orders';
-    router.push(targetRoute);
   };
 
   const handleSelectStaff = (staffId: string) => {
     setSelectedStaffId(staffId);
     setActiveNav('Staff');
-    const targetRoute = navToRoute['Staff'] || '/branch-manager-dashboard/staff';
-    router.push(targetRoute);
   };
 
   const handleSelectPayment = (paymentId: string) => {
     setSelectedPaymentId(paymentId);
     setActiveNav('Payments');
-    const targetRoute = navToRoute['Payments'] || '/branch-manager-dashboard/payments';
-    router.push(targetRoute);
   };
 
   const currentTable: TableItem =
@@ -183,13 +193,14 @@ export default function BranchManagerDashboard({
       capacity: 4,
     };
 
-  const handleConfirmReassign = (newWaiterName: string) => {
+  const handleConfirmReassign = (newWaiterName: string, waiterId?: string) => {
     if (selectedTableId) {
       setTables((prev) =>
-        prev.map((t) => (t.id === selectedTableId ? { ...t, waiter: newWaiterName } : t))
+        prev.map((t) => (t.id === selectedTableId ? { ...t, waiter: newWaiterName, waiterId } : t))
       );
     }
-    showToast(`Table ${currentTable.number} successfully reassigned to ${newWaiterName}!`);
+    showToast(`Table ${currentTable.number} successfully assigned to ${newWaiterName}!`);
+    loadLiveTables();
   };
 
   return (

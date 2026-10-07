@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, or, ilike, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -13,6 +13,7 @@ import {
   menuCategories,
   branchSettings,
 } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import {
   IOrderRepository,
   type CreateOrderInput,
@@ -134,41 +135,42 @@ export class DrizzleOrderRepository implements IOrderRepository {
       tableSessionId?: string;
     },
   ): Promise<Order[]> {
-    const conditions = [eq(orders.branchId, branchId)];
+    const qb = new DrizzleQueryBuilder<typeof orders>(this.db, orders)
+      .filterExact({
+        branchId,
+        status: filters?.status ? this.toDbStatus(filters.status) : undefined,
+        tableId: filters?.tableId,
+        guestSessionId: filters?.guestSessionId,
+        tableSessionId: filters?.tableSessionId,
+      })
+      .sort('createdAt', 'desc');
 
-    if (filters?.status) {
-      conditions.push(eq(orders.status, this.toDbStatus(filters.status)));
-    }
-    if (filters?.tableId) {
-      conditions.push(eq(orders.tableId, filters.tableId));
-    }
-    if (filters?.guestSessionId) {
-      conditions.push(eq(orders.guestSessionId, filters.guestSessionId));
-    }
-    if (filters?.tableSessionId) {
-      conditions.push(eq(orders.tableSessionId, filters.tableSessionId));
-    }
-    if (filters?.search && filters.search.trim()) {
-      const term = `%${filters.search.trim()}%`;
-      conditions.push(or(ilike(orders.orderNumber, term), ilike(orders.guestName, term))!);
+    if (filters?.search) {
+      qb.search(filters.search, [orders.orderNumber, orders.guestName]);
     }
 
-    const orderRecords = await this.db
+    const orderRecords = await qb.executePlain();
+    if (orderRecords.length === 0) return [];
+
+    const orderIds = orderRecords.map((o) => o.id);
+    const allItems = await this.db
       .select()
-      .from(orders)
-      .where(and(...conditions))
-      .orderBy(desc(orders.createdAt));
+      .from(orderItems)
+      .where(inArray(orderItems.orderId, orderIds));
 
-    const result: Order[] = [];
-    for (const record of orderRecords) {
-      const items = await this.db
-        .select()
-        .from(orderItems)
-        .where(eq(orderItems.orderId, record.id));
-      result.push(this.toDomain({ ...record, items }));
+    const itemsByOrder = new Map<string, typeof allItems>();
+    for (const item of allItems) {
+      const list = itemsByOrder.get(item.orderId) ?? [];
+      list.push(item);
+      itemsByOrder.set(item.orderId, list);
     }
 
-    return result;
+    return orderRecords.map((record) =>
+      this.toDomain({
+        ...record,
+        items: itemsByOrder.get(record.id) ?? [],
+      }),
+    );
   }
 
   // ── Item Operations ─────────────────────────────────────────────────

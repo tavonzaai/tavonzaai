@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -17,7 +18,6 @@ import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiCreatedResponse,
-  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RestaurantService } from '../../application/services/restaurant.service';
@@ -25,6 +25,7 @@ import {
   CreateRestaurantDto,
   UpdateRestaurantDto,
   RestaurantResponseDto,
+  QueryRestaurantDto,
 } from './dto/restaurant.dto';
 
 @ApiTags('Restaurants')
@@ -43,13 +44,18 @@ export class RestaurantController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List restaurants by organization ID' })
-  @ApiQuery({ name: 'organizationId', required: true, type: String })
+  @ApiOperation({ summary: 'List restaurants with search, pagination, and optional organization filter' })
   @ApiOkResponse({ type: [RestaurantResponseDto] })
   async listByOrg(
-    @Query('organizationId', new ParseUUIDPipe()) organizationId: string,
-  ): Promise<RestaurantResponseDto[]> {
-    return this.restaurantService.findByOrganizationId(organizationId);
+    @Query() query: QueryRestaurantDto,
+  ): Promise<any> {
+    if (query.page !== undefined || query.search !== undefined) {
+      return this.restaurantService.findAll(query);
+    }
+    if (query.organizationId) {
+      return this.restaurantService.findByOrganizationId(query.organizationId, query.includeDeleted);
+    }
+    return this.restaurantService.findAll(query);
   }
 
   @Get(':id')
@@ -69,5 +75,14 @@ export class RestaurantController {
     @Body() dto: UpdateRestaurantDto,
   ): Promise<RestaurantResponseDto> {
     return this.restaurantService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Soft delete a restaurant' })
+  @ApiOkResponse({ type: RestaurantResponseDto })
+  async delete(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<RestaurantResponseDto> {
+    return this.restaurantService.softDelete(id);
   }
 }

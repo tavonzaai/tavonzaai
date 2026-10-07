@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -116,6 +117,17 @@ export class TableController {
     return this.tableService.regenerateQr(id);
   }
 
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Soft delete / take table out of service' })
+  @ApiOkResponse({ type: TableResponseDto })
+  async delete(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<TableResponseDto> {
+    return this.tableService.softDelete(id);
+  }
+
   // ── Reservations ──────────────────────────────────────────────────────
 
   @Post('reservations')
@@ -141,6 +153,17 @@ export class TableController {
     return this.tableService.getReservations(branchId);
   }
 
+  @Get('reservations/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get reservation details by ID' })
+  @ApiOkResponse({ type: ReservationResponseDto })
+  async getReservationById(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ReservationResponseDto> {
+    return this.tableService.getReservationById(id);
+  }
+
   @Patch('reservations/:id/status')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
@@ -151,5 +174,16 @@ export class TableController {
     @Body('status') status: ReservationStatus,
   ): Promise<ReservationResponseDto> {
     return this.tableService.updateReservationStatus(id, status);
+  }
+
+  @Delete('reservations/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Soft delete / cancel reservation' })
+  @ApiOkResponse({ type: ReservationResponseDto })
+  async deleteReservation(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ReservationResponseDto> {
+    return this.tableService.softDeleteReservation(id);
   }
 }

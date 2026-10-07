@@ -3,8 +3,9 @@
 // ============================================================================
 
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, or, inArray, ilike, desc } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { DRIZZLE, type DrizzleDatabase, orders, orderItems, tables } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 
 @Injectable()
 export class DrizzleWaiterOrderRepository {
@@ -18,47 +19,42 @@ export class DrizzleWaiterOrderRepository {
     const isAllTables = filters.scope?.toUpperCase() === 'ALL_TABLES';
     const isMyTables = filters.scope?.toUpperCase() === 'MY_TABLES';
 
-    const conditions = [
-      eq(orders.branchId, branchId),
-    ];
+    const qb = new DrizzleQueryBuilder<typeof orders>(this.db, orders)
+      .filterExact({ branchId })
+      .sort('createdAt', 'desc');
 
     if (filters.tableId) {
-      conditions.push(eq(orders.tableId, filters.tableId));
+      qb.filterExact({ tableId: filters.tableId });
     } else if (isMyTables) {
       if (tableIds.length === 0) return [];
-      conditions.push(inArray(orders.tableId, tableIds));
+      qb.filterIn({ tableId: tableIds });
     } else if (!isAllTables && tableIds.length > 0) {
-      conditions.push(inArray(orders.tableId, tableIds));
+      qb.filterIn({ tableId: tableIds });
     }
 
     const scopeUpper = filters.scope?.toUpperCase();
     if (filters.status) {
       if (filters.status.includes(',')) {
         const statuses = filters.status.split(',').map((s) => s.trim().toUpperCase());
-        conditions.push(inArray(orders.status, statuses as any));
+        qb.filterIn({ status: statuses });
       } else {
-        conditions.push(eq(orders.status, filters.status.trim().toUpperCase() as any));
+        qb.filterExact({ status: filters.status.trim().toUpperCase() });
       }
     } else if (scopeUpper === 'PENDING') {
-      conditions.push(eq(orders.status, 'PENDING'));
+      qb.filterExact({ status: 'PENDING' });
     } else if (scopeUpper === 'ACTIVE') {
-      conditions.push(inArray(orders.status, ['CONFIRMED', 'PREPARING', 'READY']));
+      qb.filterIn({ status: ['CONFIRMED', 'PREPARING', 'READY'] });
     } else if (scopeUpper === 'SERVED' || scopeUpper === 'COMPLETED') {
-      conditions.push(inArray(orders.status, ['SERVED', 'COMPLETED']));
+      qb.filterIn({ status: ['SERVED', 'COMPLETED'] });
     } else if (scopeUpper === 'CANCELLED' || scopeUpper === 'REJECTED') {
-      conditions.push(inArray(orders.status, ['CANCELLED', 'REJECTED']));
+      qb.filterIn({ status: ['CANCELLED', 'REJECTED'] });
     }
 
     if (filters.search && filters.search.trim()) {
-      const term = `%${filters.search.trim()}%`;
-      conditions.push(or(ilike(orders.orderNumber, term), ilike(orders.guestName, term))!);
+      qb.search(filters.search, [orders.orderNumber, orders.guestName]);
     }
 
-    const rows = await this.db
-      .select()
-      .from(orders)
-      .where(and(...conditions))
-      .orderBy(desc(orders.createdAt));
+    const rows = await qb.executePlain();
 
     return this.attachTableAndItems(rows);
   }

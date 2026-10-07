@@ -41,3 +41,28 @@ export class OrganizationResponseDto {
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
 }
+
+export class QueryOrganizationDto {
+  @ApiPropertyOptional({ description: 'Search term for name or slug' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  page?: number;
+
+  @ApiPropertyOptional({ default: 10 })
+  @IsOptional()
+  limit?: number;
+
+  @ApiPropertyOptional({ default: 'createdAt' })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
+  @IsOptional()
+  sortOrder?: 'asc' | 'desc';
+}
+

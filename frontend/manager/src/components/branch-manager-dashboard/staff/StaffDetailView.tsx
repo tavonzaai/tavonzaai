@@ -30,16 +30,13 @@ export default function StaffDetailView({
       try {
         setLoading(true);
         const branchId = getActiveBranchId();
-        const assignments = await branchManagerService.getStaffAssignments(branchId);
-        if (isMounted && assignments) {
-          const found = assignments.find((s) => s.staffId === staffId || s.id === staffId);
-          if (found) {
-            setStaffMember(found);
-            setStatus(found.isActive ? 'Active' : 'Break');
-          }
+        const member = await branchManagerService.getStaffMember(branchId, staffId!);
+        if (isMounted && member) {
+          setStaffMember(member);
+          setStatus(member.isActive ? 'Active' : 'Break');
         }
       } catch (err) {
-        console.warn('Could not load staff detail:', err);
+        console.warn('Could not load staff detail via findOne:', err);
       } finally {
         if (isMounted) setLoading(false);
       }

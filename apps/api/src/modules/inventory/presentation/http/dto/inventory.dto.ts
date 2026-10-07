@@ -123,3 +123,72 @@ export class AdjustStockDto {
   @IsString()
   reason?: string;
 }
+
+export class UpdateSupplierDto {
+  @ApiPropertyOptional({ description: 'Supplier business name' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({ description: 'Contact person name' })
+  @IsOptional()
+  @IsString()
+  contactName?: string;
+
+  @ApiPropertyOptional({ description: 'Email address' })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional({ description: 'Phone number' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({ description: 'Physical address' })
+  @IsOptional()
+  @IsString()
+  address?: string;
+}
+
+export class UpdateInventoryCategoryDto {
+  @ApiPropertyOptional({ description: 'Category name' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({ description: 'Description' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+}
+
+export class UpdateInventoryItemDto {
+  @ApiPropertyOptional({ description: 'Item name' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({ description: 'Stock Keeping Unit SKU' })
+  @IsOptional()
+  @IsString()
+  sku?: string;
+
+  @ApiPropertyOptional({ enum: INVENTORY_UNITS })
+  @IsOptional()
+  @IsEnum(INVENTORY_UNITS)
+  unit?: InventoryUnit;
+
+  @ApiPropertyOptional({ description: 'Low stock notification threshold' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lowStockThreshold?: number;
+
+  @ApiPropertyOptional({ description: 'Cost per unit' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  costPerUnit?: number;
+}
+

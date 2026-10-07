@@ -1,11 +1,15 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import { randomBytes } from 'crypto';
 import {
   DRIZZLE,
   type DrizzleDatabase,
   tables,
   reservations,
+  waiterTableAssignments,
+  staff,
+  users,
 } from '@tavonza/database';
 import type {
   Table,
@@ -57,26 +61,82 @@ export class DrizzleTableRepository {
       .where(eq(tables.id, id))
       .limit(1);
 
-    return row ? this.mapTable(row) : null;
+    if (!row) return null;
+
+    const mapped = this.mapTable(row);
+
+    try {
+      const [assignment] = await this.db
+        .select({
+          waiterId: waiterTableAssignments.waiterId,
+          sessionStart: waiterTableAssignments.sessionStart,
+          sessionEnd: waiterTableAssignments.sessionEnd,
+          name: users.name,
+        })
+        .from(waiterTableAssignments)
+        .innerJoin(staff, eq(staff.id, waiterTableAssignments.waiterId))
+        .innerJoin(users, eq(users.id, staff.userId))
+        .where(
+          and(
+            eq(waiterTableAssignments.tableId, id),
+            eq(waiterTableAssignments.isActive, true),
+          ),
+        )
+        .limit(1);
+
+      if (assignment) {
+        mapped.assignedWaiter = {
+          waiterId: assignment.waiterId,
+          waiterName: assignment.name,
+          sessionStart: assignment.sessionStart,
+          sessionEnd: assignment.sessionEnd,
+        };
+      }
+    } catch {}
+
+    return mapped;
   }
 
   async findByQrToken(qrCodeToken: string): Promise<Table | null> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(qrCodeToken);
     const [row] = await this.db
       .select()
       .from(tables)
-      .where(eq(tables.qrCodeToken, qrCodeToken))
+      .where(
+        isUuid
+          ? or(eq(tables.qrCodeToken, qrCodeToken), eq(tables.id, qrCodeToken))
+          : eq(tables.qrCodeToken, qrCodeToken),
+      )
       .limit(1);
 
     return row ? this.mapTable(row) : null;
   }
 
-  async findTablesByBranch(branchId: string): Promise<Table[]> {
-    const rows = await this.db
-      .select()
-      .from(tables)
-      .where(eq(tables.branchId, branchId));
+  async findTablesByBranch(
+    branchId: string,
+    options?: {
+      search?: string;
+      serviceStatus?: TableServiceStatus;
+      operationalFlag?: TableOperationalFlag;
+      floor?: number;
+    },
+  ): Promise<Table[]> {
+    return DrizzleQueryBuilder.from(this.db, tables)
+      .filterExact({
+        branchId,
+        serviceStatus: options?.serviceStatus,
+        operationalFlag: options?.operationalFlag,
+        floor: options?.floor,
+      })
+      .search(options?.search, [tables.label])
+      .sort(tables.label, 'asc')
+      .executePlain((r) => this.mapTable(r));
+  }
 
-    return rows.map((r) => this.mapTable(r));
+  async softDeleteTable(id: string): Promise<Table | null> {
+    return this.updateTable(id, {
+      operationalFlag: 'OUT_OF_SERVICE',
+    });
   }
 
   async updateTable(
@@ -157,13 +217,25 @@ export class DrizzleTableRepository {
     return this.mapReservation(created);
   }
 
-  async findReservationsByBranch(branchId: string): Promise<Reservation[]> {
-    const rows = await this.db
-      .select()
-      .from(reservations)
-      .where(eq(reservations.branchId, branchId));
+  async findReservationsByBranch(
+    branchId: string,
+    options?: {
+      status?: ReservationStatus;
+      search?: string;
+    },
+  ): Promise<Reservation[]> {
+    return DrizzleQueryBuilder.from(this.db, reservations)
+      .filterExact({
+        branchId,
+        status: options?.status,
+      })
+      .search(options?.search, [reservations.guestName, reservations.guestPhone])
+      .sort(reservations.reservedFor, 'asc')
+      .executePlain((r) => this.mapReservation(r));
+  }
 
-    return rows.map((r) => this.mapReservation(r));
+  async softDeleteReservation(id: string): Promise<Reservation | null> {
+    return this.updateReservationStatus(id, 'CANCELLED');
   }
 
   async findReservationById(id: string): Promise<Reservation | null> {

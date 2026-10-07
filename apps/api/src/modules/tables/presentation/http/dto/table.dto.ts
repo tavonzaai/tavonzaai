@@ -97,6 +97,13 @@ export class UpdateTableDto {
   floor?: number;
 }
 
+export class AssignedWaiterDto {
+  @ApiProperty() waiterId!: string;
+  @ApiPropertyOptional() waiterName?: string;
+  @ApiPropertyOptional() sessionStart?: Date;
+  @ApiPropertyOptional() sessionEnd?: Date;
+}
+
 export class TableResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty() branchId!: string;
@@ -107,6 +114,7 @@ export class TableResponseDto {
   @ApiPropertyOptional() qrCodeToken?: string | null;
   @ApiProperty() shape!: string;
   @ApiProperty() floor!: number;
+  @ApiPropertyOptional({ type: AssignedWaiterDto }) assignedWaiter?: AssignedWaiterDto | null;
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
 }
