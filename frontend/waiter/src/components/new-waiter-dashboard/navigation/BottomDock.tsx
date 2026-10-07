@@ -4,12 +4,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { LayoutGrid, Home, UtensilsCrossed, Bell, User } from 'lucide-react';
+import { waiterService } from '@/redux/features/waiterApi';
+import { getCookie } from '@/redux/api/baseApi';
 
 interface BottomDockProps {
   activeTab?: 'floor' | 'home' | 'order' | 'orders' | 'jarvis' | 'alert' | 'alerts' | 'profile';
   onNavigateTab?: (tab: string) => void;
   showFloorLabel?: boolean;
   forceVisible?: boolean;
+  alertCount?: number;
 }
 
 export default function BottomDock({
@@ -17,11 +20,46 @@ export default function BottomDock({
   onNavigateTab,
   showFloorLabel = true,
   forceVisible = false,
+  alertCount: propAlertCount,
 }: BottomDockProps) {
   const router = useRouter();
   const pathname = usePathname();
   const dockRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(true);
+  const [liveAlertCount, setLiveAlertCount] = useState<number>(0);
+
+  // Poll live active customer alerts from backend API GET /waiter/alerts?branchId=...
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAlertCount() {
+      try {
+        const rawBranchId = getCookie('tavonza_branch_id');
+        const branchId =
+          rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
+            ? rawBranchId
+            : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+
+        const apiAlerts = await waiterService.getMyAlerts(branchId);
+        if (isMounted && Array.isArray(apiAlerts)) {
+          const activeCount = apiAlerts.filter(
+            (a) => a.status === 'pending' || a.status === 'acknowledged'
+          ).length;
+          setLiveAlertCount(activeCount);
+        }
+      } catch (err) {
+        // ignore background poll errors
+      }
+    }
+
+    fetchAlertCount();
+    const interval = setInterval(fetchAlertCount, 8000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const displayAlertCount = propAlertCount !== undefined ? propAlertCount : liveAlertCount;
 
   // Automatically derive active tab from URL route if not explicitly supplied
   const derivedTab = (() => {
@@ -272,9 +310,11 @@ export default function BottomDock({
                     : 'text-neutral-400 group-hover:text-white'
                 }`}
               />
-              <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center absolute -top-1 -right-2 text-white text-[9px] font-bold animate-pulse shadow-sm">
-                2
-              </div>
+              {displayAlertCount > 0 && (
+                <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center absolute -top-1 -right-2 text-white text-[9px] font-bold animate-pulse shadow-sm">
+                  {displayAlertCount > 99 ? '99+' : displayAlertCount}
+                </div>
+              )}
             </div>
             <span
               className={`text-[10px] font-medium font-['Inter'] ${

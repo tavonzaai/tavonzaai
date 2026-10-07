@@ -1,65 +1,76 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { baseApiFetch, ApiResponse } from '../../api/baseApi';
+import { baseApiFetch, ApiResponse, getCookie } from '../../api/baseApi';
 
-export interface BackendMenuItemSummary {
+export const DEFAULT_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+
+export function getActiveBranchId(providedBranchId?: string): string {
+  if (providedBranchId && providedBranchId.trim()) return providedBranchId.trim();
+  const cookieBranchId = getCookie('tavonza_branch_id');
+  if (cookieBranchId && cookieBranchId.trim()) return cookieBranchId.trim();
+  return DEFAULT_BRANCH_ID;
+}
+
+export interface MenuCategoryResponseDto {
   id: string;
-  restaurantId: string;
-  categoryId: string;
   name: string;
   description?: string | null;
   imageUrl?: string | null;
-  basePrice: number;
-  isAvailable: boolean;
-  isVegetarian: boolean;
-  spiceLevel?: number | null;
-  stationType?: string;
-  displayOrder: number;
-  createdAt?: string;
-  updatedAt?: string;
+  itemCount?: number;
 }
 
-export interface MenuCategoryItem {
-  id: string;
-  restaurantId: string;
-  name: string;
-  description?: string | null;
-  displayOrder: number;
-  isActive: boolean;
-  menuItems?: BackendMenuItemSummary[];
-}
+export type MenuCategoryItem = MenuCategoryResponseDto;
 
 export interface MenuCategoryQuery {
+  branchId?: string;
   page?: number;
   limit?: number;
   searchTerm?: string;
+  search?: string;
   sort?: string;
   restaurantId?: string;
   isActive?: boolean;
 }
 
 // ─────────────────────────────────────────
-// 📡 Direct Raw API Handlers
+// 📡 Direct Customer Menu Category API Handlers
 // ─────────────────────────────────────────
 export const rawMenuCategoryApi = {
-  findAll: async (query: MenuCategoryQuery = {}): Promise<ApiResponse<MenuCategoryItem[]>> => {
+  /**
+   * GET /menus/:branchId/categories
+   * Customer Get active menu categories for branch with search and pagination support
+   */
+  findAll: async (query: MenuCategoryQuery = {}): Promise<ApiResponse<MenuCategoryResponseDto[]>> => {
+    const branchId = getActiveBranchId(query.branchId);
+    if (!branchId || !branchId.trim()) {
+      return { success: true, message: 'No branch selected', data: [] };
+    }
     const params = new URLSearchParams();
+
     if (query.page) params.append('page', String(query.page));
     if (query.limit) params.append('limit', String(query.limit));
-    if (query.searchTerm) params.append('searchTerm', query.searchTerm);
+
+    const searchVal = query.search || query.searchTerm;
+    if (searchVal && searchVal.trim()) {
+      params.append('searchTerm', searchVal.trim());
+      params.append('search', searchVal.trim());
+    }
     if (query.sort) params.append('sort', query.sort);
-    if (query.restaurantId) params.append('restaurantId', query.restaurantId);
-    if (query.isActive !== undefined) params.append('isActive', String(query.isActive));
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
-    return await baseApiFetch<MenuCategoryItem[]>(`/menu-categories${queryString}`, {
-      method: 'GET',
-    });
+    return await baseApiFetch<MenuCategoryResponseDto[]>(
+      `/menus/${encodeURIComponent(branchId.trim())}/categories${queryString}`,
+      { method: 'GET' }
+    );
   },
 
-  findById: async (id: string): Promise<ApiResponse<MenuCategoryItem>> => {
-    return await baseApiFetch<MenuCategoryItem>(`/menu-categories/${encodeURIComponent(id)}`, {
-      method: 'GET',
-    });
+  findById: async (id: string, branchId?: string): Promise<ApiResponse<MenuCategoryResponseDto>> => {
+    const res = await rawMenuCategoryApi.findAll({ branchId });
+    const list = Array.isArray(res.data) ? res.data : ((res as any) || []);
+    const cat = Array.isArray(list) ? list.find((c: MenuCategoryResponseDto) => c.id === id) : null;
+    return {
+      message: 'Success',
+      data: cat || (list[0] as any),
+    };
   },
 };
 
@@ -71,8 +82,13 @@ export const fetchMenuCategories = createAsyncThunk(
   async (query: MenuCategoryQuery = {}, { rejectWithValue }) => {
     try {
       const response = await rawMenuCategoryApi.findAll(query);
+      const data = Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response)
+        ? (response as any)
+        : [];
       return {
-        data: response.data || [],
+        data,
         meta: response.meta,
       };
     } catch (err: any) {

@@ -18,6 +18,8 @@ export interface UserProfile {
   phone?: string | null;
   contactNo?: string | null;
   role: string;
+  avatar?: string | null;
+  avatarUrl?: string | null;
   permissions?: string[];
   scopes?: any[];
   organizationId?: string | null;
@@ -145,28 +147,39 @@ export const rawAuthApi = {
     return res.data || res;
   },
 
-  /** GET /auth/me — Retrieve current profile */
+  /** GET /users/me — Retrieve current profile */
   getMe: async (): Promise<UserProfile> => {
     let res: any;
     try {
-      res = await baseApiFetch<UserProfile>('/auth/me', {
+      res = await baseApiFetch<UserProfile>('/users/me', {
         method: 'GET',
       });
     } catch (err: any) {
-      if (err?.message && (err.message.includes('404') || err.message.includes('Cannot GET'))) {
+      if (err?.status === 401 || err?.statusCode === 401) {
+        throw err;
+      }
+      try {
+        res = await baseApiFetch<UserProfile>('/auth/me', {
+          method: 'GET',
+        });
+      } catch (err2: any) {
+        if (err2?.status === 401 || err2?.statusCode === 401) {
+          throw err2;
+        }
         res = await baseApiFetch<UserProfile>('/auth/get-me', {
           method: 'GET',
         });
-      } else {
-        throw err;
       }
     }
-    const user: UserProfile = (res.data && res.data.id ? res.data : res) as any;
+    const user: UserProfile = (res?.data && res?.data?.id ? res.data : res) as any;
     if (user) {
       user.name =
         user.name ||
         `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
         user.email;
+      if (user.avatar && !user.avatarUrl) {
+        user.avatarUrl = user.avatar;
+      }
     }
     return user;
   },
@@ -333,18 +346,49 @@ export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   }
 });
 
-/** 8. Change Password */
+/** 8. Change / Reset Password (Using Backend Auth Endpoints) */
 export const changePassword = createAsyncThunk(
   'auth/changePassword',
-  async (payload: { oldPassword?: string; prevPass?: string; newPassword?: string; newPass?: string }, { rejectWithValue }) => {
+  async (
+    payload: {
+      email?: string;
+      code?: string;
+      otp?: string;
+      newPassword?: string;
+      newPass?: string;
+      oldPassword?: string;
+    },
+    { rejectWithValue, getState }
+  ) => {
     try {
-      const res = await baseApiFetch('/auth/change-password', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      return res.message || 'Password changed successfully';
+      const state: any = getState();
+      const userEmail = payload.email || state?.auth?.user?.email;
+
+      const otpCode = payload.code || payload.otp;
+      const newPass = payload.newPassword || payload.newPass;
+
+      if (!userEmail) {
+        throw new Error('User email not found. Please provide your email address.');
+      }
+
+      // If OTP code is provided, execute backend POST /auth/reset-password
+      if (otpCode && newPass) {
+        const res = await rawAuthApi.resetPassword({
+          email: userEmail.trim().toLowerCase(),
+          code: otpCode.trim(),
+          newPassword: newPass.trim(),
+        });
+        return res.message || 'Password updated successfully!';
+      }
+
+      // If no OTP code provided, trigger backend POST /auth/forgot-password to send OTP to email
+      const res = await rawAuthApi.forgotPassword({ email: userEmail.trim().toLowerCase() });
+      return (
+        res.message ||
+        'A 5-digit verification code has been sent to your email. Please enter the OTP code to complete.'
+      );
     } catch (err: any) {
-      return rejectWithValue(err.message || 'Failed to change password.');
+      return rejectWithValue(err.message || 'Failed to update password.');
     }
   }
 );

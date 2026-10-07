@@ -264,11 +264,43 @@ export const resetPasswordThunk = createAsyncThunk<MessageResponse, ResetPasswor
   }
 );
 
-export const changePasswordThunk = createAsyncThunk<MessageResponse, ChangePasswordPayload>(
+export const changePasswordThunk = createAsyncThunk(
   'auth/changePassword',
-  async (payload, { rejectWithValue }) => {
+  async (
+    payload: {
+      email?: string;
+      code?: string;
+      otp?: string;
+      newPassword?: string;
+      newPass?: string;
+      oldPassword?: string;
+    },
+    { rejectWithValue, getState }
+  ) => {
     try {
-      return await rawAuthApi.changePassword(payload);
+      const state: any = getState();
+      const userEmail = payload.email || state?.auth?.user?.email;
+
+      const otpCode = payload.code || payload.otp;
+      const newPass = payload.newPassword || payload.newPass;
+
+      if (!userEmail) {
+        throw new Error('User email not found. Please provide your email address.');
+      }
+
+      // If OTP code is provided, execute backend POST /auth/reset-password
+      if (otpCode && newPass) {
+        const res = await rawAuthApi.resetPassword({
+          email: userEmail.trim().toLowerCase(),
+          code: otpCode.trim(),
+          newPassword: newPass.trim(),
+        });
+        return res;
+      }
+
+      // If no OTP code provided, trigger backend POST /auth/forgot-password to send OTP to email
+      const res = await rawAuthApi.forgotPassword({ email: userEmail.trim().toLowerCase() });
+      return res;
     } catch (err: any) {
       return rejectWithValue(err?.message || 'Password change failed.');
     }

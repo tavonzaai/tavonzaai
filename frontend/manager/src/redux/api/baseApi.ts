@@ -171,6 +171,9 @@ export async function baseApiFetch<T = any>(
     }
 
     removeAuthToken();
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+    }
     throw new ApiError('Session expired. Please log in again.', 401);
   }
 

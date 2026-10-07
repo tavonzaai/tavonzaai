@@ -131,6 +131,8 @@ export const waiterService = {
     status?: string;
     tableId?: string;
     search?: string;
+    page?: number;
+    limit?: number;
   } = {}): Promise<WaiterOrderSummary[]> => {
     const q = new URLSearchParams();
     if (params.branchId) q.append('branchId', params.branchId);
@@ -138,6 +140,8 @@ export const waiterService = {
     if (params.status) q.append('status', params.status);
     if (params.tableId) q.append('tableId', params.tableId);
     if (params.search) q.append('search', params.search);
+    if (params.page) q.append('page', String(params.page));
+    if (params.limit) q.append('limit', String(params.limit));
 
     const res = await baseApiFetch<any[]>(`/waiter/orders?${q.toString()}`, {
       method: 'GET',
@@ -345,6 +349,27 @@ export const waiterService = {
     return (res as any)?.data || res;
   },
 
+  resolveAlert: async (alertId: string): Promise<{ message: string }> => {
+    const res = await baseApiFetch<{ message: string }>(`/waiter/alerts/${encodeURIComponent(alertId)}/resolve`, {
+      method: 'PATCH',
+    });
+    return (res as any)?.data || res;
+  },
+
+  createAlert: async (payload: {
+    branchId: string;
+    tableId: string;
+    tableSessionId: string;
+    type: string;
+    message?: string;
+  }): Promise<CustomerAlert> => {
+    const res = await baseApiFetch<CustomerAlert>('/alerts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
   getAllTables: async (branchId: string): Promise<any[]> => {
     const res = await baseApiFetch<any[]>(`/tables?branchId=${encodeURIComponent(branchId)}`, {
       method: 'GET',
@@ -400,6 +425,30 @@ export const fetchWaiterAlerts = createAsyncThunk<CustomerAlert[], string, { rej
       return await waiterService.getMyAlerts(branchId);
     } catch (err: any) {
       return rejectWithValue(err.message || 'Failed to fetch alerts');
+    }
+  }
+);
+
+export const acknowledgeAlertThunk = createAsyncThunk<{ message: string; alertId: string }, string, { rejectValue: string }>(
+  'waiter/acknowledgeAlert',
+  async (alertId, { rejectWithValue }) => {
+    try {
+      const res = await waiterService.ackAlert(alertId);
+      return { message: res.message || 'Alert acknowledged', alertId };
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to acknowledge alert');
+    }
+  }
+);
+
+export const resolveAlertThunk = createAsyncThunk<{ message: string; alertId: string }, string, { rejectValue: string }>(
+  'waiter/resolveAlert',
+  async (alertId, { rejectWithValue }) => {
+    try {
+      const res = await waiterService.resolveAlert(alertId);
+      return { message: res.message || 'Alert resolved', alertId };
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to resolve alert');
     }
   }
 );

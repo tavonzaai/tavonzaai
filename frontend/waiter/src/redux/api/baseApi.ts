@@ -161,6 +161,12 @@ export async function baseApiFetch<T = any>(
   const rawJson: any = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      removeAuthToken();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    }
     let errorMsg = 'Request failed';
     if (rawJson?.message) {
       errorMsg = Array.isArray(rawJson.message) ? rawJson.message.join('. ') : rawJson.message;
