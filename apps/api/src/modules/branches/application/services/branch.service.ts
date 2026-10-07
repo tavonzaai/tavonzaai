@@ -45,9 +45,29 @@ export class BranchService {
     return this.toResponseDto(branch);
   }
 
-  async findByRestaurantId(restaurantId: string): Promise<BranchResponseDto[]> {
-    const branches = await this.branchRepo.findBranchesByRestaurantId(restaurantId);
+  async findByRestaurantId(restaurantId: string, includeDeleted = false): Promise<BranchResponseDto[]> {
+    const branches = await this.branchRepo.findBranchesByRestaurantId(restaurantId, includeDeleted);
     return branches.map((b) => this.toResponseDto(b));
+  }
+
+  async findAll(options?: any): Promise<{ data: BranchResponseDto[]; meta: any }> {
+    const res = await this.branchRepo.findAllBranches(options);
+    return {
+      data: res.data.map((b) => this.toResponseDto(b)),
+      meta: res.meta,
+    };
+  }
+
+  async softDelete(id: string): Promise<BranchResponseDto> {
+    const branch = await this.branchRepo.findBranchById(id);
+    if (!branch) {
+      throw new NotFoundException(`Branch with ID "${id}" not found`);
+    }
+    const updated = await this.branchRepo.softDeleteBranch(id);
+    if (!updated) {
+      throw new NotFoundException(`Failed to soft-delete branch "${id}"`);
+    }
+    return this.toResponseDto(updated);
   }
 
   async update(id: string, dto: UpdateBranchDto): Promise<BranchResponseDto> {
@@ -127,6 +147,14 @@ export class BranchService {
     return this.branchRepo.findStaffByBranchId(branchId, filters);
   }
 
+  async getStaffMember(branchId: string, staffId: string) {
+    const member = await this.branchRepo.findStaffMemberById(branchId, staffId);
+    if (!member) {
+      throw new NotFoundException(`Staff member "${staffId}" not found for branch "${branchId}"`);
+    }
+    return member;
+  }
+
   async createStaffForBranch(branchId: string, dto: CreateBranchStaffDto) {
     const branch = await this.branchRepo.findBranchById(branchId);
     if (!branch) {
@@ -151,6 +179,22 @@ export class BranchService {
       role: dto.role,
       permissions: dto.permissions,
     });
+  }
+
+  async updateStaff(branchId: string, staffId: string, dto: any) {
+    const updated = await this.branchRepo.updateStaffAssignment(branchId, staffId, dto);
+    if (!updated) {
+      throw new NotFoundException(`Staff assignment for staff "${staffId}" in branch "${branchId}" not found`);
+    }
+    return updated;
+  }
+
+  async softDeleteStaff(branchId: string, staffId: string) {
+    const updated = await this.branchRepo.updateStaffAssignment(branchId, staffId, { isActive: false });
+    if (!updated) {
+      throw new NotFoundException(`Staff assignment for staff "${staffId}" in branch "${branchId}" not found`);
+    }
+    return { success: true, message: 'Staff member deactivated' };
   }
 
   private toResponseDto(branch: Branch): BranchResponseDto {

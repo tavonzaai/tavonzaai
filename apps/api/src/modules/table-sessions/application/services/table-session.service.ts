@@ -33,6 +33,7 @@ import {
   tableAuthOtps,
   OutboxService,
 } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 
 function generateJoinCode(): string {
   // 6-char alphanumeric code — displayed on "Share Code" screen
@@ -375,12 +376,22 @@ export class TableSessionService {
 
     if (!session) throw new NotFoundException('Session not found');
 
-    const guests = await this.db
-      .select()
-      .from(guestSessions)
-      .where(eq(guestSessions.tableSessionId, sessionId));
+    const guestsQb = new DrizzleQueryBuilder<typeof guestSessions>(this.db, guestSessions)
+      .filterExact({ tableSessionId: sessionId });
+    const guests = await guestsQb.executePlain();
 
     return { session, guests };
+  }
+
+  /**
+   * Get all table sessions for a branch with optional status filter.
+   */
+  async findSessionsByBranch(branchId: string, status?: string) {
+    const qb = new DrizzleQueryBuilder<typeof tableSessions>(this.db, tableSessions)
+      .filterExact({ branchId, status })
+      .sort('startedAt', 'desc');
+
+    return qb.executePlain();
   }
 
   /**

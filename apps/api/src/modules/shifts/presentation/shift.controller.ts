@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -80,6 +81,16 @@ export class ShiftController {
   @ApiOperation({ summary: 'Cancel a scheduled shift' })
   @ApiOkResponse({ description: 'Shift cancelled' })
   async cancelShift(
+    @Param('id') id: string,
+    @Body('reason') reason?: string
+  ) {
+    return this.shiftService.cancelShift(id, reason);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Soft delete (cancel) a scheduled shift' })
+  @ApiOkResponse({ description: 'Shift cancelled' })
+  async deleteShift(
     @Param('id') id: string,
     @Body('reason') reason?: string
   ) {

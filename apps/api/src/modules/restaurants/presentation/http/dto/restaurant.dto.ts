@@ -84,3 +84,37 @@ export class RestaurantResponseDto {
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
 }
+
+export class QueryRestaurantDto {
+  @ApiPropertyOptional({ description: 'Filter by organization UUID' })
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
+
+  @ApiPropertyOptional({ description: 'Search term for name, slug, or description' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  page?: number;
+
+  @ApiPropertyOptional({ default: 10 })
+  @IsOptional()
+  limit?: number;
+
+  @ApiPropertyOptional({ default: 'createdAt' })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
+  @IsOptional()
+  sortOrder?: 'asc' | 'desc';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  includeDeleted?: boolean;
+}
+

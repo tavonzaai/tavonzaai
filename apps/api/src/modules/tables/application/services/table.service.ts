@@ -77,6 +77,20 @@ export class TableService {
     return this.toTableResponseDto(updated);
   }
 
+  async softDelete(id: string): Promise<TableResponseDto> {
+    const table = await this.tableRepo.findTableById(id);
+    if (!table) {
+      throw new NotFoundException(`Table with ID "${id}" not found`);
+    }
+
+    const updated = await this.tableRepo.softDeleteTable(id);
+    if (!updated) {
+      throw new NotFoundException(`Failed to soft-delete table "${id}"`);
+    }
+
+    return this.toTableResponseDto(updated);
+  }
+
   async updateServiceStatus(
     tableId: string,
     status: TableServiceStatus,
@@ -126,6 +140,28 @@ export class TableService {
   async getReservations(branchId: string): Promise<ReservationResponseDto[]> {
     const reservations = await this.tableRepo.findReservationsByBranch(branchId);
     return reservations.map((r) => this.toReservationResponseDto(r));
+  }
+
+  async getReservationById(id: string): Promise<ReservationResponseDto> {
+    const reservation = await this.tableRepo.findReservationById(id);
+    if (!reservation) {
+      throw new NotFoundException(`Reservation with ID "${id}" not found`);
+    }
+    return this.toReservationResponseDto(reservation);
+  }
+
+  async softDeleteReservation(id: string): Promise<ReservationResponseDto> {
+    const reservation = await this.tableRepo.findReservationById(id);
+    if (!reservation) {
+      throw new NotFoundException(`Reservation with ID "${id}" not found`);
+    }
+
+    const updated = await this.tableRepo.softDeleteReservation(id);
+    if (!updated) {
+      throw new NotFoundException(`Failed to cancel reservation`);
+    }
+
+    return this.toReservationResponseDto(updated);
   }
 
   async updateReservationStatus(

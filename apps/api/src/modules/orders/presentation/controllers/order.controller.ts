@@ -325,4 +325,23 @@ export class OrderController {
     );
     return OrderDetailResponseDto.fromEntity(order);
   }
+
+  /**
+   * DELETE /orders/:orderId
+   *
+   * Cancels (soft-deletes) the order.
+   */
+  @Delete(':orderId')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.ORDERS_UPDATE)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Cancel (soft delete) order' })
+  @ApiOkResponse({ type: OrderDetailResponseDto })
+  async cancelOrder(
+    @Param('orderId') orderId: string,
+  ): Promise<OrderDetailResponseDto> {
+    const order = await this.orderService.updateOrderStatus(orderId, 'CANCELLED');
+    return OrderDetailResponseDto.fromEntity(order);
+  }
 }
+

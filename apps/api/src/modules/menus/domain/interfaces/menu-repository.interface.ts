@@ -33,6 +33,15 @@ export interface IMenuRepository {
   /** Get a single category by ID. */
   findCategoryById(id: string): Promise<MenuCategory | null>;
 
+  /** Create a menu category. */
+  createCategory?(data: { restaurantId: string; name: string; description?: string; displayOrder?: number }): Promise<MenuCategory>;
+
+  /** Update a menu category. */
+  updateCategory?(id: string, data: Partial<{ name: string; description: string | null; displayOrder: number; isActive: boolean }>): Promise<MenuCategory | null>;
+
+  /** Soft delete a menu category. */
+  softDeleteCategory?(id: string): Promise<MenuCategory | null>;
+
   // ── Items ───────────────────────────────────────────────────────────
 
   /** Get all available items for a branch, optionally filtered by category. */
@@ -47,4 +56,13 @@ export interface IMenuRepository {
 
   /** Get a single item by ID (includes add-ons, full detail). */
   findItemById(id: string): Promise<MenuItem | null>;
+
+  /** Create a menu item. */
+  createItem?(data: { restaurantId: string; categoryId: string; name: string; description?: string; basePrice: number; imageUrl?: string; isVegetarian?: boolean }): Promise<MenuItem>;
+
+  /** Update a menu item. */
+  updateItem?(id: string, data: Partial<{ name: string; description: string | null; basePrice: number; isAvailable: boolean; imageUrl: string | null }>): Promise<MenuItem | null>;
+
+  /** Soft delete a menu item. */
+  softDeleteItem?(id: string): Promise<MenuItem | null>;
 }

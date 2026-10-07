@@ -267,3 +267,53 @@ export class CreateBranchStaffDto {
   @IsOptional()
   permissions?: string[];
 }
+
+export class UpdateBranchStaffDto {
+  @ApiPropertyOptional({ example: 'WAITER' })
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @ApiPropertyOptional({ example: ['VIEW_ORDERS'] })
+  @IsOptional()
+  permissions?: string[];
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class QueryBranchDto {
+  @ApiPropertyOptional({ description: 'Filter by restaurant UUID' })
+  @IsOptional()
+  @IsUUID()
+  restaurantId?: string;
+
+  @ApiPropertyOptional({ description: 'Search term for branch name or phone' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  page?: number;
+
+  @ApiPropertyOptional({ default: 10 })
+  @IsOptional()
+  limit?: number;
+
+  @ApiPropertyOptional({ default: 'createdAt' })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
+  @IsOptional()
+  sortOrder?: 'asc' | 'desc';
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  includeDeleted?: boolean;
+}
+

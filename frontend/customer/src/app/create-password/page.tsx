@@ -8,9 +8,14 @@ import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 function CreatePasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const qr = searchParams.get('qr');
   const table = searchParams.get('table');
 
-  const forwardParam = table ? `?table=${encodeURIComponent(table)}` : '';
+  const forwardParam = qr
+    ? `?qr=${encodeURIComponent(qr)}`
+    : table
+    ? `?table=${encodeURIComponent(table)}`
+    : '';
 
   return (
     <AuthDesktopLayout>

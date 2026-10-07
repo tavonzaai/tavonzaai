@@ -28,6 +28,7 @@ export interface UserProfile {
   createdAt?: string;
   assignments?: any[];
   staffId?: string | null;
+  avatar?: string | null;
 }
 
 export interface LoginPayload {

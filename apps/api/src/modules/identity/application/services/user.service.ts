@@ -213,6 +213,13 @@ export class UserService {
   }
 
   /**
+   * Soft delete user account by setting status to DELETED
+   */
+  async softDelete(targetId: string, currentUser: JwtPayload): Promise<UserDetailResponseDto> {
+    return this.changeStatus(targetId, 'DELETED', currentUser);
+  }
+
+  /**
    * Create a customer user account
    */
   async createCustomer(dto: CreateCustomerUserDto): Promise<UserDetailResponseDto> {

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, ilike, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -13,6 +13,7 @@ import {
   modifiers,
   branches,
 } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import { IMenuRepository } from '../../domain/interfaces/menu-repository.interface';
 import {
   MenuCategory,
@@ -33,16 +34,12 @@ export class DrizzleMenuRepository implements IMenuRepository {
   async findCategoriesByBranch(branchId: string): Promise<MenuCategory[]> {
     const restaurantId = await this.resolveRestaurantId(branchId);
 
-    const categories = await this.db
-      .select()
-      .from(menuCategories)
-      .where(
-        and(
-          eq(menuCategories.restaurantId, restaurantId),
-          eq(menuCategories.isActive, true),
-        ),
-      )
-      .orderBy(menuCategories.displayOrder);
+    const qb = new DrizzleQueryBuilder<typeof menuCategories>(this.db, menuCategories)
+      .filterExact({ restaurantId })
+      .softDelete({ column: menuCategories.isActive, activeValue: true })
+      .sort('displayOrder', 'asc');
+
+    const categories = await qb.executePlain();
 
     return categories.map((c) =>
       this.toDomainCategory({
@@ -71,6 +68,51 @@ export class DrizzleMenuRepository implements IMenuRepository {
     });
   }
 
+  async createCategory(data: {
+    restaurantId: string;
+    name: string;
+    description?: string;
+    displayOrder?: number;
+  }): Promise<MenuCategory> {
+    const [record] = await this.db
+      .insert(menuCategories)
+      .values({
+        restaurantId: data.restaurantId,
+        name: data.name,
+        description: data.description,
+        displayOrder: data.displayOrder ?? 0,
+        isActive: true,
+      })
+      .returning();
+    return this.toDomainCategory(record);
+  }
+
+  async updateCategory(
+    id: string,
+    data: Partial<{
+      name: string;
+      description: string | null;
+      displayOrder: number;
+      isActive: boolean;
+    }>,
+  ): Promise<MenuCategory | null> {
+    const [record] = await this.db
+      .update(menuCategories)
+      .set(data)
+      .where(eq(menuCategories.id, id))
+      .returning();
+    return record ? this.toDomainCategory(record) : null;
+  }
+
+  async softDeleteCategory(id: string): Promise<MenuCategory | null> {
+    const [record] = await this.db
+      .update(menuCategories)
+      .set({ isActive: false })
+      .where(eq(menuCategories.id, id))
+      .returning();
+    return record ? this.toDomainCategory(record) : null;
+  }
+
   // ── Items ───────────────────────────────────────────────────────────
 
   async findItemsByBranch(
@@ -83,28 +125,19 @@ export class DrizzleMenuRepository implements IMenuRepository {
   ): Promise<MenuItem[]> {
     const restaurantId = await this.resolveRestaurantId(branchId);
 
-    const conditions = [
-      eq(menuItems.restaurantId, restaurantId),
-      eq(menuItems.isAvailable, true),
-    ];
+    const qb = new DrizzleQueryBuilder<typeof menuItems>(this.db, menuItems)
+      .filterExact({
+        restaurantId,
+        ...(filters?.categoryId ? { categoryId: filters.categoryId } : {}),
+      })
+      .softDelete({ column: menuItems.isAvailable, activeValue: true })
+      .sort('displayOrder', 'asc');
 
-    if (filters?.categoryId) {
-      conditions.push(eq(menuItems.categoryId, filters.categoryId));
-    }
     if (filters?.search) {
-      conditions.push(
-        or(
-          ilike(menuItems.name, `%${filters.search}%`),
-          ilike(menuItems.description, `%${filters.search}%`),
-        )!,
-      );
+      qb.search(filters.search, [menuItems.name, menuItems.description]);
     }
 
-    const items = await this.db
-      .select()
-      .from(menuItems)
-      .where(and(...conditions))
-      .orderBy(menuItems.displayOrder);
+    const items = await qb.executePlain();
 
     return items.map((item) =>
       this.toDomainItem({
@@ -114,6 +147,66 @@ export class DrizzleMenuRepository implements IMenuRepository {
         addOns: [],
       }),
     );
+  }
+
+  async createItem(data: {
+    restaurantId: string;
+    categoryId: string;
+    name: string;
+    description?: string;
+    basePrice: number;
+    imageUrl?: string;
+    isVegetarian?: boolean;
+  }): Promise<MenuItem> {
+    const [record] = await this.db
+      .insert(menuItems)
+      .values({
+        restaurantId: data.restaurantId,
+        categoryId: data.categoryId,
+        name: data.name,
+        description: data.description,
+        basePrice: data.basePrice,
+        imageUrl: data.imageUrl,
+        isVegetarian: data.isVegetarian ?? false,
+        isAvailable: true,
+        displayOrder: 0,
+      })
+      .returning();
+    if (!record) {
+      throw new Error('Failed to create menu item');
+    }
+    return this.toDomainItem({ ...record, price: record.basePrice, addOns: [] });
+  }
+
+  async updateItem(
+    id: string,
+    data: Partial<{
+      name: string;
+      description: string | null;
+      basePrice: number;
+      isAvailable: boolean;
+      imageUrl: string | null;
+    }>,
+  ): Promise<MenuItem | null> {
+    const updateData: any = { ...data };
+    if (data.basePrice !== undefined) {
+      updateData.basePrice = data.basePrice;
+    }
+    const [record] = await this.db
+      .update(menuItems)
+      .set(updateData)
+      .where(eq(menuItems.id, id))
+      .returning();
+    return record ? this.toDomainItem({ ...record, price: record.basePrice, addOns: [] }) : null;
+  }
+
+  async softDeleteItem(id: string): Promise<MenuItem | null> {
+    const [record] = await this.db
+      .update(menuItems)
+      .set({ isAvailable: false })
+      .where(eq(menuItems.id, id))
+      .returning();
+    return record ? this.toDomainItem({ ...record, price: record.basePrice, addOns: [] }) : null;
   }
 
   async findItemById(id: string): Promise<MenuItem | null> {
