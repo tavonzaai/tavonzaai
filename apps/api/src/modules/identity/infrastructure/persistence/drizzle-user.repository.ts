@@ -311,31 +311,91 @@ export class DrizzleUserRepository {
 
   // ── OTP Codes ──────────────────────────────────────────────────────────
 
-  async createPasswordResetOtp(email: string, code: string, expiresAt: Date) {
+  async createAuthOtp(
+    email: string,
+    code: string,
+    type: 'email_verification' | 'password_reset',
+    expiresAt: Date,
+  ) {
     const result = await this.db
       .insert(schema.passwordResetOtps)
       .values({
         email,
         otp: code,
+        type,
         expiresAt,
+      })
+      .onConflictDoUpdate({
+        target: schema.passwordResetOtps.email,
+        set: {
+          otp: code,
+          type,
+          expiresAt,
+          createdAt: new Date(),
+        },
       })
       .returning();
     return result[0];
   }
 
-  async findValidPasswordResetOtp(email: string) {
+  async findValidAuthOtp(
+    email: string,
+    type: 'email_verification' | 'password_reset',
+  ) {
     const result = await this.db
       .select()
       .from(schema.passwordResetOtps)
       .where(
         and(
           eq(schema.passwordResetOtps.email, email),
+          eq(schema.passwordResetOtps.type, type),
           gt(schema.passwordResetOtps.expiresAt, new Date())
         )
       )
-      .orderBy(schema.passwordResetOtps.createdAt)
       .limit(1);
     return result[0] ?? null;
+  }
+
+  async deleteAuthOtp(
+    email: string,
+    type: 'email_verification' | 'password_reset',
+    code: string,
+  ): Promise<void> {
+    await this.db
+      .delete(schema.passwordResetOtps)
+      .where(
+        and(
+          eq(schema.passwordResetOtps.email, email),
+          eq(schema.passwordResetOtps.type, type),
+          eq(schema.passwordResetOtps.otp, code),
+        ),
+      );
+  }
+
+  async consumeAuthOtp(
+    email: string,
+    type: 'email_verification' | 'password_reset',
+    code: string,
+  ): Promise<boolean> {
+    const result = await this.db
+      .delete(schema.passwordResetOtps)
+      .where(
+        and(
+          eq(schema.passwordResetOtps.email, email),
+          eq(schema.passwordResetOtps.type, type),
+          eq(schema.passwordResetOtps.otp, code),
+          gt(schema.passwordResetOtps.expiresAt, new Date()),
+        ),
+      )
+      .returning({ id: schema.passwordResetOtps.id });
+    return result.length > 0;
+  }
+
+  async markEmailVerified(email: string): Promise<void> {
+    await this.db
+      .update(schema.users)
+      .set({ isEmailVerified: true, updatedAt: new Date() })
+      .where(eq(schema.users.email, email));
   }
 
   // ── Staff Assignments ──────────────────────────────────────────────────
