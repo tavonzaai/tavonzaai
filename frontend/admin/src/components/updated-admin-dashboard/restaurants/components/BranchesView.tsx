@@ -19,6 +19,7 @@ import CreateBranchModal from './CreateBranchModal';
 import BranchDetailView from './BranchDetailView';
 import EditBranchModal from './EditBranchModal';
 import BranchSettingsView from './BranchSettingsView';
+import { restaurantService } from '@/redux/features/restaurantApi';
 
 interface BranchesViewProps {
   restaurant: RestaurantBranch;
@@ -87,6 +88,55 @@ export default function BranchesView({
       ]
     );
   });
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadBackendBranches() {
+      try {
+        const res = await restaurantService.getBranches({ restaurantId: restaurant.id });
+        if (mounted && res.data && res.data.length > 0) {
+          const mapped: BranchItem[] = res.data.map((b) => {
+            const addr =
+              typeof b.address === 'object' && b.address
+                ? b.address.line1 || b.address.city || 'Branch Location'
+                : String(b.address || 'Branch Location');
+            const city =
+              typeof b.address === 'object' && b.address ? b.address.city || 'City' : 'City';
+            const country =
+              typeof b.address === 'object' && b.address ? b.address.country || 'Country' : 'Country';
+            return {
+              id: b.id,
+              restaurantId: b.restaurantId || restaurant.id,
+              restaurantName: restaurant.name,
+              name: b.name,
+              address: addr,
+              city,
+              country,
+              phone: b.phone || '',
+              status: b.isActive ? 'Open' : 'Closed',
+              manager: {
+                id: 'bmgr-1',
+                name: 'Branch Manager',
+                role: 'Branch Manager',
+                email: 'manager@tavonza.com',
+                avatar: 'BM',
+              },
+              staffCount: 6,
+              assignedStaff: [],
+              revenue: '$1,200/day',
+            };
+          });
+          setBranches(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not load backend branches, using local baseline:', err);
+      }
+    }
+    loadBackendBranches();
+    return () => {
+      mounted = false;
+    };
+  }, [restaurant.id, restaurant.name]);
 
   const [isCreateBranchOpen, setIsCreateBranchOpen] = useState(false);
   const [selectedBranchForDetail, setSelectedBranchForDetail] = useState<BranchItem | null>(null);

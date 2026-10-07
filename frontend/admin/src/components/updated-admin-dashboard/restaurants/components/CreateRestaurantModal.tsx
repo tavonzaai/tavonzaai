@@ -33,6 +33,7 @@ import {
   MOCK_STAFF_POOL,
   DEFAULT_OPERATING_HOURS,
 } from '../restaurantsData';
+import { restaurantService } from '@/redux/features/restaurantApi';
 
 interface CreateRestaurantModalProps {
   isOpen: boolean;
@@ -193,33 +194,69 @@ export default function CreateRestaurantModal({
   };
 
   // Step 6 -> Final Create Action
-  const handleFinalCreate = () => {
-    const assignedStaffMembers = staffPool.filter((s) => selectedStaffIds.includes(s.id));
-    const newRestaurant: RestaurantBranch = {
-      id: `rest-${Date.now()}`,
-      name: restaurantName.trim() || 'Tavonza New Restaurant',
-      type: restaurantType,
-      address: address.trim() || 'Dhanmondi, Road 27',
-      city: city.trim() || 'Dhaka',
-      country: country.trim() || 'Bangladesh',
-      postalCode: postalCode.trim() || '1209',
-      phone: phoneNumber.trim() || '+880 1711-000000',
-      email: emailAddress.trim() || 'info@tavonza.com',
-      status: 'Open',
-      manager: selectedManager || MOCK_MANAGERS[0],
-      staffCount: assignedStaffMembers.length,
-      assignedStaff: assignedStaffMembers,
-      operatingHours,
-      services: selectedServices,
-      branchesCount: 1,
-      revenue: '$0/mo',
-      rating: 5.0,
-      tablesCount: 20,
-    };
+  const handleFinalCreate = async () => {
+    try {
+      const orgs = await restaurantService.getOrganizations().catch(() => []);
+      const orgId = orgs[0]?.id || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+      const createdBackend = await restaurantService
+        .createRestaurant({
+          organizationId: orgId,
+          name: restaurantName.trim() || 'Tavonza New Restaurant',
+          slug: (restaurantName.trim() || 'tavonza-restaurant')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-'),
+          description: `${restaurantType} dining experience.`,
+        })
+        .catch((e) => {
+          console.warn('Backend restaurant creation warning:', e);
+          return null;
+        });
 
-    setCreatedRestaurant(newRestaurant);
-    onSuccess(newRestaurant);
-    setIsSuccess(true);
+      const finalId = createdBackend?.id || `rest-${Date.now()}`;
+      if (createdBackend?.id) {
+        await restaurantService
+          .createBranch({
+            restaurantId: createdBackend.id,
+            name: `${restaurantName.trim()} Flagship`,
+            address: {
+              line1: address.trim() || 'Dhanmondi, Road 27',
+              city: city.trim() || 'Dhaka',
+              country: country.trim() || 'Bangladesh',
+            },
+            phone: phoneNumber.trim() || '+880 1711-000000',
+          })
+          .catch(() => null);
+      }
+
+      const assignedStaffMembers = staffPool.filter((s) => selectedStaffIds.includes(s.id));
+      const newRestaurant: RestaurantBranch = {
+        id: finalId,
+        name: restaurantName.trim() || 'Tavonza New Restaurant',
+        type: restaurantType,
+        address: address.trim() || 'Dhanmondi, Road 27',
+        city: city.trim() || 'Dhaka',
+        country: country.trim() || 'Bangladesh',
+        postalCode: postalCode.trim() || '1209',
+        phone: phoneNumber.trim() || '+880 1711-000000',
+        email: emailAddress.trim() || 'info@tavonza.com',
+        status: 'Open',
+        manager: selectedManager || MOCK_MANAGERS[0],
+        staffCount: assignedStaffMembers.length,
+        assignedStaff: assignedStaffMembers,
+        operatingHours,
+        services: selectedServices,
+        branchesCount: 1,
+        revenue: '$0/mo',
+        rating: 5.0,
+        tablesCount: 20,
+      };
+
+      setCreatedRestaurant(newRestaurant);
+      onSuccess(newRestaurant);
+      setIsSuccess(true);
+    } catch (err) {
+      console.error('Failed to create restaurant:', err);
+    }
   };
 
   // Filtered managers for step 4
