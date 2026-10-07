@@ -4,6 +4,7 @@ import {
   Post,
   Patch,
   Put,
+  Delete,
   Param,
   Body,
   Query,
@@ -33,6 +34,8 @@ import {
   CreateHolidayDto,
   BranchResponseDto,
   CreateBranchStaffDto,
+  UpdateBranchStaffDto,
+  QueryBranchDto,
 } from './dto/branch.dto';
 
 @ApiTags('Branches')
@@ -53,13 +56,18 @@ export class BranchController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List branches by restaurant ID' })
-  @ApiQuery({ name: 'restaurantId', required: true, type: String })
+  @ApiOperation({ summary: 'List branches with search, pagination, and optional restaurant filter' })
   @ApiOkResponse({ type: [BranchResponseDto] })
   async listByRestaurant(
-    @Query('restaurantId', new ParseUUIDPipe()) restaurantId: string,
-  ): Promise<BranchResponseDto[]> {
-    return this.branchService.findByRestaurantId(restaurantId);
+    @Query() query: QueryBranchDto,
+  ): Promise<any> {
+    if (query.page !== undefined || query.search !== undefined) {
+      return this.branchService.findAll(query);
+    }
+    if (query.restaurantId) {
+      return this.branchService.findByRestaurantId(query.restaurantId, query.includeDeleted);
+    }
+    return this.branchService.findAll(query);
   }
 
   @Get(':id')
@@ -79,6 +87,15 @@ export class BranchController {
     @Body() dto: UpdateBranchDto,
   ): Promise<BranchResponseDto> {
     return this.branchService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Soft delete a branch' })
+  @ApiOkResponse({ type: BranchResponseDto })
+  async delete(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<BranchResponseDto> {
+    return this.branchService.softDelete(id);
   }
 
   // ── Settings ──────────────────────────────────────────────────────────
@@ -149,6 +166,15 @@ export class BranchController {
     return this.branchService.getStaffByBranch(id, { role, search });
   }
 
+  @Get(':id/staff/:staffId')
+  @ApiOperation({ summary: 'Get a single staff member assigned to this branch by ID' })
+  async getStaffMember(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('staffId') staffId: string,
+  ) {
+    return this.branchService.getStaffMember(id, staffId);
+  }
+
   @Post(':id/staff')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new staff member and assign to this branch' })
@@ -167,5 +193,24 @@ export class BranchController {
     @Body() dto: { staffId: string; role: any; permissions?: string[] },
   ) {
     return this.branchService.assignStaffToBranch(id, dto);
+  }
+
+  @Patch(':id/staff/:staffId')
+  @ApiOperation({ summary: 'Update staff assignment details in this branch' })
+  async updateStaff(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('staffId') staffId: string,
+    @Body() dto: UpdateBranchStaffDto,
+  ) {
+    return this.branchService.updateStaff(id, staffId, dto);
+  }
+
+  @Delete(':id/staff/:staffId')
+  @ApiOperation({ summary: 'Deactivate / soft delete staff assignment in this branch' })
+  async deleteStaff(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('staffId') staffId: string,
+  ) {
+    return this.branchService.softDeleteStaff(id, staffId);
   }
 }

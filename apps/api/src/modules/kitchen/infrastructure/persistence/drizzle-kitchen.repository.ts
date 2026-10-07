@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -8,6 +8,7 @@ import {
   tables,
   menuItems,
 } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import type {
   KitchenTicketItemEntity,
   KitchenStationType,
@@ -22,16 +23,7 @@ export class DrizzleKitchenRepository {
     branchId: string,
     station?: KitchenStationType
   ): Promise<KitchenTicketItemEntity[]> {
-    const conditions = [
-      eq(orders.branchId, branchId),
-      inArray(orders.status, ['CONFIRMED', 'PREPARING', 'READY']),
-    ];
-
-    if (station) {
-      conditions.push(eq(orderItems.stationType, station));
-    }
-
-    const rows = await this.db
+    const qb = new DrizzleQueryBuilder<any>(this.db, orderItems)
       .select({
         id: orderItems.id,
         orderId: orders.id,
@@ -47,10 +39,28 @@ export class DrizzleKitchenRepository {
         servedAt: orderItems.servedAt,
         createdAt: orderItems.createdAt,
       })
-      .from(orderItems)
       .innerJoin(orders, eq(orders.id, orderItems.orderId))
       .leftJoin(tables, eq(tables.id, orders.tableId))
-      .where(and(...conditions));
+      .filterExact(
+        {
+          branchId,
+          stationType: station,
+        },
+        {
+          branchId: orders.branchId,
+          stationType: orderItems.stationType,
+        },
+      )
+      .filterIn(
+        {
+          status: ['CONFIRMED', 'PREPARING', 'READY'],
+        },
+        {
+          status: orders.status,
+        },
+      );
+
+    const rows = await qb.executePlain();
 
     return rows.map((r: {
       id: string;

@@ -60,13 +60,31 @@ export class WaiterService {
   }
 
   async assignTable(dto: AssignTableDto, assignedById: string): Promise<any> {
-    const start = new Date();
-    const end = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const start = dto.sessionStart ? new Date(dto.sessionStart) : new Date();
+    const end = dto.sessionEnd ? new Date(dto.sessionEnd) : new Date(Date.now() + 8 * 60 * 60 * 1000);
+
+    // Resolve waiter staff ID (dto.waiterId could be staff.id or users.id)
+    let waiterStaffId = dto.waiterId;
+    const waiterByUserId = await this.waiterRepo.findProfileByUserId(dto.waiterId);
+    if (waiterByUserId) {
+      waiterStaffId = waiterByUserId.id;
+    }
+
+    // Resolve assigner staff ID (assignedById from JWT is user.sub)
+    let assignerStaffId = assignedById;
+    const assignerProfile = await this.waiterRepo.findProfileByUserId(assignedById);
+    if (assignerProfile) {
+      assignerStaffId = assignerProfile.id;
+    } else {
+      const created = await this.waiterRepo.createProfile({ userId: assignedById, jobTitle: 'MANAGER' });
+      assignerStaffId = created.id;
+    }
+
     return this.waiterRepo.assignTable({
       branchId: dto.branchId,
-      waiterId: dto.waiterId,
+      waiterId: waiterStaffId,
       tableId: dto.tableId,
-      assignedById,
+      assignedById: assignerStaffId,
       sessionStart: start,
       sessionEnd: end,
     });

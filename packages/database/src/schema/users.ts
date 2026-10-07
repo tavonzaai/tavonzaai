@@ -24,6 +24,7 @@ export const users = pgTable('users', {
   role: globalRoleEnum('role').default('CUSTOMER'),
   avatar: text('avatar'),
   status: userStatusEnum('status').default('ACTIVE'),
+  isEmailVerified: boolean('is_email_verified').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({

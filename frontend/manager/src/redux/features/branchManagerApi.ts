@@ -51,6 +51,14 @@ export interface TableItem {
   qrCodeUrl?: string | null;
   qrCodeToken?: string | null;
   isActive: boolean;
+  waiter?: string;
+  waiterId?: string;
+  assignedWaiter?: {
+    waiterId?: string;
+    waiterName?: string;
+    sessionStart?: string;
+    sessionEnd?: string;
+  } | null;
 }
 
 export interface StaffAssignmentItem {
@@ -79,9 +87,13 @@ export interface LiveOrderItem {
   itemCount: number;
   total: number;
   totalAmount?: number;
+  subtotal?: number;
+  taxAmount?: number;
   paymentStatus?: string;
   orderType?: string;
+  waiter?: string;
   waiterName?: string;
+  customerName?: string;
   estimatedPrepTime?: number;
   createdAt: string;
   submittedAt?: string;
@@ -90,6 +102,7 @@ export interface LiveOrderItem {
     menuItemId: string;
     name: string;
     unitPrice: number;
+    price?: number;
     quantity: number;
     lineTotal: number;
     notes?: string;
@@ -170,6 +183,14 @@ export interface KitchenTicketItem {
   createdAt?: string;
 }
 
+export function buildTableQrCodeUrl(token: string): string {
+  const customerBase = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? `${window.location.protocol}//${window.location.hostname}:3100`
+    : (process.env.NEXT_PUBLIC_CUSTOMER_APP_URL || 'http://localhost:3100');
+  const targetUrl = `${customerBase}?qr=${encodeURIComponent(token)}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetUrl)}`;
+}
+
 export const branchManagerService = {
   getBranch: async (branchId: string): Promise<BranchDetail> => {
     const res = await baseApiFetch<BranchDetail>(`/branches/${encodeURIComponent(branchId)}`, {
@@ -223,7 +244,32 @@ export const branchManagerService = {
     const res = await baseApiFetch<TableItem[]>(`/tables?branchId=${encodeURIComponent(branchId)}`, {
       method: 'GET',
     });
-    return (res as any)?.data || res;
+    const list = (res as any)?.data || res;
+    if (Array.isArray(list)) {
+      return list.map((t) => {
+        const qrToken = t.qrCodeToken || t.id;
+        return {
+          ...t,
+          qrCodeToken: qrToken,
+          qrCodeUrl: t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined),
+        };
+      });
+    }
+    return list;
+  },
+
+  getTable: async (tableId: string): Promise<TableItem> => {
+    const res = await baseApiFetch<TableItem>(`/tables/${encodeURIComponent(tableId)}`, {
+      method: 'GET',
+    });
+    const t = (res as any)?.data || res;
+    const qrToken = t.qrCodeToken || t.id;
+    const qrCodeUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
+    return {
+      ...t,
+      qrCodeUrl,
+      qrCodeToken: qrToken,
+    };
   },
 
   createTable: async (payload: { branchId: string; label: string; capacity: number; shape?: string }): Promise<TableItem> => {
@@ -262,8 +308,8 @@ export const branchManagerService = {
       });
       const token = (regen as any)?.qrCodeToken || (regen as any)?.data?.qrCodeToken;
       return {
-        qrCodeUrl: token ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(token)}` : '',
-        tableUrl: token ? `/t/${token}` : '',
+        qrCodeUrl: token ? buildTableQrCodeUrl(token) : '',
+        tableUrl: token ? `http://localhost:3100?qr=${encodeURIComponent(token)}` : '',
       };
     }
   },
@@ -303,6 +349,50 @@ export const branchManagerService = {
       body: JSON.stringify(payload),
     });
     return (res as any)?.data || res;
+  },
+
+  getStaffMember: async (branchId: string, staffId: string): Promise<StaffAssignmentItem> => {
+    try {
+      const res = await baseApiFetch<StaffAssignmentItem>(`/branches/${encodeURIComponent(branchId)}/staff/${encodeURIComponent(staffId)}`, {
+        method: 'GET',
+      });
+      return (res as any)?.data || res;
+    } catch {
+      const list = await branchManagerService.getStaffAssignments(branchId);
+      const found = list.find((s) => s.staffId === staffId || s.id === staffId);
+      if (found) return found;
+      throw new Error(`Staff member ${staffId} not found`);
+    }
+  },
+
+  assignWaiterToTable: async (payload: {
+    branchId: string;
+    tableId: string;
+    waiterId: string;
+    sessionStart?: string;
+    sessionEnd?: string;
+    shiftLabel?: string;
+  }): Promise<any> => {
+    try {
+      const res = await baseApiFetch('/waiter/tables/assign', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res as any)?.data || res;
+    } catch (err: any) {
+      if (err?.message?.includes('sessionStart') || err?.message?.includes('property')) {
+        const fallbackRes = await baseApiFetch('/waiter/tables/assign', {
+          method: 'POST',
+          body: JSON.stringify({
+            branchId: payload.branchId,
+            tableId: payload.tableId,
+            waiterId: payload.waiterId,
+          }),
+        });
+        return (fallbackRes as any)?.data || fallbackRes;
+      }
+      throw err;
+    }
   },
 
   getOrders: async (

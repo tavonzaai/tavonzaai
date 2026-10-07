@@ -17,6 +17,7 @@ import {
   Patch,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -171,6 +172,20 @@ export class TableSessionController {
       ...dto,
       userId: user?.sub,
     });
+  }
+
+  /**
+   * GET /sessions/branch/:branchId
+   * Returns table sessions for a branch
+   */
+  @Get('branch/:branchId')
+  @ApiOperation({ summary: 'Get table sessions for branch' })
+  @ApiOkResponse({ description: 'List of table sessions' })
+  async getBranchSessions(
+    @Param('branchId') branchId: string,
+    @Query('status') status?: string,
+  ) {
+    return this.sessionService.findSessionsByBranch(branchId, status);
   }
 
   /**

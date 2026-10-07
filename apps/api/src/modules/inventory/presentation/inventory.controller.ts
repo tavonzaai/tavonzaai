@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -18,8 +19,11 @@ import {
 import { InventoryService } from '../application/inventory.service';
 import {
   CreateSupplierDto,
+  UpdateSupplierDto,
   CreateInventoryCategoryDto,
+  UpdateInventoryCategoryDto,
   CreateInventoryItemDto,
+  UpdateInventoryItemDto,
   AdjustStockDto,
 } from './http/dto/inventory.dto';
 
@@ -52,6 +56,23 @@ export class InventoryController {
     return this.inventoryService.getSupplierById(id);
   }
 
+  @Patch('suppliers/:id')
+  @ApiOperation({ summary: 'Update supplier details' })
+  @ApiOkResponse({ description: 'Supplier updated' })
+  async updateSupplier(
+    @Param('id') id: string,
+    @Body() dto: UpdateSupplierDto,
+  ) {
+    return this.inventoryService.updateSupplier(id, dto);
+  }
+
+  @Delete('suppliers/:id')
+  @ApiOperation({ summary: 'Soft delete a supplier' })
+  @ApiOkResponse({ description: 'Supplier soft-deleted' })
+  async deleteSupplier(@Param('id') id: string) {
+    return this.inventoryService.deleteSupplier(id);
+  }
+
   // ── Categories ────────────────────────────────────────────────────────
 
   @Post('categories')
@@ -67,6 +88,30 @@ export class InventoryController {
   @ApiOkResponse({ description: 'List of categories' })
   async getBranchCategories(@Param('branchId') branchId: string) {
     return this.inventoryService.getBranchCategories(branchId);
+  }
+
+  @Get('categories/:id')
+  @ApiOperation({ summary: 'Get category details by ID' })
+  @ApiOkResponse({ description: 'Category details' })
+  async getCategory(@Param('id') id: string) {
+    return this.inventoryService.getCategoryById(id);
+  }
+
+  @Patch('categories/:id')
+  @ApiOperation({ summary: 'Update an inventory category' })
+  @ApiOkResponse({ description: 'Category updated' })
+  async updateCategory(
+    @Param('id') id: string,
+    @Body() dto: UpdateInventoryCategoryDto,
+  ) {
+    return this.inventoryService.updateCategory(id, dto);
+  }
+
+  @Delete('categories/:id')
+  @ApiOperation({ summary: 'Delete an inventory category' })
+  @ApiOkResponse({ description: 'Category deleted' })
+  async deleteCategory(@Param('id') id: string) {
+    return this.inventoryService.deleteCategory(id);
   }
 
   // ── Items ─────────────────────────────────────────────────────────────
@@ -96,6 +141,23 @@ export class InventoryController {
     return this.inventoryService.getItemById(id);
   }
 
+  @Patch('items/:id')
+  @ApiOperation({ summary: 'Update an inventory item' })
+  @ApiOkResponse({ description: 'Item updated' })
+  async updateItem(
+    @Param('id') id: string,
+    @Body() dto: UpdateInventoryItemDto,
+  ) {
+    return this.inventoryService.updateItem(id, dto);
+  }
+
+  @Delete('items/:id')
+  @ApiOperation({ summary: 'Soft delete an inventory item' })
+  @ApiOkResponse({ description: 'Item soft-deleted' })
+  async deleteItem(@Param('id') id: string) {
+    return this.inventoryService.deleteItem(id);
+  }
+
   @Patch('items/:id/adjust')
   @ApiOperation({ summary: 'Adjust stock level for an inventory item' })
   @ApiOkResponse({ description: 'Item updated with new stock level' })
@@ -116,3 +178,4 @@ export class InventoryController {
     return this.inventoryService.getInventorySummary(branchId, lowStockOnly === 'true');
   }
 }
+
