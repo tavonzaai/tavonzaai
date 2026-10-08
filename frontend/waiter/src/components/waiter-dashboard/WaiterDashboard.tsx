@@ -31,7 +31,9 @@ import {
   mockGuestReviews,
   mockCheckoutTables,
 } from './data';
-import { AssignedTable, LiveOrder, AIRecommendation, PriorityTask } from './types';
+import { AssignedTable, LiveOrder, LiveAlert, AIRecommendation, PriorityTask } from './types';
+import { useAppSelector } from '@/redux/hooks';
+import { waiterService, getActiveBranchId, CustomerAlert } from '@/redux/features/waiterApi';
 
 // Tab sub-views
 import MyTablesView from './my-tables/MyTablesView';
@@ -81,6 +83,92 @@ export default function WaiterDashboard({ initialNav = 'Dashboard' }: WaiterDash
   const [searchQuery, setSearchQuery] = useState('');
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+
+  const { user } = useAppSelector((state) => state.auth);
+  const [assignedTables, setAssignedTables] = useState<AssignedTable[]>(mockAssignedTables);
+  const [liveOrders, setLiveOrders] = useState<LiveOrder[]>(mockLiveOrders);
+  const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>(mockLiveAlerts);
+
+  // Fetch live tables, live orders, and live alerts from backend
+  useEffect(() => {
+    let mounted = true;
+    async function loadLiveOperations() {
+      try {
+        const branchId = getActiveBranchId();
+        const [tablesData, ordersData, alertsData] = await Promise.allSettled([
+          waiterService.getMyTables(branchId),
+          waiterService.getActiveOrders(branchId),
+          waiterService.getMyAlerts(branchId),
+        ]);
+
+        if (mounted) {
+          if (tablesData.status === 'fulfilled' && Array.isArray(tablesData.value) && tablesData.value.length > 0) {
+            const mappedTables: AssignedTable[] = tablesData.value.map((t) => {
+              const statusMap: Record<string, AssignedTable['status']> = {
+                AVAILABLE: 'Available',
+                OCCUPIED: 'Occupied',
+                BILLING: 'Billing',
+                DINING: 'Dining',
+              };
+              return {
+                id: t.id || t.tableId,
+                tableNumber: t.tableNumber ? `Table ${t.tableNumber}` : 'Table',
+                guests: 2,
+                maxCapacity: t.capacity || 4,
+                status: statusMap[t.serviceStatus] || 'Occupied',
+                waitMinutes: 12,
+                serverName: 'You',
+              };
+            });
+            setAssignedTables(mappedTables);
+          }
+
+          if (ordersData.status === 'fulfilled' && Array.isArray(ordersData.value) && ordersData.value.length > 0) {
+            const mappedOrders: LiveOrder[] = ordersData.value.map((o) => {
+              const statusMap: Record<string, LiveOrder['status']> = {
+                READY_TO_SERVE: 'Ready to Serve',
+                PREPARING: 'Preparing',
+                SERVED: 'Served',
+                PLACED: 'New Order',
+              };
+              const status = statusMap[o.status] || 'Preparing';
+              return {
+                id: o.id || o.orderId || `ord-${Math.random()}`,
+                orderNumber: `#${o.orderNumber || '101'}`,
+                tableNumber: o.tableNumber ? `Table ${o.tableNumber}` : 'Table',
+                items: Array.isArray(o.items) ? o.items.map((i: any) => i.productName || 'Dish') : ['Main Course'],
+                status,
+                statusColor: status === 'Ready to Serve' ? 'emerald' : status === 'Preparing' ? 'amber' : 'zinc',
+                statusBg: status === 'Ready to Serve' ? 'bg-emerald-500/10' : status === 'Preparing' ? 'bg-amber-500/10' : 'bg-zinc-800',
+                statusText: status === 'Ready to Serve' ? 'text-emerald-400' : status === 'Preparing' ? 'text-amber-400' : 'text-zinc-400',
+                eta: '8 mins',
+                timeAgo: 'Just now',
+              };
+            });
+            setLiveOrders(mappedOrders);
+          }
+
+          if (alertsData.status === 'fulfilled' && Array.isArray(alertsData.value) && alertsData.value.length > 0) {
+            const mappedAlerts: LiveAlert[] = alertsData.value.map((a: CustomerAlert) => ({
+              id: a.id,
+              message: a.message || `Customer at Table ${a.tableNumber || ''} requested service.`,
+              severity: a.type === 'request_bill' ? 'yellow' : 'red',
+              dotColor: a.type === 'request_bill' ? 'bg-amber-400' : 'bg-red-400',
+              timeAgo: a.createdAt ? `${Math.max(1, Math.round((Date.now() - new Date(a.createdAt).getTime()) / 60000))}m ago` : 'Just now',
+            }));
+            setLiveAlerts(mappedAlerts);
+          }
+        }
+      } catch (err) {
+        console.warn('Live operations background fetch warning:', err);
+      }
+    }
+
+    loadLiveOperations();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Sync active tab from browser back/forward buttons
   useEffect(() => {
@@ -198,13 +286,13 @@ export default function WaiterDashboard({ initialNav = 'Dashboard' }: WaiterDash
           ) : (
             <>
               {/* Top Greeting & Live Update Badge */}
-              <WaiterGreeting waiterName={mockWaiterProfile.name.split(' ')[0]} />
+              <WaiterGreeting waiterName={(user?.name || user?.email?.split('@')[0] || mockWaiterProfile.name).split(' ')[0]} />
 
               {/* AI Operations Hero Card with Briefing & Shift Status Widget */}
               <AIOperationsHero
                 onOpenAIModal={() => setIsAIModalOpen(true)}
                 onOpenAIReport={() => setIsAIModalOpen(true)}
-                onSelectOrder={(orderId) => {
+                onSelectOrder={(_orderId) => {
                   setActiveNav('Orders');
                 }}
               />
@@ -223,15 +311,15 @@ export default function WaiterDashboard({ initialNav = 'Dashboard' }: WaiterDash
                 />
 
                 <AssignedTablesSection
-                  tables={mockAssignedTables}
+                  tables={assignedTables}
                   onFloorPlanClick={() => setActiveNav('My Tables')}
-                  onSelectTable={(table) => setActiveNav('My Tables')}
+                  onSelectTable={(_table) => setActiveNav('My Tables')}
                 />
 
                 <LiveOrdersSection
-                  orders={mockLiveOrders}
+                  orders={liveOrders}
                   onViewAll={() => setActiveNav('Orders')}
-                  onSelectOrder={(order) => setActiveNav('Orders')}
+                  onSelectOrder={(_order) => setActiveNav('Orders')}
                 />
               </div>
 
@@ -246,7 +334,7 @@ export default function WaiterDashboard({ initialNav = 'Dashboard' }: WaiterDash
                 />
 
                 <LiveAlertsSection
-                  alerts={mockLiveAlerts}
+                  alerts={liveAlerts}
                   onViewAll={() => setActiveNav('Notifications')}
                   onSelectAlert={(alertItem) => {
                     if (alertItem.message.includes('Table')) {

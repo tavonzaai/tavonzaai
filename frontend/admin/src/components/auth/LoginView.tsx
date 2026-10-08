@@ -21,8 +21,8 @@ export default function LoginView({
   onForgotPassword,
 }: LoginViewProps) {
   const dispatch = useAppDispatch();
-  const [email, setEmail] = useState('euhan.dev@gmail.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('owner@tavonza.ai');
+  const [password, setPassword] = useState('Owner@1234');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +102,7 @@ export default function LoginView({
   const handleQuickAdminLogin = () => {
     setIsSubmitting(true);
     setTimeout(() => {
-      handleCompleteSession('System Administrator', 'euhan.dev@gmail.com', 'SUPER_ADMIN');
+      handleCompleteSession('System Administrator', 'owner@tavonza.ai', 'SUPER_ADMIN');
       setIsSubmitting(false);
     }, 250);
   };
@@ -136,7 +136,7 @@ export default function LoginView({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="euhan.dev@gmail.com"
+                placeholder="owner@tavonza.ai"
                 className="w-full bg-transparent text-xs text-white placeholder:text-zinc-100/50 font-['Inter'] focus:outline-none"
               />
             </div>

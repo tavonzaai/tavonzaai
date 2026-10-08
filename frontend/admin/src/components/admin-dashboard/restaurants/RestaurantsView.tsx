@@ -9,6 +9,7 @@ import CreateRestaurantModal from './components/CreateRestaurantModal';
 import RestaurantDetailModal from './components/RestaurantDetailModal';
 import EditRestaurantModal from './components/EditRestaurantModal';
 import BranchesView from './components/BranchesView';
+import { restaurantService } from '@/redux/features/restaurantApi';
 
 interface RestaurantsViewProps {
   initialBranchRestaurantId?: string;
@@ -22,8 +23,68 @@ export default function RestaurantsView({
   selectedBranch,
 }: RestaurantsViewProps) {
   const [restaurants, setRestaurants] = useState<RestaurantBranch[]>(INITIAL_RESTAURANTS);
+  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Open' | 'Closed'>('All');
+
+  // Fetch live restaurants from backend
+  useEffect(() => {
+    let mounted = true;
+    async function loadBackendRestaurants() {
+      try {
+        setIsLoading(true);
+        const res = await restaurantService.getRestaurants();
+        if (mounted && res.data && res.data.length > 0) {
+          const mapped: RestaurantBranch[] = await Promise.all(
+            res.data.map(async (r) => {
+              const branchesRes = await restaurantService
+                .getBranches({ restaurantId: r.id })
+                .catch(() => ({ data: [] }));
+              const branchesCount = branchesRes?.data?.length || 1;
+              return {
+                id: r.id,
+                name: r.name,
+                type: 'Restaurant',
+                address: 'Corporate Headquarters',
+                city: 'Dhaka',
+                country: 'Bangladesh',
+                postalCode: '1200',
+                phone: '+880 1711-000000',
+                email: 'operations@tavonza.com',
+                status: r.isActive ? 'Open' : 'Closed',
+                manager: {
+                  id: 'mgr-default',
+                  name: 'General Manager',
+                  role: 'General Manager',
+                  email: 'gm@tavonza.com',
+                  avatar: 'GM',
+                },
+                staffCount: 12,
+                assignedStaff: [],
+                operatingHours: [],
+                services: ['Dine In', 'Takeaway', 'QR Ordering'],
+                branchesCount,
+                revenue: '$45,000/mo',
+                rating: 4.9,
+                tablesCount: 20,
+              };
+            })
+          );
+          if (mounted && mapped.length > 0) {
+            setRestaurants(mapped);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load backend restaurants, using local baseline:', err);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+    loadBackendRestaurants();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -256,31 +317,39 @@ export default function RestaurantsView({
       {/* ========================================================================= */}
       {/* 3. RESTAURANTS GRID */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-        {filteredRestaurants.map((restaurant) => (
-          <RestaurantCard
-            key={restaurant.id}
-            restaurant={restaurant}
-            onView={(r) => handleOpenBranches(r)}
-            onEdit={(r) => setSelectedForEdit(r)}
-            onBranches={(r) => handleOpenBranches(r)}
-          />
-        ))}
+      {isLoading && restaurants.length === 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="h-48 rounded-2xl bg-zinc-900/60 border border-zinc-800 animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          {filteredRestaurants.map((restaurant) => (
+            <RestaurantCard
+              key={restaurant.id}
+              restaurant={restaurant}
+              onView={(r) => handleOpenBranches(r)}
+              onEdit={(r) => setSelectedForEdit(r)}
+              onBranches={(r) => handleOpenBranches(r)}
+            />
+          ))}
 
-        {/* Add Restaurant Card (from Figma Mockup) */}
-        <button
-          type="button"
-          onClick={() => setIsCreateModalOpen(true)}
-          className="w-full min-h-[160px] bg-white/[0.03] hover:bg-white/[0.06] border border-dashed border-stone-600/70 hover:border-amber-400/70 rounded-2xl flex flex-col items-center justify-center p-6 gap-3 transition-all cursor-pointer group shadow-sm"
-        >
-          <div className="w-12 h-12 bg-stone-200 group-hover:bg-amber-400 rounded-full flex items-center justify-center text-stone-800 group-hover:text-white transition-colors shadow-sm">
-            <Plus className="w-6 h-6 stroke-[2.5]" />
-          </div>
-          <div className="text-stone-300 group-hover:text-white text-sm font-medium transition-colors">
-            Add Restaurant
-          </div>
-        </button>
-      </div>
+          {/* Add Restaurant Card (from Figma Mockup) */}
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="w-full min-h-[160px] bg-white/[0.03] hover:bg-white/[0.06] border border-dashed border-stone-600/70 hover:border-amber-400/70 rounded-2xl flex flex-col items-center justify-center p-6 gap-3 transition-all cursor-pointer group shadow-sm"
+          >
+            <div className="w-12 h-12 bg-stone-200 group-hover:bg-amber-400 rounded-full flex items-center justify-center text-stone-800 group-hover:text-white transition-colors shadow-sm">
+              <Plus className="w-6 h-6 stroke-[2.5]" />
+            </div>
+            <div className="text-stone-300 group-hover:text-white text-sm font-medium transition-colors">
+              Add Restaurant
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* Empty State */}
       {filteredRestaurants.length === 0 && (

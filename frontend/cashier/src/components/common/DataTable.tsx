@@ -97,7 +97,7 @@ export function DataTable<T extends Record<string, any>>({
             {isLoading ? (
               Array.from({ length: loadingRows }).map((_, rIdx) => (
                 <tr key={`loading-row-${rIdx}`} className="animate-pulse bg-zinc-900/20">
-                  {columns.map((col, cIdx) => (
+                  {columns.map((_col, cIdx) => (
                     <td key={`loading-cell-${cIdx}`} className="py-4 px-4">
                       <div className="h-4 bg-zinc-800/70 rounded-md w-3/4" />
                     </td>
