@@ -116,3 +116,82 @@ export class InternalAuditRequestDto {
   @IsString()
   source!: string;
 }
+
+// ── Response DTOs ─────────────────────────────────────────────────────
+
+export class ActorContextResponseDto {
+  @ApiProperty({ example: 'USER', description: 'Actor classification (USER, AI_AGENT, SYSTEM, INTEGRATION)' })
+  actor_type!: string;
+
+  @ApiProperty({ example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef', description: 'Acting user UUID' })
+  acting_user_id!: string;
+
+  @ApiProperty({ example: 'customer_ai_v1', description: 'AI agent personality identifier' })
+  ai_agent_id!: string;
+
+  @ApiPropertyOptional({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Organization UUID' })
+  organization_id?: string;
+
+  @ApiPropertyOptional({ example: null, description: 'Restaurant UUID if assigned' })
+  restaurantId?: string | null;
+
+  @ApiProperty({ example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', description: 'Branch UUID' })
+  branch_id!: string;
+
+  @ApiProperty({ example: ['menu.read', 'tables.read', 'orders.read', 'payments.read'], description: 'Assigned tool capabilities' })
+  permissions!: string[];
+
+  @ApiPropertyOptional({ example: { tables: ['T-1', 'T-2'] }, description: 'Granular resource scopes' })
+  resource_scope?: Record<string, any>;
+}
+
+export class ActiveSessionSummaryDto {
+  @ApiProperty({ example: 'c0e1d2c3-4567-89ab-cdef-0123456789ab', description: 'Session UUID' })
+  id!: string;
+
+  @ApiProperty({ example: 'e7b1a2c3-d4e5-6789-0123-456789abcdef', description: 'Table UUID' })
+  table_id!: string;
+
+  @ApiProperty({ example: 'active', description: 'Status summary' })
+  status!: string;
+}
+
+export class BootstrapContextResponseDto {
+  @ApiProperty({ example: ['T-1', 'T-2', 'T-3', 'T-4'], description: 'Tables in branch' })
+  assigned_tables!: string[];
+
+  @ApiProperty({ type: [ActiveSessionSummaryDto], description: 'Active dining sessions in branch' })
+  active_sessions!: ActiveSessionSummaryDto[];
+}
+
+export class ToolExecutionResponseDto {
+  @ApiProperty({ example: true, description: 'Whether tool execution succeeded' })
+  ok!: boolean;
+
+  @ApiPropertyOptional({ description: 'Tool output payload' })
+  data?: any;
+
+  @ApiPropertyOptional({ example: 'Permission denied', description: 'Error explanation if ok is false' })
+  error?: string;
+}
+
+export class ToolConfirmationResponseDto {
+  @ApiProperty({ example: true, description: 'Confirmation status' })
+  ok!: boolean;
+
+  @ApiProperty({
+    example: { confirmed: true, executed_action: 'confirmed_action', pending_confirmation_id: 'conf_771829' },
+    description: 'Confirmation execution payload'
+  })
+  data!: {
+    confirmed: boolean;
+    executed_action: string;
+    pending_confirmation_id: string;
+  };
+}
+
+export class InternalAuditResponseDto {
+  @ApiProperty({ example: true, description: 'Audit record accepted flag' })
+  ok!: boolean;
+}
+
