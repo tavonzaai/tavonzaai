@@ -18,6 +18,7 @@ import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiCreatedResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RestaurantService } from '../../application/services/restaurant.service';
@@ -27,8 +28,9 @@ import {
   RestaurantResponseDto,
   QueryRestaurantDto,
 } from './dto/restaurant.dto';
+import { ApiStandardErrors } from '../../../../common/swagger';
 
-@ApiTags('Restaurants')
+@ApiTags('Core | Restaurant Management')
 @Controller('restaurants')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
@@ -38,14 +40,16 @@ export class RestaurantController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new restaurant under an organization' })
-  @ApiCreatedResponse({ type: RestaurantResponseDto })
+  @ApiCreatedResponse({ description: 'Restaurant created successfully', type: RestaurantResponseDto })
+  @ApiStandardErrors(400, 401, 403, 409, 500)
   async create(@Body() dto: CreateRestaurantDto): Promise<RestaurantResponseDto> {
     return this.restaurantService.create(dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List restaurants with search, pagination, and optional organization filter' })
-  @ApiOkResponse({ type: [RestaurantResponseDto] })
+  @ApiOkResponse({ description: 'List of restaurants or paginated restaurant collection', type: [RestaurantResponseDto] })
+  @ApiStandardErrors(401, 403, 500)
   async listByOrg(
     @Query() query: QueryRestaurantDto,
   ): Promise<any> {
@@ -60,7 +64,9 @@ export class RestaurantController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get restaurant details by ID' })
-  @ApiOkResponse({ type: RestaurantResponseDto })
+  @ApiParam({ name: 'id', description: 'Restaurant UUID', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  @ApiOkResponse({ description: 'Restaurant details', type: RestaurantResponseDto })
+  @ApiStandardErrors(401, 403, 404, 500)
   async getById(
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<RestaurantResponseDto> {
@@ -69,7 +75,9 @@ export class RestaurantController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update restaurant details' })
-  @ApiOkResponse({ type: RestaurantResponseDto })
+  @ApiParam({ name: 'id', description: 'Restaurant UUID', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  @ApiOkResponse({ description: 'Restaurant updated successfully', type: RestaurantResponseDto })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateRestaurantDto,
@@ -79,7 +87,9 @@ export class RestaurantController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Soft delete a restaurant' })
-  @ApiOkResponse({ type: RestaurantResponseDto })
+  @ApiParam({ name: 'id', description: 'Restaurant UUID', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  @ApiOkResponse({ description: 'Restaurant soft-deleted', type: RestaurantResponseDto })
+  @ApiStandardErrors(401, 403, 404, 500)
   async delete(
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<RestaurantResponseDto> {

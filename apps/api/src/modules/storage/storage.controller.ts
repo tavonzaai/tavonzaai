@@ -33,6 +33,7 @@ import {
   FileUploadQueryDto,
   FileUploadResponseDto,
   ListFilesQueryDto,
+  ListFilesResponseDto,
   PresignedDownloadResponseDto,
   PresignedDownloadUrlDto,
   PresignedPostDto,
@@ -40,8 +41,10 @@ import {
   PresignedUploadResponseDto,
   PresignedUploadUrlDto,
 } from "./dtos/storage.dto";
+import { ApiStandardErrors } from "../../common/swagger";
 
 @ApiTags("System | Storage")
+@ApiStandardErrors(400, 404, 500)
 @Controller("storage")
 export class StorageController {
   constructor(private readonly storageService: StorageService) {}
@@ -262,6 +265,13 @@ export class StorageController {
     summary: "Stream or download a file directly through the API",
     description: "Fetches the object from S3 and streams it to the HTTP client",
   })
+  @ApiOkResponse({
+    description: "Binary file payload stream",
+    schema: {
+      type: "string",
+      format: "binary",
+    },
+  })
   async streamFile(
     @Query() query: FileKeyQueryDto,
     @Res() res: Response,
@@ -351,6 +361,7 @@ export class StorageController {
    */
   @Get("files")
   @ApiOperation({ summary: "List files and folders matching a prefix" })
+  @ApiOkResponse({ description: "List of files and directories matching prefix", type: ListFilesResponseDto })
   async listFiles(@Query() query: ListFilesQueryDto) {
     const result = await this.storageService.listFiles({
       prefix: query.prefix,

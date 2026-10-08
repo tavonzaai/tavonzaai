@@ -226,15 +226,185 @@ export class CreateHolidayDto {
 }
 
 export class BranchResponseDto {
-  @ApiProperty() id!: string;
-  @ApiProperty() restaurantId!: string;
-  @ApiProperty() name!: string;
-  @ApiProperty() address!: any;
-  @ApiPropertyOptional() phone?: string | null;
-  @ApiProperty() timezone!: string;
-  @ApiProperty() isActive!: boolean;
-  @ApiProperty() createdAt!: Date;
-  @ApiProperty() updatedAt!: Date;
+  @ApiProperty({ example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', description: 'Branch UUID' })
+  id!: string;
+
+  @ApiProperty({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Restaurant ID owning this branch' })
+  restaurantId!: string;
+
+  @ApiProperty({ example: 'Downtown Branch', description: 'Branch display name' })
+  name!: string;
+
+  @ApiProperty({ type: BranchAddressDto, description: 'Physical address object' })
+  address!: BranchAddressDto;
+
+  @ApiPropertyOptional({ example: '+1-555-0199', description: 'Branch contact telephone' })
+  phone?: string | null;
+
+  @ApiProperty({ example: 'America/New_York', description: 'IANA Timezone' })
+  timezone!: string;
+
+  @ApiProperty({ example: true, description: 'Whether the branch is active' })
+  isActive!: boolean;
+
+  @ApiProperty({ example: '2026-10-01T12:00:00.000Z', description: 'Branch creation timestamp' })
+  createdAt!: Date;
+
+  @ApiProperty({ example: '2026-10-01T12:00:00.000Z', description: 'Branch last update timestamp' })
+  updatedAt!: Date;
+}
+
+export class BranchSettingsResponseDto {
+  @ApiProperty({ example: 'ee112233-4455-6677-8899-aabbccddeeff', description: 'Settings ID' })
+  id!: string;
+
+  @ApiProperty({ example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', description: 'Branch UUID' })
+  branchId!: string;
+
+  @ApiProperty({ example: 'AUTO_ACCEPT', enum: ['AUTO_ACCEPT', 'WAITER_APPROVAL', 'MANAGER_APPROVAL'], description: 'Order workflow acceptance policy' })
+  orderAcceptanceMode!: 'AUTO_ACCEPT' | 'WAITER_APPROVAL' | 'MANAGER_APPROVAL';
+
+  @ApiProperty({ example: false, description: 'Hide out-of-stock items from customer digital menu' })
+  hideUnavailableItems!: boolean;
+
+  @ApiProperty({ example: true, description: 'Allow multiple guests to join the same table session' })
+  allowMultipleGuestSessions!: boolean;
+
+  @ApiProperty({ example: true, description: 'Require SMS or table OTP code per guest to join session' })
+  requireOtpPerGuest!: boolean;
+
+  @ApiProperty({ example: true, description: 'Enable split-bill payment calculation' })
+  allowSplitBill!: boolean;
+
+  @ApiProperty({ example: true, description: 'Allow guest checkout without requiring user account' })
+  allowGuestCheckoutWithoutAccount!: boolean;
+
+  @ApiProperty({ example: 60, description: 'Auto close idle sessions after N minutes' })
+  autoCloseIdleSessionMins!: number;
+
+  @ApiProperty({ example: 'USD', description: 'Branch default transaction currency' })
+  currency!: string;
+
+  @ApiProperty({ example: 8.875, description: 'Default sales tax percent' })
+  taxPercent!: number;
+
+  @ApiProperty({ example: 10, description: 'Default service charge percent' })
+  serviceChargePct!: number;
+
+  @ApiProperty({ example: true, description: 'Whether gratuity tips are enabled' })
+  tipEnabled!: boolean;
+
+  @ApiProperty({ example: true, description: 'Whether table reservations are enabled' })
+  reservationsEnabled!: boolean;
+
+  @ApiProperty({ example: true, description: 'Whether digital waitlist is enabled' })
+  waitlistEnabled!: boolean;
+
+  @ApiProperty({ example: '2026-10-01T12:00:00.000Z', description: 'Settings creation timestamp' })
+  createdAt!: Date;
+
+  @ApiProperty({ example: '2026-10-01T12:00:00.000Z', description: 'Settings update timestamp' })
+  updatedAt!: Date;
+}
+
+export class BranchOperatingHoursResponseDto {
+  @ApiProperty({ example: '66778899-0011-2233-4455-667788990011', description: 'Operating hour record ID' })
+  id!: string;
+
+  @ApiProperty({ example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', description: 'Branch UUID' })
+  branchId!: string;
+
+  @ApiProperty({ example: 1, description: 'Day of week (0=Sunday ... 6=Saturday)' })
+  dayOfWeek!: number;
+
+  @ApiProperty({ example: '09:00', description: 'Opening time (HH:mm)' })
+  openTime!: string;
+
+  @ApiProperty({ example: '22:00', description: 'Closing time (HH:mm)' })
+  closeTime!: string;
+
+  @ApiProperty({ example: '2026-10-01T12:00:00.000Z' })
+  createdAt!: Date;
+
+  @ApiProperty({ example: '2026-10-01T12:00:00.000Z' })
+  updatedAt!: Date;
+}
+
+export class BranchHolidayResponseDto {
+  @ApiProperty({ example: '77889900-1122-3344-5566-778899001122', description: 'Holiday record ID' })
+  id!: string;
+
+  @ApiProperty({ example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', description: 'Branch UUID' })
+  branchId!: string;
+
+  @ApiProperty({ example: '2026-12-25', description: 'Holiday date YYYY-MM-DD' })
+  date!: string;
+
+  @ApiPropertyOptional({ example: 'Christmas Day', description: 'Holiday label' })
+  label?: string | null;
+
+  @ApiProperty({ example: true, description: 'Whether branch is entirely closed on this date' })
+  isClosed!: boolean;
+
+  @ApiPropertyOptional({ example: '10:00', description: 'Special opening time HH:mm' })
+  openTime?: string | null;
+
+  @ApiPropertyOptional({ example: '16:00', description: 'Special closing time HH:mm' })
+  closeTime?: string | null;
+
+  @ApiProperty({ example: '2026-10-01T12:00:00.000Z' })
+  createdAt!: Date;
+
+  @ApiProperty({ example: '2026-10-01T12:00:00.000Z' })
+  updatedAt!: Date;
+}
+
+export class BranchStaffMemberResponseDto {
+  @ApiProperty({ example: '88990011-2233-4455-6677-889900112233', description: 'Staff assignment ID' })
+  id!: string;
+
+  @ApiProperty({ example: '11223344-5566-7788-9900-aabbccddeeff', description: 'Staff member UUID' })
+  staffId!: string;
+
+  @ApiProperty({ example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', description: 'Branch UUID' })
+  branchId!: string;
+
+  @ApiProperty({ example: 'WAITER', description: 'Branch role assignment' })
+  role!: string;
+
+  @ApiProperty({ example: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'], description: 'Assigned permissions' })
+  permissions!: string[];
+
+  @ApiProperty({ example: true, description: 'Active assignment status' })
+  isActive!: boolean;
+
+  @ApiProperty({ example: '2026-10-01T12:00:00.000Z', description: 'Assignment date' })
+  assignedAt!: Date;
+
+  @ApiProperty({ example: 'Jane Waiter', description: 'Staff user full name' })
+  name!: string;
+
+  @ApiProperty({ example: 'jane@restaurant.com', description: 'Staff user email' })
+  email!: string;
+
+  @ApiPropertyOptional({ example: '+1-555-1234', description: 'Staff telephone' })
+  phone?: string | null;
+}
+
+export class AssignBranchStaffDto {
+  @ApiProperty({ example: '11223344-5566-7788-9900-aabbccddeeff', description: 'Existing staff member UUID' })
+  @IsUUID()
+  @IsNotEmpty()
+  staffId!: string;
+
+  @ApiProperty({ example: 'WAITER', description: 'Branch role to assign' })
+  @IsString()
+  @IsNotEmpty()
+  role!: string;
+
+  @ApiPropertyOptional({ example: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'], description: 'Explicit permissions granted' })
+  @IsOptional()
+  permissions?: string[];
 }
 
 export class CreateBranchStaffDto {
@@ -285,34 +455,34 @@ export class UpdateBranchStaffDto {
 }
 
 export class QueryBranchDto {
-  @ApiPropertyOptional({ description: 'Filter by restaurant UUID' })
+  @ApiPropertyOptional({ description: 'Filter by restaurant UUID', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
   @IsOptional()
   @IsUUID()
   restaurantId?: string;
 
-  @ApiPropertyOptional({ description: 'Search term for branch name or phone' })
+  @ApiPropertyOptional({ description: 'Search term for branch name or phone', example: 'Downtown' })
   @IsOptional()
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ default: 1 })
+  @ApiPropertyOptional({ default: 1, example: 1 })
   @IsOptional()
   page?: number;
 
-  @ApiPropertyOptional({ default: 10 })
+  @ApiPropertyOptional({ default: 10, example: 10 })
   @IsOptional()
   limit?: number;
 
-  @ApiPropertyOptional({ default: 'createdAt' })
+  @ApiPropertyOptional({ default: 'createdAt', example: 'createdAt' })
   @IsOptional()
   @IsString()
   sortBy?: string;
 
-  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc', example: 'desc' })
   @IsOptional()
   sortOrder?: 'asc' | 'desc';
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ default: false, example: false, description: 'Whether to include soft-deleted records' })
   @IsOptional()
   includeDeleted?: boolean;
 }
