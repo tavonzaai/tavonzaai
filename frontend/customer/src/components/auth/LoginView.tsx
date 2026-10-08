@@ -33,13 +33,13 @@ export default function LoginView({
     const fromQuery = searchParams?.get('email');
     if (fromQuery) return fromQuery;
     if (typeof document !== 'undefined') {
-      return getCookie('tavonza_signup_email') || '';
+      return getCookie('tavonza_signup_email') || 'customer@tavonza.ai';
     }
-    return '';
+    return 'customer@tavonza.ai';
   };
 
   const [email, setEmail] = useState(getInitialEmail);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('Customer@1234');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

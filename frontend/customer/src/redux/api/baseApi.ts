@@ -166,6 +166,14 @@ export async function baseApiFetch<T = any>(
   const rawJson = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      removeAuthToken();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        if (window.location.pathname.startsWith('/profile') || window.location.pathname.startsWith('/orders') || window.location.pathname.startsWith('/dashboard')) {
+          window.location.href = '/login';
+        }
+      }
+    }
     let errorMsg = 'Request failed';
     if (rawJson?.message) {
       errorMsg = Array.isArray(rawJson.message) ? rawJson.message.join('. ') : rawJson.message;

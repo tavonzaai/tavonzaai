@@ -31,14 +31,20 @@ export const SettingsView: React.FC = () => {
 
   useEffect(() => {
     if (user) {
+      const assignedBranch =
+        user.branchName ||
+        user.assignments?.[0]?.branchName ||
+        (user.assignments?.[0] as any)?.branch?.name ||
+        'Downtown HQ';
+
       setSettings((prev) => ({
         ...prev,
         profile: {
           ...prev.profile,
-          cashierName: user.name || user.firstName || prev.profile.cashierName,
+          cashierName: user.name || (user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : prev.profile.cashierName),
           email: user.email || (prev.profile as any).email,
-          phone: user.contactNo || user.phone || (prev.profile as any).phone || '',
-          branch: user.assignments?.[0]?.branch?.name || prev.profile.branch,
+          phone: user.phone || user.contactNo || '',
+          branch: assignedBranch,
         } as any,
       }));
     }
@@ -84,6 +90,7 @@ export const SettingsView: React.FC = () => {
         <div className="space-y-5">
           <ProfileCard
             profile={settings.profile}
+            user={user}
             onChange={(updated) =>
               setSettings((prev) => ({
                 ...prev,

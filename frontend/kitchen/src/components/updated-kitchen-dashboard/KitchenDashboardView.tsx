@@ -196,6 +196,9 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: "PREPARING" as OrderStatus } : o))
     );
+    kitchenService.updateOrderStatus(orderId, "PREPARING").catch((e) => {
+      console.warn("Backend order preparing status update:", e);
+    });
     playChime("new");
     toast.success("Order status updated to Preparing");
   };
@@ -215,6 +218,9 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           : order.status;
 
         if (allCompleted && order.status !== "READY") {
+          kitchenService.updateOrderStatus(orderId, "READY").catch((e) => {
+            console.warn("Backend order ready status update:", e);
+          });
           playChime("ready");
           const notif = `Ticket ${order.orderNumber} items completed! Table ${order.table} ready.`;
           setReadyNotification(notif);
@@ -242,6 +248,9 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
         };
       })
     );
+    kitchenService.updateOrderStatus(orderId, "READY").catch((e) => {
+      console.warn("Backend order ready status update:", e);
+    });
     playChime("ready");
     const targetOrder = orders.find((o) => o.id === orderId);
     const notif = `Ticket ${targetOrder?.orderNumber || ""} items completed! Table ${targetOrder?.table || ""} ready.`;

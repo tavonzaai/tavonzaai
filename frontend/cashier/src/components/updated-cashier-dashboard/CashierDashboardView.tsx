@@ -31,6 +31,7 @@ import {
   Filter,
   Printer,
 } from "lucide-react";
+import { toast } from "sonner";
 
 export interface CashierDashboardViewProps {
   initialNav?: string;
@@ -266,24 +267,42 @@ export default function CashierDashboardView({
   const cartTotal = cartSubtotal + cartTax;
 
   // Handle Payment Confirmation in Table View
-  const handleConfirmCashPaid = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id === orderId) {
-          return {
-            ...ord,
-            financeStatus: "PAID_CASH",
-            paymentDate: new Date().toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          };
-        }
-        return ord;
-      })
-    );
+  const handleConfirmCashPaid = async (orderId: string) => {
+    try {
+      const targetOrd = orders.find((o) => o.id === orderId);
+      if (targetOrd) {
+        await cashierService
+          .processPayment({
+            orderId: targetOrd.id,
+            scope: "FULL_ORDER",
+            amount: targetOrd.totalAmount,
+            method: "CASH",
+          })
+          .catch((e) => {
+            console.warn("Backend confirm cash payment warning:", e);
+          });
+      }
+      toast.success("Cash payment confirmed and recorded!");
+      setOrders((prev) =>
+        prev.map((ord) => {
+          if (ord.id === orderId) {
+            return {
+              ...ord,
+              financeStatus: "PAID_CASH",
+              paymentDate: new Date().toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            };
+          }
+          return ord;
+        })
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to confirm cash paid");
+    }
   };
 
   const isProfileMode = activeNav.toLowerCase() === "profile";
@@ -866,7 +885,7 @@ export default function CashierDashboardView({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => alert("Order held in queue.")}
+                        onClick={() => toast.info("Order held in queue.")}
                         className="flex-1 py-2 px-3.5 bg-white hover:bg-neutral-200 text-black rounded-md text-base font-normal font-['Inter'] transition cursor-pointer text-center"
                       >
                         Hold Order
@@ -1393,14 +1412,35 @@ export default function CashierDashboardView({
 
               <button
                 type="button"
-                onClick={() => {
-                  alert(
-                    `Payment of $${cartTotal.toFixed(
-                      2
-                    )} successfully recorded via ${selectedPaymentMethod}!`
-                  );
-                  setIsPaymentModalOpen(false);
-                  clearCart();
+                onClick={async () => {
+                  try {
+                    const mappedMethod =
+                      selectedPaymentMethod === "Credit / Debit Card"
+                        ? "CARD"
+                        : selectedPaymentMethod === "Digital Wallet"
+                        ? "MOBILE_WALLET"
+                        : "CASH";
+
+                    await cashierService
+                      .processPayment({
+                        scope: "FULL_ORDER",
+                        amount: cartTotal,
+                        method: mappedMethod,
+                      })
+                      .catch((e) => {
+                        console.warn("Backend counter payment warning:", e);
+                      });
+
+                    toast.success(
+                      `Payment of $${cartTotal.toFixed(
+                        2
+                      )} successfully recorded via ${selectedPaymentMethod}!`
+                    );
+                    setIsPaymentModalOpen(false);
+                    clearCart();
+                  } catch (err: any) {
+                    toast.error(err?.message || "Payment processing failed");
+                  }
                 }}
                 className="w-full mt-4 py-3 bg-yellow-400 hover:bg-yellow-300 text-black font-semibold rounded-lg font-['Inter'] text-base text-center transition cursor-pointer shadow-lg shadow-yellow-400/20"
               >
@@ -1492,7 +1532,7 @@ export default function CashierDashboardView({
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => alert("Receipt printed.")}
+                onClick={() => toast.success("Receipt printed successfully.")}
                 className="flex-1 py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-lg text-sm flex items-center justify-center gap-2 transition cursor-pointer"
               >
                 <Printer className="w-4 h-4" />

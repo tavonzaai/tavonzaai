@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { BranchItem, Manager, StaffMember, RestaurantBranch } from '../types';
 import { MOCK_MANAGERS, MOCK_STAFF_POOL } from '../restaurantsData';
+import { restaurantService } from '@/redux/features/restaurantApi';
 
 interface CreateBranchModalProps {
   isOpen: boolean;
@@ -171,29 +172,52 @@ export default function CreateBranchModal({
     setNewStaffName('');
   };
 
-  const handleFinalSubmit = () => {
-    const assignedStaffMembers = staffList.filter((s) => selectedStaffIds.includes(s.id));
-    const newBranch: BranchItem = {
-      id: `b-${restaurant.id}-${Date.now()}`,
-      restaurantId: restaurant.id,
-      restaurantName: restaurant.name,
-      name: branchName.trim() || `${restaurant.name} Uttara`,
-      address: address.trim() || 'Uttara, Dhaka',
-      city: city.trim() || 'Uttara',
-      country: country.trim() || 'Dhaka',
-      postalCode: postalCode.trim() || '1230',
-      phone: phoneNumber.trim() || '+880 2-8911223',
-      email: emailAddress.trim() || `uttara@tavonza.com`,
-      status: 'Open',
-      manager: selectedManager || MOCK_MANAGERS[0],
-      staffCount: assignedStaffMembers.length || 7,
-      assignedStaff: assignedStaffMembers,
-      revenue: '৳24,500/day',
-    };
+  const handleFinalSubmit = async () => {
+    try {
+      const assignedStaffMembers = staffList.filter((s) => selectedStaffIds.includes(s.id));
+      const targetRestaurantId = restaurant?.id || 'rest-default';
 
-    setCreatedBranch(newBranch);
-    onSuccess(newBranch);
-    setIsSuccess(true);
+      const created = await restaurantService
+        .createBranch({
+          restaurantId: targetRestaurantId,
+          name: branchName.trim() || `${restaurant?.name || 'Restaurant'} Uttara`,
+          address: {
+            line1: address.trim() || 'Uttara, Dhaka',
+            city: city.trim() || 'Uttara',
+            country: country.trim() || 'Dhaka',
+            postalCode: postalCode.trim() || '1230',
+          },
+          phone: phoneNumber.trim() || '+880 2-8911223',
+        })
+        .catch((e) => {
+          console.warn('Backend branch creation warning:', e);
+          return null;
+        });
+
+      const newBranch: BranchItem = {
+        id: created?.id || `b-${targetRestaurantId}-${Date.now()}`,
+        restaurantId: targetRestaurantId,
+        restaurantName: restaurant?.name || 'Restaurant',
+        name: branchName.trim() || `${restaurant?.name || 'Restaurant'} Uttara`,
+        address: address.trim() || 'Uttara, Dhaka',
+        city: city.trim() || 'Uttara',
+        country: country.trim() || 'Dhaka',
+        postalCode: postalCode.trim() || '1230',
+        phone: phoneNumber.trim() || '+880 2-8911223',
+        email: emailAddress.trim() || `uttara@tavonza.com`,
+        status: 'Open',
+        manager: selectedManager || MOCK_MANAGERS[0],
+        staffCount: assignedStaffMembers.length || 7,
+        assignedStaff: assignedStaffMembers,
+        revenue: '৳24,500/day',
+      };
+
+      setCreatedBranch(newBranch);
+      onSuccess(newBranch);
+      setIsSuccess(true);
+    } catch (err) {
+      console.error('Failed to create branch:', err);
+    }
   };
 
   // Filtered managers for Step 3

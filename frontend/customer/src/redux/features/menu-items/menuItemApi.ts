@@ -1,86 +1,151 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { baseApiFetch, ApiResponse } from '../../api/baseApi';
+import { baseApiFetch, ApiResponse, getCookie } from '../../api/baseApi';
 
-export interface Modifier {
-  id: string;
-  modifierGroupId: string;
-  name: string;
-  priceDelta: number;
-  isAvailable: boolean;
+export const DEFAULT_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+
+export function getActiveBranchId(providedBranchId?: string): string {
+  if (providedBranchId && providedBranchId.trim()) return providedBranchId.trim();
+  const cookieBranchId = getCookie('tavonza_branch_id');
+  if (cookieBranchId && cookieBranchId.trim()) return cookieBranchId.trim();
+  return DEFAULT_BRANCH_ID;
 }
 
-export interface ModifierGroup {
+export interface MenuItemAddOnResponseDto {
   id: string;
-  menuItemId: string;
   name: string;
-  isRequired: boolean;
-  minSelect: number;
-  maxSelect: number;
-  modifiers: Modifier[];
+  price: number;
 }
 
-export interface BackendMenuItem {
+export interface MenuItemListResponseDto {
   id: string;
-  restaurantId: string;
-  categoryId: string;
   name: string;
   description?: string | null;
-  imageUrl?: string | null;
+  price: number;
   basePrice: number;
-  isAvailable: boolean;
-  isVegetarian: boolean;
+  imageUrl?: string | null;
+  rating?: number | null;
+  ratingCount?: number;
+  isPopular?: boolean;
+  isAvailable?: boolean;
+  dietBadge?: string | null;
+  categoryName?: string;
+  categoryId: string;
+}
+
+export interface MenuItemDetailResponseDto {
+  id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  imageUrl?: string | null;
+  categoryId: string;
+  categoryName: string;
+  prepTime?: number | null;
+  calories?: number | null;
+  dietBadge?: string | null;
+  allergenDisplay?: string | null;
+  allergens?: string[];
+  winePairing?: string | null;
+  winePairingNote?: string | null;
+  rating?: number | null;
+  ratingCount?: number;
+  isPopular?: boolean;
+  isAvailable?: boolean;
+  addOns?: MenuItemAddOnResponseDto[];
+}
+
+// Unified BackendMenuItem type for state store compatibility
+export interface BackendMenuItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  basePrice: number;
+  imageUrl?: string | null;
+  rating?: number | null;
+  ratingCount?: number;
+  isPopular?: boolean;
+  isAvailable?: boolean;
+  isVegetarian?: boolean;
   spiceLevel?: number | null;
-  stationType?: string;
-  displayOrder: number;
-  createdAt: string;
-  updatedAt: string;
+  dietBadge?: string | null;
+  categoryName?: string;
+  categoryId: string;
+  prepTime?: number | null;
+  calories?: number | null;
+  allergenDisplay?: string | null;
+  allergens?: string[];
+  winePairing?: string | null;
+  winePairingNote?: string | null;
+  addOns?: MenuItemAddOnResponseDto[];
   category?: {
     id: string;
-    restaurantId: string;
     name: string;
-    description?: string | null;
-    displayOrder: number;
-    isActive: boolean;
   };
-  modifierGroups?: ModifierGroup[];
+  modifierGroups?: any[];
 }
 
 export interface MenuItemQuery {
+  branchId?: string;
+  categoryId?: string;
+  searchTerm?: string;
+  search?: string;
+  popular?: boolean | string;
+  isPopular?: boolean;
   page?: number;
   limit?: number;
-  searchTerm?: string;
-  sort?: string;
   restaurantId?: string;
-  categoryId?: string;
   isAvailable?: boolean;
   isVegetarian?: boolean;
 }
 
 // ─────────────────────────────────────────
-// 📡 Direct Raw API Handlers
+// 📡 Direct Customer Menu Items API Handlers
 // ─────────────────────────────────────────
 export const rawMenuItemApi = {
+  /**
+   * GET /menus/:branchId/items
+   * Query params: categoryId, search, searchTerm, popular, page, limit
+   */
   findAll: async (query: MenuItemQuery = {}): Promise<ApiResponse<BackendMenuItem[]>> => {
+    const branchId = getActiveBranchId(query.branchId);
+    if (!branchId || !branchId.trim()) {
+      return { success: true, message: 'No branch selected', data: [] };
+    }
     const params = new URLSearchParams();
+
     if (query.page) params.append('page', String(query.page));
     if (query.limit) params.append('limit', String(query.limit));
-    if (query.searchTerm) params.append('searchTerm', query.searchTerm);
-    if (query.sort) params.append('sort', query.sort);
-    if (query.restaurantId) params.append('restaurantId', query.restaurantId);
-    if (query.categoryId) params.append('categoryId', query.categoryId);
-    if (query.isAvailable !== undefined) params.append('isAvailable', String(query.isAvailable));
-    if (query.isVegetarian !== undefined) params.append('isVegetarian', String(query.isVegetarian));
+
+    if (query.categoryId && query.categoryId !== 'all') {
+      params.append('categoryId', query.categoryId);
+    }
+    const searchVal = query.search || query.searchTerm;
+    if (searchVal && searchVal.trim()) {
+      params.append('search', searchVal.trim());
+      params.append('searchTerm', searchVal.trim());
+    }
+    if (query.popular !== undefined || query.isPopular !== undefined) {
+      const isPop = query.popular === true || query.popular === 'true' || query.isPopular === true;
+      params.append('popular', String(isPop));
+    }
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
-    return await baseApiFetch<BackendMenuItem[]>(`/menu-items${queryString}`, {
-      method: 'GET',
-    });
+    return await baseApiFetch<BackendMenuItem[]>(
+      `/menus/${encodeURIComponent(branchId.trim())}/items${queryString}`,
+      { method: 'GET' }
+    );
   },
 
+  /**
+   * GET /menus/items/:itemId
+   * Customer Get menu item detail with add-ons and nutritional info
+   */
   findById: async (id: string): Promise<ApiResponse<BackendMenuItem>> => {
-    return await baseApiFetch<BackendMenuItem>(`/menu-items/${encodeURIComponent(id)}`, {
-      method: 'GET',
-    });
+    return await baseApiFetch<BackendMenuItem>(
+      `/menus/items/${encodeURIComponent(id)}`,
+      { method: 'GET' }
+    );
   },
 };
 
@@ -92,8 +157,13 @@ export const fetchMenuItems = createAsyncThunk(
   async (query: MenuItemQuery = {}, { rejectWithValue }) => {
     try {
       const response = await rawMenuItemApi.findAll(query);
+      const data = Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response)
+        ? (response as any)
+        : [];
       return {
-        data: response.data || [],
+        data,
         meta: response.meta,
       };
     } catch (err: any) {
@@ -107,7 +177,7 @@ export const fetchMenuItemById = createAsyncThunk(
   async (id: string, { rejectWithValue }) => {
     try {
       const response = await rawMenuItemApi.findById(id);
-      return response.data;
+      return (response as any).data || response;
     } catch (err: any) {
       return rejectWithValue(err.message || 'Failed to fetch menu item details.');
     }

@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   X,
 } from 'lucide-react';
-import { mockWaiterProfile } from '../data';
 import SmartRemindersPopover from './SmartRemindersPopover';
 import { useAppSelector } from '@/redux/hooks';
 import { useLogout } from '@/hooks/useLogout';
@@ -42,7 +41,7 @@ export default function WaiterHeader({
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [remindersCount, setRemindersCount] = useState(4);
 
-  const displayName = user?.name || user?.email?.split('@')[0] || mockWaiterProfile.name;
+  const displayName = user?.name || user?.email?.split('@')[0] || 'Staff Waiter';
   const displayRole = user?.assignments?.[0]?.role?.replace(/_/g, ' ') || 'Waiter';
   const initials = displayName
     .split(' ')
