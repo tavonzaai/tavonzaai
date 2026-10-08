@@ -16,8 +16,10 @@ Before implementing any feature, bug fix, schema change, or endpoint, inspect th
 - [**`.agent/ARCHITECTURE.md`**](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent/ARCHITECTURE.md) — Modular monolith domain boundaries, event-driven realtime outbox, worker jobs, and API design.
 - [**`.agent/AI.md`**](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent/AI.md) — AI subsystem architecture, Tool Gateway, Groq model provider integration, and strict `/internal/*` authorization paths.
 - [**`.agent/STATUS.md`**](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent/STATUS.md) — Live phase roadmap and task completion status (Phases 1–4 complete; Phase 5 Frontend Applications in progress).
-- [**`.agent/FLOWS.md`**](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent/FLOWS.md) — Detailed operational user and system workflows.
-- [**`.agent/DEVOPS.md`**](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent/DEVOPS.md) — AWS ECS, RDS, SQS, S3, CloudFront infrastructure and deployment guidelines.
+- [**`.agent/FLOWS.md`**](file:///home/euhan/projects/tavonzaai/.agent/FLOWS.md) — Detailed operational user and system workflows.
+- [**`.agent/REALTIME_AND_NOTIFICATIONS.md`**](file:///home/euhan/projects/tavonzaai/.agent/REALTIME_AND_NOTIFICATIONS.md) — Socket.IO Realtime Gateway, server room partitioning, RTK Query cache invalidation, and persistent notification subsystem.
+- [**`.agent/DEVOPS.md`**](file:///home/euhan/projects/tavonzaai/.agent/DEVOPS.md) — AWS ECS, RDS, SQS, S3, CloudFront infrastructure and deployment guidelines.
+
 
 ---
 

@@ -10,11 +10,16 @@ import type {
   KitchenStationType,
 } from '../domain/entities/kitchen-ticket.entity';
 
+import { RealtimeGateway } from '../../realtime/realtime.gateway';
+import { NotificationService } from '../../notifications/application/services/notification.service';
+
 @Injectable()
 export class KitchenService {
   constructor(
     private readonly kitchenRepo: DrizzleKitchenRepository,
     private readonly outboxService: OutboxService,
+    private readonly realtimeGateway: RealtimeGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async getActiveTickets(
@@ -35,6 +40,18 @@ export class KitchenService {
     );
 
     if (updated && updated.branchId) {
+      this.realtimeGateway.emitOrderItemStatusChanged({
+        eventType: 'ORDER_ITEM_STATUS_CHANGED',
+        eventId: itemId,
+        branchId: updated.branchId,
+        orderId: updated.orderId,
+        orderItemId: updated.id,
+        productName: updated.productName,
+        stationType: updated.stationType as any,
+        status: updated.status as any,
+        occurredAt: new Date().toISOString(),
+      });
+
       await this.outboxService.publishEvent({
         aggregateType: 'KITCHEN_ITEM',
         aggregateId: itemId,
@@ -73,8 +90,34 @@ export class KitchenService {
 
           if (allServed && order.status !== 'SERVED') {
             await this.kitchenRepo.updateOrderStatus(order.id, 'SERVED');
+
+            this.realtimeGateway.emitOrderStatusChanged({
+              eventType: 'ORDER_STATUS_CHANGED',
+              eventId: order.id,
+              branchId: order.branchId,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              tableId: order.tableId,
+              tableSessionId: order.tableSessionId,
+              status: 'SERVED',
+              occurredAt: new Date().toISOString(),
+            });
+
             if (order.tableId) {
               await this.kitchenRepo.updateTableStatus(order.tableId, 'SERVING');
+
+              this.realtimeGateway.emitTableStatusChanged({
+                eventType: 'TABLE_STATUS_CHANGED',
+                eventId: order.tableId,
+                branchId: order.branchId,
+                tableId: order.tableId,
+                tableLabel: updated.tableLabel ?? 'Table',
+                serviceStatus: 'SERVING',
+                operationalFlag: 'NORMAL',
+                activeSessionId: order.tableSessionId,
+                occurredAt: new Date().toISOString(),
+              });
+
               await this.outboxService.publishEvent({
                 aggregateType: 'TABLE',
                 aggregateId: order.tableId,
@@ -106,6 +149,30 @@ export class KitchenService {
             });
           } else if (allReadyOrServed && order.status !== 'READY' && order.status !== 'SERVED') {
             await this.kitchenRepo.updateOrderStatus(order.id, 'READY');
+
+            this.realtimeGateway.emitOrderStatusChanged({
+              eventType: 'ORDER_STATUS_CHANGED',
+              eventId: order.id,
+              branchId: order.branchId,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              tableId: order.tableId,
+              tableSessionId: order.tableSessionId,
+              status: 'READY',
+              occurredAt: new Date().toISOString(),
+            });
+
+            // Notify waitstaff that food is ready for pickup
+            await this.notificationService.create({
+              branchId: order.branchId,
+              targetRole: 'WAITER',
+              type: 'ORDER_READY',
+              title: `Order #${order.orderNumber} Ready`,
+              message: `Order #${order.orderNumber} is ready for pickup/serving.`,
+              entityType: 'ORDER',
+              entityId: order.id,
+            });
+
             await this.outboxService.publishEvent({
               aggregateType: 'ORDER',
               aggregateId: order.id,
@@ -124,8 +191,34 @@ export class KitchenService {
             });
           } else if (anyPreparing && (order.status === 'CONFIRMED' || order.status === 'PENDING')) {
             await this.kitchenRepo.updateOrderStatus(order.id, 'PREPARING');
+
+            this.realtimeGateway.emitOrderStatusChanged({
+              eventType: 'ORDER_STATUS_CHANGED',
+              eventId: order.id,
+              branchId: order.branchId,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              tableId: order.tableId,
+              tableSessionId: order.tableSessionId,
+              status: 'PREPARING',
+              occurredAt: new Date().toISOString(),
+            });
+
             if (order.tableId) {
               await this.kitchenRepo.updateTableStatus(order.tableId, 'PREPARING');
+
+              this.realtimeGateway.emitTableStatusChanged({
+                eventType: 'TABLE_STATUS_CHANGED',
+                eventId: order.tableId,
+                branchId: order.branchId,
+                tableId: order.tableId,
+                tableLabel: updated.tableLabel ?? 'Table',
+                serviceStatus: 'PREPARING',
+                operationalFlag: 'NORMAL',
+                activeSessionId: order.tableSessionId,
+                occurredAt: new Date().toISOString(),
+              });
+
               await this.outboxService.publishEvent({
                 aggregateType: 'TABLE',
                 aggregateId: order.tableId,

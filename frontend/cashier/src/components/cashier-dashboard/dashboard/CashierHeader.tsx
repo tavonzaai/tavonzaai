@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search,
-  Bell,
   ChevronDown,
   Menu,
   Sparkles,
@@ -14,6 +13,7 @@ import { toast } from 'sonner';
 import { useLogout } from '@/hooks/useLogout';
 import { getCashierProfile } from '@/lib/auth';
 import { useAppSelector } from '@/redux/store';
+import { NotificationCenter } from '../../common/NotificationCenter';
 
 interface CashierHeaderProps {
   searchQuery: string;
@@ -34,7 +34,6 @@ export default function CashierHeader({
   const [localUser, setLocalUser] = useState(getCashierProfile());
   const { handleLogout } = useLogout();
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useEffect(() => {
     setLocalUser(getCashierProfile());
@@ -93,38 +92,8 @@ export default function CashierHeader({
 
       {/* Right: Notifications & Emily Wilson Cashier Profile */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {/* Notification Bell */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setNotificationsOpen(!notificationsOpen)}
-            className="size-9 sm:size-10 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center relative text-zinc-300 hover:text-white hover:border-amber-500/30 transition-colors cursor-pointer"
-            title="Notifications"
-          >
-            <Bell className="w-4 h-4 text-white" />
-            <span className="size-4 bg-red-500 rounded-full text-white text-xs font-bold absolute -top-1 -right-1 flex items-center justify-center shadow-md font-['Inter']">
-              2
-            </span>
-          </button>
-
-          {/* Notification Popover */}
-          {notificationsOpen && (
-            <div className="absolute right-0 mt-2 w-80 bg-zinc-900 border border-white/10 rounded-xl p-3 shadow-2xl z-50 space-y-2 animate-in fade-in zoom-in-95 font-['Inter']">
-              <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                <span className="text-sm font-semibold text-white font-['Inter']">Checkout Alerts</span>
-                <span className="text-xs text-amber-400 font-medium font-['Inter']">2 Actions Required</span>
-              </div>
-              <div className="space-y-1.5 text-sm text-zinc-300 font-['Inter']">
-                <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  Card transaction TX-10579 requires manual verification.
-                </div>
-                <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                  Three completed orders are awaiting payment at Table 12.
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Realtime Notification Center */}
+        <NotificationCenter />
 
         {/* Cashier Profile Badge (Emily Wilson) */}
         <div className="relative">

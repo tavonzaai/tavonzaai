@@ -242,6 +242,31 @@ export class TableSessionController {
   }
 
   /**
+   * POST /sessions/:sessionId/request-bill
+   * Guest requests bill settlement
+   */
+  @Post(':sessionId/request-bill')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Customer] Request bill for table session' })
+  async requestBill(@Param('sessionId') sessionId: string) {
+    return this.sessionService.requestBill(sessionId);
+  }
+
+  /**
+   * POST /sessions/:sessionId/call-waiter
+   * Guest calls staff to table
+   */
+  @Post(':sessionId/call-waiter')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Customer] Call waiter to table' })
+  async callWaiter(
+    @Param('sessionId') sessionId: string,
+    @Body('reason') reason?: string,
+  ) {
+    return this.sessionService.callWaiter(sessionId, reason);
+  }
+
+  /**
    * POST /sessions/:sessionId/close
    * Called after payment is completed
    */

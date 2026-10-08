@@ -76,10 +76,20 @@ export default function AlertsView({
 
   useEffect(() => {
     loadAlerts(false);
-    const interval = setInterval(() => {
+    const handleRealtime = () => {
       loadAlerts(false);
-    }, 10000);
-    return () => clearInterval(interval);
+    };
+    window.addEventListener('tavonza:notification_created', handleRealtime);
+    window.addEventListener('tavonza:notification_read', handleRealtime);
+    window.addEventListener('tavonza:waiter_called', handleRealtime);
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+
+    return () => {
+      window.removeEventListener('tavonza:notification_created', handleRealtime);
+      window.removeEventListener('tavonza:notification_read', handleRealtime);
+      window.removeEventListener('tavonza:waiter_called', handleRealtime);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+    };
   }, [loadAlerts]);
 
   // Acknowledge Alert (PATCH /waiter/alerts/:id/acknowledge)

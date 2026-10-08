@@ -230,10 +230,20 @@ export default function OrdersView() {
     };
 
     fetchOrders();
-    const interval = setInterval(fetchOrders, 10000);
+    const handleRealtime = () => {
+      fetchOrders();
+    };
+    window.addEventListener('tavonza:order_created', handleRealtime);
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+    window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    window.addEventListener('tavonza:payment_status_changed', handleRealtime);
+
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:order_created', handleRealtime);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+      window.removeEventListener('tavonza:payment_status_changed', handleRealtime);
     };
   }, []);
 

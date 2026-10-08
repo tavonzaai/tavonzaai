@@ -205,3 +205,29 @@ export async function baseApiFetch<T = any>(
   return resData;
 }
 
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+
+export const rtkBaseApi = createApi({
+  reducerPath: 'api',
+  baseQuery: fetchBaseQuery({
+    baseUrl: getApiBaseUrl(),
+    prepareHeaders: (headers) => {
+      const token = getAuthToken();
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      return headers;
+    },
+  }),
+  tagTypes: [
+    'TABLE',
+    'ORDER',
+    'ORDER_ITEM',
+    'PAYMENT',
+    'MENU',
+    'USER',
+    'NOTIFICATION',
+  ],
+  endpoints: () => ({}),
+});
+

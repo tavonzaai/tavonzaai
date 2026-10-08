@@ -60,10 +60,15 @@ function WaitingContent() {
       }
     };
 
-    const pollInterval = setInterval(checkStatus, 4000);
+    checkStatus();
+    const handleRealtime = () => {
+      checkStatus();
+    };
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+
     return () => {
       isMounted = false;
-      clearInterval(pollInterval);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
     };
   }, [orderId, activeTable, router]);
 

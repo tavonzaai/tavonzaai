@@ -52,10 +52,18 @@ export default function BottomDock({
     }
 
     fetchAlertCount();
-    const interval = setInterval(fetchAlertCount, 8000);
+    const handleRealtime = () => {
+      fetchAlertCount();
+    };
+    window.addEventListener('tavonza:notification_created', handleRealtime);
+    window.addEventListener('tavonza:notification_read', handleRealtime);
+    window.addEventListener('tavonza:waiter_called', handleRealtime);
+
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:notification_created', handleRealtime);
+      window.removeEventListener('tavonza:notification_read', handleRealtime);
+      window.removeEventListener('tavonza:waiter_called', handleRealtime);
     };
   }, []);
 

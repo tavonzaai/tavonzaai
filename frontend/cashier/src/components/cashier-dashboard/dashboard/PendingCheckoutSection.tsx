@@ -38,10 +38,17 @@ export default function PendingCheckoutSection({ onOpenPOS }: PendingCheckoutPro
       }
     };
     loadPending();
-    const interval = setInterval(loadPending, 8000);
+    const handleUpdate = () => loadPending();
+    window.addEventListener('tavonza:order_created', handleUpdate);
+    window.addEventListener('tavonza:order_status_changed', handleUpdate);
+    window.addEventListener('tavonza:payment_status_changed', handleUpdate);
+    window.addEventListener('tavonza:payment_requested', handleUpdate);
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:order_created', handleUpdate);
+      window.removeEventListener('tavonza:order_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:payment_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:payment_requested', handleUpdate);
     };
   }, []);
 

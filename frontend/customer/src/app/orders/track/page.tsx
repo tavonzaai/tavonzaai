@@ -77,9 +77,15 @@ function TrackContent() {
     fetchTrackData();
 
     if (!orderId) return;
-    // Live polling for order status changes every 3.5s
-    const pollTimer = setInterval(fetchTrackData, 3500);
-    return () => clearInterval(pollTimer);
+    const handleRealtime = () => {
+      fetchTrackData();
+    };
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+    window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    return () => {
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+    };
   }, [orderId]);
 
   const handleCallWaiter = () => {
