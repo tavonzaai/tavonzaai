@@ -1,13 +1,16 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { baseApiFetch, ApiResponse, getCookie } from '../../api/baseApi';
 
-export const DEFAULT_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-
 export function getActiveBranchId(providedBranchId?: string): string {
   if (providedBranchId && providedBranchId.trim()) return providedBranchId.trim();
-  const cookieBranchId = getCookie('tavonza_branch_id');
+  const cookieBranchId = getCookie('tavonza_branch_id') || getCookie('branch_id');
   if (cookieBranchId && cookieBranchId.trim()) return cookieBranchId.trim();
-  return DEFAULT_BRANCH_ID;
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const branchParam = params.get('branchId');
+    if (branchParam && branchParam.trim()) return branchParam.trim();
+  }
+  return '';
 }
 
 export interface MenuItemAddOnResponseDto {

@@ -188,25 +188,30 @@ Important events include:
 - PaymentCompleted
 - TableSessionClosed
 
-## Realtime Boundary
+## Realtime Boundary & UI Synchronization
 
 REST/HTTP is used for commands and queries.
-
-WebSocket/realtime is used to notify clients about state changes.
+WebSocket/realtime (Socket.IO Gateway in `apps/api/src/modules/realtime`) is used for instantaneous UI push updates and event dispatch.
 
 ```text
-Business command
+Business Command (REST HTTP)
   ↓
-API/domain
-  ↓
-Database + event
-  ↓
-Realtime publisher
-  ↓
-Customer / Staff UI
+API Domain Service (Order, TableSession, Kitchen, Payment)
+  ├── Database Mutation (Drizzle ORM)
+  ├── Create Persistent Notification (NotificationService)
+  └── Broadcast Realtime Event (RealtimeGateway)
+        ↓
+  Socket.IO Gateway (Room-partitioned: branch:{id}, branch:{id}:{role}, table_session:{id})
+        ↓
+  Client RealtimeBridge (React / Redux Toolkit)
+        ├── Invalidate RTK Query Cache Tags (TABLE, ORDER, PAYMENT, etc.)
+        └── Dispatch DOM Event (tavonza:*)
 ```
 
-Clients must not treat a realtime message as authoritative state without validating against the API where necessary.
+Clients treat the database as the authoritative source of truth. When a realtime event is received, RTK Query automatically invalidates cache tags to re-fetch fresh state in the background. Periodic HTTP polling (`setInterval`) is strictly prohibited.
+
+For complete specifications, see [`.agent/REALTIME_AND_NOTIFICATIONS.md`](file:///home/euhan/projects/tavonzaai/.agent/REALTIME_AND_NOTIFICATIONS.md).
+
 
 ## Control Plane and Data Plane
 

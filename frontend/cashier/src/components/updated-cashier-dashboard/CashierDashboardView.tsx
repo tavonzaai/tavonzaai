@@ -197,10 +197,21 @@ export default function CashierDashboardView({
       }
     };
     loadCashierData();
-    const interval = setInterval(loadCashierData, 8000);
+    const handleUpdate = () => loadCashierData();
+    window.addEventListener('tavonza:payment_status_changed', handleUpdate);
+    window.addEventListener('tavonza:payment_requested', handleUpdate);
+    window.addEventListener('tavonza:order_created', handleUpdate);
+    window.addEventListener('tavonza:order_status_changed', handleUpdate);
+    window.addEventListener('tavonza:table_status_changed', handleUpdate);
+    window.addEventListener('tavonza:table_session_changed', handleUpdate);
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:payment_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:payment_requested', handleUpdate);
+      window.removeEventListener('tavonza:order_created', handleUpdate);
+      window.removeEventListener('tavonza:order_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:table_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:table_session_changed', handleUpdate);
     };
   }, [selectedOrderId]);
   const [orderNo, setOrderNo] = useState<string>("#1230");

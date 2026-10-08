@@ -38,73 +38,24 @@ function CartContent() {
 
   const activeTable = searchParams.get('table') || tableNumber || '';
 
-  const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-  const DEFAULT_FALLBACK_TABLE_ID = '00000014-0000-4000-8000-000000000008';
-
-  const TABLE_NUMBER_MAP: Record<string, string> = {
-    't-01': '00000014-0000-4000-8000-000000000001',
-    't-02': '00000014-0000-4000-8000-000000000002',
-    't-03': '00000014-0000-4000-8000-000000000003',
-    't-04': '00000014-0000-4000-8000-000000000004',
-    't-05': '00000014-0000-4000-8000-000000000005',
-    't-06': '00000014-0000-4000-8000-000000000006',
-    't-07': '00000014-0000-4000-8000-000000000007',
-    't-08': '00000014-0000-4000-8000-000000000008',
-    't-09': '00000014-0000-4000-8000-000000000009',
-    't-10': '00000014-0000-4000-8000-00000000000a',
-    't-11': '00000014-0000-4000-8000-00000000000b',
-    't-12': '00000014-0000-4000-8000-00000000000c',
-    'table 1': '00000014-0000-4000-8000-000000000001',
-    'table 2': '00000014-0000-4000-8000-000000000002',
-    'table 3': '00000014-0000-4000-8000-000000000003',
-    'table 4': '00000014-0000-4000-8000-000000000004',
-    'table 5': '00000014-0000-4000-8000-000000000005',
-    'table 6': '00000014-0000-4000-8000-000000000006',
-    'table 7': '00000014-0000-4000-8000-000000000007',
-    'table 8': '00000014-0000-4000-8000-000000000008',
-    'table 9': '00000014-0000-4000-8000-000000000009',
-    'table 10': '00000014-0000-4000-8000-00000000000a',
-    'table 11': '00000014-0000-4000-8000-00000000000b',
-    'table 12': '00000014-0000-4000-8000-00000000000c',
-    'table 01': '00000014-0000-4000-8000-000000000001',
-    'table 02': '00000014-0000-4000-8000-000000000002',
-    'table 03': '00000014-0000-4000-8000-000000000003',
-    'table 04': '00000014-0000-4000-8000-000000000004',
-    'table 05': '00000014-0000-4000-8000-000000000005',
-    'table 06': '00000014-0000-4000-8000-000000000006',
-    'table 07': '00000014-0000-4000-8000-000000000007',
-    'table 08': '00000014-0000-4000-8000-000000000008',
-    'table 09': '00000014-0000-4000-8000-000000000009',
-    '1': '00000014-0000-4000-8000-000000000001',
-    '2': '00000014-0000-4000-8000-000000000002',
-    '3': '00000014-0000-4000-8000-000000000003',
-    '4': '00000014-0000-4000-8000-000000000004',
-    '5': '00000014-0000-4000-8000-000000000005',
-    '6': '00000014-0000-4000-8000-000000000006',
-    '7': '00000014-0000-4000-8000-000000000007',
-    '8': '00000014-0000-4000-8000-000000000008',
-    '9': '00000014-0000-4000-8000-000000000009',
-    '10': '00000014-0000-4000-8000-00000000000a',
-    '11': '00000014-0000-4000-8000-00000000000b',
-    '12': '00000014-0000-4000-8000-00000000000c',
-  };
-
   const isUUID = (val?: string | null): boolean =>
     Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
-  const resolveDynamicBranchId = (): string => {
-    const rawBranchId = getCookie('tavonza_branch_id');
+  const resolveDynamicBranchId = (): string | null => {
+    const rawBranchId = getCookie('tavonza_branch_id') || getCookie('branch_id');
     if (rawBranchId && isUUID(rawBranchId)) return rawBranchId;
-    return DEFAULT_FALLBACK_BRANCH_ID;
+    const branchParam = searchParams.get('branchId');
+    if (branchParam && isUUID(branchParam)) return branchParam;
+    return null;
   };
 
-  const resolveDynamicTableId = (): string => {
+  const resolveDynamicTableId = (): string | null => {
     const rawTableCookie = getCookie('tavonza_table_id');
     if (rawTableCookie && isUUID(rawTableCookie)) return rawTableCookie;
     if (isUUID(activeTable)) return activeTable;
-    const tableKey = activeTable.trim().toLowerCase();
-    if (tableKey && TABLE_NUMBER_MAP[tableKey]) return TABLE_NUMBER_MAP[tableKey];
-    return DEFAULT_FALLBACK_TABLE_ID;
+    const tableIdParam = searchParams.get('tableId');
+    if (tableIdParam && isUUID(tableIdParam)) return tableIdParam;
+    return null;
   };
 
   // Automatically fetch & sync backend cart on page load
@@ -113,6 +64,7 @@ function CartContent() {
       try {
         const branchId = resolveDynamicBranchId();
         const tableId = resolveDynamicTableId();
+        if (!branchId || !tableId) return;
 
         try {
           await orderService.getCartFromSession(branchId, tableId);
@@ -136,22 +88,36 @@ function CartContent() {
     try {
       const branchId = resolveDynamicBranchId();
       const tableId = resolveDynamicTableId();
+      if (!branchId || !tableId) {
+        throw new Error('Please scan your table QR code or select a valid table before placing an order.');
+      }
 
       const draft = await orderService.getCart(branchId, tableId);
       if (!draft?.id) {
         throw new Error('Unable to create or retrieve cart for this table.');
       }
 
-      // If backend draft has no items but frontend cart does, sync them now
-      const existingItems = draft.items || [];
-      if (existingItems.length === 0 && cart.length > 0) {
-        let catalogItems: any[] = [];
-        try {
-          const catRes = await fetch(`${getApiBaseUrl()}/menus/${branchId}/items`);
-          const catData = await catRes.json();
-          catalogItems = Array.isArray(catData) ? catData : catData?.data || [];
-        } catch (err) {
-          console.warn('Could not prefetch catalog:', err);
+      // Pre-fetch catalog to resolve any non-UUID identifiers (from local storage or client state)
+      let catalogItems: any[] = [];
+      try {
+        const catRes = await fetch(`${getApiBaseUrl()}/menus/${branchId}/items`);
+        const catData = await catRes.json();
+        catalogItems = Array.isArray(catData) ? catData : catData?.data || [];
+      } catch (err) {
+        console.warn('Could not prefetch catalog:', err);
+      }
+
+      for (const item of cart) {
+        let validMenuItemId = item.dishId || item.id;
+        if (!isUUID(validMenuItemId)) {
+          const matched = catalogItems.find(
+            (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
+          );
+          validMenuItemId = matched?.id;
+        }
+
+        if (!validMenuItemId || !isUUID(validMenuItemId)) {
+          throw new Error(`Item "${item.name}" could not be verified in the restaurant menu catalog.`);
         }
         const fallbackUuid = catalogItems[0]?.id || '0000000b-0000-4000-8000-000000000004';
 

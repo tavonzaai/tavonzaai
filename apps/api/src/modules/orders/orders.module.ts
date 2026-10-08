@@ -11,9 +11,10 @@ import { OrderController } from './presentation/controllers/order.controller';
 import { DrizzleOrderRepository } from './infrastructure/persistence/drizzle-order.repository';
 import { ORDER_REPOSITORY } from './domain/interfaces/order-repository.interface';
 import { MenusModule } from '../menus/menus.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [MenusModule],
+  imports: [MenusModule, NotificationsModule],
   controllers: [OrderController],
   providers: [
     OrderService,

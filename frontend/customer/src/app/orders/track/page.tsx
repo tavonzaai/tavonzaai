@@ -99,9 +99,16 @@ function TrackContent() {
       return;
     }
 
-    fetchTrackData();
-    const pollTimer = setInterval(fetchTrackData, 3500);
-    return () => clearInterval(pollTimer);
+    if (!orderId) return;
+    const handleRealtime = () => {
+      fetchTrackData();
+    };
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+    window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    return () => {
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+    };
   }, [orderId]);
 
   const handleCallWaiter = () => {

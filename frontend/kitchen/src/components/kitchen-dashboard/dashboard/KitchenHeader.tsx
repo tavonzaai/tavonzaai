@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Bell, ChevronDown, Menu, Sparkles, User, LogOut } from 'lucide-react';
+import { Search, ChevronDown, Menu, Sparkles, User, LogOut } from 'lucide-react';
 import { useAppSelector } from '@/redux/hooks';
 import { useLogout } from '@/hooks/useLogout';
+import { NotificationCenter } from '../../common/NotificationCenter';
 
 interface KitchenHeaderProps {
   searchQuery: string;
@@ -108,18 +109,7 @@ export default function KitchenHeader({
         </button>
 
         {/* Notification Bell */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => alert('Kitchen Notifications:\n1. Order #10582 close to timer limit\n2. Cheese stock reorder alert')}
-            className="w-9 h-9 rounded-lg bg-zinc-900 border border-white/10 hover:border-white/20 flex items-center justify-center text-zinc-300 hover:text-white transition-colors cursor-pointer"
-          >
-            <Bell className="w-4 h-4" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
-              2
-            </span>
-          </button>
-        </div>
+        <NotificationCenter />
 
         {/* Staff Profile */}
         <div className="relative">

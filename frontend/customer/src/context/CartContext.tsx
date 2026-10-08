@@ -37,83 +37,44 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-export const DEFAULT_FALLBACK_TABLE_ID = '00000014-0000-4000-8000-000000000008';
-
-export const TABLE_NUMBER_MAP: Record<string, string> = {
-  't-01': '00000014-0000-4000-8000-000000000001',
-  't-02': '00000014-0000-4000-8000-000000000002',
-  't-03': '00000014-0000-4000-8000-000000000003',
-  't-04': '00000014-0000-4000-8000-000000000004',
-  't-05': '00000014-0000-4000-8000-000000000005',
-  't-06': '00000014-0000-4000-8000-000000000006',
-  't-07': '00000014-0000-4000-8000-000000000007',
-  't-08': '00000014-0000-4000-8000-000000000008',
-  't-09': '00000014-0000-4000-8000-000000000009',
-  't-10': '00000014-0000-4000-8000-00000000000a',
-  't-11': '00000014-0000-4000-8000-00000000000b',
-  't-12': '00000014-0000-4000-8000-00000000000c',
-  'table 1': '00000014-0000-4000-8000-000000000001',
-  'table 2': '00000014-0000-4000-8000-000000000002',
-  'table 3': '00000014-0000-4000-8000-000000000003',
-  'table 4': '00000014-0000-4000-8000-000000000004',
-  'table 5': '00000014-0000-4000-8000-000000000005',
-  'table 6': '00000014-0000-4000-8000-000000000006',
-  'table 7': '00000014-0000-4000-8000-000000000007',
-  'table 8': '00000014-0000-4000-8000-000000000008',
-  'table 9': '00000014-0000-4000-8000-000000000009',
-  'table 10': '00000014-0000-4000-8000-00000000000a',
-  'table 11': '00000014-0000-4000-8000-00000000000b',
-  'table 12': '00000014-0000-4000-8000-00000000000c',
-  'table 01': '00000014-0000-4000-8000-000000000001',
-  'table 02': '00000014-0000-4000-8000-000000000002',
-  'table 03': '00000014-0000-4000-8000-000000000003',
-  'table 04': '00000014-0000-4000-8000-000000000004',
-  'table 05': '00000014-0000-4000-8000-000000000005',
-  'table 06': '00000014-0000-4000-8000-000000000006',
-  'table 07': '00000014-0000-4000-8000-000000000007',
-  'table 08': '00000014-0000-4000-8000-000000000008',
-  'table 09': '00000014-0000-4000-8000-000000000009',
-  '1': '00000014-0000-4000-8000-000000000001',
-  '2': '00000014-0000-4000-8000-000000000002',
-  '3': '00000014-0000-4000-8000-000000000003',
-  '4': '00000014-0000-4000-8000-000000000004',
-  '5': '00000014-0000-4000-8000-000000000005',
-  '6': '00000014-0000-4000-8000-000000000006',
-  '7': '00000014-0000-4000-8000-000000000007',
-  '8': '00000014-0000-4000-8000-000000000008',
-  '9': '00000014-0000-4000-8000-000000000009',
-  '10': '00000014-0000-4000-8000-00000000000a',
-  '11': '00000014-0000-4000-8000-00000000000b',
-  '12': '00000014-0000-4000-8000-00000000000c',
-};
-
-export const isUUID = (val?: string | null): boolean =>
+const isUUID = (val?: string | null): boolean =>
   Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
-export const resolveDynamicBranchId = (apiBranchId?: string | null): string => {
+const resolveDynamicBranchId = (apiBranchId?: string | null): string | null => {
   if (apiBranchId && isUUID(apiBranchId)) return apiBranchId;
-  const cookieBranch = getCookie('tavonza_branch_id');
+  const cookieBranch = getCookie('tavonza_branch_id') || getCookie('branch_id');
   if (cookieBranch && isUUID(cookieBranch)) return cookieBranch;
-  return DEFAULT_FALLBACK_BRANCH_ID;
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const queryBranch = params.get('branchId');
+    if (queryBranch && isUUID(queryBranch)) return queryBranch;
+  }
+  return null;
 };
 
-export const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string => {
+const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string | null => {
   if (apiTableId && isUUID(apiTableId)) return apiTableId;
   const cookieTable = getCookie('tavonza_table_id');
   if (cookieTable && isUUID(cookieTable)) return cookieTable;
-  const rawTable = getCookie('tavonza_table');
-  const tableKey = (activeTableNumber || rawTable || '').trim().toLowerCase();
-  if (tableKey && TABLE_NUMBER_MAP[tableKey]) {
-    return TABLE_NUMBER_MAP[tableKey];
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const queryTableId = params.get('tableId');
+    if (queryTableId && isUUID(queryTableId)) return queryTableId;
+    const queryTable = params.get('table');
+    if (queryTable && isUUID(queryTable)) return queryTable;
   }
-  return DEFAULT_FALLBACK_TABLE_ID;
+  if (activeTableNumber && isUUID(activeTableNumber)) return activeTableNumber;
+  return null;
 };
 
 const syncAddItemToBackend = async (item: CartItem): Promise<string | undefined> => {
   try {
     const branchId = resolveDynamicBranchId();
     const tableId = resolveDynamicTableId();
+    if (!branchId || !tableId) {
+      // Local cart only until session/table is connected
+      return;
+    }
 
     let draft: any = null;
     try {
@@ -130,7 +91,9 @@ const syncAddItemToBackend = async (item: CartItem): Promise<string | undefined>
         ? item.dishId!
         : isUUID(item.id)
         ? item.id
-        : '0000000b-0000-4000-8000-000000000004';
+        : null;
+
+      if (!validMenuItemId) return;
 
       const res = await orderService.addItem({
         orderId: draft.id,
@@ -156,9 +119,9 @@ const syncUpdateItemBackend = async (item: CartItem, newQty: number) => {
 
     let draft: any = null;
     try {
-      draft = await orderService.getCartFromSession(branchId, tableId);
+      draft = await orderService.getCartFromSession(branchId!, tableId!);
     } catch {
-      draft = await orderService.getCart(branchId, tableId);
+      draft = await orderService.getCart(branchId!, tableId!);
     }
 
     if (!draft?.id) return;
@@ -186,9 +149,9 @@ const syncRemoveItemBackend = async (item: CartItem) => {
 
     let draft: any = null;
     try {
-      draft = await orderService.getCartFromSession(branchId, tableId);
+      draft = await orderService.getCartFromSession(branchId!, tableId!);
     } catch {
-      draft = await orderService.getCart(branchId, tableId);
+      draft = await orderService.getCart(branchId!, tableId!);
     }
 
     if (!draft?.id) return;
@@ -225,17 +188,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         try {
           const parsed = JSON.parse(savedCart);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const isUUID = (val?: string | null) =>
-              Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
-            const sanitized = parsed.map((item: CartItem) => {
-              if (item.dishId === 'item' || !isUUID(item.dishId)) {
-                return {
-                  ...item,
-                  dishId: '4455110d-db04-4cef-92c6-46bcd6a4c7e2',
-                };
-              }
-              return item;
-            });
+            const sanitized = parsed.filter((item: CartItem) => item && (item.dishId || item.id || item.name));
             setCart(sanitized);
           }
         } catch {

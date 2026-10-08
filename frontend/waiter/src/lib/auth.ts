@@ -19,24 +19,6 @@ export interface WaiterUser {
   }>;
 }
 
-export const DEMO_WAITER_USER: WaiterUser = {
-  id: 'wtr-101',
-  name: 'Michael Davis',
-  email: ' ',
-  role: 'WAITER',
-  station: 'Downtown Branch Station A',
-  assignments: [
-    {
-      id: 'asg-wtr-1',
-      role: 'WAITER',
-      branch: { id: 'br-1', name: 'Downtown Branch' },
-    },
-  ],
-};
-
-/**
- * Check if waiter session is currently active (STRICTLY COOKIES ONLY - NO LOCALSTORAGE)
- */
 export function isWaiterAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
   const waiterToken = getCookie(WAITER_TOKEN_KEY);
@@ -73,9 +55,14 @@ export function loginWaiterSession(customUser?: Partial<WaiterUser>): WaiterUser
     : `wtr_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
   const user: WaiterUser = {
-    ...DEMO_WAITER_USER,
-    ...customUser,
+    id: customUser?.id || '',
+    name: customUser?.name || 'Waiter Staff',
+    email: customUser?.email || '',
+    role: customUser?.role || 'WAITER',
+    station: customUser?.station || 'Waiter Station',
+    assignments: customUser?.assignments || [],
     shiftStartedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    ...customUser,
   };
 
   // Store strictly in Cookies (NO LOCALSTORAGE)

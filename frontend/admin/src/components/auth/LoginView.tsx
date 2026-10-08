@@ -82,29 +82,15 @@ export default function LoginView({
       const userRole = userProfile?.role ? String(userProfile.role).toUpperCase() : 'SUPER_ADMIN';
 
       handleCompleteSession(userName, email.trim(), userRole, userProfile);
-    } catch {
-      // Offline / demo fallback - only if admin email
-      const emailLower = email.toLowerCase();
-      if (emailLower.includes('euhan') || emailLower.includes('admin')) {
-        handleCompleteSession(
-          'System Administrator',
-          email.trim(),
-          'SUPER_ADMIN'
-        );
-      } else {
-        setError('Invalid credentials or unauthorized administrator access.');
-      }
+    } catch (err: any) {
+      setError(
+        typeof err === 'string'
+          ? err
+          : err?.message || 'Invalid credentials or unauthorized administrator access.'
+      );
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickAdminLogin = () => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      handleCompleteSession('System Administrator', 'owner@tavonza.ai', 'SUPER_ADMIN');
-      setIsSubmitting(false);
-    }, 250);
   };
 
   return (
@@ -179,16 +165,6 @@ export default function LoginView({
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {isSubmitting ? 'Signing in…' : 'Log In to Console'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleQuickAdminLogin}
-            disabled={isSubmitting}
-            className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 text-xs text-amber-300 font-medium rounded-xl transition flex items-center justify-center gap-2 cursor-pointer font-['Inter']"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-yellow-400" />
-            <span>⚡ One-Click Admin Sign In (<strong>System Administrator</strong>)</span>
           </button>
         </form>
       </div>

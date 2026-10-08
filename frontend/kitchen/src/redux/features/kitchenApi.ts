@@ -34,35 +34,43 @@ export interface ToggleAvailabilityPayload {
   isAvailable: boolean;
 }
 
+const isUUID = (val?: string | null): boolean =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
 export function getActiveBranchId(): string {
   if (typeof window !== 'undefined') {
     try {
-      const match = document.cookie.match(/(?:^|;\s*)active_branch_id=([^;]+)/);
+      const match = document.cookie.match(/(?:^|;\s*)(?:active_branch_id|tavonza_branch_id|branch_id)=([^;]+)/);
       if (match && match[1]) {
         const val = decodeURIComponent(match[1]);
-        if (val.length === 36 && val.includes('-')) return val;
+        if (isUUID(val)) return val;
       }
       const rawUser = localStorage.getItem('tavonza_user');
       if (rawUser) {
         const parsed = JSON.parse(rawUser);
-        if (parsed?.branchId && parsed.branchId.length === 36) return parsed.branchId;
-        if (parsed?.assignments?.[0]?.branchId && parsed.assignments[0].branchId.length === 36) {
+        if (isUUID(parsed?.branchId)) return parsed.branchId;
+        if (isUUID(parsed?.assignments?.[0]?.branchId)) {
           return parsed.assignments[0].branchId;
+        }
+        if (isUUID(parsed?.assignments?.[0]?.branch?.id)) {
+          return parsed.assignments[0].branch.id;
         }
       }
     } catch {}
   }
-  return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+  return '';
 }
 
 export const kitchenService = {
   getOrders: async (branchId: string): Promise<any[]> => {
+    if (!branchId) return [];
     const res = await baseApiFetch<any[]>(`/orders/branch/${encodeURIComponent(branchId)}`, {
       method: 'GET',
     });
     return (res as any)?.data || res;
   },
   getActiveTickets: async (branchId: string, station?: KitchenStationType): Promise<KitchenTicketItem[]> => {
+    if (!branchId) return [];
     let url = `/kitchen/tickets/${encodeURIComponent(branchId)}`;
     if (station) {
       url += `?station=${encodeURIComponent(station)}`;

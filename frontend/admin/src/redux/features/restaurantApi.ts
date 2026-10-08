@@ -262,3 +262,5 @@ export const restaurantService = {
     return (res as any)?.data || res || [];
   },
 };
+
+export const branchService = restaurantService;

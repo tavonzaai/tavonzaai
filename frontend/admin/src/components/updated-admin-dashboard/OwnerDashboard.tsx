@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { baseApiFetch } from '../../redux/api/baseApi';
+import { baseApiFetch, getCookie } from '../../redux/api/baseApi';
+import { branchService } from '../../redux/features/restaurantApi';
+import { NotificationCenter } from '../common/NotificationCenter';
 import {
   Store,
   LayoutDashboard,
@@ -65,7 +67,21 @@ export default function OwnerDashboard({
     let mounted = true;
     const fetchLiveData = async () => {
       try {
-        const branchId = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+        let branchId =
+          getCookie('tavonza_branch_id') ||
+          getCookie('branch_id') ||
+          getCookie('active_branch_id');
+
+        if (!branchId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branchId)) {
+          const branchesRes = await branchService.getBranches({ limit: 1 }).catch(() => null);
+          const firstBranch = branchesRes?.data?.[0];
+          if (firstBranch?.id) {
+            branchId = firstBranch.id;
+          }
+        }
+
+        if (!branchId) return;
+
         const [ordersRes, tablesRes] = await Promise.allSettled([
           baseApiFetch<any[]>(`/orders/branch/${branchId}`),
           baseApiFetch<any[]>(`/tables/branch/${branchId}`),
@@ -250,51 +266,8 @@ export default function OwnerDashboard({
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-amber-400' : ''}`} />
             </button>
 
-            {/* Notification Bell */}
-            <div className="relative">
-              <button
-                onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:border-zinc-700 relative transition-colors"
-                aria-label="Notifications"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-black text-[10px] font-bold rounded-full flex items-center justify-center">
-                  3
-                </span>
-              </button>
-
-              {/* Notifications Popup */}
-              {notificationsOpen && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 p-4 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      <span className="text-xs font-semibold text-white">Live Owner Alerts</span>
-                    </div>
-                    <span className="text-[10px] text-zinc-400">3 unread</span>
-                  </div>
-
-                  <div className="divide-y divide-zinc-800/60 max-h-80 overflow-y-auto mt-2">
-                    {notifications.map((n) => (
-                      <div key={n.id} className="py-3 first:pt-1 last:pb-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-white">{n.title}</span>
-                          <span className="text-[10px] text-zinc-500">{n.time}</span>
-                        </div>
-                        <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{n.text}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    onClick={() => setNotificationsOpen(false)}
-                    className="w-full mt-3 py-1.5 text-center text-xs font-medium text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors"
-                  >
-                    Close Alerts
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Realtime Notification Center */}
+            <NotificationCenter />
 
             {/* Owner Profile Chip */}
             <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-zinc-800">

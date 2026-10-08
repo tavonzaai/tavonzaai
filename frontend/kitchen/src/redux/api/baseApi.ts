@@ -196,3 +196,67 @@ export async function baseApiFetch<T = any>(
 
   return resData;
 }
+
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+
+export const rtkBaseApi = createApi({
+  reducerPath: 'api',
+  baseQuery: fetchBaseQuery({
+    baseUrl: getApiBaseUrl(),
+    prepareHeaders: (headers) => {
+      const token = getAuthToken();
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      return headers;
+    },
+  }),
+  tagTypes: [
+    'TABLE',
+    'ORDER',
+    'ORDER_ITEM',
+    'PAYMENT',
+    'NOTIFICATION',
+    'DASHBOARD',
+    'MENU',
+    'USER',
+  ],
+  endpoints: () => ({}),
+});
+
+export const notificationsApi = rtkBaseApi.injectEndpoints({
+  endpoints: (builder) => ({
+    getNotifications: builder.query<any, { page?: number; limit?: number; isRead?: boolean } | void>({
+      query: (params) => ({
+        url: '/notifications',
+        params: params || undefined,
+      }),
+      providesTags: ['NOTIFICATION'],
+    }),
+    getUnreadCount: builder.query<{ unreadCount: number }, void>({
+      query: () => '/notifications/unread-count',
+      providesTags: ['NOTIFICATION'],
+    }),
+    markAsRead: builder.mutation<any, string>({
+      query: (id) => ({
+        url: `/notifications/${id}/read`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
+    markAllAsRead: builder.mutation<any, void>({
+      query: () => ({
+        url: '/notifications/mark-all-read',
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
+  }),
+});
+
+export const {
+  useGetNotificationsQuery,
+  useGetUnreadCountQuery,
+  useMarkAsReadMutation,
+  useMarkAllAsReadMutation,
+} = notificationsApi;

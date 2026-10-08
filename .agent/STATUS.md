@@ -82,39 +82,52 @@ Phase 1 (Database Modeling), Phase 2 (Shared Foundation & RBAC), Phase 3 (Backen
 
 ---
 
-### Phase 4: Realtime Engine & Background Processing (Complete)
+### Phase 4: Realtime Engine, Notifications & Background Processing (Complete)
 - [x] **4.1 Shared Realtime Event Contracts & Outbox Schema**
-  - Strongly-typed event contracts (`packages/events`) for Order, Session, Payment, and Staff alerts.
+  - Strongly-typed event contracts (`packages/events`) for Order, Session, Payment, Staff alerts, and Notifications (`NotificationEvent`).
   - Channel definitions with role/scope access boundaries (`packages/events/src/channels.ts`).
   - Drizzle `outbox_events` schema (`packages/database/src/schema/events.ts`) and transactional `OutboxService`.
   - Database migration generated (`0001_big_arachne.sql`).
-- [x] **4.2 Dedicated WebSocket Server (`apps/realtime`)**
-  - JWT handshake authentication (differentiating staff vs. guest/customer tokens).
-  - Scope and role-aware room subscriptions (tenant isolation, table sessions, kitchen stations, waiter floor).
+- [x] **4.2 Dedicated WebSocket Server (`apps/realtime`) & Low-Latency API Gateway (`apps/api/src/modules/realtime`)**
+  - NestJS `RealtimeGateway` using `@nestjs/platform-socket.io` with JWT handshake authentication.
+  - Scope and role-aware room partitioning (`branch:{id}`, `branch:{id}:{role}`, `table_session:{id}`, `user:{id}`).
   - Redis Pub/Sub subscription engine bridging worker outbox broadcasts to connected WebSocket clients.
   - Presence tracker with 30s heartbeat ping/pong.
 - [x] **4.3 Background Worker & Outbox Processor (`apps/worker`)**
   - Polling outbox worker with batch fetching, status progression (PENDING -> PROCESSING -> PUBLISHED), retry backoff, and dead-letter handling.
   - Redis event publisher dispatching outbox payloads to targeted channels.
   - Scheduled background cron jobs (`IdleSessionJob` checking branch `autoCloseIdleSessionMins` and auto-abandoning idle table sessions).
-- [x] **4.4 API Module Event Outbox Integration (`apps/api`)**
+- [x] **4.4 API Module Event Outbox & Realtime Integration (`apps/api`)**
   - Transactional event emission across all domain services: `OrderService` (Submitted, Accepted, Rejected, Served), `PaymentService` (Completed, Refunded), `KitchenService` (ItemStatusChanged), `TableSessionService` (SessionStarted, GuestJoined, SessionClosed), and `WaiterService` (CallAlert, Acknowledged).
+- [x] **4.5 Persistent Notification Subsystem (`packages/database`, `apps/api`)**
+  - Persistent `notifications` table in PostgreSQL with multi-cast role and direct user targeting.
+  - REST endpoints (`/notifications`, `/notifications/unread-count`, `/notifications/:id/read`, `/notifications/mark-all-read`).
+  - Realtime emission (`NOTIFICATION_CREATED`, `NOTIFICATION_READ`) with live badge counters.
 
 ---
 
-### Phase 5: Frontend Applications (One by One)
-- [ ] **5.1 Customer QR Self-Ordering Web App**
-  - Mobile-first web app: QR landing, OTP verification, interactive menu with modifiers, multi-guest shared view, order status tracking, and split-bill checkout.
-- [ ] **5.2 Waiter & Floor Staff Tablet/Mobile App**
-  - Real-time floor plan view, table status indicators, pending order acceptance/rejection, manual order creation, and bill collection.
-- [ ] **5.3 Kitchen & Bar Display System (KDS)**
-  - Live station order feed (filtered by Kitchen vs. Bar), item preparation timer, line-item mark ready, and item out-of-stock toggle.
-- [ ] **5.4 Cashier & POS Terminal Web App**
-  - Register checkout view, cash/card payment recording, split-bill cashier settlement, and daily shift reconciliation.
-- [ ] **5.5 Restaurant & Branch Manager Portal**
-  - Menu catalog editor, floor layout designer, shift scheduler, inventory dashboard, discount creator, and branch settings toggles.
-- [ ] **5.6 Super Admin Platform Portal**
-  - Organization provisioning, global role management, cross-tenant audit log viewer, and platform-wide performance analytics.
+### Phase 5: Frontend Applications & Realtime Standardization (Complete)
+- [x] **5.1 Architecture Standardization across All 6 React Applications**
+  - Standardized on **Redux Toolkit & RTK Query** (`rtkBaseApi`, `notificationsApi`).
+  - Strict elimination of all aggressive `setInterval` polling timers across all frontends.
+  - Implemented `<RealtimeBridge />` component with `socket.io-client` syncing backend room events to RTK Query cache invalidation tags (`TABLE`, `ORDER`, `ORDER_ITEM`, `PAYMENT`, `NOTIFICATION`, `DASHBOARD`).
+  - Mounted `<NotificationCenter />` with real-time unread badge counter in headers across all staff portals.
+- [x] **5.2 Customer QR Self-Ordering Web App (`@frontend/customer`)**
+  - Realtime table session synchronization, live order waiting/tracking updates via push events, and clean zero-error production build.
+- [x] **5.3 Waiter & Floor Staff Tablet/Mobile App (`@frontend/waiter`)**
+  - Instant table status invalidation, order update pushes, waiter-call alerts, and live notification dock.
+- [x] **5.4 Kitchen & Bar Display System (`@frontend/kitchen`)**
+  - Real-time KDS line-item and ticket feed updates on order confirmation and item progress without polling.
+- [x] **5.5 Cashier & POS Terminal Web App (`@frontend/cashier`)**
+  - Live checkout requests, transaction feed updates, and cashier alert notifications.
+- [x] **5.6 Restaurant & Branch Manager Portal (`@frontend/manager`)**
+  - Real-time KDS monitoring, payment summaries, and live manager alert notifications.
+- [x] **5.7 Super Admin Platform Portal (`@frontend/admin`)**
+  - Global tenant state invalidation and executive notification center.
+- [x] **5.8 Elimination of Hardcoded Demo Fallbacks & Strict Session Resolution**
+  - Completely purged all hardcoded fallback UUIDs (`DEFAULT_FALLBACK_BRANCH_ID`, `DEFAULT_FALLBACK_TABLE_ID`, `TABLE_NUMBER_MAP`), demo mock users (`DEMO_WAITER_USER`, `DEMO_CASHIER_USER`, `DEMO_BRANCH_MANAGER_USER`, `DEMO_ADMIN_USER`), and offline login bypasses across all six frontend apps.
+  - Implemented dynamic tenant/session resolution (via cookies, URL query parameters, and authenticated Redux state) with graceful empty states and API guards. Documented in `.agent/ADR/0001-elimination-of-hardcoded-demo-fallbacks.md`.
+
 
 ---
 

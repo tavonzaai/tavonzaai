@@ -31,6 +31,8 @@ function generateTransactionRef(): string {
 }
 
 import { OutboxService } from '@tavonza/database';
+import { RealtimeGateway } from '../../realtime/realtime.gateway';
+import { NotificationService } from '../../notifications/application/services/notification.service';
 
 @Injectable()
 export class PaymentService {
@@ -38,6 +40,8 @@ export class PaymentService {
     @Inject(DRIZZLE) private readonly db: DrizzleDatabase,
     private readonly paymentRepo: DrizzlePaymentRepository,
     private readonly outboxService: OutboxService,
+    private readonly realtimeGateway: RealtimeGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -212,6 +216,32 @@ export class PaymentService {
       },
     });
 
+    this.realtimeGateway.emitPaymentStatusChanged({
+      eventType: 'PAYMENT_STATUS_CHANGED',
+      eventId: payment.id,
+      branchId: branchIdForEvent ?? '',
+      paymentId: payment.id,
+      orderId: payment.orderId,
+      tableSessionId: payment.tableSessionId,
+      status: 'PAID',
+      method: payment.method as any,
+      amount: Number(payment.amount),
+      transactionRef: payment.transactionRef,
+      occurredAt: new Date().toISOString(),
+    });
+
+    if (branchIdForEvent) {
+      await this.notificationService.create({
+        branchId: branchIdForEvent,
+        targetRole: 'CASHIER',
+        type: 'PAYMENT_RECEIVED',
+        title: 'Payment Received',
+        message: `Payment of $${payment.amount} settled via ${payment.method}.`,
+        entityType: 'PAYMENT',
+        entityId: payment.id,
+      });
+    }
+
     return payment;
   }
 
@@ -346,6 +376,20 @@ export class PaymentService {
       },
     });
 
+    this.realtimeGateway.emitPaymentStatusChanged({
+      eventType: 'PAYMENT_STATUS_CHANGED',
+      eventId: payment.id,
+      branchId: branchIdForEvent ?? '',
+      paymentId: payment.id,
+      orderId: payment.orderId,
+      tableSessionId: payment.tableSessionId,
+      status: 'PAID',
+      method: payment.method as any,
+      amount: Number(payment.amount),
+      transactionRef: payment.transactionRef,
+      occurredAt: new Date().toISOString(),
+    });
+
     return { payment, allocations };
   }
 
@@ -382,6 +426,20 @@ export class PaymentService {
     const updated = await this.paymentRepo.updateStatus(paymentId, newStatus, {
       refundRef: dto.reason,
       refundAmount: dto.refundAmount,
+    });
+
+    this.realtimeGateway.emitPaymentStatusChanged({
+      eventType: 'PAYMENT_STATUS_CHANGED',
+      eventId: updated.id,
+      branchId: '',
+      paymentId: updated.id,
+      orderId: updated.orderId,
+      tableSessionId: updated.tableSessionId,
+      status: (newStatus === 'REFUNDED' ? 'REFUNDED' : 'PARTIALLY_PAID') as any,
+      method: updated.method as any,
+      amount: Number(updated.amount),
+      transactionRef: updated.transactionRef,
+      occurredAt: new Date().toISOString(),
     });
 
     await this.outboxService.publishEvent({

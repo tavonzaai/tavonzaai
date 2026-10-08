@@ -26,6 +26,7 @@ import {
   Menu as MenuIcon,
   RotateCcw,
 } from "lucide-react";
+import { NotificationCenter } from "../common/NotificationCenter";
 import { toast } from "sonner";
 import { KITCHEN_STATIONS, INITIAL_INVENTORY, RECIPES, SHIFT_STATS, FLAG_REASONS } from "./data";
 import { KitchenOrder, OrderStatus } from "./types";
@@ -94,10 +95,20 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
       }
     };
     loadKitchenData();
-    const interval = setInterval(loadKitchenData, 7000);
+    const handleRealtimeUpdate = () => {
+      loadKitchenData();
+    };
+    window.addEventListener("tavonza:order_created", handleRealtimeUpdate);
+    window.addEventListener("tavonza:order_status_changed", handleRealtimeUpdate);
+    window.addEventListener("tavonza:order_item_changed", handleRealtimeUpdate);
+    window.addEventListener("tavonza:table_status_changed", handleRealtimeUpdate);
+
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener("tavonza:order_created", handleRealtimeUpdate);
+      window.removeEventListener("tavonza:order_status_changed", handleRealtimeUpdate);
+      window.removeEventListener("tavonza:order_item_changed", handleRealtimeUpdate);
+      window.removeEventListener("tavonza:table_status_changed", handleRealtimeUpdate);
     };
   }, []);
 
@@ -507,51 +518,8 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           {/* Right: Notification Bell, Speaker, Live Clock & Date */}
           <div className="flex items-center gap-3 lg:gap-4">
             
-            {/* Notification Bell */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setAlertsOpen(!alertsOpen)}
-                className="w-10 h-10 rounded-xl bg-[#18181b] border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-800 transition cursor-pointer relative"
-                title="Kitchen Alerts"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 bg-yellow-400 text-black text-[10px] font-bold px-1.5 py-0.2 rounded-full border border-black shadow">
-                  02
-                </span>
-              </button>
-
-              {/* Alerts Dropdown */}
-              {alertsOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40 bg-transparent"
-                    onClick={() => setAlertsOpen(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-2 w-72 bg-[#121214] border border-zinc-800 rounded-2xl shadow-2xl p-4 z-50 space-y-3">
-                    <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                      <span className="text-xs font-bold text-white uppercase tracking-wider">Kitchen Alerts (2)</span>
-                      <button
-                        onClick={() => setAlertsOpen(false)}
-                        className="text-zinc-500 hover:text-white text-xs"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <div className="space-y-2 text-xs">
-                      <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200">
-                        <span className="font-bold block text-red-400">Order #1524 Overdue</span>
-                        Table T-01 burger wait time exceeded 15 mins.
-                      </div>
-                      <div className="p-2.5 rounded-xl bg-yellow-950/60 border border-yellow-500/40 text-yellow-200">
-                        <span className="font-bold block text-yellow-400">Special Request: No Onions</span>
-                        Verified for Classic Burger on Grill Station.
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            {/* Realtime Notification Center */}
+            <NotificationCenter />
 
             {/* Volume Speaker Toggle */}
             <button

@@ -21,7 +21,7 @@ import {
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
 import { toast } from 'sonner';
-import { waiterService, CustomerAlert } from '@/redux/features/waiterApi';
+import { waiterService, CustomerAlert, getActiveBranchId, WaiterTableAssignment } from '@/redux/features/waiterApi';
 import { getCookie } from '@/redux/api/baseApi';
 
 interface AlertsViewProps {
@@ -42,19 +42,16 @@ export default function AlertsView({
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [actionInProgress, setActionInProgress] = useState<Record<string, boolean>>({});
 
-  // Trigger Alert Modal State (NEW FEATURE)
+  // Trigger Alert Modal State
   const [showSimulateModal, setShowSimulateModal] = useState<boolean>(false);
-  const [simTable, setSimTable] = useState<string>('Table 2');
+  const [tables, setTables] = useState<WaiterTableAssignment[]>([]);
+  const [simTableId, setSimTableId] = useState<string>('');
   const [simType, setSimType] = useState<'call_waiter' | 'request_bill' | 'need_help' | 'custom'>('call_waiter');
   const [simMessage, setSimMessage] = useState<string>('');
   const [isSubmittingAlert, setIsSubmittingAlert] = useState<boolean>(false);
 
   const getBranchId = useCallback((): string => {
-    const rawBranchId = getCookie('tavonza_branch_id');
-    if (rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)) {
-      return rawBranchId;
-    }
-    return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+    return getActiveBranchId();
   }, []);
 
   // Fetch Alerts from Backend API GET /waiter/alerts?branchId=...
@@ -62,9 +59,21 @@ export default function AlertsView({
     if (showIndicator) setRefreshing(true);
     try {
       const branchId = getBranchId();
-      const apiAlerts = await waiterService.getMyAlerts(branchId);
-      if (Array.isArray(apiAlerts)) {
-        setAlerts(apiAlerts);
+      if (!branchId) return;
+
+      const [apiAlerts, myTables] = await Promise.allSettled([
+        waiterService.getMyAlerts(branchId),
+        waiterService.getMyTables(branchId),
+      ]);
+
+      if (apiAlerts.status === 'fulfilled' && Array.isArray(apiAlerts.value)) {
+        setAlerts(apiAlerts.value);
+      }
+      if (myTables.status === 'fulfilled' && Array.isArray(myTables.value)) {
+        setTables(myTables.value);
+        if (myTables.value.length > 0 && myTables.value[0]?.tableId && !simTableId) {
+          setSimTableId(myTables.value[0].tableId);
+        }
       }
     } catch (err: any) {
       console.warn('Failed to load waiter alerts:', err);
@@ -72,14 +81,24 @@ export default function AlertsView({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [getBranchId]);
+  }, [getBranchId, simTableId]);
 
   useEffect(() => {
     loadAlerts(false);
-    const interval = setInterval(() => {
+    const handleRealtime = () => {
       loadAlerts(false);
-    }, 10000);
-    return () => clearInterval(interval);
+    };
+    window.addEventListener('tavonza:notification_created', handleRealtime);
+    window.addEventListener('tavonza:notification_read', handleRealtime);
+    window.addEventListener('tavonza:waiter_called', handleRealtime);
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+
+    return () => {
+      window.removeEventListener('tavonza:notification_created', handleRealtime);
+      window.removeEventListener('tavonza:notification_read', handleRealtime);
+      window.removeEventListener('tavonza:waiter_called', handleRealtime);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+    };
   }, [loadAlerts]);
 
   // Acknowledge Alert (PATCH /waiter/alerts/:id/acknowledge)
@@ -118,20 +137,25 @@ export default function AlertsView({
     }
   };
 
-  // NEW FEATURE: Send Customer Alert Simulation (POST /alerts)
+  // Send Customer Alert Simulation (POST /alerts)
   const handleCreateCustomerAlert = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmittingAlert(true);
     try {
       const branchId = getBranchId();
+      if (!branchId) throw new Error('No active branch selected.');
+      const selectedTable = tables.find((t) => t.tableId === simTableId) || tables[0];
+      if (!selectedTable?.tableId) {
+        throw new Error('No assigned table available to trigger alert.');
+      }
       await waiterService.createAlert({
         branchId,
-        tableId: '34489e98-b165-4f29-bc3e-38be762dedb3',
-        tableSessionId: '7f9a8b6c-1d2e-3f4a-5b6c-7d8e9f0a1b2c',
+        tableId: selectedTable.tableId,
+        tableSessionId: selectedTable.activeSessionId || selectedTable.tableId,
         type: simType,
-        message: simMessage.trim() || `Customer alert triggered from ${simTable}`,
+        message: simMessage.trim() || `Customer alert triggered from ${selectedTable.tableNumber || 'Table'}`,
       });
-      toast.success(`Alert generated for ${simTable}!`, {
+      toast.success(`Alert generated for ${selectedTable.tableNumber || 'Table'}!`, {
         description: 'New live alert sent to waiter station dashboard.',
       });
       setShowSimulateModal(false);
@@ -396,15 +420,18 @@ export default function AlertsView({
               <div>
                 <label className="block text-zinc-400 text-xs font-semibold mb-1">Target Table</label>
                 <select
-                  value={simTable}
-                  onChange={(e) => setSimTable(e.target.value)}
+                  value={simTableId}
+                  onChange={(e) => setSimTableId(e.target.value)}
                   className="w-full h-10 px-3 bg-black/60 border border-white/10 rounded-lg text-white text-xs font-mono focus:border-yellow-400 focus:outline-none"
                 >
-                  <option value="Table 1">Table 1</option>
-                  <option value="Table 2">Table 2</option>
-                  <option value="Table 3">Table 3</option>
-                  <option value="Table 4">Table 4</option>
-                  <option value="Table 5">Table 5</option>
+                  {tables.map((t) => (
+                    <option key={t.tableId} value={t.tableId}>
+                      {t.tableNumber || `Table ${t.tableId.slice(0, 4)}`}
+                    </option>
+                  ))}
+                  {tables.length === 0 && (
+                    <option value="">No tables assigned</option>
+                  )}
                 </select>
               </div>
 

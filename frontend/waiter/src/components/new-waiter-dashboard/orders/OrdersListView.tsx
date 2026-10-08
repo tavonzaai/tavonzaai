@@ -160,12 +160,20 @@ export default function OrdersListView({
     setLoading(true);
     fetchOrders();
 
-    // Auto-refresh every 3 seconds for real-time live customer order updates
-    const interval = setInterval(() => {
+    const handleRealtime = () => {
       fetchOrders();
-    }, 3000);
+    };
+    window.addEventListener('tavonza:order_created', handleRealtime);
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+    window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    window.addEventListener('tavonza:payment_status_changed', handleRealtime);
 
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('tavonza:order_created', handleRealtime);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+      window.removeEventListener('tavonza:payment_status_changed', handleRealtime);
+    };
   }, [fetchOrders]);
 
   const actionNeededCount = orders.filter(

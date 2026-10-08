@@ -118,28 +118,15 @@ export default function NewWaiterLoginMobileView({
       const userRole = userProfile?.role ? String(userProfile.role).toUpperCase() : 'WAITER';
 
       handleCompleteSession(userName, email.trim(), userRole, userProfile);
-    } catch {
-      // Offline / demo fallback - only if waiter demo email
-      if (email.toLowerCase().includes('waiter')) {
-        handleCompleteSession(
-          'Michael Davis',
-          email.trim(),
-          'WAITER'
-        );
-      } else {
-        setError('Invalid credentials or unauthorized station access.');
-      }
+    } catch (err: any) {
+      setError(
+        typeof err === 'string'
+          ? err
+          : err?.message || 'Invalid credentials or unauthorized station access.'
+      );
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickDemoLogin = () => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      handleCompleteSession('Michael Davis', ' ', 'WAITER');
-      setIsSubmitting(false);
-    }, 250);
   };
 
   return (
@@ -328,17 +315,6 @@ export default function NewWaiterLoginMobileView({
                 >
                   {isSubmitting && <Loader2 className="w-4 h-4 animate-spin text-black" />}
                   <span>{isSubmitting ? 'Signing in…' : 'Login'}</span>
-                </button>
-
-                {/* One-Click Quick Sign In Button */}
-                <button
-                  type="button"
-                  onClick={handleQuickDemoLogin}
-                  disabled={isSubmitting}
-                  className="w-full py-2.5 px-3 bg-neutral-900/80 hover:bg-neutral-800 text-xs text-amber-300 font-medium rounded-xl transition flex items-center justify-center gap-2 cursor-pointer font-['Inter'] border border-amber-400/20 mt-1"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span>⚡ Quick Waiter Login (<strong>Michael Davis</strong>)</span>
                 </button>
               </form>
             </div>

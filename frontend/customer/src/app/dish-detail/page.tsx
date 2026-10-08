@@ -188,13 +188,13 @@ function DishDetailContent() {
     }
 
     return {
-      id: '4455110d-db04-4cef-92c6-46bcd6a4c7e2',
-      name: 'Potato Corn Burger',
+      id: dishParam || '',
+      name: dishParam ? 'Dish Details' : 'Menu Item',
       subtitle: 'Chef Specialty',
-      price: 26,
-      category: 'ba394e24-642c-4608-8e42-61424fc78448',
+      price: 0,
+      category: '',
       image: '/images/burger.jpg',
-      popular: true,
+      popular: false,
       description: 'Prepared fresh with the finest seasonal ingredients by Tavonza chefs.',
       addOns: [],
     };

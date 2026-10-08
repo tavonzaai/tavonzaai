@@ -19,6 +19,17 @@ export const RealtimeChannels = {
 
   /** Branch manager operational room */
   manager: (branchId: string) => `branch:${branchId}:manager`,
+  /** User direct notification room */
+  user: (userId: string) => `user:${userId}`,
+
+  /** Branch broadcast room */
+  branch: (branchId: string) => `branch:${branchId}`,
+
+  /** Table room */
+  table: (tableId: string) => `table:${tableId}`,
+
+  /** Order room */
+  order: (orderId: string) => `order:${orderId}`,
 } as const;
 
 export type RealtimeChannelType =

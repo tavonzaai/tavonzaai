@@ -87,12 +87,13 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
     user?.branchName ||
     user?.assignments?.[0]?.branchName ||
     (user?.assignments?.[0] as any)?.branch?.name ||
-    'Downtown HQ';
+    'Active Branch';
 
   const branchId =
     user?.branchId ||
     user?.assignments?.[0]?.branchId ||
-    'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+    (user?.assignments?.[0] as any)?.branch?.id ||
+    '—';
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-4xl mx-auto w-full animate-fadeIn">
@@ -165,7 +166,7 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
               </span>
             </div>
             <p className="text-xs text-zinc-400 font-mono pt-1">
-              ID: <span className="text-zinc-300">{user?.id || '00000001-0000-4000-8000-000000000010'}</span>
+              ID: <span className="text-zinc-300">{user?.id || '—'}</span>
             </p>
           </div>
         </div>
@@ -187,7 +188,7 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
             <div className="p-3 bg-zinc-950 rounded-xl border border-neutral-800 space-y-1">
               <span className="text-zinc-500 text-[10px] uppercase font-semibold block">Account Created</span>
               <span className="text-zinc-200 font-medium text-sm block">
-                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Oct 5, 2026'}
+                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
               </span>
               <span className="text-zinc-500 text-[10px] block">Registered Staff User</span>
             </div>
@@ -198,7 +199,7 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
                 <CheckCircle2 className="w-3.5 h-3.5" /> Active Staff Duty
               </span>
               <span className="text-zinc-500 font-mono text-[10px] truncate block">
-                ID: {user?.assignments?.[0]?.id || '00000004-0000-4000-8000-000000000010'}
+                ID: {user?.assignments?.[0]?.id || '—'}
               </span>
             </div>
           </div>

@@ -34,7 +34,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               Cashier Profile
             </h2>
             <p className="text-slate-400 text-xs font-mono">
-              ID: {user?.id || '00000001-0000-4000-8000-000000000010'}
+              ID: {user?.id || '—'}
             </p>
           </div>
         </div>

@@ -34,6 +34,7 @@ import {
   DEFAULT_OPERATING_HOURS,
 } from '../restaurantsData';
 import { restaurantService } from '@/redux/features/restaurantApi';
+import { toast } from 'sonner';
 
 interface CreateRestaurantModalProps {
   isOpen: boolean;
@@ -197,7 +198,11 @@ export default function CreateRestaurantModal({
   const handleFinalCreate = async () => {
     try {
       const orgs = await restaurantService.getOrganizations().catch(() => []);
-      const orgId = orgs[0]?.id || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+      const orgId = orgs[0]?.id;
+      if (!orgId) {
+        toast.error('No organization found. Please ensure an organization exists before creating restaurants.');
+        return;
+      }
       const createdBackend = await restaurantService
         .createRestaurant({
           organizationId: orgId,
