@@ -77,10 +77,58 @@ export const SWAGGER_TAGS: SwaggerTagDefinition[] = [
     description: 'Manual and card payments, bill splitting, refunds, and session closure',
   },
 
-  // ── Branch & Organization Management ─────────────────────────────────────
+  // ── Operations & Hierarchy ──────────────────────────────────────────────
   {
-    name: 'Manager | Branch',
-    description: 'Branch settings, operating hours, floor plan tables, and performance reports',
+    name: 'Organizations',
+    description: 'Multi-tenant organization management, owner relationships, and enterprise grouping',
+  },
+  {
+    name: 'Restaurants',
+    description: 'Restaurant brand portfolios under organizations',
+  },
+  {
+    name: 'Branches',
+    description: 'Physical restaurant branch locations, operational settings, operating hours, holidays, and staff assignment',
+  },
+  {
+    name: 'Tables & Areas',
+    description: 'Physical table layouts, QR code token resolution, seating capacity, and table reservations',
+  },
+  {
+    name: 'Users',
+    description: 'User directory, profile management, and global administrative users',
+  },
+  {
+    name: 'Notifications',
+    description: 'Persistent and real-time user notification feed, unread counters, and mark-as-read workflows',
+  },
+  {
+    name: 'Kitchen & Bar Display System (KDS)',
+    description: 'Kitchen ticket management, dish preparation workflow, line item status transitions, and 86 availability toggling',
+  },
+  {
+    name: 'Payments & Billing',
+    description: 'Payment collection, split-bill allocations, discount voucher evaluation, refunds, and table balance receipts',
+  },
+  {
+    name: 'Operations | Work Shifts & Attendance',
+    description: 'Staff shift scheduling, clock-in, clock-out attendance tracking, and shift management',
+  },
+  {
+    name: 'Operations | Inventory & Suppliers',
+    description: 'Branch ingredient suppliers, inventory categories, stock tracking, and inventory adjustments',
+  },
+  {
+    name: 'Internal | AI Agent Tool Gateway',
+    description: 'Strict internal AI execution endpoints: actor resolution, context bootstrap, tool execution, and audit trail',
+  },
+  {
+    name: 'Menu Compatibility',
+    description: 'Backward-compatible endpoints for legacy menu fetching',
+  },
+  {
+    name: 'Health',
+    description: 'Service uptime and diagnostics health endpoints',
   },
 ];
 
@@ -110,8 +158,12 @@ export function buildSwaggerConfig(options?: SwaggerConfigOptions) {
     .setDescription(description)
     .setVersion(version)
     .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'Enter your JWT access token' },
       bearerName
+    )
+    .addApiKey(
+      { type: 'apiKey', name: 'x-internal-service-token', in: 'header', description: 'Secret token for internal AI Gateway communication' },
+      'InternalServiceToken'
     );
 
   const tags = [...SWAGGER_TAGS, ...(options?.extraTags ?? [])];

@@ -51,8 +51,10 @@ import { UserDetailResponseDto } from './dto/user-response.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../infrastructure/adapters/jwt.strategy';
+import { ApiStandardErrors } from '../../../../common/swagger';
 
-@ApiTags('Customer | Auth')
+@ApiTags('Identity | Authentication')
+@ApiStandardErrors(400, 401, 500)
 @Controller('auth')
 export class AuthController {
   constructor(
