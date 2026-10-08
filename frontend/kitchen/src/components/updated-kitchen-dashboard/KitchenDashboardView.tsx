@@ -349,14 +349,14 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           
           {/* Left: Tavonza Logo & Branch / Staff Info */}
           <div className="flex items-center gap-4 lg:gap-6">
-            <button
+            {/* <button
               type="button"
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden text-zinc-400 hover:text-white p-2 rounded-xl bg-zinc-900 border border-zinc-800"
               title="Open Navigation"
             >
               <MenuIcon className="w-5 h-5" />
-            </button>
+            </button> */}
 
             {/* Tavonza Brand Logo */}
             <div className="flex items-center gap-3">

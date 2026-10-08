@@ -6,6 +6,7 @@ import { orderService } from '@/redux/features/orderApi';
 
 export interface CartItem {
   id: string;
+  orderItemId?: string;
   dishId?: string;
   name: string;
   subtitle?: string;
@@ -66,7 +67,7 @@ const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: s
   return null;
 };
 
-const syncAddItemToBackend = async (item: CartItem) => {
+const syncAddItemToBackend = async (item: CartItem): Promise<string | undefined> => {
   try {
     const branchId = resolveDynamicBranchId();
     const tableId = resolveDynamicTableId();
@@ -83,6 +84,9 @@ const syncAddItemToBackend = async (item: CartItem) => {
     }
 
     if (draft?.id) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tavonza_active_cart_id', draft.id);
+      }
       const validMenuItemId = isUUID(item.dishId)
         ? item.dishId!
         : isUUID(item.id)
@@ -91,16 +95,79 @@ const syncAddItemToBackend = async (item: CartItem) => {
 
       if (!validMenuItemId) return;
 
-      await orderService.addItem({
+      const res = await orderService.addItem({
         orderId: draft.id,
         menuItemId: validMenuItemId,
         quantity: item.quantity || 1,
         specialInstructions: item.specialInstructions,
         addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
       });
+
+      const added = res?.items?.find((i) => i.menuItemId === validMenuItemId);
+      return added?.id;
     }
   } catch (err) {
     console.warn('Sync add to cart API warning:', err);
+  }
+  return undefined;
+};
+
+const syncUpdateItemBackend = async (item: CartItem, newQty: number) => {
+  try {
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+
+    let draft: any = null;
+    try {
+      draft = await orderService.getCartFromSession(branchId!, tableId!);
+    } catch {
+      draft = await orderService.getCart(branchId!, tableId!);
+    }
+
+    if (!draft?.id) return;
+
+    const backendItem = draft.items?.find(
+      (bi: any) => bi.id === item.orderItemId || bi.menuItemId === item.dishId || bi.menuItemId === item.id
+    );
+
+    if (backendItem?.id) {
+      await orderService.updateItem({
+        orderId: draft.id,
+        itemId: backendItem.id,
+        quantity: newQty,
+      });
+    }
+  } catch (err) {
+    console.warn('Sync update cart item API warning:', err);
+  }
+};
+
+const syncRemoveItemBackend = async (item: CartItem) => {
+  try {
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+
+    let draft: any = null;
+    try {
+      draft = await orderService.getCartFromSession(branchId!, tableId!);
+    } catch {
+      draft = await orderService.getCart(branchId!, tableId!);
+    }
+
+    if (!draft?.id) return;
+
+    const backendItem = draft.items?.find(
+      (bi: any) => bi.id === item.orderItemId || bi.menuItemId === item.dishId || bi.menuItemId === item.id
+    );
+
+    if (backendItem?.id) {
+      await orderService.removeItem({
+        orderId: draft.id,
+        itemId: backendItem.id,
+      });
+    }
+  } catch (err) {
+    console.warn('Sync remove cart item API warning:', err);
   }
 };
 
@@ -151,21 +218,38 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const qtyToAdd = item.quantity || 1;
       if (existingIndex > -1) {
         const next = [...prev];
+        const updatedQty = next[existingIndex].quantity + qtyToAdd;
         next[existingIndex] = {
           ...next[existingIndex],
-          quantity: next[existingIndex].quantity + qtyToAdd,
+          quantity: updatedQty,
         };
+        syncUpdateItemBackend(next[existingIndex], updatedQty);
         return next;
       }
       return [...prev, fullItem];
     });
 
     // Trigger API call when adding product to cart
-    syncAddItemToBackend(fullItem);
+    syncAddItemToBackend(fullItem).then((backendItemId) => {
+      if (backendItemId) {
+        setCart((prev) =>
+          prev.map((i) => (i.id === fullItem.id ? { ...i, orderItemId: backendItemId } : i))
+        );
+      }
+    });
   };
 
   const updateQuantity = (id: string, delta: number) => {
     setCart((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (target) {
+        const nextQty = target.quantity + delta;
+        if (nextQty > 0) {
+          syncUpdateItemBackend(target, nextQty);
+        } else {
+          syncRemoveItemBackend(target);
+        }
+      }
       return prev
         .map((item) => {
           if (item.id === id) {
@@ -179,7 +263,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeFromCart = (id: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== id));
+    setCart((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (target) {
+        syncRemoveItemBackend(target);
+      }
+      return prev.filter((item) => item.id !== id);
+    });
   };
 
   const clearCart = () => {

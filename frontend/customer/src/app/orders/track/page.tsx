@@ -25,7 +25,25 @@ function TrackContent() {
   const { tableNumber } = useCart();
 
   const activeTable = searchParams.get('table') || tableNumber || 'Table 08';
-  const orderId = searchParams.get('order') || searchParams.get('id') || '';
+  const [orderId, setOrderId] = useState<string>(() => {
+    const fromParam = (searchParams.get('order') || searchParams.get('id') || '').trim();
+    if (fromParam) return fromParam;
+    if (typeof window !== 'undefined') {
+      return (
+        localStorage.getItem('tavonza_last_submitted_order_id') ||
+        getCookie('tavonza_last_submitted_order_id') ||
+        ''
+      ).trim();
+    }
+    return '';
+  });
+
+  useEffect(() => {
+    const fromParam = (searchParams.get('order') || searchParams.get('id') || '').trim();
+    if (fromParam) {
+      setOrderId(fromParam);
+    }
+  }, [searchParams]);
 
   const [orderTracking, setOrderTracking] = useState<OrderTrackingResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,20 +51,21 @@ function TrackContent() {
   const [callWaiterSent, setCallWaiterSent] = useState(false);
 
   const fetchTrackData = async () => {
-    if (!orderId) {
+    const trimmedId = (orderId || '').trim();
+    if (!trimmedId) {
       setLoading(false);
       return;
     }
 
     try {
-      const data = await orderService.trackOrder(orderId);
+      const data = await orderService.trackOrder(trimmedId);
       if (data) {
         setOrderTracking(data);
       }
     } catch (err: any) {
       // Fallback: try getOrderDetail if track fails
       try {
-        const detail = await orderService.getOrderDetail(orderId);
+        const detail = await orderService.getOrderDetail(trimmedId);
         if (detail) {
           setOrderTracking({
             id: detail.orderId,
@@ -74,7 +93,11 @@ function TrackContent() {
   };
 
   useEffect(() => {
-    fetchTrackData();
+    const trimmedId = (orderId || '').trim();
+    if (!trimmedId) {
+      setLoading(false);
+      return;
+    }
 
     if (!orderId) return;
     const handleRealtime = () => {

@@ -13,7 +13,7 @@ import {
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
 import { orderService } from '@/redux/features/orderApi';
-import { getCookie, getApiBaseUrl } from '@/redux/api/baseApi';
+import { getCookie, setCookie, getApiBaseUrl } from '@/redux/api/baseApi';
 
 function CartContent() {
   const router = useRouter();
@@ -119,20 +119,36 @@ function CartContent() {
         if (!validMenuItemId || !isUUID(validMenuItemId)) {
           throw new Error(`Item "${item.name}" could not be verified in the restaurant menu catalog.`);
         }
+        const fallbackUuid = catalogItems[0]?.id || '0000000b-0000-4000-8000-000000000004';
 
-        await orderService.addItem({
-          orderId: draft.id,
-          menuItemId: validMenuItemId,
-          quantity: item.quantity || 1,
-          specialInstructions: item.specialInstructions,
-          addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
-        });
+        for (const item of cart) {
+          let validMenuItemId = item.dishId || item.id;
+          if (!isUUID(validMenuItemId)) {
+            const matched = catalogItems.find(
+              (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
+            );
+            validMenuItemId = matched?.id || fallbackUuid;
+          }
+
+          await orderService.addItem({
+            orderId: draft.id,
+            menuItemId: validMenuItemId,
+            quantity: item.quantity || 1,
+            specialInstructions: item.specialInstructions,
+            addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
+          });
+        }
       }
 
       const submitted = await orderService.submitOrder(draft.id);
-      const submittedId = submitted?.orderNumber || submitted?.id;
+      const submittedId = submitted?.id || submitted?.orderId || submitted?.orderNumber;
       if (!submittedId) {
         throw new Error('Order submission returned empty response.');
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
+        setCookie('tavonza_last_submitted_order_id', submittedId);
       }
 
       clearCart();
