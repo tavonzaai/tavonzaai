@@ -169,7 +169,7 @@ export async function baseApiFetch<T = any>(
     if (response.status === 401) {
       removeAuthToken();
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        if (window.location.pathname.startsWith('/profile') || window.location.pathname.startsWith('/orders') || window.location.pathname.startsWith('/dashboard')) {
+        if (window.location.pathname.startsWith('/profile') || window.location.pathname.startsWith('/account')) {
           window.location.href = '/login';
         }
       }

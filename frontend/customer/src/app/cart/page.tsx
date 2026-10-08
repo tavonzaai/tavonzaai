@@ -13,7 +13,7 @@ import {
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
 import { orderService } from '@/redux/features/orderApi';
-import { getCookie, getApiBaseUrl } from '@/redux/api/baseApi';
+import { getCookie, setCookie, getApiBaseUrl } from '@/redux/api/baseApi';
 
 function CartContent() {
   const router = useRouter();
@@ -39,24 +39,54 @@ function CartContent() {
   const activeTable = searchParams.get('table') || tableNumber || '';
 
   const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-  const DEFAULT_FALLBACK_TABLE_ID = '34489e98-b165-4f29-bc3e-38be762dedb3';
+  const DEFAULT_FALLBACK_TABLE_ID = '00000014-0000-4000-8000-000000000008';
 
   const TABLE_NUMBER_MAP: Record<string, string> = {
-    't-01': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-    't-02': '34489e98-b165-4f29-bc3e-38be762dedb3',
-    't-03': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-    't-04': '41fe73cd-e275-459b-9533-0b2d5098d927',
-    't-05': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-    'table 1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-    'table 2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-    'table 3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-    'table 4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-    'table 5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-    '1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-    '2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-    '3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-    '4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-    '5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
+    't-01': '00000014-0000-4000-8000-000000000001',
+    't-02': '00000014-0000-4000-8000-000000000002',
+    't-03': '00000014-0000-4000-8000-000000000003',
+    't-04': '00000014-0000-4000-8000-000000000004',
+    't-05': '00000014-0000-4000-8000-000000000005',
+    't-06': '00000014-0000-4000-8000-000000000006',
+    't-07': '00000014-0000-4000-8000-000000000007',
+    't-08': '00000014-0000-4000-8000-000000000008',
+    't-09': '00000014-0000-4000-8000-000000000009',
+    't-10': '00000014-0000-4000-8000-00000000000a',
+    't-11': '00000014-0000-4000-8000-00000000000b',
+    't-12': '00000014-0000-4000-8000-00000000000c',
+    'table 1': '00000014-0000-4000-8000-000000000001',
+    'table 2': '00000014-0000-4000-8000-000000000002',
+    'table 3': '00000014-0000-4000-8000-000000000003',
+    'table 4': '00000014-0000-4000-8000-000000000004',
+    'table 5': '00000014-0000-4000-8000-000000000005',
+    'table 6': '00000014-0000-4000-8000-000000000006',
+    'table 7': '00000014-0000-4000-8000-000000000007',
+    'table 8': '00000014-0000-4000-8000-000000000008',
+    'table 9': '00000014-0000-4000-8000-000000000009',
+    'table 10': '00000014-0000-4000-8000-00000000000a',
+    'table 11': '00000014-0000-4000-8000-00000000000b',
+    'table 12': '00000014-0000-4000-8000-00000000000c',
+    'table 01': '00000014-0000-4000-8000-000000000001',
+    'table 02': '00000014-0000-4000-8000-000000000002',
+    'table 03': '00000014-0000-4000-8000-000000000003',
+    'table 04': '00000014-0000-4000-8000-000000000004',
+    'table 05': '00000014-0000-4000-8000-000000000005',
+    'table 06': '00000014-0000-4000-8000-000000000006',
+    'table 07': '00000014-0000-4000-8000-000000000007',
+    'table 08': '00000014-0000-4000-8000-000000000008',
+    'table 09': '00000014-0000-4000-8000-000000000009',
+    '1': '00000014-0000-4000-8000-000000000001',
+    '2': '00000014-0000-4000-8000-000000000002',
+    '3': '00000014-0000-4000-8000-000000000003',
+    '4': '00000014-0000-4000-8000-000000000004',
+    '5': '00000014-0000-4000-8000-000000000005',
+    '6': '00000014-0000-4000-8000-000000000006',
+    '7': '00000014-0000-4000-8000-000000000007',
+    '8': '00000014-0000-4000-8000-000000000008',
+    '9': '00000014-0000-4000-8000-000000000009',
+    '10': '00000014-0000-4000-8000-00000000000a',
+    '11': '00000014-0000-4000-8000-00000000000b',
+    '12': '00000014-0000-4000-8000-00000000000c',
   };
 
   const isUUID = (val?: string | null): boolean =>
@@ -112,39 +142,47 @@ function CartContent() {
         throw new Error('Unable to create or retrieve cart for this table.');
       }
 
-      // Pre-fetch catalog to resolve any non-UUID identifiers (from local storage or client state)
-      let catalogItems: any[] = [];
-      try {
-        const catRes = await fetch(`${getApiBaseUrl()}/menus/${branchId}/items`);
-        const catData = await catRes.json();
-        catalogItems = Array.isArray(catData) ? catData : catData?.data || [];
-      } catch (err) {
-        console.warn('Could not prefetch catalog:', err);
-      }
-      const fallbackUuid = catalogItems[0]?.id || null;
-
-      for (const item of cart) {
-        let validMenuItemId = item.dishId || item.id;
-        if (!isUUID(validMenuItemId)) {
-          const matched = catalogItems.find(
-            (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
-          );
-          validMenuItemId = matched?.id || fallbackUuid;
+      // If backend draft has no items but frontend cart does, sync them now
+      const existingItems = draft.items || [];
+      if (existingItems.length === 0 && cart.length > 0) {
+        let catalogItems: any[] = [];
+        try {
+          const catRes = await fetch(`${getApiBaseUrl()}/menus/${branchId}/items`);
+          const catData = await catRes.json();
+          catalogItems = Array.isArray(catData) ? catData : catData?.data || [];
+        } catch (err) {
+          console.warn('Could not prefetch catalog:', err);
         }
+        const fallbackUuid = catalogItems[0]?.id || '0000000b-0000-4000-8000-000000000004';
 
-        await orderService.addItem({
-          orderId: draft.id,
-          menuItemId: validMenuItemId,
-          quantity: item.quantity || 1,
-          specialInstructions: item.specialInstructions,
-          addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
-        });
+        for (const item of cart) {
+          let validMenuItemId = item.dishId || item.id;
+          if (!isUUID(validMenuItemId)) {
+            const matched = catalogItems.find(
+              (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
+            );
+            validMenuItemId = matched?.id || fallbackUuid;
+          }
+
+          await orderService.addItem({
+            orderId: draft.id,
+            menuItemId: validMenuItemId,
+            quantity: item.quantity || 1,
+            specialInstructions: item.specialInstructions,
+            addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
+          });
+        }
       }
 
       const submitted = await orderService.submitOrder(draft.id);
-      const submittedId = submitted?.orderNumber || submitted?.id;
+      const submittedId = submitted?.id || submitted?.orderId || submitted?.orderNumber;
       if (!submittedId) {
         throw new Error('Order submission returned empty response.');
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
+        setCookie('tavonza_last_submitted_order_id', submittedId);
       }
 
       clearCart();
