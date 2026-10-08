@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { baseApiFetch } from '../../redux/api/baseApi';
+import { baseApiFetch, getCookie } from '../../redux/api/baseApi';
+import { branchService } from '../../redux/features/restaurantApi';
 import { NotificationCenter } from '../common/NotificationCenter';
 import {
   Store,
@@ -66,7 +67,21 @@ export default function OwnerDashboard({
     let mounted = true;
     const fetchLiveData = async () => {
       try {
-        const branchId = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+        let branchId =
+          getCookie('tavonza_branch_id') ||
+          getCookie('branch_id') ||
+          getCookie('active_branch_id');
+
+        if (!branchId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branchId)) {
+          const branchesRes = await branchService.getBranches({ limit: 1 }).catch(() => null);
+          const firstBranch = branchesRes?.data?.[0];
+          if (firstBranch?.id) {
+            branchId = firstBranch.id;
+          }
+        }
+
+        if (!branchId) return;
+
         const [ordersRes, tablesRes] = await Promise.allSettled([
           baseApiFetch<any[]>(`/orders/branch/${branchId}`),
           baseApiFetch<any[]>(`/tables/branch/${branchId}`),

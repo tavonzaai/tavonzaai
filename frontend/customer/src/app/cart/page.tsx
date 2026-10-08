@@ -38,43 +38,24 @@ function CartContent() {
 
   const activeTable = searchParams.get('table') || tableNumber || '';
 
-  const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-  const DEFAULT_FALLBACK_TABLE_ID = '34489e98-b165-4f29-bc3e-38be762dedb3';
-
-  const TABLE_NUMBER_MAP: Record<string, string> = {
-    't-01': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-    't-02': '34489e98-b165-4f29-bc3e-38be762dedb3',
-    't-03': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-    't-04': '41fe73cd-e275-459b-9533-0b2d5098d927',
-    't-05': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-    'table 1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-    'table 2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-    'table 3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-    'table 4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-    'table 5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-    '1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-    '2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-    '3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-    '4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-    '5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-  };
-
   const isUUID = (val?: string | null): boolean =>
     Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
-  const resolveDynamicBranchId = (): string => {
-    const rawBranchId = getCookie('tavonza_branch_id');
+  const resolveDynamicBranchId = (): string | null => {
+    const rawBranchId = getCookie('tavonza_branch_id') || getCookie('branch_id');
     if (rawBranchId && isUUID(rawBranchId)) return rawBranchId;
-    return DEFAULT_FALLBACK_BRANCH_ID;
+    const branchParam = searchParams.get('branchId');
+    if (branchParam && isUUID(branchParam)) return branchParam;
+    return null;
   };
 
-  const resolveDynamicTableId = (): string => {
+  const resolveDynamicTableId = (): string | null => {
     const rawTableCookie = getCookie('tavonza_table_id');
     if (rawTableCookie && isUUID(rawTableCookie)) return rawTableCookie;
     if (isUUID(activeTable)) return activeTable;
-    const tableKey = activeTable.trim().toLowerCase();
-    if (tableKey && TABLE_NUMBER_MAP[tableKey]) return TABLE_NUMBER_MAP[tableKey];
-    return DEFAULT_FALLBACK_TABLE_ID;
+    const tableIdParam = searchParams.get('tableId');
+    if (tableIdParam && isUUID(tableIdParam)) return tableIdParam;
+    return null;
   };
 
   // Automatically fetch & sync backend cart on page load
@@ -83,6 +64,7 @@ function CartContent() {
       try {
         const branchId = resolveDynamicBranchId();
         const tableId = resolveDynamicTableId();
+        if (!branchId || !tableId) return;
 
         try {
           await orderService.getCartFromSession(branchId, tableId);
@@ -106,6 +88,9 @@ function CartContent() {
     try {
       const branchId = resolveDynamicBranchId();
       const tableId = resolveDynamicTableId();
+      if (!branchId || !tableId) {
+        throw new Error('Please scan your table QR code or select a valid table before placing an order.');
+      }
 
       const draft = await orderService.getCart(branchId, tableId);
       if (!draft?.id) {
@@ -121,7 +106,6 @@ function CartContent() {
       } catch (err) {
         console.warn('Could not prefetch catalog:', err);
       }
-      const fallbackUuid = catalogItems[0]?.id || null;
 
       for (const item of cart) {
         let validMenuItemId = item.dishId || item.id;
@@ -129,7 +113,11 @@ function CartContent() {
           const matched = catalogItems.find(
             (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
           );
-          validMenuItemId = matched?.id || fallbackUuid;
+          validMenuItemId = matched?.id;
+        }
+
+        if (!validMenuItemId || !isUUID(validMenuItemId)) {
+          throw new Error(`Item "${item.name}" could not be verified in the restaurant menu catalog.`);
         }
 
         await orderService.addItem({

@@ -124,6 +124,9 @@ Phase 1 (Database Modeling), Phase 2 (Shared Foundation & RBAC), Phase 3 (Backen
   - Real-time KDS monitoring, payment summaries, and live manager alert notifications.
 - [x] **5.7 Super Admin Platform Portal (`@frontend/admin`)**
   - Global tenant state invalidation and executive notification center.
+- [x] **5.8 Elimination of Hardcoded Demo Fallbacks & Strict Session Resolution**
+  - Completely purged all hardcoded fallback UUIDs (`DEFAULT_FALLBACK_BRANCH_ID`, `DEFAULT_FALLBACK_TABLE_ID`, `TABLE_NUMBER_MAP`), demo mock users (`DEMO_WAITER_USER`, `DEMO_CASHIER_USER`, `DEMO_BRANCH_MANAGER_USER`, `DEMO_ADMIN_USER`), and offline login bypasses across all six frontend apps.
+  - Implemented dynamic tenant/session resolution (via cookies, URL query parameters, and authenticated Redux state) with graceful empty states and API guards. Documented in `.agent/ADR/0001-elimination-of-hardcoded-demo-fallbacks.md`.
 
 
 ---

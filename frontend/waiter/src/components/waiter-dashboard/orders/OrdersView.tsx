@@ -15,7 +15,7 @@ import {
   Eye,
   SlidersHorizontal,
 } from 'lucide-react';
-import { waiterService } from '@/redux/features/waiterApi';
+import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
 import { getCookie } from '@/redux/api/baseApi';
 
 export interface OrderItemRow {
@@ -191,11 +191,8 @@ export default function OrdersView() {
     let mounted = true;
     const fetchOrders = async () => {
       try {
-        const rawBranchId = getCookie('waiter_branch_id') || getCookie('branch_id');
-        const branchId =
-          rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
-            ? rawBranchId
-            : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+        const branchId = getActiveBranchId();
+        if (!branchId) return;
         const activeOrders = await waiterService.getActiveOrders(branchId);
         if (mounted) {
           if (Array.isArray(activeOrders) && activeOrders.length > 0) {

@@ -36,53 +36,44 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-const DEFAULT_FALLBACK_TABLE_ID = '34489e98-b165-4f29-bc3e-38be762dedb3';
-
-const TABLE_NUMBER_MAP: Record<string, string> = {
-  't-01': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-  't-02': '34489e98-b165-4f29-bc3e-38be762dedb3',
-  't-03': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-  't-04': '41fe73cd-e275-459b-9533-0b2d5098d927',
-  't-05': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-  'table 1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-  'table 2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-  'table 3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-  'table 4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-  'table 5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-  '1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-  '2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-  '3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-  '4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-  '5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-};
-
 const isUUID = (val?: string | null): boolean =>
   Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
-const resolveDynamicBranchId = (apiBranchId?: string | null): string => {
+const resolveDynamicBranchId = (apiBranchId?: string | null): string | null => {
   if (apiBranchId && isUUID(apiBranchId)) return apiBranchId;
-  const cookieBranch = getCookie('tavonza_branch_id');
+  const cookieBranch = getCookie('tavonza_branch_id') || getCookie('branch_id');
   if (cookieBranch && isUUID(cookieBranch)) return cookieBranch;
-  return DEFAULT_FALLBACK_BRANCH_ID;
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const queryBranch = params.get('branchId');
+    if (queryBranch && isUUID(queryBranch)) return queryBranch;
+  }
+  return null;
 };
 
-const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string => {
+const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string | null => {
   if (apiTableId && isUUID(apiTableId)) return apiTableId;
   const cookieTable = getCookie('tavonza_table_id');
   if (cookieTable && isUUID(cookieTable)) return cookieTable;
-  const rawTable = getCookie('tavonza_table');
-  const tableKey = (activeTableNumber || rawTable || '').trim().toLowerCase();
-  if (tableKey && TABLE_NUMBER_MAP[tableKey]) {
-    return TABLE_NUMBER_MAP[tableKey];
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const queryTableId = params.get('tableId');
+    if (queryTableId && isUUID(queryTableId)) return queryTableId;
+    const queryTable = params.get('table');
+    if (queryTable && isUUID(queryTable)) return queryTable;
   }
-  return DEFAULT_FALLBACK_TABLE_ID;
+  if (activeTableNumber && isUUID(activeTableNumber)) return activeTableNumber;
+  return null;
 };
 
 const syncAddItemToBackend = async (item: CartItem) => {
   try {
     const branchId = resolveDynamicBranchId();
     const tableId = resolveDynamicTableId();
+    if (!branchId || !tableId) {
+      // Local cart only until session/table is connected
+      return;
+    }
 
     let draft: any = null;
     try {
@@ -96,7 +87,9 @@ const syncAddItemToBackend = async (item: CartItem) => {
         ? item.dishId!
         : isUUID(item.id)
         ? item.id
-        : '4455110d-db04-4cef-92c6-46bcd6a4c7e2';
+        : null;
+
+      if (!validMenuItemId) return;
 
       await orderService.addItem({
         orderId: draft.id,
@@ -128,17 +121,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         try {
           const parsed = JSON.parse(savedCart);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const isUUID = (val?: string | null) =>
-              Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
-            const sanitized = parsed.map((item: CartItem) => {
-              if (item.dishId === 'item' || !isUUID(item.dishId)) {
-                return {
-                  ...item,
-                  dishId: '4455110d-db04-4cef-92c6-46bcd6a4c7e2',
-                };
-              }
-              return item;
-            });
+            const sanitized = parsed.filter((item: CartItem) => item && (item.dishId || item.id || item.name));
             setCart(sanitized);
           }
         } catch {

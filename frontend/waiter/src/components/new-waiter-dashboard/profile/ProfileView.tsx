@@ -190,7 +190,7 @@ export default function ProfileView({
                 </div>
               </div>
               <span className="text-[11px] text-zinc-400 font-mono mt-0.5">
-                ID: {user?.id || '00000001-0000-4000-8000-000000000005'}
+                ID: {user?.id || '—'}
               </span>
             </div>
           </div>
@@ -236,7 +236,7 @@ export default function ProfileView({
               <div className="p-3 flex flex-col gap-2.5">
                 {/* Account Badges from getMe */}
                 <div className="flex items-center justify-between gap-2 p-2 bg-neutral-900/90 rounded-[5px] border border-white/5 text-xs">
-                  <span className="text-zinc-400 font-mono text-[11px]">ID: {user?.id || '00000001-0000-4000-8000-000000000005'}</span>
+                  <span className="text-zinc-400 font-mono text-[11px]">ID: {user?.id || '—'}</span>
                   <div className="flex items-center gap-1.5">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
                       user?.isEmailVerified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'

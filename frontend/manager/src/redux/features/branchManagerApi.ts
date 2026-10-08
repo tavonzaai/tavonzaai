@@ -1,8 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { baseApiFetch, getCookie } from '../api/baseApi';
 
-export const DEFAULT_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function isValidUuid(id: any): boolean {
@@ -10,7 +8,7 @@ export function isValidUuid(id: any): boolean {
 }
 
 export function getActiveBranchId(): string {
-  const fromCookie = getCookie('tavonza_branch_id') || getCookie('branch_id');
+  const fromCookie = getCookie('tavonza_branch_id') || getCookie('branch_id') || getCookie('active_branch_id');
   if (fromCookie && isValidUuid(fromCookie)) return fromCookie;
 
   const rawUser = getCookie('branch_manager_user');
@@ -21,10 +19,29 @@ export function getActiveBranchId(): string {
       if (parsed?.assignments?.[0]?.branchId && isValidUuid(parsed.assignments[0].branchId)) {
         return parsed.assignments[0].branchId;
       }
+      if (parsed?.assignments?.[0]?.branch?.id && isValidUuid(parsed.assignments[0].branch.id)) {
+        return parsed.assignments[0].branch.id;
+      }
     } catch {}
   }
 
-  return DEFAULT_BRANCH_ID;
+  if (typeof window !== 'undefined') {
+    const rawLocalUser = localStorage.getItem('tavonza_user');
+    if (rawLocalUser) {
+      try {
+        const parsed = JSON.parse(rawLocalUser);
+        if (parsed?.branchId && isValidUuid(parsed.branchId)) return parsed.branchId;
+        if (parsed?.assignments?.[0]?.branchId && isValidUuid(parsed.assignments[0].branchId)) {
+          return parsed.assignments[0].branchId;
+        }
+        if (parsed?.assignments?.[0]?.branch?.id && isValidUuid(parsed.assignments[0].branch.id)) {
+          return parsed.assignments[0].branch.id;
+        }
+      } catch {}
+    }
+  }
+
+  return '';
 }
 
 export interface BranchSettings {

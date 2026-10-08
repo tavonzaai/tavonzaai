@@ -40,15 +40,15 @@ export default function CashierHeader({
   }, []);
 
   const activeUser = reduxAuth.user || localUser;
-  const displayName = activeUser?.name || 'Nobin Mille';
+  const displayName = activeUser?.name || 'Cashier';
   const displayRole = (activeUser as any)?.assignments?.[0]?.role?.replace(/_/g, ' ') || activeUser?.role || 'Cashier';
-  const branchName = (activeUser as any)?.assignments?.[0]?.branch?.name || (activeUser as any)?.station || 'Downtown Branch';
+  const branchName = (activeUser as any)?.assignments?.[0]?.branch?.name || (activeUser as any)?.station || 'Main Branch';
   const initials = displayName
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map((n: string) => n[0]?.toUpperCase() || '')
-    .join('') || 'NM';
+    .join('') || 'C';
 
   return (
     <header className="h-20 bg-black border-b border-white/10 px-3 sm:px-8 flex items-center justify-between gap-2 sm:gap-4 sticky top-0 z-30 flex-shrink-0 shadow-[0px_0px_4px_0px_rgba(255,255,255,0.25)] font-['Inter']">

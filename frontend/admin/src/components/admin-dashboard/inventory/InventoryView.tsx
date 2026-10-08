@@ -17,6 +17,23 @@ import {
 } from './types';
 import { toast } from 'sonner';
 import { inventoryService } from '@/redux/features/inventoryApi';
+import { branchService } from '@/redux/features/restaurantApi';
+import { getCookie } from '@/redux/api/baseApi';
+
+async function resolveActiveBranch(): Promise<string | null> {
+  const branchId =
+    getCookie('tavonza_branch_id') ||
+    getCookie('branch_id') ||
+    getCookie('active_branch_id');
+
+  if (branchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branchId)) {
+    return branchId;
+  }
+
+  const branchesRes = await branchService.getBranches({ limit: 1 }).catch(() => null);
+  const firstBranch = branchesRes?.data?.[0];
+  return firstBranch?.id || null;
+}
 
 export default function InventoryView() {
   const [items, setItems] = useState<InventoryItem[]>(INITIAL_INVENTORY_ITEMS);
@@ -33,7 +50,8 @@ export default function InventoryView() {
     let mounted = true;
     async function loadBackendInventory() {
       try {
-        const branchId = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+        const branchId = await resolveActiveBranch();
+        if (!branchId) return;
         const data = await inventoryService.getBranchItems(branchId);
         if (mounted && data && data.length > 0) {
           const mapped: InventoryItem[] = data.map((item) => {
@@ -128,7 +146,11 @@ export default function InventoryView() {
   // Add Item handler
   const handleAddItem = async (newItem: InventoryItem) => {
     try {
-      const branchId = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+      const branchId = await resolveActiveBranch();
+      if (!branchId) {
+        toast.error('No active branch selected to register inventory items.');
+        return;
+      }
       const created = await inventoryService.createItem({
         branchId,
         name: newItem.name,

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { LayoutGrid, Home, UtensilsCrossed, Bell, User } from 'lucide-react';
-import { waiterService } from '@/redux/features/waiterApi';
+import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
 import { getCookie } from '@/redux/api/baseApi';
 
 interface BottomDockProps {
@@ -33,11 +33,8 @@ export default function BottomDock({
     let isMounted = true;
     async function fetchAlertCount() {
       try {
-        const rawBranchId = getCookie('tavonza_branch_id');
-        const branchId =
-          rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
-            ? rawBranchId
-            : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+        const branchId = getActiveBranchId();
+        if (!branchId) return;
 
         const apiAlerts = await waiterService.getMyAlerts(branchId);
         if (isMounted && Array.isArray(apiAlerts)) {
