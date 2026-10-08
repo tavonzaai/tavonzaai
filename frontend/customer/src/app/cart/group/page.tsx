@@ -47,25 +47,27 @@ function GroupCartContent() {
     try {
       const branchId = resolveDynamicBranchId();
       const tableId = resolveDynamicTableId(null, activeTable);
-      const draft = await orderService.getCart(branchId, tableId);
-      if (draft?.id) {
-        if ((!draft.items || draft.items.length === 0) && cart.length > 0) {
-          for (const item of cart) {
-            await orderService.addItem({
-              orderId: draft.id,
-              menuItemId: item.dishId || item.id,
-              quantity: item.quantity || 1,
-            });
+      if (branchId && tableId) {
+        const draft = await orderService.getCart(branchId, tableId);
+        if (draft?.id) {
+          if ((!draft.items || draft.items.length === 0) && cart.length > 0) {
+            for (const item of cart) {
+              await orderService.addItem({
+                orderId: draft.id,
+                menuItemId: item.dishId || item.id,
+                quantity: item.quantity || 1,
+              });
+            }
+          }  
+          const submitted = await orderService.submitOrder(draft.id);
+          const submittedId = submitted?.id || submitted?.orderId || submitted?.orderNumber;
+          if (submittedId && typeof window !== 'undefined') {
+            localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
           }
+          clearCart();
+          router.push(`/orders/waiting?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(submittedId || '')}&mode=together`);
+          return;
         }
-        const submitted = await orderService.submitOrder(draft.id);
-        const submittedId = submitted?.id || submitted?.orderId || submitted?.orderNumber;
-        if (submittedId && typeof window !== 'undefined') {
-          localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
-        }
-        clearCart();
-        router.push(`/orders/waiting?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(submittedId || '')}&mode=together`);
-        return;
       }
     } catch (e) {
       console.warn('Place group order error:', e);

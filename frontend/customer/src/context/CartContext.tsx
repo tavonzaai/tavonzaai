@@ -40,7 +40,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 const isUUID = (val?: string | null): boolean =>
   Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
-const resolveDynamicBranchId = (apiBranchId?: string | null): string | null => {
+export const resolveDynamicBranchId = (apiBranchId?: string | null): string | null => {
   if (apiBranchId && isUUID(apiBranchId)) return apiBranchId;
   const cookieBranch = getCookie('tavonza_branch_id') || getCookie('branch_id');
   if (cookieBranch && isUUID(cookieBranch)) return cookieBranch;
@@ -52,7 +52,7 @@ const resolveDynamicBranchId = (apiBranchId?: string | null): string | null => {
   return null;
 };
 
-const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string | null => {
+export const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string | null => {
   if (apiTableId && isUUID(apiTableId)) return apiTableId;
   const cookieTable = getCookie('tavonza_table_id');
   if (cookieTable && isUUID(cookieTable)) return cookieTable;
