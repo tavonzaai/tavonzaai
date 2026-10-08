@@ -87,6 +87,40 @@ export const kitchenService = {
       body: JSON.stringify({ isAvailable: payload.isAvailable }),
     });
   },
+
+  updateOrderStatus: async (orderId: string, status: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/orders/${encodeURIComponent(orderId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return (res as any)?.data || res;
+  },
+
+  getInventoryItems: async (branchId: string): Promise<any[]> => {
+    const res = await baseApiFetch<any[]>(`/inventory/items/branch/${encodeURIComponent(branchId)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res || [];
+  },
+
+  adjustStock: async (
+    itemId: string,
+    payload: { quantityDelta: number; reason: string; notes?: string }
+  ): Promise<any> => {
+    const res = await baseApiFetch<any>(`/inventory/items/${encodeURIComponent(itemId)}/adjust`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  getShifts: async (branchId: string, date?: string): Promise<any[]> => {
+    const qs = date ? `?date=${encodeURIComponent(date)}` : '';
+    const res = await baseApiFetch<any[]>(`/shifts/branch/${encodeURIComponent(branchId)}${qs}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res || [];
+  },
 };
 
 export const fetchActiveKitchenTickets = createAsyncThunk<
