@@ -8,15 +8,41 @@ import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
 import { getApiBaseUrl } from '@/redux/api/baseApi';
 
+import { orderService } from '@/redux/features/orderApi';
+import { getCookie } from '@/redux/api/baseApi';
+
 function WaitingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tableNumber } = useCart();
 
   const activeTable = searchParams.get('table') || tableNumber || 'Table 08';
-  const orderId = searchParams.get('order') || 'LT-2847';
+
+  const [orderId, setOrderId] = useState<string>(() => {
+    const fromParam = (searchParams.get('order') || searchParams.get('id') || '').trim();
+    if (fromParam) return fromParam;
+    if (typeof window !== 'undefined') {
+      return (
+        localStorage.getItem('tavonza_last_submitted_order_id') ||
+        getCookie('tavonza_last_submitted_order_id') ||
+        ''
+      ).trim();
+    }
+    return '';
+  });
 
   const [secondsElapsed, setSecondsElapsed] = useState(0);
+
+  // Sync orderId from query parameter if it changes
+  useEffect(() => {
+    const fromParam = (searchParams.get('order') || searchParams.get('id') || '').trim();
+    if (fromParam) {
+      setOrderId(fromParam);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tavonza_last_submitted_order_id', fromParam);
+      }
+    }
+  }, [searchParams]);
 
   // Real-time elapsed time counter (NO auto-acceptance: strictly awaits waiter / staff approval)
   useEffect(() => {
@@ -27,19 +53,15 @@ function WaitingContent() {
     return () => clearInterval(timer);
   }, []);
 
-  // Poll backend for real waiter order confirmation if orderId exists
+  // Poll backend for real waiter order confirmation ONLY if orderId exists
   useEffect(() => {
-    if (!orderId) return;
+    const trimmedId = (orderId || '').trim();
+    if (!trimmedId) return;
 
     let isMounted = true;
     const checkStatus = async () => {
       try {
-        const apiUrl = getApiBaseUrl();
-        const res = await fetch(`${apiUrl}/orders/${orderId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const order = data?.data || data;
-
+        const order = await orderService.getOrderDetail(trimmedId).catch(() => orderService.trackOrder(trimmedId));
         if (order && isMounted) {
           const status = String(order.status || '').toUpperCase();
           if (
@@ -50,16 +72,17 @@ function WaitingContent() {
             status === 'READY' ||
             status === 'SERVED'
           ) {
-            router.push(`/orders/confirmed?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(orderId)}`);
+            router.push(`/orders/confirmed?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(trimmedId)}`);
           } else if (status === 'REJECTED' || status === 'CANCELLED') {
             router.push(`/order-unavailable?table=${encodeURIComponent(activeTable)}&reason=${status.toLowerCase()}`);
           }
         }
       } catch {
-        // network or mock fallback: continue waiting for waiter
+        // network or waiting for waiter: continue waiting
       }
     };
 
+    checkStatus();
     const pollInterval = setInterval(checkStatus, 4000);
     return () => {
       isMounted = false;

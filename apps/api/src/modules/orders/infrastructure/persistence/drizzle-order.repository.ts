@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -58,10 +58,11 @@ export class DrizzleOrderRepository implements IOrderRepository {
   // ── Find ────────────────────────────────────────────────────────────
 
   async findById(id: string): Promise<Order | null> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
     const [record] = await this.db
       .select()
       .from(orders)
-      .where(eq(orders.id, id))
+      .where(isUuid ? or(eq(orders.id, id), eq(orders.orderNumber, id)) : eq(orders.orderNumber, id))
       .limit(1);
 
     if (!record) return null;
@@ -69,7 +70,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
     const items = await this.db
       .select()
       .from(orderItems)
-      .where(eq(orderItems.orderId, id));
+      .where(eq(orderItems.orderId, record.id));
 
     return this.toDomain({ ...record, items });
   }

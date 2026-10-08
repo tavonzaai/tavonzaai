@@ -46,8 +46,41 @@ export default function OrdersView({ onReserveClick, onOpenFeedback }: OrdersVie
           : undefined;
 
       // 1. Fetch user session orders from backend GET /orders/me
-      const myOrdersList = await orderService.getMyOrders({ branchId });
-      setOrders(myOrdersList || []);
+      try {
+        const myOrdersList = await orderService.getMyOrders({ branchId });
+        setOrders(myOrdersList || []);
+      } catch {
+        // If guest customer without JWT, fallback to tracking last placed table order
+        const lastId =
+          typeof window !== 'undefined'
+            ? localStorage.getItem('tavonza_last_submitted_order_id')
+            : null;
+        if (lastId) {
+          try {
+            const singleOrder = await orderService.trackOrder(lastId);
+            if (singleOrder?.id) {
+              setOrders([
+                {
+                  id: singleOrder.id,
+                  orderId: singleOrder.orderId,
+                  orderNumber: singleOrder.orderNumber,
+                  tableId: singleOrder.tableId,
+                  status: singleOrder.status,
+                  displayStatus: singleOrder.displayStatus,
+                  itemCount: singleOrder.items?.length || 0,
+                  total: singleOrder.totalAmount || singleOrder.total || 0,
+                  totalAmount: singleOrder.totalAmount || singleOrder.total || 0,
+                  estimatedPrepTime: singleOrder.estimatedPrepTime,
+                  items: singleOrder.items || [],
+                  createdAt: singleOrder.submittedAt || new Date().toISOString(),
+                },
+              ]);
+            }
+          } catch {
+            // ignore tracking fallback error
+          }
+        }
+      }
 
       // 2. Fetch active draft cart from GET /orders/cart
       try {

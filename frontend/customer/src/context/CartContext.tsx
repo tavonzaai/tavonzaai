@@ -6,6 +6,7 @@ import { orderService } from '@/redux/features/orderApi';
 
 export interface CartItem {
   id: string;
+  orderItemId?: string;
   dishId?: string;
   name: string;
   subtitle?: string;
@@ -36,38 +37,68 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-const DEFAULT_FALLBACK_TABLE_ID = '34489e98-b165-4f29-bc3e-38be762dedb3';
+export const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+export const DEFAULT_FALLBACK_TABLE_ID = '00000014-0000-4000-8000-000000000008';
 
-const TABLE_NUMBER_MAP: Record<string, string> = {
-  't-01': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-  't-02': '34489e98-b165-4f29-bc3e-38be762dedb3',
-  't-03': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-  't-04': '41fe73cd-e275-459b-9533-0b2d5098d927',
-  't-05': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-  'table 1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-  'table 2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-  'table 3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-  'table 4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-  'table 5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-  '1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-  '2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-  '3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-  '4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-  '5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
+export const TABLE_NUMBER_MAP: Record<string, string> = {
+  't-01': '00000014-0000-4000-8000-000000000001',
+  't-02': '00000014-0000-4000-8000-000000000002',
+  't-03': '00000014-0000-4000-8000-000000000003',
+  't-04': '00000014-0000-4000-8000-000000000004',
+  't-05': '00000014-0000-4000-8000-000000000005',
+  't-06': '00000014-0000-4000-8000-000000000006',
+  't-07': '00000014-0000-4000-8000-000000000007',
+  't-08': '00000014-0000-4000-8000-000000000008',
+  't-09': '00000014-0000-4000-8000-000000000009',
+  't-10': '00000014-0000-4000-8000-00000000000a',
+  't-11': '00000014-0000-4000-8000-00000000000b',
+  't-12': '00000014-0000-4000-8000-00000000000c',
+  'table 1': '00000014-0000-4000-8000-000000000001',
+  'table 2': '00000014-0000-4000-8000-000000000002',
+  'table 3': '00000014-0000-4000-8000-000000000003',
+  'table 4': '00000014-0000-4000-8000-000000000004',
+  'table 5': '00000014-0000-4000-8000-000000000005',
+  'table 6': '00000014-0000-4000-8000-000000000006',
+  'table 7': '00000014-0000-4000-8000-000000000007',
+  'table 8': '00000014-0000-4000-8000-000000000008',
+  'table 9': '00000014-0000-4000-8000-000000000009',
+  'table 10': '00000014-0000-4000-8000-00000000000a',
+  'table 11': '00000014-0000-4000-8000-00000000000b',
+  'table 12': '00000014-0000-4000-8000-00000000000c',
+  'table 01': '00000014-0000-4000-8000-000000000001',
+  'table 02': '00000014-0000-4000-8000-000000000002',
+  'table 03': '00000014-0000-4000-8000-000000000003',
+  'table 04': '00000014-0000-4000-8000-000000000004',
+  'table 05': '00000014-0000-4000-8000-000000000005',
+  'table 06': '00000014-0000-4000-8000-000000000006',
+  'table 07': '00000014-0000-4000-8000-000000000007',
+  'table 08': '00000014-0000-4000-8000-000000000008',
+  'table 09': '00000014-0000-4000-8000-000000000009',
+  '1': '00000014-0000-4000-8000-000000000001',
+  '2': '00000014-0000-4000-8000-000000000002',
+  '3': '00000014-0000-4000-8000-000000000003',
+  '4': '00000014-0000-4000-8000-000000000004',
+  '5': '00000014-0000-4000-8000-000000000005',
+  '6': '00000014-0000-4000-8000-000000000006',
+  '7': '00000014-0000-4000-8000-000000000007',
+  '8': '00000014-0000-4000-8000-000000000008',
+  '9': '00000014-0000-4000-8000-000000000009',
+  '10': '00000014-0000-4000-8000-00000000000a',
+  '11': '00000014-0000-4000-8000-00000000000b',
+  '12': '00000014-0000-4000-8000-00000000000c',
 };
 
-const isUUID = (val?: string | null): boolean =>
+export const isUUID = (val?: string | null): boolean =>
   Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
-const resolveDynamicBranchId = (apiBranchId?: string | null): string => {
+export const resolveDynamicBranchId = (apiBranchId?: string | null): string => {
   if (apiBranchId && isUUID(apiBranchId)) return apiBranchId;
   const cookieBranch = getCookie('tavonza_branch_id');
   if (cookieBranch && isUUID(cookieBranch)) return cookieBranch;
   return DEFAULT_FALLBACK_BRANCH_ID;
 };
 
-const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string => {
+export const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string => {
   if (apiTableId && isUUID(apiTableId)) return apiTableId;
   const cookieTable = getCookie('tavonza_table_id');
   if (cookieTable && isUUID(cookieTable)) return cookieTable;
@@ -79,7 +110,7 @@ const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: s
   return DEFAULT_FALLBACK_TABLE_ID;
 };
 
-const syncAddItemToBackend = async (item: CartItem) => {
+const syncAddItemToBackend = async (item: CartItem): Promise<string | undefined> => {
   try {
     const branchId = resolveDynamicBranchId();
     const tableId = resolveDynamicTableId();
@@ -92,22 +123,88 @@ const syncAddItemToBackend = async (item: CartItem) => {
     }
 
     if (draft?.id) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tavonza_active_cart_id', draft.id);
+      }
       const validMenuItemId = isUUID(item.dishId)
         ? item.dishId!
         : isUUID(item.id)
         ? item.id
-        : '4455110d-db04-4cef-92c6-46bcd6a4c7e2';
+        : '0000000b-0000-4000-8000-000000000004';
 
-      await orderService.addItem({
+      const res = await orderService.addItem({
         orderId: draft.id,
         menuItemId: validMenuItemId,
         quantity: item.quantity || 1,
         specialInstructions: item.specialInstructions,
         addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
       });
+
+      const added = res?.items?.find((i) => i.menuItemId === validMenuItemId);
+      return added?.id;
     }
   } catch (err) {
     console.warn('Sync add to cart API warning:', err);
+  }
+  return undefined;
+};
+
+const syncUpdateItemBackend = async (item: CartItem, newQty: number) => {
+  try {
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+
+    let draft: any = null;
+    try {
+      draft = await orderService.getCartFromSession(branchId, tableId);
+    } catch {
+      draft = await orderService.getCart(branchId, tableId);
+    }
+
+    if (!draft?.id) return;
+
+    const backendItem = draft.items?.find(
+      (bi: any) => bi.id === item.orderItemId || bi.menuItemId === item.dishId || bi.menuItemId === item.id
+    );
+
+    if (backendItem?.id) {
+      await orderService.updateItem({
+        orderId: draft.id,
+        itemId: backendItem.id,
+        quantity: newQty,
+      });
+    }
+  } catch (err) {
+    console.warn('Sync update cart item API warning:', err);
+  }
+};
+
+const syncRemoveItemBackend = async (item: CartItem) => {
+  try {
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+
+    let draft: any = null;
+    try {
+      draft = await orderService.getCartFromSession(branchId, tableId);
+    } catch {
+      draft = await orderService.getCart(branchId, tableId);
+    }
+
+    if (!draft?.id) return;
+
+    const backendItem = draft.items?.find(
+      (bi: any) => bi.id === item.orderItemId || bi.menuItemId === item.dishId || bi.menuItemId === item.id
+    );
+
+    if (backendItem?.id) {
+      await orderService.removeItem({
+        orderId: draft.id,
+        itemId: backendItem.id,
+      });
+    }
+  } catch (err) {
+    console.warn('Sync remove cart item API warning:', err);
   }
 };
 
@@ -168,21 +265,38 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const qtyToAdd = item.quantity || 1;
       if (existingIndex > -1) {
         const next = [...prev];
+        const updatedQty = next[existingIndex].quantity + qtyToAdd;
         next[existingIndex] = {
           ...next[existingIndex],
-          quantity: next[existingIndex].quantity + qtyToAdd,
+          quantity: updatedQty,
         };
+        syncUpdateItemBackend(next[existingIndex], updatedQty);
         return next;
       }
       return [...prev, fullItem];
     });
 
     // Trigger API call when adding product to cart
-    syncAddItemToBackend(fullItem);
+    syncAddItemToBackend(fullItem).then((backendItemId) => {
+      if (backendItemId) {
+        setCart((prev) =>
+          prev.map((i) => (i.id === fullItem.id ? { ...i, orderItemId: backendItemId } : i))
+        );
+      }
+    });
   };
 
   const updateQuantity = (id: string, delta: number) => {
     setCart((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (target) {
+        const nextQty = target.quantity + delta;
+        if (nextQty > 0) {
+          syncUpdateItemBackend(target, nextQty);
+        } else {
+          syncRemoveItemBackend(target);
+        }
+      }
       return prev
         .map((item) => {
           if (item.id === id) {
@@ -196,7 +310,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeFromCart = (id: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== id));
+    setCart((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (target) {
+        syncRemoveItemBackend(target);
+      }
+      return prev.filter((item) => item.id !== id);
+    });
   };
 
   const clearCart = () => {
