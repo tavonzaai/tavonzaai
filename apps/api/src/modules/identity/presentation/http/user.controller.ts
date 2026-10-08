@@ -26,6 +26,7 @@ import {
   ApiCreatedResponse,
   ApiConsumes,
   ApiBody,
+  ApiParam,
   ApiBadRequestResponse,
   ApiNotFoundResponse,
   ApiForbiddenResponse,
@@ -46,8 +47,10 @@ import {
   UserDetailResponseDto,
   UsersListResponseDto,
 } from './dto/user-response.dto';
+import { ApiStandardErrors } from '../../../../common/swagger';
 
-@ApiTags('Users')
+@ApiTags('Identity | User Management')
+@ApiStandardErrors(400, 401, 403, 500)
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -137,6 +140,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get a specific user by ID' })
+  @ApiParam({ name: 'id', description: 'User UUID', example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef' })
   @ApiOkResponse({ type: UserDetailResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiForbiddenResponse({ description: 'Insufficient permissions' })
@@ -156,6 +160,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Toggle or update user status' })
+  @ApiParam({ name: 'id', description: 'User UUID', example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef' })
   @ApiOkResponse({ type: UserDetailResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiForbiddenResponse({ description: 'Administrator privileges required' })
@@ -176,6 +181,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Soft delete a user account' })
+  @ApiParam({ name: 'id', description: 'User UUID', example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef' })
   @ApiOkResponse({ type: UserDetailResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiForbiddenResponse({ description: 'Administrator privileges required' })

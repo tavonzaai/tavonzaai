@@ -47,6 +47,7 @@ function GroupCartContent() {
     try {
       const branchId = resolveDynamicBranchId();
       const tableId = resolveDynamicTableId(null, activeTable);
+      if (!branchId || !tableId) return;
       const draft = await orderService.getCart(branchId, tableId);
       if (draft?.id) {
         if ((!draft.items || draft.items.length === 0) && cart.length > 0) {

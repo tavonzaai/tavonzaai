@@ -1,14 +1,6 @@
 // ============================================================================
 // Table Sessions Controller
 // ============================================================================
-//
-// Figma Screens:
-//   QR Scan Screen    → POST /sessions/scan
-//   Splash Screen     → GET  /sessions/:sessionId
-//   Share Code Screen → POST /sessions/:sessionId/share-code
-//   Guest Menu        → POST /sessions/join
-//   Order Mode        → PATCH /sessions/order-mode
-// ============================================================================
 
 import {
   Controller,
@@ -28,106 +20,28 @@ import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiCreatedResponse,
-  ApiProperty,
-  ApiPropertyOptional,
+  ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { TableSessionService } from '../application/services/table-session.service';
-import { JwtAuthGuard } from '../.././../common/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../identity/infrastructure/adapters/jwt.strategy';
-
-import { IsUUID, IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
-
-// ── DTOs ──────────────────────────────────────────────────────────────
-
-class ScanQrDto {
-  @ApiProperty({ description: 'Branch UUID from QR code' })
-  @IsUUID()
-  branchId!: string;
-
-  @ApiProperty({ description: 'Table UUID from QR code' })
-  @IsUUID()
-  tableId!: string;
-
-  @ApiProperty({ description: 'Human-readable table number', example: 'Table 08' })
-  @IsString()
-  @IsNotEmpty()
-  tableNumber!: string;
-}
-
-class JoinSessionDto {
-  @ApiProperty({ description: '6-char share code from host QR', example: 'ABC123' })
-  @IsString()
-  @IsNotEmpty()
-  code!: string;
-
-  @ApiProperty({ required: false, description: 'Display name for non-logged-in guests' })
-  @IsOptional()
-  @IsString()
-  displayName?: string;
-}
-
-class OrderModeDto {
-  @ApiProperty({ enum: ['individual', 'together'] })
-  @IsIn(['individual', 'together'])
-  orderMode!: 'individual' | 'together';
-
-  @ApiProperty({ description: 'Customer session ID' })
-  @IsUUID()
-  customerSessionId!: string;
-}
-
-export class RequestTableOtpDto {
-  @ApiProperty({ description: 'Branch UUID' })
-  @IsUUID()
-  branchId!: string;
-
-  @ApiProperty({ description: 'Table UUID' })
-  @IsUUID()
-  tableId!: string;
-
-  @ApiProperty({ description: 'Customer phone number or email', example: '+1234567890' })
-  @IsString()
-  @IsNotEmpty()
-  contact!: string;
-
-  @ApiPropertyOptional({ description: 'Optional Table Session UUID if joining active table' })
-  @IsOptional()
-  @IsUUID()
-  tableSessionId?: string;
-}
-
-export class VerifyTableOtpDto {
-  @ApiProperty({ description: 'Branch UUID' })
-  @IsUUID()
-  branchId!: string;
-
-  @ApiProperty({ description: 'Table UUID' })
-  @IsUUID()
-  tableId!: string;
-
-  @ApiProperty({ description: 'Customer phone number or email', example: '+1234567890' })
-  @IsString()
-  @IsNotEmpty()
-  contact!: string;
-
-  @ApiProperty({ description: '5-digit verification code', example: '12345' })
-  @IsString()
-  @IsNotEmpty()
-  code!: string;
-
-  @ApiPropertyOptional({ description: 'Optional guest display name', example: 'Alice' })
-  @IsOptional()
-  @IsString()
-  displayName?: string;
-
-  @ApiPropertyOptional({ description: 'Optional human-readable table number', example: 'Table 12' })
-  @IsOptional()
-  @IsString()
-  tableNumber?: string;
-}
-
-// ── Controller ────────────────────────────────────────────────────────
+import {
+  ScanQrDto,
+  JoinSessionDto,
+  OrderModeDto,
+  RequestTableOtpDto,
+  VerifyTableOtpDto,
+  TableOtpRequestResponseDto,
+  TableOtpVerifyResponseDto,
+  ScanQrResponseDto,
+  SessionDetailResponseDto,
+  ShareCodeResponseDto,
+  SessionActionResponseDto,
+  TableSessionRecordDto,
+} from './http/dto/table-session.dto';
+import { ApiStandardErrors } from '../../../common/swagger';
 
 @ApiTags('Customer | Sessions')
 @Controller('sessions')
@@ -140,8 +54,16 @@ export class TableSessionController {
    */
   @Post('table-otp/request')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[Customer] Request OTP for table session authentication' })
-  async requestTableOtp(@Body() dto: RequestTableOtpDto) {
+  @ApiOperation({
+    summary: '[Customer] Request OTP for table session authentication',
+    description: 'Sends a 5-digit verification code to the customer contact (SMS/email) to authenticate onto a table session.',
+  })
+  @ApiOkResponse({
+    type: TableOtpRequestResponseDto,
+    description: 'OTP code generated and dispatched',
+  })
+  @ApiStandardErrors(400, 404, 500)
+  async requestTableOtp(@Body() dto: RequestTableOtpDto): Promise<TableOtpRequestResponseDto> {
     return this.sessionService.requestTableAuthOtp(dto);
   }
 
@@ -151,23 +73,37 @@ export class TableSessionController {
    */
   @Post('table-otp/verify')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[Customer] Verify OTP to create/join table session and receive JWT' })
-  async verifyTableOtp(@Body() dto: VerifyTableOtpDto) {
+  @ApiOperation({
+    summary: '[Customer] Verify OTP to create/join table session and receive JWT',
+    description: 'Verifies the 5-digit code, seats the guest, creates or connects to the table session, and returns an authorized JWT.',
+  })
+  @ApiOkResponse({
+    type: TableOtpVerifyResponseDto,
+    description: 'Verified session and JWT authentication token',
+  })
+  @ApiStandardErrors(400, 404, 500)
+  async verifyTableOtp(@Body() dto: VerifyTableOtpDto): Promise<any> {
     return this.sessionService.verifyTableAuthOtp(dto);
   }
 
   /**
    * POST /sessions/scan
    * Figma: QR Scan Screen → Splash Screen
-   * Called when customer scans the QR code on the table.
    */
   @Post('scan')
-  @ApiOperation({ summary: '[Customer] Scan table QR code — creates or joins a table session' })
-  @ApiCreatedResponse({ description: 'Session created or returned with table info' })
+  @ApiOperation({
+    summary: '[Customer] Scan table QR code — creates or joins a table session',
+    description: 'Direct QR code scan handler. Automatically allocates a host guest session if table is free, or attaches guest if active.',
+  })
+  @ApiCreatedResponse({
+    type: ScanQrResponseDto,
+    description: 'Session context and guest allocation',
+  })
+  @ApiStandardErrors(400, 404, 500)
   async scanQr(
     @Body() dto: ScanQrDto,
     @CurrentUser() user?: JwtPayload,
-  ) {
+  ): Promise<any> {
     return this.sessionService.scanQr({
       ...dto,
       userId: user?.sub,
@@ -176,11 +112,30 @@ export class TableSessionController {
 
   /**
    * GET /sessions/branch/:branchId
-   * Returns table sessions for a branch
    */
   @Get('branch/:branchId')
-  @ApiOperation({ summary: 'Get table sessions for branch' })
-  @ApiOkResponse({ description: 'List of table sessions' })
+  @ApiOperation({
+    summary: '[Staff] Get table sessions for branch',
+    description: 'Returns active table sessions in the branch with seating and occupancy states.',
+  })
+  @ApiParam({
+    name: 'branchId',
+    type: String,
+    description: 'Branch UUID',
+    example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['ACTIVE', 'PAYMENT_PENDING', 'CLOSED', 'ABANDONED'],
+    description: 'Filter sessions by status',
+    example: 'ACTIVE',
+  })
+  @ApiOkResponse({
+    type: [TableSessionRecordDto],
+    description: 'List of table sessions in branch',
+  })
+  @ApiStandardErrors(400, 500)
   async getBranchSessions(
     @Param('branchId') branchId: string,
     @Query('status') status?: string,
@@ -190,40 +145,71 @@ export class TableSessionController {
 
   /**
    * GET /sessions/:sessionId
-   * Returns session data with all guests — used for Splash screen info
    */
   @Get(':sessionId')
-  @ApiOperation({ summary: '[Customer] Get table session with guests list' })
-  @ApiOkResponse({ description: 'Session detail with customers' })
-  async getSession(@Param('sessionId') sessionId: string) {
+  @ApiOperation({
+    summary: '[Customer] Get table session with guests list',
+    description: 'Returns session details and list of all guests seated at this dining table.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    type: String,
+    description: 'Table Session UUID',
+    example: '8877332f-4512-40bc-8012-d881e6e58003',
+  })
+  @ApiOkResponse({
+    type: SessionDetailResponseDto,
+    description: 'Active session detail and guests list',
+  })
+  @ApiStandardErrors(400, 404, 500)
+  async getSession(@Param('sessionId') sessionId: string): Promise<any> {
     return this.sessionService.getSession(sessionId);
   }
 
   /**
    * POST /sessions/:sessionId/share-code
-   * Figma: "Share Code" screen — generates 6-char code + 30-second QR
    */
   @Post(':sessionId/share-code')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: '[Customer] Generate share code QR for HostGuest feature (30s expiry)' })
-  async generateShareCode(@Param('sessionId') sessionId: string) {
+  @ApiOperation({
+    summary: '[Customer] Generate share code QR for HostGuest feature',
+    description: 'Generates a 6-character alphanumeric code for companions to scan or enter to join this table session.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    type: String,
+    description: 'Table Session UUID',
+    example: '8877332f-4512-40bc-8012-d881e6e58003',
+  })
+  @ApiOkResponse({
+    type: ShareCodeResponseDto,
+    description: 'Generated join code and URL',
+  })
+  @ApiStandardErrors(400, 401, 404, 500)
+  async generateShareCode(@Param('sessionId') sessionId: string): Promise<any> {
     return this.sessionService.generateShareCode(sessionId);
   }
 
   /**
    * POST /sessions/join
-   * Figma: Guest scans host's QR → joins table as guest
-   * Shows "You've joined the table as a Host Guest" banner on menu
    */
   @Post('join')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[Customer] Join a table session using host share code' })
+  @ApiOperation({
+    summary: '[Customer] Join a table session using host share code',
+    description: 'Allows dining companion to join an active table session using the 6-character join code.',
+  })
+  @ApiOkResponse({
+    type: TableOtpVerifyResponseDto,
+    description: 'Joined session and guest credentials',
+  })
+  @ApiStandardErrors(400, 404, 500)
   async joinSession(
     @Body() dto: JoinSessionDto,
     @CurrentUser() user?: JwtPayload,
-  ) {
+  ): Promise<any> {
     return this.sessionService.joinByCode({
       code: dto.code,
       userId: user?.sub,
@@ -232,51 +218,97 @@ export class TableSessionController {
 
   /**
    * PATCH /sessions/order-mode
-   * Figma: "Order Individually" / "Order together" selection in cart
    */
   @Patch('order-mode')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[Customer] Set order mode: individual or together with guests' })
-  async setOrderMode(@Body() dto: OrderModeDto) {
+  @ApiOperation({
+    summary: '[Customer] Set order mode: individual or together with guests',
+    description: 'Updates whether customer wishes to order and bill independently or consolidate into a shared group bill.',
+  })
+  @ApiOkResponse({
+    type: SessionActionResponseDto,
+    description: 'Order mode updated successfully',
+  })
+  @ApiStandardErrors(400, 404, 500)
+  async setOrderMode(@Body() dto: OrderModeDto): Promise<any> {
     return this.sessionService.setOrderMode(dto.customerSessionId, dto.orderMode);
   }
 
   /**
    * POST /sessions/:sessionId/request-bill
-   * Guest requests bill settlement
    */
   @Post(':sessionId/request-bill')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[Customer] Request bill for table session' })
-  async requestBill(@Param('sessionId') sessionId: string) {
+  @ApiOperation({
+    summary: '[Customer] Request bill for table session',
+    description: 'Notifies floor staff and cashier that guests are ready to settle the bill.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    type: String,
+    description: 'Table Session UUID',
+    example: '8877332f-4512-40bc-8012-d881e6e58003',
+  })
+  @ApiOkResponse({
+    type: SessionActionResponseDto,
+    description: 'Bill request dispatched to floor staff',
+  })
+  @ApiStandardErrors(400, 404, 500)
+  async requestBill(@Param('sessionId') sessionId: string): Promise<any> {
     return this.sessionService.requestBill(sessionId);
   }
 
   /**
    * POST /sessions/:sessionId/call-waiter
-   * Guest calls staff to table
    */
   @Post(':sessionId/call-waiter')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '[Customer] Call waiter to table' })
+  @ApiOperation({
+    summary: '[Customer] Call waiter to table',
+    description: 'Sends real-time high-priority assistance alert to assigned table waiter and floor staff.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    type: String,
+    description: 'Table Session UUID',
+    example: '8877332f-4512-40bc-8012-d881e6e58003',
+  })
+  @ApiOkResponse({
+    type: SessionActionResponseDto,
+    description: 'Waiter call acknowledged',
+  })
+  @ApiStandardErrors(400, 404, 500)
   async callWaiter(
     @Param('sessionId') sessionId: string,
     @Body('reason') reason?: string,
-  ) {
+  ): Promise<any> {
     return this.sessionService.callWaiter(sessionId, reason);
   }
 
   /**
    * POST /sessions/:sessionId/close
-   * Called after payment is completed
    */
   @Post(':sessionId/close')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: '[Customer] Close table session after payment' })
-  async closeSession(@Param('sessionId') sessionId: string) {
+  @ApiOperation({
+    summary: '[Customer/Staff] Close table session after payment',
+    description: 'Enforces session closure invariants: verifies all orders are served and balance is settled, then frees table.',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    type: String,
+    description: 'Table Session UUID',
+    example: '8877332f-4512-40bc-8012-d881e6e58003',
+  })
+  @ApiOkResponse({
+    type: SessionActionResponseDto,
+    description: 'Table session closed and table released to AVAILABLE',
+  })
+  @ApiStandardErrors(400, 401, 404, 409, 500)
+  async closeSession(@Param('sessionId') sessionId: string): Promise<any> {
     await this.sessionService.closeSession(sessionId);
-    return { message: 'Session closed' };
+    return { success: true, message: 'Session closed' };
   }
 }
