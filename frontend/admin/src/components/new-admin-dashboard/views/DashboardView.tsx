@@ -376,80 +376,57 @@ export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
         </div>
 
         {/* Right Column: Business Health Card (4 or 5 cols) */}
-        <div className="lg:col-span-5 xl:col-span-4 p-6 bg-neutral-900/90 rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-300/20 backdrop-blur-xl flex flex-col justify-between gap-6 shadow-xl">
+        <div className="lg:col-span-5 xl:col-span-4 p-6 bg-[#121316] rounded-2xl border border-neutral-800/80 backdrop-blur-xl flex flex-col justify-between gap-6 shadow-xl">
           {/* Header */}
           <div className="flex justify-between items-center">
-            <h2 className="text-white text-base font-semibold font-sans">
+            <h2 className="text-white text-base sm:text-lg font-semibold font-sans">
               Business Health
             </h2>
-            <div className="px-2.5 py-0.5 bg-green-500/10 border border-green-500/20 rounded-full inline-flex items-center">
-              <span className="text-green-500 text-[10px] font-semibold font-sans tracking-wide">
+            <div className="px-3 py-1 bg-emerald-950/60 border border-emerald-500/20 rounded-full inline-flex items-center">
+              <span className="text-emerald-400 text-xs font-semibold font-sans tracking-wide">
                 Excellent
               </span>
             </div>
           </div>
 
-          {/* Circular Score Gauge */}
-          <div className="relative flex flex-col items-center justify-center my-2">
-            <div className="relative size-36 flex items-center justify-center">
-              <svg className="size-full -rotate-90" viewBox="0 0 100 100">
-                {/* Background Ring */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  stroke="#27272a"
-                  strokeWidth="8"
+          {/* 3-Color Donut Gauge Matching Image 1 */}
+          <div className="relative flex flex-col items-center justify-center my-1">
+            <div className="relative size-44 flex items-center justify-center">
+              <svg className="size-full" viewBox="0 0 160 160">
+                {/* Segment 1: Vibrant Green (from 220° to 52° clockwise) */}
+                <path
+                  d="M 44.65 122.13 A 55 55 0 1 1 123.34 46.14"
                   fill="none"
+                  stroke="#00c853"
+                  strokeWidth="26"
+                  strokeLinecap="butt"
                 />
 
-                {/* Indigo Layer */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  stroke="#6366f1"
-                  strokeWidth="8"
-                  strokeDasharray="251.2"
-                  strokeDashoffset="60"
-                  strokeLinecap="round"
+                {/* Segment 2: Royal Periwinkle Blue (from 52° to 106° clockwise) */}
+                <path
+                  d="M 123.34 46.14 A 55 55 0 0 1 132.87 95.16"
                   fill="none"
-                  className="opacity-70"
+                  stroke="#5b75f5"
+                  strokeWidth="26"
+                  strokeLinecap="butt"
                 />
 
-                {/* Primary Emerald/Green Layer */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  stroke="#22c55e"
-                  strokeWidth="8"
-                  strokeDasharray="251.2"
-                  strokeDashoffset="22.6"
-                  strokeLinecap="round"
+                {/* Segment 3: Golden Amber (from 106° to 220° clockwise) */}
+                <path
+                  d="M 132.87 95.16 A 55 55 0 0 1 44.65 122.13"
                   fill="none"
-                />
-
-                {/* Golden Accent Marker */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="32"
-                  stroke="#eab308"
-                  strokeWidth="2"
-                  strokeDasharray="200"
-                  strokeDashoffset="70"
-                  fill="none"
-                  className="opacity-40"
+                  stroke="#f9a825"
+                  strokeWidth="26"
+                  strokeLinecap="butt"
                 />
               </svg>
 
               {/* Score Value Center */}
-              <div className="absolute flex flex-col items-center justify-center text-center">
-                <span className="text-white text-4xl font-bold font-sans tracking-tight leading-8">
+              <div className="absolute flex flex-col items-center justify-center text-center pointer-events-none">
+                <span className="text-white text-4xl sm:text-5xl font-bold font-sans tracking-tight leading-none">
                   91
                 </span>
-                <span className="text-slate-400 text-xs font-normal font-sans mt-0.5">
+                <span className="text-neutral-400 text-xs font-medium font-sans mt-1">
                   / 100
                 </span>
               </div>
@@ -457,16 +434,20 @@ export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
           </div>
 
           {/* Breakdown Progress Bars */}
-          <div className="space-y-3 pt-2">
+          <div className="space-y-3.5 pt-1">
             {BUSINESS_HEALTH_METRICS.map((metric) => (
               <div key={metric.name} className="flex flex-col gap-1.5">
-                <div className="flex justify-between items-center text-xs font-sans">
-                  <span className="text-slate-400 font-normal">{metric.name}</span>
-                  <span className="text-green-500 font-semibold">{metric.score}</span>
+                <div className="flex justify-between items-center text-xs sm:text-sm font-sans">
+                  <span className="text-neutral-400 font-normal">{metric.name}</span>
+                  <span className="text-emerald-400 font-semibold">{metric.score}</span>
                 </div>
-                <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ${metric.color}`}
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      metric.name === 'Operations' || metric.name === 'Staff'
+                        ? 'bg-[#5b75f5]'
+                        : 'bg-[#00c853]'
+                    }`}
                     style={{ width: `${metric.score}%` }}
                   />
                 </div>
