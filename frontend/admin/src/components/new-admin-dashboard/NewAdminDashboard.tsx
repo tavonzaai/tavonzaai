@@ -99,7 +99,9 @@ export default function NewAdminDashboard({
           {activeTab === 'restaurants' && (
             <RestaurantsView initialRestaurantId={initialRestaurantId} />
           )}
-          {activeTab === 'branches' && <BranchesView />}
+          {activeTab === 'branches' && (
+            <BranchesView onBack={() => handleTabSelect('restaurants')} />
+          )}
           {activeTab === 'restaurant-branches' && (
             <RestaurantBranchesDetailView
               restaurant={
@@ -112,6 +114,7 @@ export default function NewAdminDashboard({
                   : null) || MOCK_RESTAURANTS[0]
               }
               onBack={() => handleTabSelect('restaurants')}
+              onOpenBranchDashboard={(b) => handleTabSelect('branches')}
             />
           )}
           {activeTab === 'permissions' && <PermissionsView />}

@@ -194,6 +194,9 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
       <RestaurantBranchesDetailView
         restaurant={detailRestaurant}
         onBack={handleBackToList}
+        onOpenBranchDashboard={(branch) => {
+          router.push('/new-admin-dashboard/branches');
+        }}
       />
     );
   }

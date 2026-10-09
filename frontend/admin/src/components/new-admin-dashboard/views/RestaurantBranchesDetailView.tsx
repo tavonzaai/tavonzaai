@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Plus,
@@ -30,6 +31,7 @@ export default function RestaurantBranchesDetailView({
   onBack,
   onOpenBranchDashboard,
 }: RestaurantBranchesDetailViewProps) {
+  const router = useRouter();
   // Load branches associated with this restaurant
   const [branches, setBranches] = useState<BranchItem[]>(() => {
     const matched = MOCK_BRANCHES.filter(
@@ -332,7 +334,7 @@ export default function RestaurantBranchesDetailView({
                     if (onOpenBranchDashboard) {
                       onOpenBranchDashboard(branch);
                     } else {
-                      toast.info(`Opening console for ${branch.name}`);
+                      router.push('/new-admin-dashboard/branches');
                     }
                   }}
                   className="flex-1 px-2.5 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-700 flex justify-center items-center gap-1.5 transition-colors cursor-pointer"
