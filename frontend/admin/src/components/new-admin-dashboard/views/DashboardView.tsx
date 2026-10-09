@@ -13,7 +13,6 @@ import {
 import { useAppSelector } from '@/redux/store';
 import {
   INITIAL_METRICS,
-  REVENUE_PERIOD_DATA,
   BUSINESS_HEALTH_METRICS,
 } from '../data';
 import { AdminNavTab } from '../types';
@@ -22,51 +21,57 @@ interface DashboardViewProps {
   onNavigateTab?: (tab: AdminNavTab) => void;
 }
 
+const REVENUE_TIMEFRAME_DATASETS = {
+  Week: {
+    yLabels: ['$20', '$15', '$10', '$5', '$0'],
+    xLabels: ['Mon', 'Tue', 'Wed', 'The', 'Fri', 'Sta', 'Sun'],
+    areaPath:
+      'M 0,140 C 70,128 100,120 170,135 C 240,150 280,105 370,78 C 450,55 500,28 580,28 C 640,28 670,48 700,56 L 700,220 L 0,220 Z',
+    linePath:
+      'M 0,140 C 70,128 100,120 170,135 C 240,150 280,105 370,78 C 450,55 500,28 580,28 C 640,28 670,48 700,56',
+    startDot: { x: 2, y: 140 },
+    endDot: { x: 698, y: 56 },
+  },
+  Month: {
+    yLabels: ['$80k', '$60k', '$40k', '$20k', '$0'],
+    xLabels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+    areaPath:
+      'M 0,165 C 100,140 160,95 240,115 C 340,135 440,65 540,42 C 610,28 660,35 700,45 L 700,220 L 0,220 Z',
+    linePath:
+      'M 0,165 C 100,140 160,95 240,115 C 340,135 440,65 540,42 C 610,28 660,35 700,45',
+    startDot: { x: 2, y: 165 },
+    endDot: { x: 698, y: 45 },
+  },
+  Year: {
+    yLabels: ['$300k', '$225k', '$150k', '$75k', '$0'],
+    xLabels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    areaPath:
+      'M 0,170 C 80,150 140,160 200,135 C 280,100 360,120 440,80 C 520,50 600,40 700,25 L 700,220 L 0,220 Z',
+    linePath:
+      'M 0,170 C 80,150 140,160 200,135 C 280,100 360,120 440,80 C 520,50 600,40 700,25',
+    startDot: { x: 2, y: 170 },
+    endDot: { x: 698, y: 25 },
+  },
+  All: {
+    yLabels: ['$1.2M', '$900k', '$600k', '$300k', '$0'],
+    xLabels: ['2020', '2021', '2022', '2023', '2024', '2025'],
+    areaPath:
+      'M 0,180 C 100,165 200,145 320,110 C 440,75 560,45 700,25 L 700,220 L 0,220 Z',
+    linePath:
+      'M 0,180 C 100,165 200,145 320,110 C 440,75 560,45 700,25',
+    startDot: { x: 2, y: 180 },
+    endDot: { x: 698, y: 25 },
+  },
+};
+
 export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
   const { user } = useAppSelector((state) => state.auth);
   const [selectedPeriod, setSelectedPeriod] = useState<'All' | 'Week' | 'Month' | 'Year'>('Week');
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const rawName = user?.name || 'Robert';
   const firstName = rawName.split(' ')[0] || 'Robert';
 
-  const chartData = useMemo(() => {
-    return REVENUE_PERIOD_DATA[selectedPeriod] || REVENUE_PERIOD_DATA.Week;
-  }, [selectedPeriod]);
-
-  // Compute SVG Path points dynamically for the chart
-  const { pathD, areaD, points, maxVal } = useMemo(() => {
-    const values = chartData.map((d) => d.value);
-    const max = Math.max(...values, 20) * 1.15;
-    const width = 590;
-    const height = 180;
-    const paddingX = 30;
-    const paddingY = 20;
-
-    const usableWidth = width - paddingX * 2;
-    const usableHeight = height - paddingY * 2;
-
-    const pts = chartData.map((item, idx) => {
-      const x = paddingX + (idx / (chartData.length - 1)) * usableWidth;
-      const y = height - paddingY - (item.value / max) * usableHeight;
-      return { x, y, ...item };
-    });
-
-    if (pts.length === 0) return { pathD: '', areaD: '', points: [], maxVal: max };
-
-    // Create smooth curved path
-    let d = `M ${pts[0].x} ${pts[0].y}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const curr = pts[i];
-      const next = pts[i + 1];
-      const mx = (curr.x + next.x) / 2;
-      d += ` C ${mx} ${curr.y}, ${mx} ${next.y}, ${next.x} ${next.y}`;
-    }
-
-    const area = `${d} L ${pts[pts.length - 1].x} ${height} L ${pts[0].x} ${height} Z`;
-
-    return { pathD: d, areaD: area, points: pts, maxVal: max };
-  }, [chartData]);
+  const currentDataset = REVENUE_TIMEFRAME_DATASETS[selectedPeriod] || REVENUE_TIMEFRAME_DATASETS.Week;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -207,32 +212,31 @@ export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
       {/* Main Content Row: Revenue Overview + Business Health */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Revenue Overview (7 or 8 cols) */}
-        <div className="lg:col-span-7 xl:col-span-8 p-6 lg:p-8 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-gray-300/20 flex flex-col gap-6 shadow-xl">
+        <div className="lg:col-span-7 xl:col-span-8 p-6 lg:p-7 bg-[#121316] rounded-2xl border border-neutral-800/80 flex flex-col justify-between shadow-xl">
           {/* Header & Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div>
-              <h2 className="text-white text-lg font-semibold font-sans leading-5">
+              <h2 className="text-white text-xl sm:text-2xl font-bold font-sans tracking-tight">
                 Revenue Overview
               </h2>
-              <p className="text-neutral-400 text-xs font-normal font-sans mt-1">
+              <p className="text-neutral-400 text-xs sm:text-sm font-normal font-sans mt-1">
                 Monitor your business performance across different time periods.
               </p>
             </div>
 
-            {/* Segmented Filter */}
-            <div className="h-9 inline-flex rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900/80 shrink-0">
-              {(['All', 'Week', 'Month', 'Year'] as const).map((period, idx) => {
+            {/* Segmented Filter Pills Matching Image 1 */}
+            <div className="inline-flex items-center bg-[#18181b] border border-neutral-800 rounded-xl overflow-hidden p-0.5 shrink-0 self-start sm:self-auto">
+              {(['All', 'Week', 'Month', 'Year'] as const).map((period) => {
                 const isActive = selectedPeriod === period;
                 return (
                   <button
                     key={period}
+                    type="button"
                     onClick={() => setSelectedPeriod(period)}
-                    className={`h-9 px-3.5 text-xs font-medium font-sans transition-all ${
-                      idx !== 0 ? 'border-l border-neutral-700' : ''
-                    } ${
+                    className={`px-3.5 sm:px-4 py-1.5 text-xs sm:text-sm font-medium font-sans transition-all cursor-pointer rounded-lg ${
                       isActive
-                        ? 'bg-yellow-500/30 text-white font-semibold'
-                        : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
+                        ? 'bg-[#4d3d13] text-[#fef08a] font-semibold border border-amber-500/20 shadow-sm'
+                        : 'text-neutral-400 hover:text-white'
                     }`}
                   >
                     {period}
@@ -242,135 +246,105 @@ export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
             </div>
           </div>
 
-          {/* SVG Chart Container */}
-          <div className="relative w-full rounded-lg outline outline-[0.5px] outline-white/10 bg-neutral-950/40 p-4 overflow-hidden">
-            <div className="h-64 w-full relative">
-              <svg
-                viewBox="0 0 590 200"
-                className="w-full h-full overflow-visible"
-                preserveAspectRatio="none"
-              >
-                <defs>
-                  {/* Glowing Gradient fill matching user's spec: from-yellow-500/25 to-orange-500/0 */}
-                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#eab308" stopOpacity="0.30" />
-                    <stop offset="70%" stopColor="#f97316" stopOpacity="0.08" />
-                    <stop offset="100%" stopColor="#ea580c" stopOpacity="0.0" />
-                  </linearGradient>
-
-                  <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="3" result="blur" />
-                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                  </filter>
-                </defs>
-
-                {/* Grid Lines */}
-                {[40, 85, 130, 175].map((yVal, i) => (
-                  <line
-                    key={i}
-                    x1="20"
-                    y1={yVal}
-                    x2="570"
-                    y2={yVal}
-                    stroke="#27272a"
-                    strokeWidth="0.8"
-                    strokeDasharray="3 3"
-                  />
-                ))}
-
-                {/* Filled Area */}
-                {areaD && (
-                  <path
-                    d={areaD}
-                    fill="url(#revenueGrad)"
-                    className="transition-all duration-300"
-                  />
-                )}
-
-                {/* Stroke Path Line */}
-                {pathD && (
-                  <path
-                    d={pathD}
-                    fill="none"
-                    stroke="#eab308"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    filter="url(#glow)"
-                    className="transition-all duration-300"
-                  />
-                )}
-
-                {/* Data Points and Hover Interaction */}
-                {points.map((pt, idx) => {
-                  const isHovered = hoveredIndex === idx;
-                  return (
-                    <g key={idx}>
-                      <circle
-                        cx={pt.x}
-                        cy={pt.y}
-                        r={isHovered ? 6 : 4}
-                        fill="#eab308"
-                        stroke="#000000"
-                        strokeWidth="2"
-                        className="transition-all duration-150 cursor-pointer"
-                        onMouseEnter={() => setHoveredIndex(idx)}
-                        onMouseLeave={() => setHoveredIndex(null)}
-                      />
-
-                      {/* Tooltip on hover */}
-                      {isHovered && (
-                        <g transform={`translate(${pt.x}, ${pt.y - 32})`}>
-                          <rect
-                            x="-36"
-                            y="-12"
-                            width="72"
-                            height="24"
-                            rx="5"
-                            fill="#18181b"
-                            stroke="#eab308"
-                            strokeWidth="1"
-                          />
-                          <text
-                            x="0"
-                            y="4"
-                            fill="#ffffff"
-                            fontSize="11"
-                            fontWeight="bold"
-                            textAnchor="middle"
-                            fontFamily="Inter"
-                          >
-                            {pt.formatted}
-                          </text>
-                        </g>
-                      )}
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
-
-            {/* X-Axis Labels */}
-            <div className="flex justify-between items-center px-4 pt-3 border-t border-neutral-800/80">
-              {chartData.map((d, i) => (
-                <div
-                  key={i}
-                  className={`text-xs font-sans transition-colors cursor-pointer ${
-                    hoveredIndex === i ? 'text-amber-400 font-semibold' : 'text-neutral-400'
-                  }`}
-                  onMouseEnter={() => setHoveredIndex(i)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                >
-                  {d.day}
-                </div>
+          {/* Chart Area with Left Y-axis & Golden Wave Matching Image 1 */}
+          <div className="relative w-full h-64 sm:h-72 pt-3 flex items-stretch">
+            {/* Y-Axis Labels on the Left */}
+            <div className="flex flex-col justify-between text-left text-neutral-400 text-xs sm:text-sm font-normal font-sans pr-3 sm:pr-4 select-none pb-7">
+              {currentDataset.yLabels.map((lbl, idx) => (
+                <span key={idx}>{lbl}</span>
               ))}
             </div>
 
-            {/* Y-Axis Reference Pill */}
-            <div className="flex justify-between items-center px-4 pt-2 text-[10px] text-neutral-500 font-sans">
-              <span>Low Range: $0</span>
-              <span>Average: $14.2k</span>
-              <span>Peak: $20.0k+</span>
+            {/* Chart Grid & SVG Curve Area */}
+            <div className="relative flex-1 flex flex-col justify-between">
+              {/* Grid Container */}
+              <div className="relative flex-1 w-full overflow-hidden">
+                {/* Horizontal Grid lines */}
+                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none z-0">
+                  <div className="w-full h-px border-t border-dashed border-neutral-800" />
+                  <div className="w-full h-px border-t border-dashed border-neutral-800" />
+                  <div className="w-full h-px border-t border-dashed border-neutral-800" />
+                  <div className="w-full h-px border-t border-dashed border-neutral-800" />
+                  <div className="w-full h-px border-t border-dashed border-neutral-800" />
+                </div>
+
+                {/* Vertical Grid lines */}
+                <div className="absolute inset-0 flex justify-between pointer-events-none z-0">
+                  {currentDataset.xLabels.map((_, idx) => (
+                    <div
+                      key={idx}
+                      className={`h-full w-px ${
+                        idx === 0 || idx === currentDataset.xLabels.length - 1
+                          ? ''
+                          : 'border-r border-dashed border-neutral-800'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                {/* Glowing SVG Golden Wave Chart */}
+                <svg
+                  key={selectedPeriod}
+                  viewBox="0 0 700 220"
+                  preserveAspectRatio="none"
+                  className="w-full h-full overflow-visible transition-all duration-500 relative z-10"
+                >
+                  <defs>
+                    <linearGradient id="revenueGoldenWaveGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.40" />
+                      <stop offset="35%" stopColor="#d97706" stopOpacity="0.25" />
+                      <stop offset="75%" stopColor="#92400e" stopOpacity="0.10" />
+                      <stop offset="100%" stopColor="#121316" stopOpacity="0.0" />
+                    </linearGradient>
+                    <filter id="revenueGoldenGlow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="2.5" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                  </defs>
+
+                  {/* Area Fill Gradient */}
+                  <path
+                    d={currentDataset.areaPath}
+                    fill="url(#revenueGoldenWaveGrad)"
+                  />
+
+                  {/* Top Glowing Golden Wave Line */}
+                  <path
+                    d={currentDataset.linePath}
+                    fill="none"
+                    stroke="#fbbf24"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
+                    filter="url(#revenueGoldenGlow)"
+                  />
+
+                  {/* Start & End Golden Dots matching Image 1 */}
+                  <circle
+                    cx={currentDataset.startDot.x}
+                    cy={currentDataset.startDot.y}
+                    r="3.5"
+                    fill="#fbbf24"
+                  />
+                  <circle
+                    cx={currentDataset.endDot.x}
+                    cy={currentDataset.endDot.y}
+                    r="3.5"
+                    fill="#fbbf24"
+                  />
+                </svg>
+              </div>
+
+              {/* X-Axis Labels */}
+              <div className="flex items-center justify-between text-center text-neutral-400 text-xs sm:text-sm font-medium font-sans pt-3 px-1">
+                {currentDataset.xLabels.map((lbl, idx) => (
+                  <span
+                    key={idx}
+                    className="hover:text-amber-400 transition-colors cursor-pointer"
+                  >
+                    {lbl}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </div>
