@@ -195,7 +195,7 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
         restaurant={detailRestaurant}
         onBack={handleBackToList}
         onOpenBranchDashboard={(branch) => {
-          router.push('/new-admin-dashboard/branches');
+          router.push(`/new-admin-dashboard/branches?branchId=${branch.id}`);
         }}
       />
     );

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Plus,
@@ -15,19 +15,58 @@ import {
   Phone,
   CheckCircle2,
   Search,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MOCK_BRANCHES, MOCK_RESTAURANTS } from '../data';
 import { BranchItem } from '../types';
+import BranchDashboardView from './BranchDashboardView';
 
 interface BranchesViewProps {
   onBack?: () => void;
+  initialBranchId?: string;
 }
 
-export default function BranchesView({ onBack }: BranchesViewProps = {}) {
+export default function BranchesView({ onBack, initialBranchId }: BranchesViewProps = {}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [branches, setBranches] = useState<BranchItem[]>(MOCK_BRANCHES);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Selected branch for viewing branch dashboard
+  const [selectedBranch, setSelectedBranch] = useState<BranchItem | null>(() => {
+    const idToFind = initialBranchId || searchParams.get('branchId') || searchParams.get('branch');
+    if (idToFind) {
+      return (
+        MOCK_BRANCHES.find(
+          (b) =>
+            b.id.toLowerCase() === idToFind.toLowerCase() ||
+            b.name.toLowerCase().includes(idToFind.toLowerCase().slice(0, 7))
+        ) || null
+      );
+    }
+    return null;
+  });
+
+  // Sync with searchParams
+  useEffect(() => {
+    const branchId = searchParams.get('branchId') || searchParams.get('branch');
+    if (branchId) {
+      const found = branches.find(
+        (b) =>
+          b.id.toLowerCase() === branchId.toLowerCase() ||
+          b.name.toLowerCase().includes(branchId.toLowerCase().slice(0, 7))
+      );
+      if (found) {
+        setSelectedBranch(found);
+      }
+    }
+  }, [searchParams, branches]);
+
+  const handleViewBranch = (branch: BranchItem) => {
+    setSelectedBranch(branch);
+    router.push(`/new-admin-dashboard/branches?branchId=${branch.id}`, { scroll: false });
+  };
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -182,6 +221,24 @@ export default function BranchesView({ onBack }: BranchesViewProps = {}) {
     );
   });
 
+  if (selectedBranch) {
+    return (
+      <BranchDashboardView
+        branch={selectedBranch}
+        onBack={() => {
+          setSelectedBranch(null);
+          router.push('/new-admin-dashboard/branches', { scroll: false });
+        }}
+        onUpdateBranch={(updated) => {
+          setBranches((prev) =>
+            prev.map((b) => (b.id === updated.id ? updated : b))
+          );
+          setSelectedBranch(updated);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Navigation Row: Back Button */}
@@ -254,14 +311,17 @@ export default function BranchesView({ onBack }: BranchesViewProps = {}) {
                     isLast ? 'rounded-bl-lg' : ''
                   }`}
                 >
-                  <div className="inline-flex flex-col justify-center items-start gap-1">
-                    <span className="text-neutral-200 text-base font-medium font-['Inter'] leading-4">
+                  <button
+                    onClick={() => handleViewBranch(branch)}
+                    className="inline-flex flex-col justify-center items-start gap-1 text-left group cursor-pointer"
+                  >
+                    <span className="text-neutral-200 group-hover:text-amber-400 transition-colors text-base font-medium font-['Inter'] leading-4">
                       {branch.name}
                     </span>
                     <span className="text-neutral-400 text-[10px] font-normal font-['SF_Pro'] leading-4 tracking-tight">
                       {branch.location}
                     </span>
-                  </div>
+                  </button>
                 </div>
               );
             })}
@@ -388,10 +448,20 @@ export default function BranchesView({ onBack }: BranchesViewProps = {}) {
               return (
                 <div
                   key={branch.id}
-                  className={`px-3 py-6 border-r border-b border-zinc-800 flex justify-center items-center gap-4 h-[72px] ${
+                  className={`px-3 py-6 border-r border-b border-zinc-800 flex justify-center items-center gap-3.5 h-[72px] ${
                     isLast ? 'rounded-br-lg' : ''
                   }`}
                 >
+                  {/* View action button */}
+                  <button
+                    onClick={() => handleViewBranch(branch)}
+                    className="p-1 hover:text-amber-400 text-neutral-400 transition-colors cursor-pointer"
+                    aria-label={`View dashboard for ${branch.name}`}
+                    title="View branch dashboard"
+                  >
+                    <Eye className="size-4" />
+                  </button>
+
                   {/* Edit button */}
                   <button
                     onClick={() => handleOpenEdit(branch)}

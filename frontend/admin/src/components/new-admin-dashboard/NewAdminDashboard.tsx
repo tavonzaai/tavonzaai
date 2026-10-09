@@ -114,7 +114,10 @@ export default function NewAdminDashboard({
                   : null) || MOCK_RESTAURANTS[0]
               }
               onBack={() => handleTabSelect('restaurants')}
-              onOpenBranchDashboard={(b) => handleTabSelect('branches')}
+              onOpenBranchDashboard={(b) => {
+                setActiveTab('branches');
+                router.push(`/new-admin-dashboard/branches?branchId=${b.id}`, { scroll: false });
+              }}
             />
           )}
           {activeTab === 'permissions' && <PermissionsView />}
