@@ -18,10 +18,12 @@ import { AdminNavTab } from './types';
 
 interface NewAdminDashboardProps {
   initialTab?: string;
+  initialRestaurantId?: string;
 }
 
 export default function NewAdminDashboard({
   initialTab = 'dashboard',
+  initialRestaurantId,
 }: NewAdminDashboardProps) {
   const router = useRouter();
 
@@ -94,11 +96,21 @@ export default function NewAdminDashboard({
           {activeTab === 'dashboard' && (
             <DashboardView onNavigateTab={handleTabSelect} />
           )}
-          {activeTab === 'restaurants' && <RestaurantsView />}
+          {activeTab === 'restaurants' && (
+            <RestaurantsView initialRestaurantId={initialRestaurantId} />
+          )}
           {activeTab === 'branches' && <BranchesView />}
           {activeTab === 'restaurant-branches' && (
             <RestaurantBranchesDetailView
-              restaurant={MOCK_RESTAURANTS[0]}
+              restaurant={
+                (initialRestaurantId
+                  ? MOCK_RESTAURANTS.find(
+                      (r) =>
+                        r.id.toLowerCase() === initialRestaurantId.toLowerCase() ||
+                        r.name.toLowerCase().includes(initialRestaurantId.toLowerCase().slice(0, 7))
+                    )
+                  : null) || MOCK_RESTAURANTS[0]
+              }
               onBack={() => handleTabSelect('restaurants')}
             />
           )}

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus,
   GitBranch,
@@ -15,20 +16,63 @@ import {
   User,
   CheckCircle2,
   AlertCircle,
+  Store,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MOCK_RESTAURANTS, MOCK_BRANCHES } from '../data';
 import { RestaurantItem } from '../types';
 import RestaurantBranchesDetailView from './RestaurantBranchesDetailView';
 
-export default function RestaurantsView() {
+interface RestaurantsViewProps {
+  initialRestaurantId?: string;
+}
+
+export default function RestaurantsView({ initialRestaurantId }: RestaurantsViewProps = {}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [restaurants, setRestaurants] = useState<RestaurantItem[]>(MOCK_RESTAURANTS);
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingRestaurant, setEditingRestaurant] = useState<RestaurantItem | null>(null);
   const [deletingRestaurant, setDeletingRestaurant] = useState<RestaurantItem | null>(null);
-  const [detailRestaurant, setDetailRestaurant] = useState<RestaurantItem | null>(null);
+  const [detailRestaurant, setDetailRestaurant] = useState<RestaurantItem | null>(() => {
+    if (initialRestaurantId) {
+      return (
+        MOCK_RESTAURANTS.find(
+          (r) =>
+            r.id.toLowerCase() === initialRestaurantId.toLowerCase() ||
+            r.name.toLowerCase().includes(initialRestaurantId.toLowerCase().slice(0, 7))
+        ) || null
+      );
+    }
+    return null;
+  });
+
+  // Sync with searchParams if ?id=rest-1 or ?restaurant=...
+  useEffect(() => {
+    const idParam = searchParams.get('id') || searchParams.get('restaurant');
+    if (idParam) {
+      const found = restaurants.find(
+        (r) =>
+          r.id.toLowerCase() === idParam.toLowerCase() ||
+          r.name.toLowerCase().includes(idParam.toLowerCase().slice(0, 7))
+      );
+      if (found) {
+        setDetailRestaurant(found);
+      }
+    }
+  }, [searchParams, restaurants]);
+
+  const handleSelectRestaurant = (rest: RestaurantItem) => {
+    setDetailRestaurant(rest);
+    router.push(`/new-admin-dashboard/restaurants?id=${rest.id}`, { scroll: false });
+  };
+
+  const handleBackToList = () => {
+    setDetailRestaurant(null);
+    router.push('/new-admin-dashboard/restaurants', { scroll: false });
+  };
 
   // Create form state
   const [createForm, setCreateForm] = useState({
@@ -149,7 +193,7 @@ export default function RestaurantsView() {
     return (
       <RestaurantBranchesDetailView
         restaurant={detailRestaurant}
-        onBack={() => setDetailRestaurant(null)}
+        onBack={handleBackToList}
       />
     );
   }
@@ -195,9 +239,14 @@ export default function RestaurantsView() {
                   <div className="flex-1 inline-flex flex-col justify-start items-start gap-0.5">
                     <div className="self-stretch flex flex-col justify-start items-start gap-1">
                       <div className="self-stretch flex flex-col justify-start items-start gap-0.5">
-                        <h2 className="self-stretch text-white text-lg font-medium font-sans leading-5">
-                          {rest.name}
-                        </h2>
+                        <button
+                          onClick={() => handleSelectRestaurant(rest)}
+                          className="text-left group cursor-pointer"
+                        >
+                          <h2 className="self-stretch text-white text-lg font-medium font-sans leading-5 group-hover:text-amber-400 transition-colors">
+                            {rest.name}
+                          </h2>
+                        </button>
                       </div>
                       <p className="self-stretch text-neutral-400 text-xs font-normal font-sans leading-4">
                         {rest.description || rest.tagline || 'Modern dining with seasonal plates.'}
@@ -235,16 +284,19 @@ export default function RestaurantsView() {
               {/* Branch count row */}
               <div className="self-stretch flex flex-col justify-start items-start gap-3.5">
                 <div className="self-stretch inline-flex justify-start items-center">
-                  <div className="flex justify-start items-center gap-3">
-                    <div className="px-2.5 py-2 bg-yellow-500/10 rounded-lg flex justify-center items-center">
+                  <button
+                    onClick={() => handleSelectRestaurant(rest)}
+                    className="flex justify-start items-center gap-3 cursor-pointer group"
+                  >
+                    <div className="px-2.5 py-2 bg-yellow-500/10 rounded-lg flex justify-center items-center group-hover:bg-yellow-500/20 transition-colors">
                       <GitBranch className="size-4 text-yellow-500" />
                     </div>
                     <div className="flex justify-start items-center">
-                      <span className="text-yellow-500 text-lg font-normal font-sans leading-5">
+                      <span className="text-yellow-500 text-lg font-normal font-sans leading-5 group-hover:underline">
                         {rest.branchesCount} branches
                       </span>
                     </div>
-                  </div>
+                  </button>
                 </div>
               </div>
 
@@ -254,7 +306,7 @@ export default function RestaurantsView() {
               {/* Action buttons row */}
               <div className="self-stretch inline-flex justify-start items-center gap-2">
                 <button
-                  onClick={() => setDetailRestaurant(rest)}
+                  onClick={() => handleSelectRestaurant(rest)}
                   className="flex-1 px-2.5 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-700 flex justify-center items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <span className="text-center text-white text-sm font-medium font-sans leading-4">

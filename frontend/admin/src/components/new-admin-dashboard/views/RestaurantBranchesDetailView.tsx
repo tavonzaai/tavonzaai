@@ -264,15 +264,15 @@ export default function RestaurantBranchesDetailView({
         </p>
       </div>
 
-      {/* Branch Cards Grid matching user snippet */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+      {/* Branch Cards Row matching user snippet */}
+      <div className="flex flex-wrap items-start gap-5">
         {branches.map((branch) => {
           const isActive = branch.status === 'Active';
 
           return (
             <div
               key={branch.id}
-              className="self-stretch p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 inline-flex flex-col justify-start items-start gap-4 transition-all hover:border-neutral-700 shadow-xl"
+              className="w-full sm:w-[360px] p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 inline-flex flex-col justify-start items-start gap-4 transition-all hover:border-neutral-700 shadow-xl"
             >
               {/* Branch Header: Icon + Name & Location + Status Badge */}
               <div className="self-stretch inline-flex justify-start items-center gap-3">
@@ -407,6 +407,7 @@ export default function RestaurantBranchesDetailView({
                       <span className="text-stone-300 text-sm font-normal font-sans leading-4">
                         {restaurant.name}
                       </span>
+                      <ChevronDown className="size-4 text-stone-300 pointer-events-none" />
                     </div>
                   </div>
 
@@ -613,6 +614,7 @@ export default function RestaurantBranchesDetailView({
                       <span className="text-stone-300 text-sm font-normal font-sans leading-4">
                         {restaurant.name}
                       </span>
+                      <ChevronDown className="size-4 text-stone-300 pointer-events-none" />
                     </div>
                   </div>
 
@@ -719,17 +721,20 @@ export default function RestaurantBranchesDetailView({
                     <label className="text-white text-sm font-normal font-sans leading-4">
                       Opening Time
                     </label>
-                    <input
-                      type="text"
-                      value={editForm.openingTime}
-                      onChange={(e) =>
-                        setEditForm({
-                          ...editForm,
-                          openingTime: e.target.value,
-                        })
-                      }
-                      className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-sans focus:outline-none focus:border-amber-400"
-                    />
+                    <div className="self-stretch relative">
+                      <input
+                        type="text"
+                        value={editForm.openingTime}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            openingTime: e.target.value,
+                          })
+                        }
+                        className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-sans focus:outline-none focus:border-amber-400"
+                      />
+                      <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                   </div>
 
                   <div className="flex flex-col justify-start items-start gap-2">

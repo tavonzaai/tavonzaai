@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import NewAdminDashboard from '@/components/new-admin-dashboard/NewAdminDashboard';
 import AuthGuard from '@/components/auth/AuthGuard';
 
@@ -28,7 +28,10 @@ export default async function NewAdminTabPage({
 
   return (
     <AuthGuard>
-      <NewAdminDashboard initialTab={tabParam} />
+      <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-zinc-500">Loading console...</div>}>
+        <NewAdminDashboard initialTab={tabParam} />
+      </Suspense>
     </AuthGuard>
   );
 }
+
