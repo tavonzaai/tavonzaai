@@ -42,42 +42,42 @@ export function RealtimeBridge({ children }: { children: React.ReactNode }) {
     });
 
     // Realtime UI Cache Invalidation & Event Dispatch
-    socket.on('ORDER_STATUS_CHANGED', (payload) => {
+    socket.on('ORDER_STATUS_CHANGED', (payload: any) => {
       dispatch(rtkBaseApi.util.invalidateTags(['ORDER', 'ORDER_ITEM']));
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('tavonza:order_status_changed', { detail: payload }));
       }
     });
 
-    socket.on('ORDER_ITEM_STATUS_CHANGED', (payload) => {
+    socket.on('ORDER_ITEM_STATUS_CHANGED', (payload: any) => {
       dispatch(rtkBaseApi.util.invalidateTags(['ORDER', 'ORDER_ITEM']));
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('tavonza:order_item_changed', { detail: payload }));
       }
     });
 
-    socket.on('ORDER_CREATED', (payload) => {
+    socket.on('ORDER_CREATED', (payload: any) => {
       dispatch(rtkBaseApi.util.invalidateTags(['ORDER']));
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('tavonza:order_created', { detail: payload }));
       }
     });
 
-    socket.on('TABLE_STATUS_CHANGED', (payload) => {
+    socket.on('TABLE_STATUS_CHANGED', (payload: any) => {
       dispatch(rtkBaseApi.util.invalidateTags(['TABLE']));
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('tavonza:table_status_changed', { detail: payload }));
       }
     });
 
-    socket.on('TABLE_SESSION_STATUS_CHANGED', (payload) => {
+    socket.on('TABLE_SESSION_STATUS_CHANGED', (payload: any) => {
       dispatch(rtkBaseApi.util.invalidateTags(['TABLE', 'ORDER']));
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('tavonza:table_session_changed', { detail: payload }));
       }
     });
 
-    socket.on('PAYMENT_STATUS_CHANGED', (payload) => {
+    socket.on('PAYMENT_STATUS_CHANGED', (payload: any) => {
       dispatch(rtkBaseApi.util.invalidateTags(['PAYMENT', 'ORDER']));
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('tavonza:payment_status_changed', { detail: payload }));

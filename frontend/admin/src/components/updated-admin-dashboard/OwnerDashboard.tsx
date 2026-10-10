@@ -36,6 +36,7 @@ import OwnerSidebar from './Sidebar';
 import RestaurantsView from './restaurants/RestaurantsView';
 import { INITIAL_RESTAURANTS } from './restaurants/restaurantsData';
 import { RestaurantBranch } from './restaurants/types';
+import AskAiModal from '../new-admin-dashboard/modals/AskAiModal';
 
 export interface OwnerDashboardProps {
   initialTab?: string;
@@ -62,6 +63,7 @@ export default function OwnerDashboard({
   const [refreshing, setRefreshing] = useState(false);
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
   const [liveTables, setLiveTables] = useState<any[]>([]);
+  const [isAskAiOpen, setIsAskAiOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -188,7 +190,7 @@ export default function OwnerDashboard({
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white flex">
+    <div className="h-screen bg-black text-white flex overflow-hidden">
       {/* Owner Sidebar */}
       <OwnerSidebar
         activeNav={activeNav}
@@ -205,9 +207,9 @@ export default function OwnerDashboard({
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:pl-72 flex flex-col min-w-0">
+      <div className="flex-1 lg:pl-72 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Top Header Bar */}
-        <header className="sticky top-0 z-30 h-20 bg-black/90 backdrop-blur-md border-b border-zinc-800 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+        <header className="shrink-0 sticky top-0 z-30 h-20 bg-black/90 backdrop-blur-md border-b border-zinc-800 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -283,7 +285,7 @@ export default function OwnerDashboard({
         </header>
 
         {/* Dynamic Main View */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar">
           {activeNav === 'restaurants' && (
             <RestaurantsView
               initialBranchRestaurantId={initialBranchRestaurantId}
@@ -736,6 +738,20 @@ export default function OwnerDashboard({
           )}
         </main>
       </div>
+
+      {/* Floating Ask AI Assistant Button */}
+      <button
+        type="button"
+        onClick={() => setIsAskAiOpen((prev) => !prev)}
+        className="fixed bottom-7 right-8 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-neutral-950 font-semibold text-xs sm:text-sm rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-yellow-300/60 flex items-center gap-2 cursor-pointer transition-all duration-200 z-50 font-sans group hover:shadow-yellow-400/20"
+        aria-label={isAskAiOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
+      >
+        <Sparkles className="w-4 h-4 text-black group-hover:rotate-12 transition-transform duration-200" />
+        <span>{isAskAiOpen ? 'Close AI' : 'Ask AI'}</span>
+      </button>
+
+      {/* Ask AI Assistant Floating Popup */}
+      <AskAiModal isOpen={isAskAiOpen} onClose={() => setIsAskAiOpen(false)} />
     </div>
   );
 }

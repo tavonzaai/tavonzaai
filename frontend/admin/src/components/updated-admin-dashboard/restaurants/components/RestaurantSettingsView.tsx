@@ -10,6 +10,7 @@ import {
   BarChart3,
   Bike,
   Check,
+  X,
 } from 'lucide-react';
 import { RestaurantBranch } from '../types';
 
@@ -124,9 +125,19 @@ export default function RestaurantSettingsView({
     <div className="w-full min-h-[calc(100vh-6rem)] bg-black text-zinc-100 rounded-3xl p-4 sm:p-8 border border-zinc-800 shadow-2xl animate-in fade-in duration-200">
       {/* Toast feedback */}
       {feedbackMessage && (
-        <div className="fixed top-24 right-8 z-50 bg-zinc-900 border border-amber-500/40 text-amber-300 px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-semibold animate-in slide-in-from-top duration-200">
-          <Check className="w-4 h-4 text-emerald-400" />
-          <span>{feedbackMessage}</span>
+        <div className="fixed top-24 right-8 z-50 bg-zinc-900 border border-amber-500/40 text-amber-300 px-4 py-2.5 rounded-xl shadow-2xl flex items-center justify-between gap-3 text-xs font-semibold animate-in slide-in-from-top duration-200">
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-400" />
+            <span>{feedbackMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFeedbackMessage(null)}
+            className="p-0.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Close notification"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 

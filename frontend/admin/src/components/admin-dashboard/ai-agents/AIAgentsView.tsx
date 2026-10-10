@@ -9,7 +9,7 @@ import {
 } from './components';
 import { INITIAL_AI_AGENTS } from './aiAgentsData';
 import { AIAgentItem, AIAgentsKPIs } from './types';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, X } from 'lucide-react';
 
 export default function AIAgentsView() {
   const [agents, setAgents] = useState<AIAgentItem[]>(INITIAL_AI_AGENTS);
@@ -107,9 +107,19 @@ export default function AIAgentsView() {
     <div className="w-full space-y-6 animate-in fade-in duration-200 pb-16 relative">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 px-4 py-3 bg-[#18191c] border border-amber-500/50 rounded-xl shadow-2xl text-white text-sm flex items-center gap-2.5 animate-in slide-in-from-top duration-300">
-          <CheckCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-          <span>{toastMessage}</span>
+        <div className="fixed top-6 right-6 z-50 px-4 py-3 bg-[#18191c] border border-amber-500/50 rounded-xl shadow-2xl text-white text-sm flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Close notification"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 

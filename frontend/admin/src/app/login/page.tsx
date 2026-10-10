@@ -10,7 +10,7 @@ import { isRoleAllowedForAdmin } from '@/redux/ReduxProvider';
 
 function LoginContent() {
   const router = useRouter();
-  const returnUrl = '/admin-dashboard/dashboard';
+  const returnUrl = '/new-admin-dashboard/dashboard';
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
 
   const activeUser = user || (typeof document !== 'undefined' ? getStoredAdminUser() : null);
