@@ -23,7 +23,7 @@ import AskAiModal from './modals/AskAiModal';
 import OtherViews from './other/OtherViews';
 import { TableItem } from './types';
 import { navToRoute, routeToNav } from './routes';
-import { Sparkles, CheckCircle2 } from 'lucide-react';
+import { Sparkles, CheckCircle2, X } from 'lucide-react';
 import { branchManagerService, getActiveBranchId } from '../../redux/features/branchManagerApi';
 import { useAppDispatch } from '../../redux/hooks';
 import { getMe } from '../../redux/features/authApi';
@@ -207,9 +207,19 @@ export default function BranchManagerDashboard({
     <div className="flex h-screen bg-black text-white font-['Inter'] font-sans overflow-hidden">
       {/* Toast Notification */}
       {successNotification && (
-        <div className="fixed top-5 right-5 z-50 bg-emerald-500 text-neutral-950 font-semibold px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-3">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span className="text-xs font-['Inter']">{successNotification}</span>
+        <div className="fixed top-5 right-5 z-50 bg-emerald-500 text-neutral-950 font-semibold px-4 py-2.5 rounded-xl shadow-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span className="text-xs font-['Inter']">{successNotification}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessNotification(null)}
+            className="p-0.5 rounded-md hover:bg-black/20 text-neutral-950 transition-colors cursor-pointer"
+            aria-label="Close notification"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
@@ -302,11 +312,12 @@ export default function BranchManagerDashboard({
           {!selectedTableId && !selectedOrderId && !selectedStaffId && !selectedPaymentId && (
             <button
               type="button"
-              onClick={() => setIsAskAiOpen(true)}
-              className="fixed bottom-7 right-8 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-neutral-950 font-semibold text-xs sm:text-sm rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.5)] flex items-center gap-2 cursor-pointer transition z-20 font-['DM_Sans']"
+              onClick={() => setIsAskAiOpen((prev) => !prev)}
+              className="fixed bottom-7 right-8 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-neutral-950 font-semibold text-xs sm:text-sm rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.5)] border border-yellow-300/60 flex items-center gap-2 cursor-pointer transition z-50 font-['DM_Sans'] group hover:shadow-yellow-400/20"
+              aria-label={isAskAiOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
             >
-              <Sparkles className="w-4 h-4 text-black" />
-              <span>Ask AI</span>
+              <Sparkles className="w-4 h-4 text-black group-hover:rotate-12 transition-transform duration-200" />
+              <span>{isAskAiOpen ? 'Close AI' : 'Ask AI'}</span>
             </button>
           )}
         </main>
