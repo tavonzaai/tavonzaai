@@ -82,6 +82,12 @@ export const SWAGGER_TAGS: SwaggerTagDefinition[] = [
     name: 'Manager | Branch',
     description: 'Branch settings, operating hours, floor plan tables, and performance reports',
   },
+
+  // ── Authorization & Access Control ───────────────────────────────────────
+  {
+    name: 'Authorization & Roles',
+    description: 'Dynamic roles, permissions catalog, user capability assignments, and authorization evaluation',
+  },
 ];
 
 export interface SwaggerConfigOptions {
