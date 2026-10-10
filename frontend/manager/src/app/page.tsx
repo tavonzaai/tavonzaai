@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-// test comment
+
 export default async function RootPage() {
   const cookieStore = await cookies();
   const token =
