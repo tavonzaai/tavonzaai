@@ -7,6 +7,7 @@ import {
   Get,
   Patch,
   Post,
+  Delete,
   Param,
   Body,
   Query,
@@ -25,6 +26,7 @@ import {
   ApiCreatedResponse,
   ApiConsumes,
   ApiBody,
+  ApiParam,
   ApiBadRequestResponse,
   ApiNotFoundResponse,
   ApiForbiddenResponse,
@@ -44,9 +46,12 @@ import {
 import {
   UserDetailResponseDto,
   UsersListResponseDto,
+  MyAssignmentsResponseDto,
 } from './dto/user-response.dto';
+import { ApiStandardErrors } from '../../../../common/swagger';
 
-@ApiTags('Users')
+@ApiTags('Identity | User Management')
+@ApiStandardErrors(400, 401, 403, 500)
 @Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -106,6 +111,20 @@ export class UserController {
   }
 
   /**
+   * GET /users/me/assignments
+   * Get current authenticated user staff assignments
+   */
+  @Get('me/assignments')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get staff assignments for current authenticated user' })
+  @ApiOkResponse({ type: MyAssignmentsResponseDto })
+  async getMyAssignments(@CurrentUser() user: JwtPayload): Promise<MyAssignmentsResponseDto> {
+    return this.userService.getMyAssignments(user.sub);
+  }
+
+
+  /**
    * GET /users
    * Retrieve all users with filters, search, and pagination.
    * Requires admin role or staff reading capabilities.
@@ -136,6 +155,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get a specific user by ID' })
+  @ApiParam({ name: 'id', description: 'User UUID', example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef' })
   @ApiOkResponse({ type: UserDetailResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiForbiddenResponse({ description: 'Insufficient permissions' })
@@ -155,6 +175,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Toggle or update user status' })
+  @ApiParam({ name: 'id', description: 'User UUID', example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef' })
   @ApiOkResponse({ type: UserDetailResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiForbiddenResponse({ description: 'Administrator privileges required' })
@@ -164,6 +185,26 @@ export class UserController {
     @Body() body?: UpdateUserStatusDto,
   ): Promise<UserDetailResponseDto> {
     return this.userService.changeStatus(id, body?.status, user);
+  }
+
+  /**
+   * DELETE /users/:id
+   * Soft delete a user by setting status to DELETED.
+   * Restricted to administrators.
+   */
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Soft delete a user account' })
+  @ApiParam({ name: 'id', description: 'User UUID', example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef' })
+  @ApiOkResponse({ type: UserDetailResponseDto })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiForbiddenResponse({ description: 'Administrator privileges required' })
+  async softDelete(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ): Promise<UserDetailResponseDto> {
+    return this.userService.softDelete(id, user);
   }
 
   /**

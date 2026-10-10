@@ -67,4 +67,97 @@ export class MenuService {
     }
     return item;
   }
+
+  // ── Category CRUD ──────────────────────────────────────────────────────
+
+  async createCategory(data: {
+    restaurantId: string;
+    name: string;
+    description?: string;
+    displayOrder?: number;
+  }): Promise<MenuCategory> {
+    if (!this.menuRepository.createCategory) {
+      throw new Error('createCategory is not supported');
+    }
+    return this.menuRepository.createCategory(data);
+  }
+
+  async updateCategory(
+    id: string,
+    data: Partial<{
+      name: string;
+      description: string | null;
+      displayOrder: number;
+      isActive: boolean;
+    }>,
+  ): Promise<MenuCategory> {
+    if (!this.menuRepository.updateCategory) {
+      throw new Error('updateCategory is not supported');
+    }
+    const updated = await this.menuRepository.updateCategory(id, data);
+    if (!updated) {
+      throw new NotFoundException(`Menu category ${id} not found`);
+    }
+    return updated;
+  }
+
+  async softDeleteCategory(id: string): Promise<MenuCategory> {
+    if (!this.menuRepository.softDeleteCategory) {
+      throw new Error('softDeleteCategory is not supported');
+    }
+    const deleted = await this.menuRepository.softDeleteCategory(id);
+    if (!deleted) {
+      throw new NotFoundException(`Menu category ${id} not found`);
+    }
+    return deleted;
+  }
+
+  // ── Item CRUD ──────────────────────────────────────────────────────────
+
+  async createItem(data: {
+    restaurantId: string;
+    categoryId: string;
+    name: string;
+    description?: string;
+    basePrice: number;
+    imageUrl?: string;
+    isVegetarian?: boolean;
+  }): Promise<MenuItem> {
+    if (!this.menuRepository.createItem) {
+      throw new Error('createItem is not supported');
+    }
+    return this.menuRepository.createItem(data);
+  }
+
+  async updateItem(
+    id: string,
+    data: Partial<{
+      name: string;
+      description: string | null;
+      basePrice: number;
+      isAvailable: boolean;
+      imageUrl: string | null;
+    }>,
+  ): Promise<MenuItem> {
+    if (!this.menuRepository.updateItem) {
+      throw new Error('updateItem is not supported');
+    }
+    const updated = await this.menuRepository.updateItem(id, data);
+    if (!updated) {
+      throw new NotFoundException(`Menu item ${id} not found`);
+    }
+    return updated;
+  }
+
+  async softDeleteItem(id: string): Promise<MenuItem> {
+    if (!this.menuRepository.softDeleteItem) {
+      throw new Error('softDeleteItem is not supported');
+    }
+    const deleted = await this.menuRepository.softDeleteItem(id);
+    if (!deleted) {
+      throw new NotFoundException(`Menu item ${id} not found`);
+    }
+    return deleted;
+  }
 }
+

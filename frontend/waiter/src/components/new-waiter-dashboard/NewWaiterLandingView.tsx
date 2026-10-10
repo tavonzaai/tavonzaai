@@ -193,13 +193,8 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   });
 
   // Selected Table for Detail View
-  const [selectedTable, setSelectedTable] = useState<TableItem | null>({
-    id: 'T-01',
-    name: 'Table-01',
-    guests: '2/4 Guests',
-    location: 'Main Hall',
-    status: 'Available',
-  });
+  const [selectedTable, setSelectedTable] = useState<TableItem | null>(null);
+
 
   // Selected Order for Order Details View (Figma Screen 2/3/4/5)
   const [selectedDetailOrder, setSelectedDetailOrder] = useState<OrderItemData | null>(null);
@@ -290,39 +285,41 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
       ]);
 
       if (Array.isArray(backendTables) && backendTables.length > 0) {
-        setTables(
-          backendTables.map((bt: any) => {
-            const tableLabel = bt.tableNumber || bt.label || `Table-${bt.id?.slice(0, 2)}`;
-            const tableOrdersCount = Array.isArray(liveOrders)
-              ? liveOrders.filter(
-                  (o: any) =>
-                    o.tableId === bt.tableId ||
-                    o.tableId === bt.id ||
-                    o.tableNumber === tableLabel ||
-                    o.tableLabel === tableLabel
-                ).length
-              : 0;
+        const mappedTables = backendTables.map((bt: any) => {
+          const tableLabel = bt.tableNumber || bt.label || `Table-${bt.id?.slice(0, 2)}`;
+          const tableOrdersCount = Array.isArray(liveOrders)
+            ? liveOrders.filter(
+                (o: any) =>
+                  o.tableId === bt.tableId ||
+                  o.tableId === bt.id ||
+                  o.tableNumber === tableLabel ||
+                  o.tableLabel === tableLabel
+              ).length
+            : 0;
 
-            let statusDisplay: 'Available' | 'New Order' | 'Ready To Serve' | 'Occupied' = 'Available';
-            if (tableOrdersCount > 0) {
-              statusDisplay = 'New Order';
-            } else if (bt.serviceStatus === 'OCCUPIED' || bt.serviceStatus === 'PREPARING') {
-              statusDisplay = 'Occupied';
-            } else if (bt.serviceStatus === 'READY') {
-              statusDisplay = 'Ready To Serve';
-            }
+          let statusDisplay: 'Available' | 'New Order' | 'Ready To Serve' | 'Occupied' = 'Available';
+          if (tableOrdersCount > 0) {
+            statusDisplay = 'New Order';
+          } else if (bt.serviceStatus === 'OCCUPIED' || bt.serviceStatus === 'PREPARING') {
+            statusDisplay = 'Occupied';
+          } else if (bt.serviceStatus === 'READY') {
+            statusDisplay = 'Ready To Serve';
+          }
 
-            return {
-              id: bt.tableId || bt.id,
-              name: tableLabel.startsWith('Table') ? tableLabel : `Table-${tableLabel}`,
-              guests: `${bt.capacity || 4} Guests`,
-              location: 'Main Hall',
-              status: statusDisplay,
-              orderCount: tableOrdersCount,
-            };
-          })
-        );
+          return {
+            id: bt.tableId || bt.id,
+            name: tableLabel.startsWith('Table') ? tableLabel : `Table-${tableLabel}`,
+            guests: `${bt.capacity || 4} Guests`,
+            location: 'Main Hall',
+            status: statusDisplay,
+            orderCount: tableOrdersCount,
+          };
+        });
+        setTables(mappedTables);
+        setSelectedTable((prev) => prev || mappedTables[0] || null);
       }
+
+
 
       if (Array.isArray(liveOrders)) {
         setPendingOrders(
@@ -353,16 +350,35 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
 
   useEffect(() => {
     loadHomeDashboardData();
-    const interval = setInterval(loadHomeDashboardData, 4000);
-    return () => clearInterval(interval);
+    const handleRealtime = () => {
+      loadHomeDashboardData();
+    };
+    window.addEventListener('tavonza:table_status_changed', handleRealtime);
+    window.addEventListener('tavonza:table_session_changed', handleRealtime);
+    window.addEventListener('tavonza:order_created', handleRealtime);
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+    window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    window.addEventListener('tavonza:waiter_called', handleRealtime);
+    window.addEventListener('tavonza:payment_status_changed', handleRealtime);
+
+    return () => {
+      window.removeEventListener('tavonza:table_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:table_session_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_created', handleRealtime);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+      window.removeEventListener('tavonza:waiter_called', handleRealtime);
+      window.removeEventListener('tavonza:payment_status_changed', handleRealtime);
+    };
   }, [loadHomeDashboardData]);
 
   // Load orders for selected table
   useEffect(() => {
-    if (selectedTable?.id) {
+    if (selectedTable?.id && selectedTable.id !== 'T-01') {
       const branchId = getActiveBranchId();
       waiterService
         .queryOrders({ branchId, tableId: selectedTable.id })
+
         .then((orders) => {
           if (Array.isArray(orders) && orders.length > 0) {
             setTableOrders(

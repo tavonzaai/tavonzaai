@@ -22,8 +22,8 @@ export default function LoginView({
   onNavigateToVerify,
 }: LoginViewProps) {
   const dispatch = useAppDispatch();
-  const [email, setEmail] = useState(' ');
-  const [password, setPassword] = useState(' ');
+  const [email, setEmail] = useState('kitchen@tavonza.ai');
+  const [password, setPassword] = useState('Kitchen@1234');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

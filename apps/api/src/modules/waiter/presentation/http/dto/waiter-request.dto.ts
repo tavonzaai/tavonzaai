@@ -13,6 +13,7 @@ import {
   Min,
   ValidateNested,
   IsIn,
+  IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -30,6 +31,21 @@ export class AssignTableDto {
   @ApiProperty({ description: 'Table ID to assign' })
   @IsUUID()
   tableId!: string;
+
+  @ApiPropertyOptional({ description: 'Assignment session start timestamp', example: '2026-10-07T09:00:00Z' })
+  @IsOptional()
+  @IsDateString()
+  sessionStart?: string;
+
+  @ApiPropertyOptional({ description: 'Assignment session end timestamp', example: '2026-10-07T17:00:00Z' })
+  @IsOptional()
+  @IsDateString()
+  sessionEnd?: string;
+
+  @ApiPropertyOptional({ description: 'Shift label / operating hours', example: 'Lunch Shift (10:00 AM - 04:00 PM)' })
+  @IsOptional()
+  @IsString()
+  shiftLabel?: string;
 }
 
 // ── Reject Order ──────────────────────────────────────────────────────

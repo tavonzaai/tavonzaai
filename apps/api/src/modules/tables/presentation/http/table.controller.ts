@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -17,6 +18,7 @@ import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiCreatedResponse,
+  ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
@@ -26,11 +28,12 @@ import {
   UpdateTableDto,
   TableResponseDto,
   CreateReservationDto,
+  UpdateReservationStatusDto,
   ReservationResponseDto,
 } from './dto/table.dto';
-import type { ReservationStatus } from '../../domain/entities/table.entity';
+import { ApiStandardErrors } from '../../../../common/swagger';
 
-@ApiTags('Tables & Areas')
+@ApiTags('Operations | Tables & Areas')
 @Controller('tables')
 export class TableController {
   constructor(private readonly tableService: TableService) {}
@@ -39,7 +42,9 @@ export class TableController {
 
   @Get('resolve-qr/:token')
   @ApiOperation({ summary: 'Resolve an opaque QR code token to table & branch information' })
-  @ApiOkResponse({ type: TableResponseDto })
+  @ApiParam({ name: 'token', description: 'Opaque QR scan token string', example: 'qr_tok_live_998877665544332211' })
+  @ApiOkResponse({ description: 'Table details resolved from QR code', type: TableResponseDto })
+  @ApiStandardErrors(400, 404, 500)
   async resolveQr(
     @Param('token') token: string,
   ): Promise<TableResponseDto> {
@@ -53,7 +58,8 @@ export class TableController {
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new table in a branch' })
-  @ApiCreatedResponse({ type: TableResponseDto })
+  @ApiCreatedResponse({ description: 'Table created successfully', type: TableResponseDto })
+  @ApiStandardErrors(400, 401, 403, 409, 500)
   async create(@Body() dto: CreateTableDto): Promise<TableResponseDto> {
     return this.tableService.create(dto);
   }
@@ -62,8 +68,9 @@ export class TableController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all tables in a branch' })
-  @ApiQuery({ name: 'branchId', required: true, type: String })
-  @ApiOkResponse({ type: [TableResponseDto] })
+  @ApiQuery({ name: 'branchId', required: true, type: String, description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiOkResponse({ description: 'List of tables', type: [TableResponseDto] })
+  @ApiStandardErrors(400, 401, 403, 500)
   async listByBranch(
     @Query('branchId', new ParseUUIDPipe()) branchId: string,
   ): Promise<TableResponseDto[]> {
@@ -74,7 +81,9 @@ export class TableController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all tables in a branch' })
-  @ApiOkResponse({ type: [TableResponseDto] })
+  @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiOkResponse({ description: 'List of tables', type: [TableResponseDto] })
+  @ApiStandardErrors(400, 401, 403, 500)
   async listByBranchPath(
     @Param('branchId', new ParseUUIDPipe()) branchId: string,
   ): Promise<TableResponseDto[]> {
@@ -85,7 +94,9 @@ export class TableController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get table details by ID' })
-  @ApiOkResponse({ type: TableResponseDto })
+  @ApiParam({ name: 'id', description: 'Table UUID', example: 'e7b1a2c3-d4e5-6789-0123-456789abcdef' })
+  @ApiOkResponse({ description: 'Table details', type: TableResponseDto })
+  @ApiStandardErrors(401, 403, 404, 500)
   async getById(
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<TableResponseDto> {
@@ -96,7 +107,9 @@ export class TableController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update table properties or service status' })
-  @ApiOkResponse({ type: TableResponseDto })
+  @ApiParam({ name: 'id', description: 'Table UUID', example: 'e7b1a2c3-d4e5-6789-0123-456789abcdef' })
+  @ApiOkResponse({ description: 'Table updated successfully', type: TableResponseDto })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateTableDto,
@@ -109,11 +122,26 @@ export class TableController {
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate and regenerate the opaque QR token for a table' })
-  @ApiOkResponse({ type: TableResponseDto })
+  @ApiParam({ name: 'id', description: 'Table UUID', example: 'e7b1a2c3-d4e5-6789-0123-456789abcdef' })
+  @ApiOkResponse({ description: 'Table updated with regenerated QR token', type: TableResponseDto })
+  @ApiStandardErrors(401, 403, 404, 500)
   async regenerateQr(
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<TableResponseDto> {
     return this.tableService.regenerateQr(id);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Soft delete / take table out of service' })
+  @ApiParam({ name: 'id', description: 'Table UUID', example: 'e7b1a2c3-d4e5-6789-0123-456789abcdef' })
+  @ApiOkResponse({ description: 'Table taken out of service', type: TableResponseDto })
+  @ApiStandardErrors(401, 403, 404, 500)
+  async delete(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<TableResponseDto> {
+    return this.tableService.softDelete(id);
   }
 
   // ── Reservations ──────────────────────────────────────────────────────
@@ -123,7 +151,8 @@ export class TableController {
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new table reservation' })
-  @ApiCreatedResponse({ type: ReservationResponseDto })
+  @ApiCreatedResponse({ description: 'Reservation created successfully', type: ReservationResponseDto })
+  @ApiStandardErrors(400, 401, 403, 409, 500)
   async createReservation(
     @Body() dto: CreateReservationDto,
   ): Promise<ReservationResponseDto> {
@@ -134,22 +163,52 @@ export class TableController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List reservations for a branch' })
-  @ApiOkResponse({ type: [ReservationResponseDto] })
+  @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiOkResponse({ description: 'List of reservations', type: [ReservationResponseDto] })
+  @ApiStandardErrors(401, 403, 404, 500)
   async listReservations(
     @Param('branchId', new ParseUUIDPipe()) branchId: string,
   ): Promise<ReservationResponseDto[]> {
     return this.tableService.getReservations(branchId);
   }
 
+  @Get('reservations/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get reservation details by ID' })
+  @ApiParam({ name: 'id', description: 'Reservation UUID', example: 'fa01b2c3-d4e5-6789-0123-456789abcdef' })
+  @ApiOkResponse({ description: 'Reservation details', type: ReservationResponseDto })
+  @ApiStandardErrors(401, 403, 404, 500)
+  async getReservationById(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ReservationResponseDto> {
+    return this.tableService.getReservationById(id);
+  }
+
   @Patch('reservations/:id/status')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update reservation status' })
-  @ApiOkResponse({ type: ReservationResponseDto })
+  @ApiParam({ name: 'id', description: 'Reservation UUID', example: 'fa01b2c3-d4e5-6789-0123-456789abcdef' })
+  @ApiOkResponse({ description: 'Reservation status updated', type: ReservationResponseDto })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async updateReservationStatus(
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body('status') status: ReservationStatus,
+    @Body() dto: UpdateReservationStatusDto,
   ): Promise<ReservationResponseDto> {
-    return this.tableService.updateReservationStatus(id, status);
+    return this.tableService.updateReservationStatus(id, dto.status);
+  }
+
+  @Delete('reservations/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Soft delete / cancel reservation' })
+  @ApiParam({ name: 'id', description: 'Reservation UUID', example: 'fa01b2c3-d4e5-6789-0123-456789abcdef' })
+  @ApiOkResponse({ description: 'Reservation cancelled', type: ReservationResponseDto })
+  @ApiStandardErrors(401, 403, 404, 500)
+  async deleteReservation(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ReservationResponseDto> {
+    return this.tableService.softDeleteReservation(id);
   }
 }

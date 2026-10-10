@@ -1,25 +1,45 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { baseApiFetch } from '../api/baseApi';
 
+export const isUUID = (val?: string | null): boolean =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
 export function getActiveBranchId(): string {
   if (typeof window !== 'undefined') {
     try {
-      const match = document.cookie.match(/(?:^|;\s*)active_branch_id=([^;]+)/);
+      // 1. Direct branch cookies
+      const match = document.cookie.match(/(?:^|;\s*)(?:active_branch_id|tavonza_branch_id|waiter_branch_id|branch_id)=([^;]+)/);
       if (match && match[1]) {
         const val = decodeURIComponent(match[1]);
-        if (val.length === 36 && val.includes('-')) return val;
+        if (isUUID(val)) return val;
       }
-      const rawUser = localStorage.getItem('tavonza_user');
-      if (rawUser) {
-        const parsed = JSON.parse(rawUser);
-        if (parsed?.branchId && parsed.branchId.length === 36) return parsed.branchId;
-        if (parsed?.assignments?.[0]?.branchId && parsed.assignments[0].branchId.length === 36) {
-          return parsed.assignments[0].branchId;
+
+      // 2. User cookies (waiter_user, tavonza_user, user)
+      const userCookieMatch = document.cookie.match(/(?:^|;\s*)(?:waiter_user|tavonza_user|user)=([^;]+)/);
+      if (userCookieMatch && userCookieMatch[1]) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(userCookieMatch[1]));
+          if (isUUID(parsed?.branchId)) return parsed.branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
+        } catch {}
+      }
+
+      // 3. localStorage keys
+      for (const key of ['waiter_user', 'tavonza_user', 'user']) {
+        const rawUser = localStorage.getItem(key);
+        if (rawUser) {
+          try {
+            const parsed = JSON.parse(rawUser);
+            if (isUUID(parsed?.branchId)) return parsed.branchId;
+            if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
+            if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
+          } catch {}
         }
       }
     } catch {}
   }
-  return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+  return '';
 }
 
 export interface WaiterTableAssignment {
@@ -110,8 +130,10 @@ export interface CreateOrderOnBehalfPayload {
 }
 
 export const waiterService = {
-  getMyTables: async (branchId: string): Promise<WaiterTableAssignment[]> => {
-    const res = await baseApiFetch<WaiterTableAssignment[]>(`/waiter/tables?branchId=${encodeURIComponent(branchId)}`, {
+  getMyTables: async (branchId?: string): Promise<WaiterTableAssignment[]> => {
+    const resolvedBranchId = (branchId && isUUID(branchId)) ? branchId : getActiveBranchId();
+    const query = resolvedBranchId && isUUID(resolvedBranchId) ? `?branchId=${encodeURIComponent(resolvedBranchId)}` : '';
+    const res = await baseApiFetch<WaiterTableAssignment[]>(`/waiter/tables${query}`, {
       method: 'GET',
     });
     return (res as any)?.data || res;
@@ -131,17 +153,26 @@ export const waiterService = {
     status?: string;
     tableId?: string;
     search?: string;
+    page?: number;
+    limit?: number;
   } = {}): Promise<WaiterOrderSummary[]> => {
     const q = new URLSearchParams();
-    if (params.branchId) q.append('branchId', params.branchId);
+    const resolvedBranchId = (params.branchId && isUUID(params.branchId)) ? params.branchId : getActiveBranchId();
+    if (resolvedBranchId && isUUID(resolvedBranchId)) q.append('branchId', resolvedBranchId);
     if (params.scope) q.append('scope', params.scope);
     if (params.status) q.append('status', params.status);
-    if (params.tableId) q.append('tableId', params.tableId);
+    if (params.tableId && params.tableId.trim() && params.tableId !== 'T-01') {
+      q.append('tableId', params.tableId.trim());
+    }
     if (params.search) q.append('search', params.search);
+    if (params.page) q.append('page', String(params.page));
+    if (params.limit) q.append('limit', String(params.limit));
 
-    const res = await baseApiFetch<any[]>(`/waiter/orders?${q.toString()}`, {
+    const qs = q.toString();
+    const res = await baseApiFetch<any[]>(`/waiter/orders${qs ? `?${qs}` : ''}`, {
       method: 'GET',
     });
+
     const data = (res as any)?.data || res;
     if (Array.isArray(data)) {
       return data.map((o: any) => ({
@@ -345,6 +376,27 @@ export const waiterService = {
     return (res as any)?.data || res;
   },
 
+  resolveAlert: async (alertId: string): Promise<{ message: string }> => {
+    const res = await baseApiFetch<{ message: string }>(`/waiter/alerts/${encodeURIComponent(alertId)}/resolve`, {
+      method: 'PATCH',
+    });
+    return (res as any)?.data || res;
+  },
+
+  createAlert: async (payload: {
+    branchId: string;
+    tableId: string;
+    tableSessionId: string;
+    type: string;
+    message?: string;
+  }): Promise<CustomerAlert> => {
+    const res = await baseApiFetch<CustomerAlert>('/alerts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
   getAllTables: async (branchId: string): Promise<any[]> => {
     const res = await baseApiFetch<any[]>(`/tables?branchId=${encodeURIComponent(branchId)}`, {
       method: 'GET',
@@ -400,6 +452,30 @@ export const fetchWaiterAlerts = createAsyncThunk<CustomerAlert[], string, { rej
       return await waiterService.getMyAlerts(branchId);
     } catch (err: any) {
       return rejectWithValue(err.message || 'Failed to fetch alerts');
+    }
+  }
+);
+
+export const acknowledgeAlertThunk = createAsyncThunk<{ message: string; alertId: string }, string, { rejectValue: string }>(
+  'waiter/acknowledgeAlert',
+  async (alertId, { rejectWithValue }) => {
+    try {
+      const res = await waiterService.ackAlert(alertId);
+      return { message: res.message || 'Alert acknowledged', alertId };
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to acknowledge alert');
+    }
+  }
+);
+
+export const resolveAlertThunk = createAsyncThunk<{ message: string; alertId: string }, string, { rejectValue: string }>(
+  'waiter/resolveAlert',
+  async (alertId, { rejectWithValue }) => {
+    try {
+      const res = await waiterService.resolveAlert(alertId);
+      return { message: res.message || 'Alert resolved', alertId };
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to resolve alert');
     }
   }
 );

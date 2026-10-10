@@ -3,8 +3,9 @@
 // ============================================================================
 
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, or, and, gt, ilike, desc, asc, sql, inArray } from 'drizzle-orm';
+import { eq, or, and, gt, inArray } from 'drizzle-orm';
 import { DRIZZLE, schema } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 
 type DrizzleDb = any;
 
@@ -165,50 +166,16 @@ export class DrizzleUserRepository {
     status?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    includeDeleted?: boolean;
   }) {
-    const conditions: any[] = [];
-
-    if (filters.role && filters.role.trim()) {
-      conditions.push(eq(schema.users.role, filters.role.trim().toUpperCase() as any));
-    }
-
-    if (filters.status && filters.status.trim()) {
-      conditions.push(eq(schema.users.status, filters.status.trim().toUpperCase() as any));
-    }
-
-    if (filters.search && filters.search.trim()) {
-      const term = `%${filters.search.trim()}%`;
-      conditions.push(
-        or(
-          ilike(schema.users.name, term),
-          ilike(schema.users.email, term),
-          ilike(schema.users.contactNo, term),
-        ),
-      );
-    }
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const countQuery = this.db
-      .select({ total: sql<number>`cast(count(*) as integer)` })
-      .from(schema.users);
-    const countRes = whereClause ? await countQuery.where(whereClause) : await countQuery;
-    const total = Number(countRes[0]?.total ?? 0);
-
-    const page = Math.max(1, Number(filters.page ?? 1));
-    const limit = Math.max(1, Math.min(100, Number(filters.limit ?? 10)));
-    const offset = (page - 1) * limit;
-
-    let orderByColumn: any = schema.users.createdAt;
-    if (filters.sortBy === 'name') orderByColumn = schema.users.name;
-    else if (filters.sortBy === 'email') orderByColumn = schema.users.email;
-    else if (filters.sortBy === 'updatedAt') orderByColumn = schema.users.updatedAt;
-
-    const orderClause = filters.sortOrder?.toLowerCase() === 'asc'
-      ? asc(orderByColumn)
-      : desc(orderByColumn);
-
-    const selectQuery = this.db
+    const builder = DrizzleQueryBuilder.from(this.db, schema.users)
+      .paginate({ page: filters.page, limit: filters.limit })
+      .search(filters.search, [schema.users.name, schema.users.email, schema.users.contactNo])
+      .filterExact({
+        role: filters.role?.trim().toUpperCase(),
+        status: filters.status?.trim().toUpperCase(),
+      })
+      .sort(filters.sortBy, filters.sortOrder, schema.users.createdAt)
       .select({
         id: schema.users.id,
         email: schema.users.email,
@@ -220,43 +187,39 @@ export class DrizzleUserRepository {
         createdAt: schema.users.createdAt,
         updatedAt: schema.users.updatedAt,
       })
-      .from(schema.users);
-
-    const userRecords = whereClause
-      ? await selectQuery.where(whereClause).orderBy(orderClause).limit(limit).offset(offset)
-      : await selectQuery.orderBy(orderClause).limit(limit).offset(offset);
-
-    const userIds = userRecords.map((u: any) => u.id);
-    const customerMap = new Map<string, any>();
-    if (userIds.length > 0) {
-      try {
-        const custRows = await this.db
-          .select()
-          .from(schema.customers)
-          .where(inArray(schema.customers.userId, userIds));
-        for (const c of custRows) {
-          customerMap.set(c.userId, c);
+      .softDelete({
+        column: schema.users.status,
+        deletedValue: 'DELETED',
+        includeDeleted: filters.includeDeleted ?? Boolean(filters.status),
+      })
+      .afterExecute(async (userRecords) => {
+        const userIds = userRecords.map((u: any) => u.id);
+        const customerMap = new Map<string, any>();
+        if (userIds.length > 0) {
+          try {
+            const custRows = await this.db
+              .select()
+              .from(schema.customers)
+              .where(inArray(schema.customers.userId, userIds));
+            for (const c of custRows) {
+              customerMap.set(c.userId, c);
+            }
+          } catch {
+            // Continue if customers query fails
+          }
         }
-      } catch {
-        // Continue if customers query fails
-      }
-    }
+        return userRecords.map((u: any) => ({
+          ...u,
+          phone: u.contactNo ?? null,
+          customer: customerMap.get(u.id) ?? null,
+        }));
+      });
 
-    const data = userRecords.map((u: any) => ({
-      ...u,
-      phone: u.contactNo ?? null,
-      customer: customerMap.get(u.id) ?? null,
-    }));
+    return builder.execute();
+  }
 
-    return {
-      data,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPage: Math.ceil(total / limit) || 1,
-      },
-    };
+  async softDelete(userId: string) {
+    return this.updateStatus(userId, 'DELETED');
   }
 
   async updateStatus(userId: string, newStatus?: string) {
@@ -311,40 +274,114 @@ export class DrizzleUserRepository {
 
   // ── OTP Codes ──────────────────────────────────────────────────────────
 
-  async createPasswordResetOtp(email: string, code: string, expiresAt: Date) {
+  async createAuthOtp(
+    email: string,
+    code: string,
+    type: 'email_verification' | 'password_reset',
+    expiresAt: Date,
+  ) {
     const result = await this.db
       .insert(schema.passwordResetOtps)
       .values({
         email,
         otp: code,
+        type,
         expiresAt,
+      })
+      .onConflictDoUpdate({
+        target: schema.passwordResetOtps.email,
+        set: {
+          otp: code,
+          type,
+          expiresAt,
+          createdAt: new Date(),
+        },
       })
       .returning();
     return result[0];
   }
 
-  async findValidPasswordResetOtp(email: string) {
+  async findValidAuthOtp(
+    email: string,
+    type: 'email_verification' | 'password_reset',
+  ) {
     const result = await this.db
       .select()
       .from(schema.passwordResetOtps)
       .where(
         and(
           eq(schema.passwordResetOtps.email, email),
+          eq(schema.passwordResetOtps.type, type),
           gt(schema.passwordResetOtps.expiresAt, new Date())
         )
       )
-      .orderBy(schema.passwordResetOtps.createdAt)
       .limit(1);
     return result[0] ?? null;
   }
 
+  async deleteAuthOtp(
+    email: string,
+    type: 'email_verification' | 'password_reset',
+    code: string,
+  ): Promise<void> {
+    await this.db
+      .delete(schema.passwordResetOtps)
+      .where(
+        and(
+          eq(schema.passwordResetOtps.email, email),
+          eq(schema.passwordResetOtps.type, type),
+          eq(schema.passwordResetOtps.otp, code),
+        ),
+      );
+  }
+
+  async consumeAuthOtp(
+    email: string,
+    type: 'email_verification' | 'password_reset',
+    code: string,
+  ): Promise<boolean> {
+    const result = await this.db
+      .delete(schema.passwordResetOtps)
+      .where(
+        and(
+          eq(schema.passwordResetOtps.email, email),
+          eq(schema.passwordResetOtps.type, type),
+          eq(schema.passwordResetOtps.otp, code),
+          gt(schema.passwordResetOtps.expiresAt, new Date()),
+        ),
+      )
+      .returning({ id: schema.passwordResetOtps.id });
+    return result.length > 0;
+  }
+
+  async markEmailVerified(email: string): Promise<void> {
+    await this.db
+      .update(schema.users)
+      .set({ isEmailVerified: true, updatedAt: new Date() })
+      .where(eq(schema.users.email, email));
+  }
+
   // ── Staff Assignments ──────────────────────────────────────────────────
+
+  async findStaffProfileByUserId(userId: string) {
+    try {
+      const [record] = await this.db
+        .select()
+        .from(schema.staff)
+        .where(eq(schema.staff.userId, userId))
+        .limit(1);
+      return record || null;
+    } catch {
+      return null;
+    }
+  }
 
   async findStaffAssignments(userId: string) {
     try {
       const results = await this.db
         .select({
           id: schema.staffAssignments.id,
+          staffId: schema.staffAssignments.staffId,
           branchId: schema.staffAssignments.branchId,
           branchName: schema.branches.name,
           role: schema.staffAssignments.role,
@@ -361,3 +398,4 @@ export class DrizzleUserRepository {
     }
   }
 }
+

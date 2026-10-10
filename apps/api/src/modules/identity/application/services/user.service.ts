@@ -23,6 +23,7 @@ import type {
 import {
   UserDetailResponseDto,
   UsersListResponseDto,
+  MyAssignmentsResponseDto,
 } from '../../presentation/http/dto/user-response.dto';
 
 @Injectable()
@@ -213,6 +214,13 @@ export class UserService {
   }
 
   /**
+   * Soft delete user account by setting status to DELETED
+   */
+  async softDelete(targetId: string, currentUser: JwtPayload): Promise<UserDetailResponseDto> {
+    return this.changeStatus(targetId, 'DELETED', currentUser);
+  }
+
+  /**
    * Create a customer user account
    */
   async createCustomer(dto: CreateCustomerUserDto): Promise<UserDetailResponseDto> {
@@ -297,7 +305,20 @@ export class UserService {
     );
   }
 
+  /**
+   * Get staff assignments for the current authenticated user
+   */
+  async getMyAssignments(userId: string): Promise<MyAssignmentsResponseDto> {
+    const staff = await this.userRepo.findStaffProfileByUserId(userId);
+    const assignments = await this.userRepo.findStaffAssignments(userId);
+    return {
+      staffId: staff?.id || (assignments[0] as any)?.staffId || null,
+      assignments: assignments as any,
+    };
+  }
+
   private validatePassword(password: string): void {
+
     if (!password || password.length < 8) {
       throw new BadRequestException('Password must be at least 8 characters long');
     }

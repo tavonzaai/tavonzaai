@@ -6,6 +6,8 @@ import { mockManagerProfile } from './data';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import { logoutUser } from '../../redux/features/authApi';
 
+import { NotificationCenter } from '../common/NotificationCenter';
+
 interface TopbarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -57,8 +59,12 @@ export default function Topbar({
         </div>
       </div>
 
-      {/* User Profile Pill matching Figma & connected to Redux Auth */}
-      <div className="relative">
+      <div className="flex items-center gap-3">
+        {/* Realtime Notification Center */}
+        <NotificationCenter />
+
+        {/* User Profile Pill matching Figma & connected to Redux Auth */}
+        <div className="relative">
         <button
           type="button"
           onClick={() => setShowUserDropdown(!showUserDropdown)}
@@ -101,6 +107,7 @@ export default function Topbar({
             </button>
           </div>
         )}
+      </div>
       </div>
     </header>
   );

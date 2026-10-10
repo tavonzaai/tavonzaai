@@ -8,13 +8,18 @@ import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 function ForgotPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const qr = searchParams.get('qr');
   const table = searchParams.get('table');
 
-  const forwardParam = table ? `?table=${encodeURIComponent(table)}` : '';
+  const forwardParam = qr
+    ? `?qr=${encodeURIComponent(qr)}`
+    : table
+    ? `?table=${encodeURIComponent(table)}`
+    : '';
 
   const handleRequestCode = (email: string) => {
-    const tableParam = table ? `&table=${encodeURIComponent(table)}` : '';
-    router.push(`/verify-otp?email=${encodeURIComponent(email)}&type=password_reset${tableParam}`);
+    const destParam = qr ? `&qr=${encodeURIComponent(qr)}` : (table ? `&table=${encodeURIComponent(table)}` : '');
+    router.push(`/verify-otp?email=${encodeURIComponent(email)}&type=password_reset${destParam}`);
   };
 
   return (

@@ -20,20 +20,6 @@ export interface AdminUser {
   }>;
 }
 
-export const DEMO_ADMIN_USER: AdminUser = {
-  id: 'adm-101',
-  name: 'System Administrator',
-  email: 'euhan.dev@gmail.com',
-  role: 'SUPER_ADMIN',
-  assignments: [
-    {
-      id: 'asg-adm-1',
-      role: 'SUPER_ADMIN',
-      branch: { id: 'br-hq', name: 'Global HQ' },
-    },
-  ],
-};
-
 export function isAdminAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
   const token = getCookie(ADMIN_TOKEN_KEY);
@@ -64,9 +50,13 @@ export function loginAdminSession(customUser?: Partial<AdminUser>): AdminUser {
     : `adm_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
   const user: AdminUser = {
-    ...DEMO_ADMIN_USER,
-    ...customUser,
+    id: customUser?.id || '',
+    name: customUser?.name || 'System Administrator',
+    email: customUser?.email || '',
+    role: customUser?.role || 'SUPER_ADMIN',
+    assignments: customUser?.assignments || [],
     shiftStartedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    ...customUser,
   };
 
   setCookie(ADMIN_TOKEN_KEY, token);

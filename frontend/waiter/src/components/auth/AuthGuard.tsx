@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAppSelector } from '@/redux/store';
 import { isWaiterAuthenticated } from '@/lib/auth';
 import { isRoleAllowedForWaiter } from '@/redux/ReduxProvider';
@@ -14,16 +14,30 @@ interface AuthGuardProps {
 
 export default function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, isInitialized, user } = useAppSelector((state) => state.auth);
 
+  const isLoginPage =
+    pathname === '/login' ||
+    pathname === '/new-waiter-dashboard/login' ||
+    Boolean(pathname?.startsWith('/login')) ||
+    Boolean(pathname?.startsWith('/verify-otp')) ||
+    Boolean(pathname?.startsWith('/forgot-password')) ||
+    Boolean(pathname?.startsWith('/reset-password'));
+
   const hasWaiterRole = user ? isRoleAllowedForWaiter(user) : false;
-  const isAuth = isAuthenticated && hasWaiterRole && isWaiterAuthenticated();
+  const isAuth = isWaiterAuthenticated() && (isAuthenticated || hasWaiterRole || Boolean(user));
 
   useEffect(() => {
-    if (isInitialized && !isAuth) {
+    if (isInitialized && !isAuth && !isLoginPage) {
       router.replace('/login');
     }
-  }, [isInitialized, isAuth, router]);
+  }, [isInitialized, isAuth, isLoginPage, router]);
+
+  // Public / auth pages render without session blocking
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
   // Loading state: ALWAYS show loading spinner until session initialization is complete
   if (!isInitialized) {
@@ -47,3 +61,4 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   return <>{children}</>;
 }
+
