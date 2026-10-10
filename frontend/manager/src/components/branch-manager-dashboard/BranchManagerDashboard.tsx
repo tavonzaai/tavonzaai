@@ -23,7 +23,7 @@ import AskAiModal from './modals/AskAiModal';
 import OtherViews from './other/OtherViews';
 import { TableItem } from './types';
 import { navToRoute, routeToNav } from './routes';
-import { Sparkles, CheckCircle2 } from 'lucide-react';
+import { Sparkles, CheckCircle2, X } from 'lucide-react';
 import { branchManagerService, getActiveBranchId } from '../../redux/features/branchManagerApi';
 import { useAppDispatch } from '../../redux/hooks';
 import { getMe } from '../../redux/features/authApi';
@@ -207,9 +207,19 @@ export default function BranchManagerDashboard({
     <div className="flex h-screen bg-black text-white font-['Inter'] font-sans overflow-hidden">
       {/* Toast Notification */}
       {successNotification && (
-        <div className="fixed top-5 right-5 z-50 bg-emerald-500 text-neutral-950 font-semibold px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-3">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span className="text-xs font-['Inter']">{successNotification}</span>
+        <div className="fixed top-5 right-5 z-50 bg-emerald-500 text-neutral-950 font-semibold px-4 py-2.5 rounded-xl shadow-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span className="text-xs font-['Inter']">{successNotification}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessNotification(null)}
+            className="p-0.5 rounded-md hover:bg-black/20 text-neutral-950 transition-colors cursor-pointer"
+            aria-label="Close notification"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 

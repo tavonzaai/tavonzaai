@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Store,
-  GitBranch,
-  ShieldCheck,
+  ClipboardList,
+  Users,
   CreditCard,
   BarChart3,
-  Sparkles,
+  Shield,
   Settings,
   LogOut,
   X,
@@ -35,11 +35,11 @@ interface NavItemConfig {
 const PRIMARY_NAV_ITEMS: NavItemConfig[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'restaurants', label: 'Restaurants', icon: Store },
-  { id: 'branches', label: 'Branches', icon: GitBranch },
-  { id: 'permissions', label: 'Permissions', icon: ShieldCheck },
+  { id: 'branches', label: 'Branches', icon: ClipboardList },
+  { id: 'permissions', label: 'Permissions', icon: Users },
   { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'subscription', label: 'Subscription', icon: Sparkles },
+  { id: 'subscription', label: 'Subscription', icon: Shield },
 ];
 
 export default function Sidebar({
@@ -76,39 +76,44 @@ export default function Sidebar({
       >
         <div className="flex flex-col flex-1 overflow-y-auto no-scrollbar">
           {/* Top Brand Area */}
-          <div className="h-[73px] px-6 py-3 border-b border-neutral-800 flex items-center justify-between shrink-0">
-            <Link
-              href="/new-admin-dashboard/dashboard"
-              className="inline-flex items-center gap-3 group"
-              onClick={() => {
-                onSelectTab('dashboard');
-                onClose();
-              }}
-            >
-              <div className="w-10 h-10 rounded-xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center p-1.5 shadow-sm group-hover:border-amber-400/50 transition-colors">
-                <TavonzaLogoIcon className="w-7 h-7" />
-              </div>
-              <div className="inline-flex flex-col justify-start items-start">
-                <span className="text-white text-base font-bold font-sans tracking-tight leading-4">
-                  Tavonza
-                </span>
-                <span className="text-white/30 text-xs font-normal font-sans uppercase leading-4 tracking-tight">
-                  Branch Manager
-                </span>
-              </div>
-            </Link>
+          <div className="px-6 py-4 border-b border-neutral-800/80 flex flex-col justify-center shrink-0">
+            <span className="text-[11px] text-neutral-400 font-sans font-medium mb-1.5 tracking-tight">
+              Admin Dashboard
+            </span>
+            <div className="flex items-center justify-between">
+              <Link
+                href="/new-admin-dashboard/dashboard"
+                className="inline-flex items-center gap-3 group"
+                onClick={() => {
+                  onSelectTab('dashboard');
+                  onClose();
+                }}
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center p-1.5 shadow-sm group-hover:border-amber-400/50 transition-colors">
+                  <TavonzaLogoIcon className="w-7 h-7" />
+                </div>
+                <div className="inline-flex flex-col justify-start items-start">
+                  <span className="text-white text-base font-bold font-sans tracking-tight leading-4">
+                    Tavonza
+                  </span>
+                  <span className="text-neutral-400 text-xs font-semibold font-sans uppercase leading-4 tracking-wider mt-0.5">
+                    ADMIN
+                  </span>
+                </div>
+              </Link>
 
-            <button
-              onClick={onClose}
-              className="lg:hidden p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors"
-              aria-label="Close sidebar"
-            >
-              <X className="w-5 h-5" />
-            </button>
+              <button
+                onClick={onClose}
+                className="lg:hidden p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors"
+                aria-label="Close sidebar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          {/* Main Navigation Items */}
-          <nav className="p-4 space-y-1.5">
+          {/* Navigation Items */}
+          <nav className="p-4 space-y-2">
             {PRIMARY_NAV_ITEMS.map((item) => {
               const isActive =
                 activeTab === item.id ||
@@ -119,67 +124,61 @@ export default function Sidebar({
                 <button
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}
-                  className={`w-full px-3 py-2.5 rounded-lg inline-flex items-center justify-between text-left transition-all ${
+                  className={`w-full px-3.5 py-3 rounded-xl inline-flex items-center justify-between text-left transition-all ${
                     isActive
-                      ? 'bg-zinc-800 text-white font-medium shadow-sm'
-                      : 'text-gray-400 hover:text-white hover:bg-zinc-900/60'
+                      ? 'bg-zinc-800 text-white font-semibold shadow-sm'
+                      : 'text-neutral-300 hover:text-white hover:bg-zinc-900/60 font-medium'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3.5">
                     <Icon
-                      className={`size-5 transition-colors ${
-                        isActive ? 'text-amber-400' : 'text-gray-400 group-hover:text-white'
+                      className={`w-5 h-5 shrink-0 transition-colors ${
+                        isActive ? 'text-white' : 'text-neutral-400 group-hover:text-white'
                       }`}
                     />
-                    <span className="text-sm font-normal font-sans leading-5">
+                    <span className="text-[15px] sm:text-base font-sans leading-tight">
                       {item.label}
                     </span>
                   </div>
-                  {isActive && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                  )}
                 </button>
               );
             })}
-          </nav>
 
-          {/* System Section */}
-          <div className="px-4 py-3 mt-auto border-t border-neutral-900">
-            <div className="px-3 pb-2 text-neutral-500 text-xs font-semibold uppercase tracking-wider font-sans">
+            {/* System Section Heading (Inline with nav, not pushed to bottom) */}
+            <div className="pt-4 pb-1 px-3.5 text-neutral-400 text-xs font-semibold uppercase tracking-wider font-sans">
               System
             </div>
+
+            {/* Settings Nav Item */}
             <button
               onClick={() => handleNavClick('settings')}
-              className={`w-full px-3 py-2.5 rounded-lg inline-flex items-center justify-between text-left transition-all ${
+              className={`w-full px-3.5 py-3 rounded-xl inline-flex items-center justify-between text-left transition-all ${
                 activeTab === 'settings'
-                  ? 'bg-zinc-800 text-white font-medium'
-                  : 'text-gray-400 hover:text-white hover:bg-zinc-900/60'
+                  ? 'bg-zinc-800 text-white font-semibold shadow-sm'
+                  : 'text-neutral-300 hover:text-white hover:bg-zinc-900/60 font-medium'
               }`}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3.5">
                 <Settings
-                  className={`size-5 transition-colors ${
-                    activeTab === 'settings' ? 'text-amber-400' : 'text-gray-400'
+                  className={`w-5 h-5 shrink-0 transition-colors ${
+                    activeTab === 'settings' ? 'text-white' : 'text-neutral-400 group-hover:text-white'
                   }`}
                 />
-                <span className="text-sm font-normal font-sans leading-5">
+                <span className="text-[15px] sm:text-base font-sans leading-tight">
                   Settings
                 </span>
               </div>
-              {activeTab === 'settings' && (
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              )}
             </button>
-          </div>
+          </nav>
         </div>
 
-        {/* Bottom Logout Button */}
+        {/* Bottom: Only Sign Out / Logout Button */}
         <div className="p-4 border-t border-neutral-800/80 bg-neutral-950/40 shrink-0">
           <button
             onClick={handleLogout}
-            className="w-full px-3 py-2.5 rounded-lg flex items-center gap-3 text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors text-left font-sans text-sm"
+            className="w-full px-3.5 py-3 rounded-xl flex items-center gap-3.5 text-neutral-300 hover:text-red-400 hover:bg-red-500/10 transition-colors text-left font-sans text-[15px] sm:text-base font-medium"
           >
-            <LogOut className="size-5" />
+            <LogOut className="w-5 h-5 shrink-0" />
             <span>Sign Out</span>
           </button>
         </div>
