@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   UserCheck,
   CheckCircle2,
@@ -13,11 +13,52 @@ import {
 } from 'lucide-react';
 import { mockGuestRequests } from '../data';
 import { GuestRequest } from '../types';
+import { waiterService, getActiveBranchId, CustomerAlert } from '@/redux/features/waiterApi';
 
 export default function GuestRequestsView() {
   const [requests, setRequests] = useState<GuestRequest[]>(mockGuestRequests);
 
-  const handleResolve = (id: string) => {
+  // Load real customer alerts from backend
+  useEffect(() => {
+    let mounted = true;
+    async function loadAlerts() {
+      try {
+        const branchId = getActiveBranchId();
+        const data = await waiterService.getMyAlerts(branchId);
+        if (mounted && Array.isArray(data) && data.length > 0) {
+          const typeMap: Record<string, GuestRequest['type']> = {
+            call_waiter: 'Waiter Call',
+            request_bill: 'Bill Request',
+            need_help: 'Waiter Call',
+            water_refill: 'Water Refill',
+            custom: 'Waiter Call',
+          };
+          const mapped: GuestRequest[] = data.map((a: CustomerAlert) => ({
+            id: a.id,
+            tableNumber: a.tableNumber ? `Table ${a.tableNumber}` : 'Table',
+            type: typeMap[a.type] || 'Waiter Call',
+            status: a.status === 'resolved' ? 'Resolved' : a.status === 'acknowledged' ? 'In Progress' : 'Pending',
+            timeAgo: a.createdAt ? `${Math.max(1, Math.round((Date.now() - new Date(a.createdAt).getTime()) / 60000))}m ago` : 'Just now',
+            notes: a.message || undefined,
+          }));
+          setRequests(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not load live alerts, using local baseline:', err);
+      }
+    }
+    loadAlerts();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleResolve = async (id: string) => {
+    try {
+      if (id && !id.startsWith('req-')) {
+        await waiterService.resolveAlert(id).catch(() => null);
+      }
+    } catch {}
     setRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'Resolved' } : r))
     );

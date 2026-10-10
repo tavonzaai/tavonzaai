@@ -41,6 +41,9 @@ import {
 } from '@tavonza/database';
 import { eq } from 'drizzle-orm';
 
+import { RealtimeGateway } from '../../../realtime/realtime.gateway';
+import { NotificationService } from '../../../notifications/application/services/notification.service';
+
 @Injectable()
 export class OrderService {
   constructor(
@@ -49,6 +52,8 @@ export class OrderService {
     @Inject(DRIZZLE)
     private readonly db: DrizzleDatabase,
     private readonly outboxService: OutboxService,
+    private readonly realtimeGateway: RealtimeGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // ══════════════════════════════════════════════════════════════════════
@@ -198,6 +203,32 @@ export class OrderService {
         });
       }
 
+      this.realtimeGateway.emitOrderStatusChanged({
+        eventType: 'ORDER_STATUS_CHANGED',
+        eventId: finalOrder.id,
+        branchId: finalOrder.branchId,
+        orderId: finalOrder.id,
+        orderNumber: finalOrder.orderNumber,
+        tableId: finalOrder.tableId,
+        tableSessionId: finalOrder.tableSessionId,
+        status: 'CONFIRMED',
+        occurredAt: new Date().toISOString(),
+      });
+
+      if (finalOrder.tableId) {
+        this.realtimeGateway.emitTableStatusChanged({
+          eventType: 'TABLE_STATUS_CHANGED',
+          eventId: finalOrder.tableId,
+          branchId: finalOrder.branchId,
+          tableId: finalOrder.tableId,
+          tableLabel: 'Table',
+          serviceStatus: 'PREPARING',
+          operationalFlag: 'NORMAL',
+          activeSessionId: finalOrder.tableSessionId,
+          occurredAt: new Date().toISOString(),
+        });
+      }
+
       await this.outboxService.publishEvent({
         aggregateType: 'ORDER',
         aggregateId: finalOrder.id,
@@ -221,6 +252,18 @@ export class OrderService {
           .set({ serviceStatus: 'ORDERING', updatedAt: new Date() })
           .where(eq(tables.id, finalOrder.tableId));
 
+        this.realtimeGateway.emitTableStatusChanged({
+          eventType: 'TABLE_STATUS_CHANGED',
+          eventId: finalOrder.tableId,
+          branchId: finalOrder.branchId,
+          tableId: finalOrder.tableId,
+          tableLabel: 'Table',
+          serviceStatus: 'ORDERING',
+          operationalFlag: 'NORMAL',
+          activeSessionId: finalOrder.tableSessionId,
+          occurredAt: new Date().toISOString(),
+        });
+
         await this.outboxService.publishEvent({
           aggregateType: 'TABLE',
           aggregateId: finalOrder.tableId,
@@ -237,6 +280,33 @@ export class OrderService {
           },
         });
       }
+
+      this.realtimeGateway.emitOrderCreated({
+        eventType: 'ORDER_CREATED',
+        eventId: updatedOrder.id,
+        branchId: updatedOrder.branchId,
+        orderId: updatedOrder.id,
+        orderNumber: updatedOrder.orderNumber,
+        tableId: updatedOrder.tableId,
+        tableSessionId: updatedOrder.tableSessionId,
+        status: 'PENDING',
+        paymentStatus: 'UNPAID',
+        totalAmount: updatedOrder.total,
+        acceptanceMode: 'WAITER_APPROVAL',
+        itemsCount: updatedOrder.items.length,
+        occurredAt: new Date().toISOString(),
+      });
+
+      // Notify waitstaff about pending order
+      await this.notificationService.create({
+        branchId: updatedOrder.branchId,
+        targetRole: 'WAITER',
+        type: 'ORDER_PENDING_APPROVAL',
+        title: `New Order ${updatedOrder.orderNumber}`,
+        message: `Order ${updatedOrder.orderNumber} placed and awaiting approval.`,
+        entityType: 'ORDER',
+        entityId: updatedOrder.id,
+      });
 
       await this.outboxService.publishEvent({
         aggregateType: 'ORDER',
@@ -324,6 +394,18 @@ export class OrderService {
         .set({ serviceStatus: 'PREPARING', updatedAt: new Date() })
         .where(eq(tables.id, updatedOrder.tableId));
 
+      this.realtimeGateway.emitTableStatusChanged({
+        eventType: 'TABLE_STATUS_CHANGED',
+        eventId: updatedOrder.tableId,
+        branchId: updatedOrder.branchId,
+        tableId: updatedOrder.tableId,
+        tableLabel: 'Table',
+        serviceStatus: 'PREPARING',
+        operationalFlag: 'NORMAL',
+        activeSessionId: updatedOrder.tableSessionId,
+        occurredAt: new Date().toISOString(),
+      });
+
       await this.outboxService.publishEvent({
         aggregateType: 'TABLE',
         aggregateId: updatedOrder.tableId,
@@ -347,6 +429,18 @@ export class OrderService {
         .set({ serviceStatus: 'SERVING', updatedAt: new Date() })
         .where(eq(tables.id, updatedOrder.tableId));
 
+      this.realtimeGateway.emitTableStatusChanged({
+        eventType: 'TABLE_STATUS_CHANGED',
+        eventId: updatedOrder.tableId,
+        branchId: updatedOrder.branchId,
+        tableId: updatedOrder.tableId,
+        tableLabel: 'Table',
+        serviceStatus: 'SERVING',
+        operationalFlag: 'NORMAL',
+        activeSessionId: updatedOrder.tableSessionId,
+        occurredAt: new Date().toISOString(),
+      });
+
       await this.outboxService.publishEvent({
         aggregateType: 'TABLE',
         aggregateId: updatedOrder.tableId,
@@ -363,6 +457,32 @@ export class OrderService {
         },
       });
     }
+
+    const dbStatusMap: Record<string, any> = {
+      DRAFT: 'DRAFT',
+      SUBMITTED: 'PENDING',
+      ACCEPTED: 'CONFIRMED',
+      KITCHEN_QUEUE: 'CONFIRMED',
+      PREPARING: 'PREPARING',
+      READY: 'READY',
+      SERVED: 'SERVED',
+      CANCELLED: 'CANCELLED',
+      REJECTED: 'REJECTED',
+    };
+    const mappedDbStatus = dbStatusMap[newStatus] ?? 'PENDING';
+
+    this.realtimeGateway.emitOrderStatusChanged({
+      eventType: 'ORDER_STATUS_CHANGED',
+      eventId: updatedOrder.id,
+      branchId: updatedOrder.branchId,
+      orderId: updatedOrder.id,
+      orderNumber: updatedOrder.orderNumber,
+      tableId: updatedOrder.tableId,
+      tableSessionId: updatedOrder.tableSessionId,
+      status: mappedDbStatus,
+      previousStatus: order.status,
+      occurredAt: new Date().toISOString(),
+    });
 
     let eventType = 'OrderStatusChanged';
     if (newStatus === 'ACCEPTED') eventType = 'OrderAccepted';

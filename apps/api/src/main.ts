@@ -5,6 +5,7 @@ import { AppLogger } from "@tavonza/observability";
 import { AppModule } from "./app.module";
 import { HttpLoggerInterceptor } from "./common/interceptors/http-logger.interceptor";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
+import { createValidationException } from "./common/errors/validation-exception.factory";
 
 async function bootstrap() {
   const logger = new AppLogger('Bootstrap');
@@ -13,6 +14,9 @@ async function bootstrap() {
     // Disable NestJS's default logger — we use our own structured one
     logger: false,
   });
+
+  // Enable graceful shutdown hooks (SIGTERM/SIGINT)
+  app.enableShutdownHooks();
 
   // ── Global Exception Filter ────────────────────────────────────────────────
   // Must be registered before interceptors so it catches everything
@@ -31,6 +35,7 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      exceptionFactory: createValidationException,
     }),
   );
 
@@ -50,8 +55,28 @@ async function bootstrap() {
   });
 }
 
+// test file
+// Global safety net for unhandled asynchronous errors
+process.on('unhandledRejection', (reason: any) => {
+  const logger = new AppLogger('Process');
+  logger.error('Unhandled Promise Rejection', {
+    error: reason?.message || String(reason),
+    stack: reason?.stack,
+  });
+});
+
+process.on('uncaughtException', (err: Error) => {
+  const logger = new AppLogger('Process');
+  logger.error('Uncaught Exception — initiating graceful exit', {
+    error: err.message,
+    stack: err.stack,
+  });
+  process.exit(1);
+});
+
 bootstrap().catch((err) => {
   const logger = new AppLogger('Bootstrap');
   logger.error('Fatal error during startup', { error: err?.message, stack: err?.stack });
   process.exit(1);
 });
+

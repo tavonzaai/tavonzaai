@@ -76,10 +76,18 @@ export default function ActiveOrdersView() {
       }
     };
     loadTickets();
-    const interval = setInterval(loadTickets, 7000);
+    const handleRealtimeUpdate = () => {
+      loadTickets();
+    };
+    window.addEventListener('tavonza:order_created', handleRealtimeUpdate);
+    window.addEventListener('tavonza:order_status_changed', handleRealtimeUpdate);
+    window.addEventListener('tavonza:order_item_changed', handleRealtimeUpdate);
+
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:order_created', handleRealtimeUpdate);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtimeUpdate);
+      window.removeEventListener('tavonza:order_item_changed', handleRealtimeUpdate);
     };
   }, []);
   const [stationFilter, setStationFilter] = useState<string>('All');

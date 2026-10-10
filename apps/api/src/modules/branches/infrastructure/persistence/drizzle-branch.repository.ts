@@ -1,5 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, or, ilike } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import * as argon2 from 'argon2';
 import {
   DRIZZLE,
@@ -18,6 +19,10 @@ import type {
   BranchOperatingHours,
   BranchHoliday,
 } from '../../domain/entities/branch.entity';
+import {
+  ResourceConflictException,
+  InternalOperationException,
+} from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzleBranchRepository {
@@ -44,7 +49,7 @@ export class DrizzleBranchRepository {
       .returning();
 
     if (!created) {
-      throw new Error('Failed to create branch');
+      throw new InternalOperationException('Failed to create branch record');
     }
 
     // Automatically create default branch settings
@@ -65,13 +70,43 @@ export class DrizzleBranchRepository {
     return row ? this.mapBranch(row) : null;
   }
 
-  async findBranchesByRestaurantId(restaurantId: string): Promise<Branch[]> {
-    const rows = await this.db
-      .select()
-      .from(branches)
-      .where(eq(branches.restaurantId, restaurantId));
+  async findAllBranches(options?: {
+    restaurantId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    includeDeleted?: boolean;
+  }): Promise<{ data: Branch[]; meta: any }> {
+    const builder = DrizzleQueryBuilder.from(this.db, branches)
+      .paginate({ page: options?.page, limit: options?.limit })
+      .filterExact({ restaurantId: options?.restaurantId })
+      .search(options?.search, [branches.name, branches.phone])
+      .softDelete({
+        column: branches.isActive,
+        activeValue: true,
+        includeDeleted: options?.includeDeleted,
+      })
+      .sort(options?.sortBy, options?.sortOrder, branches.createdAt);
 
-    return rows.map((r) => this.mapBranch(r));
+    return builder.execute((r) => this.mapBranch(r));
+  }
+
+  async findBranchesByRestaurantId(restaurantId: string, includeDeleted = false): Promise<Branch[]> {
+    return DrizzleQueryBuilder.from(this.db, branches)
+      .filterExact({ restaurantId })
+      .softDelete({
+        column: branches.isActive,
+        activeValue: true,
+        includeDeleted,
+      })
+      .sort(branches.createdAt, 'desc')
+      .executePlain((r) => this.mapBranch(r));
+  }
+
+  async softDeleteBranch(id: string): Promise<Branch | null> {
+    return this.updateBranch(id, { isActive: false });
   }
 
   async updateBranch(
@@ -127,20 +162,18 @@ export class DrizzleBranchRepository {
   // ── Operating Hours ───────────────────────────────────────────────────
 
   async findOperatingHours(branchId: string): Promise<BranchOperatingHours[]> {
-    const rows = await this.db
-      .select()
-      .from(branchOperatingHours)
-      .where(eq(branchOperatingHours.branchId, branchId));
-
-    return rows.map((r) => ({
-      id: r.id,
-      branchId: r.branchId,
-      dayOfWeek: r.dayOfWeek,
-      openTime: r.openTime,
-      closeTime: r.closeTime,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    }));
+    return DrizzleQueryBuilder.from(this.db, branchOperatingHours)
+      .filterExact({ branchId })
+      .sort(branchOperatingHours.dayOfWeek, 'asc')
+      .executePlain((r) => ({
+        id: r.id,
+        branchId: r.branchId,
+        dayOfWeek: r.dayOfWeek,
+        openTime: r.openTime,
+        closeTime: r.closeTime,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      }));
   }
 
   async replaceOperatingHours(
@@ -179,22 +212,20 @@ export class DrizzleBranchRepository {
   // ── Holidays ──────────────────────────────────────────────────────────
 
   async findHolidays(branchId: string): Promise<BranchHoliday[]> {
-    const rows = await this.db
-      .select()
-      .from(branchHolidays)
-      .where(eq(branchHolidays.branchId, branchId));
-
-    return rows.map((r) => ({
-      id: r.id,
-      branchId: r.branchId,
-      date: r.date,
-      isClosed: r.isClosed ?? true,
-      label: r.label,
-      openTime: r.openTime,
-      closeTime: r.closeTime,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    }));
+    return DrizzleQueryBuilder.from(this.db, branchHolidays)
+      .filterExact({ branchId })
+      .sort(branchHolidays.date, 'asc')
+      .executePlain((r) => ({
+        id: r.id,
+        branchId: r.branchId,
+        date: r.date,
+        isClosed: r.isClosed ?? true,
+        label: r.label,
+        openTime: r.openTime,
+        closeTime: r.closeTime,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      }));
   }
 
   async createHoliday(data: {
@@ -218,7 +249,7 @@ export class DrizzleBranchRepository {
       .returning();
 
     if (!created) {
-      throw new Error('Failed to create holiday schedule');
+      throw new InternalOperationException('Failed to create holiday schedule');
     }
 
     return {
@@ -276,19 +307,59 @@ export class DrizzleBranchRepository {
   // ── Staff Assignments ──────────────────────────────────────────────────
 
   async findStaffByBranchId(branchId: string, filters?: { role?: string; search?: string }) {
-    const conditions: any[] = [eq(staffAssignments.branchId, branchId)];
+    const roleFilter = filters?.role && filters.role !== 'ALL' ? (filters.role.toUpperCase() as any) : undefined;
+    return DrizzleQueryBuilder.from(this.db, staffAssignments)
+      .innerJoin(staff, eq(staff.id, staffAssignments.staffId))
+      .innerJoin(users, eq(users.id, staff.userId))
+      .filterExact({
+        branchId,
+        role: roleFilter,
+        isActive: true,
+      })
+      .search(filters?.search, [users.name, users.email, users.contactNo])
+      .select({
+        id: staffAssignments.id,
+        staffId: staffAssignments.staffId,
+        branchId: staffAssignments.branchId,
+        role: staffAssignments.role,
+        permissions: staffAssignments.permissions,
+        isActive: staffAssignments.isActive,
+        assignedAt: staffAssignments.createdAt,
+        name: users.name,
+        email: users.email,
+        phone: users.contactNo,
+      })
+      .sort(staffAssignments.createdAt, 'desc')
+      .executePlain();
+  }
 
-    if (filters?.role && filters.role !== 'ALL') {
-      const roleUpper = filters.role.toUpperCase();
-      conditions.push(eq(staffAssignments.role, roleUpper as any));
-    }
+  async updateStaffAssignment(
+    branchId: string,
+    staffIdOrAssignmentId: string,
+    updates: Partial<{ role: any; permissions: string[]; isActive: boolean }>,
+  ) {
+    const [updated] = await this.db
+      .update(staffAssignments)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(staffAssignments.branchId, branchId),
+          or(
+            eq(staffAssignments.id, staffIdOrAssignmentId),
+            eq(staffAssignments.staffId, staffIdOrAssignmentId),
+          ),
+        ),
+      )
+      .returning();
 
-    if (filters?.search && filters.search.trim()) {
-      const term = `%${filters.search.trim()}%`;
-      conditions.push(or(ilike(users.name, term), ilike(users.email, term))!);
-    }
+    return updated || null;
+  }
 
-    return this.db
+  async findStaffMemberById(branchId: string, staffIdOrAssignmentId: string) {
+    const [result] = await this.db
       .select({
         id: staffAssignments.id,
         staffId: staffAssignments.staffId,
@@ -304,7 +375,18 @@ export class DrizzleBranchRepository {
       .from(staffAssignments)
       .innerJoin(staff, eq(staff.id, staffAssignments.staffId))
       .innerJoin(users, eq(users.id, staff.userId))
-      .where(and(...conditions));
+      .where(
+        and(
+          eq(staffAssignments.branchId, branchId),
+          or(
+            eq(staffAssignments.id, staffIdOrAssignmentId),
+            eq(staffAssignments.staffId, staffIdOrAssignmentId)
+          )
+        )
+      )
+      .limit(1);
+
+    return result || null;
   }
 
   async createStaffAndAssignment(data: {
@@ -336,7 +418,9 @@ export class DrizzleBranchRepository {
           .where(eq(users.contactNo, cleanPhone))
           .limit(1);
         if (existingPhone) {
-          throw new Error(`Phone number "${cleanPhone}" is already in use by another user.`);
+          throw new ResourceConflictException(`Phone number "${cleanPhone}" is already in use by another user.`, {
+            errorMessages: [{ path: 'phone', message: 'This phone number is already in use.' }],
+          });
         }
       }
 
@@ -352,7 +436,7 @@ export class DrizzleBranchRepository {
           status: 'ACTIVE',
         })
         .returning();
-      if (!newUser) throw new Error('Failed to create user record');
+      if (!newUser) throw new InternalOperationException('Failed to create user record');
       userId = newUser.id;
     }
 
@@ -371,7 +455,7 @@ export class DrizzleBranchRepository {
           userId,
         })
         .returning();
-      if (!newStaff) throw new Error('Failed to create staff record');
+      if (!newStaff) throw new InternalOperationException('Failed to create staff record');
       staffId = newStaff.id;
     }
 
@@ -396,7 +480,7 @@ export class DrizzleBranchRepository {
       })
       .returning();
 
-    if (!assignment) throw new Error('Failed to assign staff to branch');
+    if (!assignment) throw new InternalOperationException('Failed to assign staff to branch');
 
     return {
       id: assignment.id,

@@ -227,16 +227,16 @@ pnpm dev
 
 This starts all apps concurrently with their respective ports:
 
-| App                  | URL                   |
-| -------------------- | --------------------- |
-| API (NestJS)         | http://localhost:3000 |
-| Realtime (WebSocket) | http://localhost:3001 |
-| Customer Frontend    | http://localhost:3100 |
-| Waiter Frontend      | http://localhost:3101 |
-| Admin Frontend       | http://localhost:3102 |
-| Branch Manager       | http://localhost:3103 |
-| Cashier Frontend     | http://localhost:3104 |
-| Kitchen Frontend     | http://localhost:3105 |
+| App                  | URL                     |
+| -------------------- | ----------------------- |
+| API (NestJS)         | https://api.tavonza.com |
+| Realtime (WebSocket) | http://localhost:3001   |
+| Customer Frontend    | http://localhost:3100   |
+| Waiter Frontend      | http://localhost:3101   |
+| Admin Frontend       | http://localhost:3102   |
+| Branch Manager       | http://localhost:3103   |
+| Cashier Frontend     | http://localhost:3104   |
+| Kitchen Frontend     | http://localhost:3105   |
 
 ### Run a Specific App Only
 
@@ -334,14 +334,14 @@ git commit -m "docs: update developer guide with AI role section"
 
 ### Your Apps
 
-| App                | Path                       | Port | Audience                           |
-| ------------------ | -------------------------- | ---- | ---------------------------------- |
-| Customer App       | `frontend/customer/`       | 3100 | Restaurant guests (QR scan)        |
-| Waiter App         | `frontend/waiter/`         | 3101 | Floor waiters (tables, orders)     |
-| Admin App          | `frontend/admin/`          | 3102 | Tenant & branch admins             |
-| Manager App        | `frontend/manager/`        | 3103 | Restaurant branch & ops managers   |
-| Cashier App        | `frontend/cashier/`        | 3104 | Cashiers (POS, checkout)           |
-| Kitchen App        | `frontend/kitchen/`        | 3105 | Kitchen chefs (KDS, tickets, prep) |
+| App          | Path                 | Port | Audience                           |
+| ------------ | -------------------- | ---- | ---------------------------------- |
+| Customer App | `frontend/customer/` | 3100 | Restaurant guests (QR scan)        |
+| Waiter App   | `frontend/waiter/`   | 3101 | Floor waiters (tables, orders)     |
+| Admin App    | `frontend/admin/`    | 3102 | Tenant & branch admins             |
+| Manager App  | `frontend/manager/`  | 3103 | Restaurant branch & ops managers   |
+| Cashier App  | `frontend/cashier/`  | 3104 | Cashiers (POS, checkout)           |
+| Kitchen App  | `frontend/kitchen/`  | 3105 | Kitchen chefs (KDS, tickets, prep) |
 
 ### Tech Stack
 
@@ -526,18 +526,18 @@ If you're creating a new shared library under `packages/`:
 
 ### Your App
 
-| Path       | Purpose                                                          |
-| ---------- | ---------------------------------------------------------------- |
+| Path       | Purpose                                                         |
+| ---------- | --------------------------------------------------------------- |
 | `apps/ai/` | AI agent runtime, context builder, Tool Gateway, model services |
 
 ### Language & Framework Freedom
 
 The AI app does **not** enforce a specific language or framework. You have full flexibility based on the task:
 
-| Language | Common use case | Suggested tools |
-|----------|----------------|------------------|
-| **Python** | ML models, vector embeddings, LLM orchestration | FastAPI, LangChain, LlamaIndex, Haystack |
-| **TypeScript** | Tool Gateway client, lightweight orchestration | tsx, Node.js |
+| Language       | Common use case                                 | Suggested tools                          |
+| -------------- | ----------------------------------------------- | ---------------------------------------- |
+| **Python**     | ML models, vector embeddings, LLM orchestration | FastAPI, LangChain, LlamaIndex, Haystack |
+| **TypeScript** | Tool Gateway client, lightweight orchestration  | tsx, Node.js                             |
 
 > **Recommendation:** Use **Python + FastAPI** as the main AI service runtime. It gives you the richest ecosystem for LLMs, embeddings, vector stores, and ML pipelines. Use TypeScript only for lightweight gateway clients or integration glue if needed.
 
@@ -579,13 +579,13 @@ apps/ai/
 
 You have full freedom here — choose what fits the task:
 
-| Tool | Purpose |
-|------|---------|
+| Tool         | Purpose                                                    |
+| ------------ | ---------------------------------------------------------- |
 | **pgvector** | Postgres-native vector search (simplest, already in infra) |
-| **Qdrant** | Dedicated vector DB (better for scale) |
-| **Pinecone** | Managed cloud vector DB |
-| **Chroma** | Local development, prototyping |
-| **Weaviate** | Full-featured, open-source |
+| **Qdrant**   | Dedicated vector DB (better for scale)                     |
+| **Pinecone** | Managed cloud vector DB                                    |
+| **Chroma**   | Local development, prototyping                             |
+| **Weaviate** | Full-featured, open-source                                 |
 
 > Start with **pgvector** — it reuses the existing Postgres infra with zero extra services. Switch to a dedicated vector DB only if you hit performance limits.
 

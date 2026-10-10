@@ -2,8 +2,8 @@
 // Drizzle Waiter Repository — Staff / Table Assignment Persistence
 // ============================================================================
 
-import { Injectable, Inject, BadRequestException } from '@nestjs/common';
-import { eq, and, or, lte, gte } from 'drizzle-orm';
+import { Injectable, Inject } from '@nestjs/common';
+import { eq, and, or } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -12,11 +12,15 @@ import {
   waiterTableAssignments,
   tables,
 } from '@tavonza/database';
+import { isUUID } from '@tavonza/shared';
+import { DrizzleQueryBuilder } from '../../../../common/database';
+
 import type {
   StaffProfile,
   BranchStaffAssignment,
   WaiterTableAssignment,
 } from '../../domain/entities/waiter.entity';
+import { InternalOperationException } from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzleWaiterRepository {
@@ -38,7 +42,7 @@ export class DrizzleWaiterRepository {
       })
       .returning();
 
-    if (!result) throw new Error('Failed to create staff profile');
+    if (!result) throw new InternalOperationException('Failed to create staff profile');
 
     return {
       id: result.id,
@@ -55,6 +59,25 @@ export class DrizzleWaiterRepository {
       .select()
       .from(staff)
       .where(eq(staff.userId, userId))
+      .limit(1);
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      userId: row.userId,
+      jobTitle: 'WAITER',
+      status: 'active',
+      createdAt: row.createdAt ?? new Date(),
+      updatedAt: row.updatedAt ?? new Date(),
+    };
+  }
+
+  async findProfileById(staffId: string): Promise<StaffProfile | null> {
+    const [row] = await this.db
+      .select()
+      .from(staff)
+      .where(eq(staff.id, staffId))
       .limit(1);
 
     if (!row) return null;
@@ -89,7 +112,7 @@ export class DrizzleWaiterRepository {
       })
       .returning();
 
-    if (!result) throw new Error('Failed to assign staff to branch');
+    if (!result) throw new InternalOperationException('Failed to assign staff to branch');
 
     return {
       id: result.id,
@@ -104,15 +127,11 @@ export class DrizzleWaiterRepository {
   }
 
   async findActiveBranchesForStaff(staffId: string): Promise<BranchStaffAssignment[]> {
-    const rows = await this.db
-      .select()
-      .from(staffAssignments)
-      .where(
-        and(
-          eq(staffAssignments.staffId, staffId),
-          eq(staffAssignments.isActive, true),
-        ),
-      );
+    const qb = new DrizzleQueryBuilder<typeof staffAssignments>(this.db, staffAssignments)
+      .filterExact({ staffId })
+      .softDelete({ column: staffAssignments.isActive, activeValue: true });
+
+    const rows = await qb.executePlain();
 
     return rows.map((r) => ({
       id: r.id,
@@ -127,6 +146,9 @@ export class DrizzleWaiterRepository {
   }
 
   async isStaffAssignedToBranch(staffId: string, branchId: string): Promise<boolean> {
+    if (!staffId || !branchId || !isUUID(staffId) || !isUUID(branchId)) {
+      return false;
+    }
     const result = await this.db
       .select({ id: staffAssignments.id })
       .from(staffAssignments)
@@ -142,6 +164,7 @@ export class DrizzleWaiterRepository {
     return result.length > 0;
   }
 
+
   // ── Waiter Table Assignments ────────────────────────────────────────
 
   async assignTable(data: {
@@ -155,26 +178,17 @@ export class DrizzleWaiterRepository {
     const start = data.sessionStart ?? new Date();
     const end = data.sessionEnd ?? new Date(Date.now() + 8 * 60 * 60 * 1000); // 8-hour shift default
 
-    // Validate no active assignment overlaps for this table in this branch
-    const overlapping = await this.db
-      .select({ id: waiterTableAssignments.id })
-      .from(waiterTableAssignments)
+    // Deactivate previous active assignment for this table so reassignment succeeds seamlessly
+    await this.db
+      .update(waiterTableAssignments)
+      .set({ isActive: false, updatedAt: new Date() })
       .where(
         and(
           eq(waiterTableAssignments.tableId, data.tableId),
           eq(waiterTableAssignments.branchId, data.branchId),
           eq(waiterTableAssignments.isActive, true),
-          lte(waiterTableAssignments.sessionStart, end),
-          gte(waiterTableAssignments.sessionEnd, start),
         ),
-      )
-      .limit(1);
-
-    if (overlapping.length > 0) {
-      throw new BadRequestException(
-        'Table is already assigned to an active waiter for this shift window',
       );
-    }
 
     const [result] = await this.db
       .insert(waiterTableAssignments)
@@ -189,7 +203,7 @@ export class DrizzleWaiterRepository {
       })
       .returning();
 
-    if (!result) throw new Error('Failed to assign table to waiter');
+    if (!result) throw new InternalOperationException('Failed to assign table to waiter');
 
     return {
       id: result.id,
@@ -209,7 +223,11 @@ export class DrizzleWaiterRepository {
     branchId: string,
     additionalId?: string,
   ): Promise<any[]> {
-    const rows = await this.db
+    if (!branchId || !isUUID(branchId)) {
+      return [];
+    }
+
+    const qb = new DrizzleQueryBuilder<any>(this.db, waiterTableAssignments)
       .select({
         id: waiterTableAssignments.id,
         branchId: waiterTableAssignments.branchId,
@@ -224,27 +242,24 @@ export class DrizzleWaiterRepository {
         serviceStatus: tables.serviceStatus,
         shape: tables.shape,
       })
-      .from(waiterTableAssignments)
       .innerJoin(tables, eq(waiterTableAssignments.tableId, tables.id))
-      .where(
-        and(
-          or(
-            eq(waiterTableAssignments.waiterId, waiterId),
-            ...(additionalId ? [eq(waiterTableAssignments.waiterId, additionalId)] : []),
-          ),
-          eq(waiterTableAssignments.branchId, branchId),
-          eq(waiterTableAssignments.isActive, true),
-        ),
+      .filterExact({ branchId })
+      .softDelete({ column: waiterTableAssignments.isActive, activeValue: true })
+      .orWhere(
+        eq(waiterTableAssignments.waiterId, waiterId),
+        ...(additionalId ? [eq(waiterTableAssignments.waiterId, additionalId)] : []),
       );
+
+    const rows = await qb.executePlain();
 
     if (rows.length > 0) {
       return rows;
     }
 
-    const allTables = await this.db
-      .select()
-      .from(tables)
-      .where(eq(tables.branchId, branchId));
+    const fallbackQb = new DrizzleQueryBuilder<typeof tables>(this.db, tables)
+      .filterExact({ branchId });
+
+    const allTables = await fallbackQb.executePlain();
 
     return allTables.map((t) => ({
       id: t.id,
@@ -267,7 +282,11 @@ export class DrizzleWaiterRepository {
     tableId: string,
     branchId: string,
   ): Promise<boolean> {
+    if (!tableId || !branchId || !isUUID(tableId) || !isUUID(branchId)) {
+      return false;
+    }
     const profile = await this.findProfileByUserId(waiterId);
+
     const result = await this.db
       .select({ id: waiterTableAssignments.id })
       .from(waiterTableAssignments)

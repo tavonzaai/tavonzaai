@@ -247,10 +247,12 @@ function ShareQrContent() {
   };
 
   const handleProceedIndividualOrder = () => {
+    const lastId = typeof window !== 'undefined' ? (localStorage.getItem('tavonza_last_submitted_order_id') || '') : '';
+    const orderParam = lastId ? `&order=${encodeURIComponent(lastId)}` : '';
     router.push(
       `/orders/waiting?table=${encodeURIComponent(
         activeTable
-      )}&mode=individual&session=${encodeURIComponent(sessionCode)}`
+      )}&mode=individual&session=${encodeURIComponent(sessionCode)}${orderParam}`
     );
   };
 

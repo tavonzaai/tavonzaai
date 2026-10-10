@@ -1,13 +1,6 @@
 // ============================================================================
 // Waiter Controller — REST endpoints for waiter operations
 // ============================================================================
-//
-// All endpoints require:
-//   - JWT bearer token (role='waiter')
-//   - permissions checked at application service layer (table ownership scope)
-//
-// Swagger group: 'Waiter | Tables' / 'Waiter | Orders' / 'Waiter | Alerts'
-// ============================================================================
 
 import {
   Controller,
@@ -28,9 +21,7 @@ import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiCreatedResponse,
-  ApiNotFoundResponse,
-  ApiForbiddenResponse,
-  ApiBadRequestResponse,
+  ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
 import { WaiterService } from '../../application/services/waiter.service';
@@ -39,11 +30,13 @@ import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
 import { Permission } from '@tavonza/authorization';
+import { isUUID } from '@tavonza/shared';
 import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 import {
   AssignTableDto,
   CreateOrderOnBehalfDto,
   CreateAlertDto,
+  RejectOrderDto,
 } from './dto/waiter-request.dto';
 import {
   TableAssignmentDto,
@@ -53,6 +46,7 @@ import {
   CustomerAlertDto,
   WaiterMessageDto,
 } from './dto/waiter-response.dto';
+import { ApiStandardErrors } from '../../../../common/swagger';
 
 // ─── Waiter | Tables ──────────────────────────────────────────────────────────
 
@@ -69,15 +63,27 @@ export class WaiterTablesController {
    */
   @Get()
   @RequirePermissions(Permission.TABLES_READ)
-  @ApiOperation({ summary: '[Waiter] Get my assigned tables for today' })
-  @ApiOkResponse({ type: [TableAssignmentDto] })
-  @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiOperation({
+    summary: '[Waiter] Get my assigned tables for today',
+    description: 'Retrieves all dining tables assigned to the authenticated waiter for the active branch and shift.',
+  })
+  @ApiOkResponse({ type: [TableAssignmentDto], description: 'List of assigned tables' })
+  @ApiQuery({
+    name: 'branchId',
+    required: false,
+    type: String,
+    description: 'Branch UUID',
+    example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27',
+  })
+  @ApiStandardErrors(400, 401, 403, 500)
   async getMyTables(
     @CurrentUser() user: JwtPayload,
-    @Query('branchId') branchId: string,
+    @Query('branchId') qBranchId?: string,
   ): Promise<TableAssignmentDto[]> {
+    const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
     return this.waiterService.getMyTables(user.sub, branchId);
   }
+
 
   /**
    * POST /waiter/tables/assign
@@ -85,8 +91,12 @@ export class WaiterTablesController {
    */
   @Post('assign')
   @RequirePermissions(Permission.TABLES_UPDATE)
-  @ApiOperation({ summary: '[Manager] Assign a table to a waiter' })
-  @ApiCreatedResponse({ type: TableAssignmentDto })
+  @ApiOperation({
+    summary: '[Manager] Assign a table to a waiter',
+    description: 'Assigns a specific dining table to a waiter staff member for shift monitoring.',
+  })
+  @ApiCreatedResponse({ type: TableAssignmentDto, description: 'Table assignment created' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async assignTable(
     @CurrentUser() user: JwtPayload,
     @Body() dto: AssignTableDto,
@@ -110,13 +120,17 @@ export class WaiterOrdersController {
    */
   @Get()
   @RequirePermissions(Permission.ORDERS_READ)
-  @ApiOperation({ summary: '[Waiter] Get orders at my tables with search & filters' })
-  @ApiOkResponse({ type: [WaiterOrderSummaryDto] })
-  @ApiQuery({ name: 'branchId', required: false, type: String })
-  @ApiQuery({ name: 'scope', required: false, type: String })
-  @ApiQuery({ name: 'status', required: false, type: String })
-  @ApiQuery({ name: 'tableId', required: false, type: String })
-  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiOperation({
+    summary: '[Waiter] Get orders at my tables with search & filters',
+    description: 'Fetches orders placed across the waiter tables, with support for status filtering and text search.',
+  })
+  @ApiOkResponse({ type: [WaiterOrderSummaryDto], description: 'List of orders' })
+  @ApiQuery({ name: 'branchId', required: false, type: String, example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiQuery({ name: 'scope', required: false, type: String, example: 'my_tables' })
+  @ApiQuery({ name: 'status', required: false, type: String, example: 'SUBMITTED' })
+  @ApiQuery({ name: 'tableId', required: false, type: String, example: '5298804e-5847-4e5a-bdba-73a8f06d9ed2' })
+  @ApiQuery({ name: 'search', required: false, type: String, example: 'ORD-84' })
+  @ApiStandardErrors(400, 401, 403, 500)
   async getOrders(
     @CurrentUser() user: JwtPayload,
     @Query('branchId') qBranchId?: string,
@@ -125,8 +139,8 @@ export class WaiterOrdersController {
     @Query('tableId') tableId?: string,
     @Query('search') search?: string,
   ): Promise<WaiterOrderSummaryDto[]> {
-    const branchId = user.branchId || qBranchId;
-    if (!branchId) throw new BadRequestException('Branch ID is required');
+    const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
+    if (!branchId) throw new BadRequestException('A valid branch UUID is required');
     return this.waiterService.getOrders(user.sub, branchId, {
       scope,
       status,
@@ -137,46 +151,59 @@ export class WaiterOrdersController {
 
   /**
    * GET /waiter/orders/pending
-   * Lists all SUBMITTED orders at waiter's assigned tables — the incoming queue.
    */
   @Get('pending')
   @RequirePermissions(Permission.ORDERS_READ)
-  @ApiOperation({ summary: '[Waiter] Get pending (unaccepted) orders at my tables' })
-  @ApiOkResponse({ type: [WaiterOrderSummaryDto] })
-  @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiOperation({
+    summary: '[Waiter] Get pending (unaccepted) orders at my tables',
+    description: 'Queue of submitted orders awaiting staff review and acceptance.',
+  })
+  @ApiOkResponse({ type: [WaiterOrderSummaryDto], description: 'List of pending orders' })
+  @ApiQuery({ name: 'branchId', required: false, type: String, example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiStandardErrors(400, 401, 403, 500)
   async getPendingOrders(
     @CurrentUser() user: JwtPayload,
-    @Query('branchId') branchId: string,
+    @Query('branchId') qBranchId?: string,
   ): Promise<WaiterOrderSummaryDto[]> {
+    const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
+    if (!branchId) throw new BadRequestException('A valid branch UUID is required');
     return this.waiterService.getPendingOrders(user.sub, branchId);
   }
 
   /**
    * GET /waiter/orders/active
-   * Lists accepted, in-kitchen, and ready-to-serve orders at waiter's tables.
    */
   @Get('active')
   @RequirePermissions(Permission.ORDERS_READ)
-  @ApiOperation({ summary: '[Waiter] Get active (accepted → in-kitchen → ready) orders at my tables' })
-  @ApiOkResponse({ type: [WaiterOrderSummaryDto] })
-  @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiOperation({
+    summary: '[Waiter] Get active orders at my tables',
+    description: 'Lists active orders in ACCEPTED, PREPARING, and READY states for live floor tracking.',
+  })
+  @ApiOkResponse({ type: [WaiterOrderSummaryDto], description: 'List of active orders' })
+  @ApiQuery({ name: 'branchId', required: false, type: String, example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiStandardErrors(400, 401, 403, 500)
   async getActiveOrders(
     @CurrentUser() user: JwtPayload,
-    @Query('branchId') branchId: string,
+    @Query('branchId') qBranchId?: string,
   ): Promise<WaiterOrderSummaryDto[]> {
+    const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
+    if (!branchId) throw new BadRequestException('A valid branch UUID is required');
     return this.waiterService.getActiveOrders(user.sub, branchId);
   }
 
+
   /**
    * GET /waiter/orders/:id
-   * Full order detail including line items.
    */
   @Get(':id')
   @RequirePermissions(Permission.ORDERS_READ)
-  @ApiOperation({ summary: '[Waiter] Get full order detail with items' })
-  @ApiOkResponse({ type: WaiterOrderDetailDto })
-  @ApiNotFoundResponse({ description: 'Order not found' })
-  @ApiForbiddenResponse({ description: 'Table not assigned to this waiter' })
+  @ApiOperation({
+    summary: '[Waiter] Get full order detail with items',
+    description: 'Returns comprehensive order breakdown including modifiers, status history, and totals.',
+  })
+  @ApiParam({ name: 'id', type: String, description: 'Order UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
+  @ApiOkResponse({ type: WaiterOrderDetailDto, description: 'Detailed order entity' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async getOrderDetail(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -186,15 +213,17 @@ export class WaiterOrdersController {
 
   /**
    * POST /waiter/orders/:id/accept
-   * Accept a SUBMITTED order → transitions to ACCEPTED → auto-sent to kitchen.
    */
   @Post(':id/accept')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(Permission.ORDERS_ACCEPT)
-  @ApiOperation({ summary: '[Waiter] Accept a customer order (moves to kitchen queue)' })
-  @ApiOkResponse({ type: WaiterMessageDto })
-  @ApiBadRequestResponse({ description: 'Order not in SUBMITTED status' })
-  @ApiForbiddenResponse({ description: 'Table not assigned to this waiter' })
+  @ApiOperation({
+    summary: '[Waiter] Accept a customer order',
+    description: 'Transitions SUBMITTED order to ACCEPTED and auto-dispatches line items to kitchen and bar stations.',
+  })
+  @ApiParam({ name: 'id', type: String, description: 'Order UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
+  @ApiOkResponse({ type: WaiterMessageDto, description: 'Order accepted' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async acceptOrder(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -205,18 +234,20 @@ export class WaiterOrdersController {
 
   /**
    * POST /waiter/orders/:id/reject
-   * Reject a SUBMITTED order with a reason.
    */
   @Post(':id/reject')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(Permission.ORDERS_REJECT)
-  @ApiOperation({ summary: '[Waiter] Reject a customer order with a reason' })
-  @ApiOkResponse({ type: WaiterMessageDto })
-  @ApiBadRequestResponse({ description: 'Order not in SUBMITTED status or missing reason' })
-  @ApiForbiddenResponse({ description: 'Table not assigned to this waiter' })
+  @ApiOperation({
+    summary: '[Waiter] Reject a customer order with a reason',
+    description: 'Rejects order, notifying the table customer with reason and restoring cart for re-selection.',
+  })
+  @ApiParam({ name: 'id', type: String, description: 'Order UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
+  @ApiOkResponse({ type: WaiterMessageDto, description: 'Order rejected' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async rejectOrder(
     @Param('id') id: string,
-    @Body() body: { reason: string; reasonCode?: any; rejectionReasonCode?: any },
+    @Body() body: RejectOrderDto,
     @CurrentUser() user: JwtPayload,
   ): Promise<WaiterMessageDto> {
     const reasonCode = body.reasonCode || body.rejectionReasonCode || 'OTHER';
@@ -229,15 +260,17 @@ export class WaiterOrdersController {
 
   /**
    * POST /waiter/orders/:id/serve
-   * Mark a READY order as SERVED. One-time, irreversible.
    */
   @Post(':id/serve')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(Permission.ORDERS_SERVE)
-  @ApiOperation({ summary: '[Waiter] Mark an order as served (READY → SERVED, one-time action)' })
-  @ApiOkResponse({ type: WaiterMessageDto })
-  @ApiBadRequestResponse({ description: 'Order not in READY status' })
-  @ApiForbiddenResponse({ description: 'Table not assigned to this waiter' })
+  @ApiOperation({
+    summary: '[Waiter] Mark an order as served',
+    description: 'Marks a READY order as SERVED once brought to the dining table.',
+  })
+  @ApiParam({ name: 'id', type: String, description: 'Order UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
+  @ApiOkResponse({ type: WaiterMessageDto, description: 'Order served' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async serveOrder(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -248,16 +281,15 @@ export class WaiterOrdersController {
 
   /**
    * POST /waiter/orders
-   * Waiter creates an order on behalf of a customer.
-   * If the customer email/phone doesn't exist, an account is auto-created (password=1234).
    */
   @Post()
   @RequirePermissions(Permission.ORDERS_CREATE)
   @ApiOperation({
-    summary: '[Waiter] Create order on behalf of customer (auto-creates account if needed)',
+    summary: '[Waiter] Create order on behalf of customer',
+    description: 'Allows waiter to punch in an order directly for a customer table, auto-creating a guest profile if needed.',
   })
-  @ApiCreatedResponse({ type: CreateOrderOnBehalfResponseDto })
-  @ApiForbiddenResponse({ description: 'Table not assigned to this waiter' })
+  @ApiCreatedResponse({ type: CreateOrderOnBehalfResponseDto, description: 'Order created on behalf of customer' })
+  @ApiStandardErrors(400, 401, 403, 500)
   async createOrderOnBehalf(
     @Body() dto: CreateOrderOnBehalfDto,
     @CurrentUser() user: JwtPayload,
@@ -275,15 +307,18 @@ export class WaiterAlertsController {
 
   /**
    * GET /waiter/alerts
-   * Returns all pending/acknowledged alerts at waiter's branch.
    */
   @Get()
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(Permission.ALERTS_READ)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: '[Waiter] Get all pending alerts at my branch' })
-  @ApiOkResponse({ type: [CustomerAlertDto] })
-  @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiOperation({
+    summary: '[Waiter] Get all pending alerts at my branch',
+    description: 'Lists all unhandled or active table call-waiter and assistance requests for the branch.',
+  })
+  @ApiOkResponse({ type: [CustomerAlertDto], description: 'List of alerts' })
+  @ApiQuery({ name: 'branchId', required: true, type: String, example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiStandardErrors(400, 401, 403, 500)
   async getMyAlerts(
     @CurrentUser() user: JwtPayload,
     @Query('branchId') branchId: string,
@@ -293,16 +328,19 @@ export class WaiterAlertsController {
 
   /**
    * PATCH /waiter/alerts/:id/acknowledge
-   * Waiter acknowledges they've seen the alert.
    */
   @Patch(':id/acknowledge')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(Permission.ALERTS_ACKNOWLEDGE)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: '[Waiter] Acknowledge a customer alert' })
-  @ApiOkResponse({ type: WaiterMessageDto })
-  @ApiNotFoundResponse({ description: 'Alert not found' })
+  @ApiOperation({
+    summary: '[Waiter] Acknowledge a customer alert',
+    description: 'Marks an alert as acknowledged, indicating a waiter is responding to the table.',
+  })
+  @ApiParam({ name: 'id', type: String, description: 'Alert UUID', example: 'aa112233-4455-6677-8899-00aabbccddee' })
+  @ApiOkResponse({ type: WaiterMessageDto, description: 'Alert acknowledged' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async acknowledgeAlert(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -313,16 +351,19 @@ export class WaiterAlertsController {
 
   /**
    * PATCH /waiter/alerts/:id/resolve
-   * Waiter marks the alert as resolved (handled).
    */
   @Patch(':id/resolve')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(Permission.ALERTS_RESOLVE)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: '[Waiter] Resolve a customer alert' })
-  @ApiOkResponse({ type: WaiterMessageDto })
-  @ApiNotFoundResponse({ description: 'Alert not found' })
+  @ApiOperation({
+    summary: '[Waiter] Resolve a customer alert',
+    description: 'Marks the customer assistance request as completed and resolved.',
+  })
+  @ApiParam({ name: 'id', type: String, description: 'Alert UUID', example: 'aa112233-4455-6677-8899-00aabbccddee' })
+  @ApiOkResponse({ type: WaiterMessageDto, description: 'Alert resolved' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async resolveAlert(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -341,14 +382,15 @@ export class CustomerAlertsController {
 
   /**
    * POST /alerts
-   * Customer sends an alert from their session (call_waiter, request_bill, etc.)
-   * No auth required — customer session context is provided in the body.
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: '[Customer] Send an alert to your waiter (call_waiter, request_bill, etc.)' })
-  @ApiCreatedResponse({ type: CustomerAlertDto })
-  @ApiBadRequestResponse({ description: 'Invalid alert type or missing message for custom type' })
+  @ApiOperation({
+    summary: '[Customer] Send an alert to your waiter',
+    description: 'Submits an alert (call_waiter, request_bill, need_help, or custom) to floor staff.',
+  })
+  @ApiCreatedResponse({ type: CustomerAlertDto, description: 'Alert dispatched' })
+  @ApiStandardErrors(400, 404, 500)
   async createAlert(@Body() dto: CreateAlertDto): Promise<CustomerAlertDto> {
     return this.waiterService.createAlert(dto);
   }

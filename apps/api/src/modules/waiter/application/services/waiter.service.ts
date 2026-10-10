@@ -21,6 +21,7 @@ import { DrizzleWaiterRepository } from '../../infrastructure/persistence/drizzl
 import { DrizzleWaiterOrderRepository } from '../../infrastructure/persistence/drizzle-waiter-order.repository';
 import { DrizzleAlertRepository } from '../../infrastructure/persistence/drizzle-alert.repository';
 import { DrizzleUserRepository } from '../../../identity/infrastructure/persistence/drizzle-user.repository';
+import { isUUID } from '@tavonza/shared';
 import {
   canWaiterTransition,
   ORDER_STATUS,
@@ -49,24 +50,55 @@ export class WaiterService {
 
   // ── Slice 2: Assigned Tables ────────────────────────────────────────
 
-  async getMyTables(waiterId: string, branchId: string): Promise<any[]> {
+  async getMyTables(waiterId: string, branchId?: string): Promise<any[]> {
     const profile = await this.waiterRepo.findProfileByUserId(waiterId);
     if (!profile) throw new NotFoundException('Staff profile not found');
 
-    const isAssigned = await this.waiterRepo.isStaffAssignedToBranch(profile.id, branchId);
+    let resolvedBranchId = branchId;
+    if (!resolvedBranchId || !isUUID(resolvedBranchId)) {
+      const branches = await this.waiterRepo.findActiveBranchesForStaff(profile.id);
+      const firstBranchId = branches?.[0]?.branchId;
+      if (firstBranchId && isUUID(firstBranchId)) {
+        resolvedBranchId = firstBranchId;
+      } else {
+        throw new BadRequestException('A valid branch UUID is required');
+      }
+    }
+
+
+    const isAssigned = await this.waiterRepo.isStaffAssignedToBranch(profile.id, resolvedBranchId);
     if (!isAssigned) throw new ForbiddenException('You are not assigned to this branch');
 
-    return this.waiterRepo.findActiveTableAssignmentsForWaiter(waiterId, branchId, profile.id);
+    return this.waiterRepo.findActiveTableAssignmentsForWaiter(waiterId, resolvedBranchId, profile.id);
   }
 
+
   async assignTable(dto: AssignTableDto, assignedById: string): Promise<any> {
-    const start = new Date();
-    const end = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const start = dto.sessionStart ? new Date(dto.sessionStart) : new Date();
+    const end = dto.sessionEnd ? new Date(dto.sessionEnd) : new Date(Date.now() + 8 * 60 * 60 * 1000);
+
+    // Resolve waiter staff ID (dto.waiterId could be staff.id or users.id)
+    let waiterStaffId = dto.waiterId;
+    const waiterByUserId = await this.waiterRepo.findProfileByUserId(dto.waiterId);
+    if (waiterByUserId) {
+      waiterStaffId = waiterByUserId.id;
+    }
+
+    // Resolve assigner staff ID (assignedById from JWT is user.sub)
+    let assignerStaffId = assignedById;
+    const assignerProfile = await this.waiterRepo.findProfileByUserId(assignedById);
+    if (assignerProfile) {
+      assignerStaffId = assignerProfile.id;
+    } else {
+      const created = await this.waiterRepo.createProfile({ userId: assignedById, jobTitle: 'MANAGER' });
+      assignerStaffId = created.id;
+    }
+
     return this.waiterRepo.assignTable({
       branchId: dto.branchId,
-      waiterId: dto.waiterId,
+      waiterId: waiterStaffId,
       tableId: dto.tableId,
-      assignedById,
+      assignedById: assignerStaffId,
       sessionStart: start,
       sessionEnd: end,
     });

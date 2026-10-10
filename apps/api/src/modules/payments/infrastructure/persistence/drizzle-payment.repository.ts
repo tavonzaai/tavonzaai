@@ -7,12 +7,17 @@ import {
   paymentAllocations,
   discounts,
 } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import type { IPaymentRepository } from '../../domain/repositories/payment-repository.interface';
 import type {
   PaymentEntity,
   PaymentAllocationEntity,
   DiscountEntity,
 } from '../../domain/entities/payment.entity';
+import {
+  ResourceNotFoundException,
+  InternalOperationException,
+} from '../../../../common/errors/app.exception';
 
 @Injectable()
 export class DrizzlePaymentRepository implements IPaymentRepository {
@@ -40,7 +45,7 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
       })
       .returning();
 
-    if (!created) throw new Error('Failed to create payment');
+    if (!created) throw new InternalOperationException('Failed to create payment record');
     return this.mapPayment(created);
   }
 
@@ -55,20 +60,16 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
   }
 
   async findByOrderId(orderId: string): Promise<PaymentEntity[]> {
-    const rows = await this.db
-      .select()
-      .from(payments)
-      .where(eq(payments.orderId, orderId));
-
+    const qb = new DrizzleQueryBuilder<typeof payments>(this.db, payments)
+      .filterExact({ orderId });
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapPayment(r));
   }
 
   async findByTableSessionId(tableSessionId: string): Promise<PaymentEntity[]> {
-    const rows = await this.db
-      .select()
-      .from(payments)
-      .where(eq(payments.tableSessionId, tableSessionId));
-
+    const qb = new DrizzleQueryBuilder<typeof payments>(this.db, payments)
+      .filterExact({ tableSessionId });
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapPayment(r));
   }
 
@@ -96,7 +97,7 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
       .where(eq(payments.id, id))
       .returning();
 
-    if (!updated) throw new Error(`Payment ${id} not found`);
+    if (!updated) throw new ResourceNotFoundException('Payment', id);
     return this.mapPayment(updated);
   }
 
@@ -121,11 +122,9 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
   }
 
   async findAllocationsByPaymentId(paymentId: string): Promise<PaymentAllocationEntity[]> {
-    const rows = await this.db
-      .select()
-      .from(paymentAllocations)
-      .where(eq(paymentAllocations.paymentId, paymentId));
-
+    const qb = new DrizzleQueryBuilder<typeof paymentAllocations>(this.db, paymentAllocations)
+      .filterExact({ paymentId });
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapAllocation(r));
   }
 

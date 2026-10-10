@@ -19,24 +19,6 @@ export interface CashierUser {
   }>;
 }
 
-export const DEMO_CASHIER_USER: CashierUser = {
-  id: 'csh-101',
-  name: 'Nobin Mille',
-  email: 'cashier@tavonza.demo',
-  role: 'CASHIER',
-  station: 'Terminal #1 (Main Cashier)',
-  assignments: [
-    {
-      id: 'asg-1',
-      role: 'CASHIER',
-      branch: { id: 'br-1', name: 'Terminal #1 (Main Cashier)' },
-    },
-  ],
-};
-
-/**
- * Check if cashier session is currently active (STRICTLY COOKIES ONLY - NO LOCALSTORAGE)
- */
 export function isCashierAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
 
@@ -50,7 +32,7 @@ export function isCashierAuthenticated(): boolean {
 /**
  * Retrieve cached cashier profile from Cookies
  */
-export function getCashierProfile(): CashierUser {
+export function getCashierProfile(): CashierUser | null {
   const raw = getCookie(CASHIER_USER_KEY);
   if (raw) {
     try {
@@ -60,7 +42,7 @@ export function getCashierProfile(): CashierUser {
     }
   }
 
-  return DEMO_CASHIER_USER;
+  return null;
 }
 
 /**
@@ -68,15 +50,19 @@ export function getCashierProfile(): CashierUser {
  */
 export function loginCashierSession(customUser?: Partial<CashierUser>): CashierUser {
   const existingToken = getCookie(CASHIER_TOKEN_KEY) || getCookie('access_token');
-  // Keep existing JWT access token if set by rawAuthApi.login, otherwise generate demo token
   const token = (existingToken && !existingToken.startsWith('csh_tok_'))
     ? existingToken
     : `csh_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
   const user: CashierUser = {
-    ...DEMO_CASHIER_USER,
-    ...customUser,
+    id: customUser?.id || '',
+    name: customUser?.name || 'Cashier User',
+    email: customUser?.email || '',
+    role: customUser?.role || 'CASHIER',
+    station: customUser?.station || 'Main Cashier Terminal',
+    assignments: customUser?.assignments || [],
     shiftStartedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    ...customUser,
   };
 
   // Store strictly in Cookies (NO LOCALSTORAGE)

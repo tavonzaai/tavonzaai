@@ -1,5 +1,5 @@
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
-import * as schema from '@tavonza/database/src/schema';
+import { schema } from '@tavonza/database';
 
 // Export Zod schemas for all tables
 export const insertOrganizationSchema = createInsertSchema(schema.organizations);

@@ -28,6 +28,15 @@ export interface TableItem {
   capacity?: number;
   subtotal?: number;
   activeSessionId?: string | null;
+  qrCodeUrl?: string | null;
+  qrCodeToken?: string | null;
+  waiterId?: string;
+  assignedWaiter?: {
+    waiterId: string;
+    waiterName?: string;
+    sessionStart?: string;
+    sessionEnd?: string;
+  } | null;
 }
 
 export interface OrderDish {

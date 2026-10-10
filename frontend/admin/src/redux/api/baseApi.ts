@@ -68,14 +68,14 @@ export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
-      return 'http://localhost:5000';
+      return 'https://api.tavonza.com';
     }
     return 'https://api.tavonza.com';
   }
 
   // Server-side / Build-time default
   if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
-    return 'http://localhost:5000';
+    return 'https://api.tavonza.com';
   }
 
   return 'https://api.tavonza.com';
@@ -172,6 +172,12 @@ export async function baseApiFetch<T = any>(
   const rawJson: any = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      removeAuthToken();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    }
     let errorMsg = 'Request failed';
     if (rawJson?.message) {
       errorMsg = Array.isArray(rawJson.message) ? rawJson.message.join('. ') : rawJson.message;
@@ -207,3 +213,70 @@ export async function baseApiFetch<T = any>(
 
   return resData;
 }
+
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+
+export const rtkBaseApi = createApi({
+  reducerPath: 'api',
+  baseQuery: fetchBaseQuery({
+    baseUrl: getApiBaseUrl(),
+    prepareHeaders: (headers) => {
+      const token = getAuthToken();
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      return headers;
+    },
+  }),
+  tagTypes: [
+    'TABLE',
+    'ORDER',
+    'ORDER_ITEM',
+    'PAYMENT',
+    'NOTIFICATION',
+    'DASHBOARD',
+    'MENU',
+    'USER',
+    'ORGANIZATION',
+    'BRANCH',
+  ],
+  endpoints: () => ({}),
+});
+
+export const notificationsApi = rtkBaseApi.injectEndpoints({
+  endpoints: (builder) => ({
+    getNotifications: builder.query<any, { page?: number; limit?: number; isRead?: boolean } | void>({
+      query: (params) => ({
+        url: '/notifications',
+        params: params || undefined,
+      }),
+      providesTags: ['NOTIFICATION'],
+    }),
+    getUnreadCount: builder.query<{ unreadCount: number }, void>({
+      query: () => '/notifications/unread-count',
+      providesTags: ['NOTIFICATION'],
+    }),
+    markAsRead: builder.mutation<any, string>({
+      query: (id) => ({
+        url: `/notifications/${id}/read`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
+    markAllAsRead: builder.mutation<any, void>({
+      query: () => ({
+        url: '/notifications/mark-all-read',
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
+  }),
+});
+
+export const {
+  useGetNotificationsQuery,
+  useGetUnreadCountQuery,
+  useMarkAsReadMutation,
+  useMarkAllAsReadMutation,
+} = notificationsApi;
+

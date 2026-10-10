@@ -4,7 +4,7 @@ import argon2 from '/Users/anonymous/workspace/tavonzaai/apps/api/node_modules/a
 
 const { Pool } = pg;
 const DB_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/platform_dev?schema=public';
-const API_URL = 'http://localhost:3000';
+const API_URL = 'https://api.tavonza.com';
 
 async function main() {
   console.log('===============================================================');
