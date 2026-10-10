@@ -276,3 +276,170 @@ export class TableBillCalculationResponseDto {
   isFullyPaid!: boolean;
 }
 
+// ── Stripe & Offline Workflow DTOs ────────────────────────────────────
+
+export class CreateStripePaymentIntentDto {
+  @ApiPropertyOptional({ description: 'Order ID' })
+  @IsOptional()
+  @IsUUID()
+  orderId?: string;
+
+  @ApiPropertyOptional({ description: 'Table session ID' })
+  @IsOptional()
+  @IsUUID()
+  tableSessionId?: string;
+
+  @ApiPropertyOptional({ description: 'Payer guest session ID' })
+  @IsOptional()
+  @IsUUID()
+  payerGuestSessionId?: string;
+
+  @ApiPropertyOptional({ description: 'Tip amount', example: 5.0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  tipAmount?: number;
+
+  @ApiPropertyOptional({ description: 'Discount promo code', example: 'WELCOME10' })
+  @IsOptional()
+  @IsString()
+  discountCode?: string;
+}
+
+export class StripePaymentIntentResponseDto {
+  @ApiProperty({ description: 'Stripe client secret for Stripe Elements' })
+  clientSecret!: string;
+
+  @ApiProperty({ description: 'Stripe PaymentIntent ID' })
+  paymentIntentId!: string;
+
+  @ApiProperty({ description: 'Chargeable amount in currency units' })
+  amount!: number;
+
+  @ApiProperty({ description: 'ISO Currency code', example: 'USD' })
+  currency!: string;
+
+  @ApiProperty({ description: 'Stripe publishable key' })
+  publishableKey!: string;
+
+  @ApiPropertyOptional({ description: 'Associated order ID' })
+  orderId?: string | null;
+
+  @ApiPropertyOptional({ description: 'Associated table session ID' })
+  tableSessionId?: string | null;
+}
+
+export class VerifyStripePaymentDto {
+  @ApiProperty({ description: 'Stripe PaymentIntent ID to verify' })
+  @IsString()
+  paymentIntentId!: string;
+}
+
+export class RequestOfflinePaymentDto {
+  @ApiPropertyOptional({ description: 'Order ID' })
+  @IsOptional()
+  @IsUUID()
+  orderId?: string;
+
+  @ApiPropertyOptional({ description: 'Table session ID' })
+  @IsOptional()
+  @IsUUID()
+  tableSessionId?: string;
+
+  @ApiPropertyOptional({ description: 'Payer guest session ID' })
+  @IsOptional()
+  @IsUUID()
+  payerGuestSessionId?: string;
+
+  @ApiProperty({ enum: ['CASH', 'CARD'], example: 'CASH', description: 'Offline payment method' })
+  @IsIn(['CASH', 'CARD'])
+  method!: 'CASH' | 'CARD';
+
+  @ApiPropertyOptional({ description: 'Tip amount', example: 2.0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  tipAmount?: number;
+
+  @ApiPropertyOptional({ description: 'Discount promo code' })
+  @IsOptional()
+  @IsString()
+  discountCode?: string;
+}
+
+export class ConfirmOfflinePaymentDto {
+  @ApiPropertyOptional({ description: 'Payment Request UUID (if passing in body)', example: '55667788-99aa-bbcc-ddee-112233445566' })
+  @IsOptional()
+  @IsUUID()
+  paymentId?: string;
+
+  @ApiPropertyOptional({ description: 'Received amount', example: 45.5 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  receivedAmount?: number;
+
+  @ApiPropertyOptional({ description: 'Tip amount', example: 5.0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  tipAmount?: number;
+}
+
+export class RejectOfflinePaymentDto {
+  @ApiPropertyOptional({ description: 'Payment Request UUID (if passing in body)', example: '55667788-99aa-bbcc-ddee-112233445566' })
+  @IsOptional()
+  @IsUUID()
+  paymentId?: string;
+
+  @ApiProperty({ description: 'Rejection reason', example: 'Customer cancelled offline payment request' })
+  @IsString()
+  reason!: string;
+}
+
+export class OfflinePaymentRequestItemDto {
+  @ApiProperty({ example: '55667788-99aa-bbcc-ddee-112233445566', description: 'Payment record ID' })
+  id!: string;
+
+  @ApiPropertyOptional({ example: '8877332f-4512-40bc-8012-d881e6e58003', description: 'Order ID' })
+  orderId?: string | null;
+
+  @ApiPropertyOptional({ example: 'ORD-10590', description: 'Order number' })
+  orderNumber?: string;
+
+  @ApiPropertyOptional({ example: '11223344-5566-7788-99aa-bbccddeeff00', description: 'Table ID' })
+  tableId?: string | null;
+
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label' })
+  tableLabel?: string;
+
+  @ApiPropertyOptional({ example: 'John Doe', description: 'Customer or guest name' })
+  customerName?: string;
+
+  @ApiPropertyOptional({ description: 'Table session ID' })
+  tableSessionId?: string | null;
+
+  @ApiPropertyOptional({ description: 'Payer guest session ID' })
+  payerGuestSessionId?: string | null;
+
+  @ApiProperty({ example: 45.5, description: 'Payable amount' })
+  amount!: number;
+
+  @ApiProperty({ example: 5.0, description: 'Tip amount' })
+  tipAmount!: number;
+
+  @ApiProperty({ example: 'CASH', enum: ['CASH', 'CARD'] })
+  method!: string;
+
+  @ApiPropertyOptional({ example: '55667788-99aa-bbcc-ddee-112233445566', description: 'Payment record ID' })
+  paymentId?: string;
+
+  @ApiProperty({ example: 'UNPAID', description: 'Current status' })
+  status!: string;
+
+  @ApiProperty({ example: 'REQ-172839281-4829', description: 'Reference' })
+  transactionRef!: string;
+
+  @ApiProperty({ description: 'Request timestamp' })
+  createdAt!: Date;
+}

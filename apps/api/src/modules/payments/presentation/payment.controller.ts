@@ -5,9 +5,12 @@ import {
   Body,
   Param,
   Query,
+  Headers,
+  Req,
   HttpCode,
   HttpStatus,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,9 +32,18 @@ import {
   PaymentDetailResponseDto,
   DiscountEvaluationResponseDto,
   TableBillCalculationResponseDto,
+  CreateStripePaymentIntentDto,
+  StripePaymentIntentResponseDto,
+  VerifyStripePaymentDto,
+  RequestOfflinePaymentDto,
+  ConfirmOfflinePaymentDto,
+  RejectOfflinePaymentDto,
+  OfflinePaymentRequestItemDto,
 } from './http/dto/payment.dto';
 import { ApiStandardErrors } from '../../../common/swagger';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import type { JwtPayload } from '../../identity/infrastructure/adapters/jwt.strategy';
 
 @ApiTags('Payments & Billing')
 @Controller('payments')
@@ -97,6 +109,166 @@ export class PaymentController {
   async validateDiscount(@Body() dto: ApplyDiscountDto): Promise<DiscountEvaluationResponseDto> {
     return this.paymentService.applyDiscount(dto);
   }
+
+  // ── Stripe Online Payment Flow ───────────────────────────────────────
+
+  @Post('stripe/create-intent')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: '[Customer] Create Stripe PaymentIntent',
+    description: 'Calculates authoritative order/session balance and generates a Stripe client secret for Stripe Elements.',
+  })
+  @ApiCreatedResponse({ type: StripePaymentIntentResponseDto, description: 'Stripe PaymentIntent generated' })
+  @ApiStandardErrors(400, 404, 500)
+  async createStripePaymentIntent(
+    @Body() dto: CreateStripePaymentIntentDto,
+  ): Promise<StripePaymentIntentResponseDto> {
+    return this.paymentService.createStripePaymentIntent(dto);
+  }
+
+  @Post('stripe/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: '[Customer] Authoritatively verify Stripe PaymentIntent',
+    description: 'Queries Stripe API to confirm PaymentIntent status and updates payment and order records.',
+  })
+  @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment verified and settled' })
+  @ApiStandardErrors(400, 404, 500)
+  async verifyStripePayment(
+    @Body() dto: VerifyStripePaymentDto,
+  ): Promise<any> {
+    return this.paymentService.verifyStripePayment(dto.paymentIntentId);
+  }
+
+  @Post('stripe/webhook')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: '[Stripe] Webhook event listener',
+    description: 'Receives signed webhook events from Stripe (e.g. payment_intent.succeeded) and performs authoritative settlement.',
+  })
+  async handleStripeWebhook(
+    @Req() req: any,
+    @Headers('stripe-signature') signature: string,
+  ): Promise<{ received: boolean; processed?: boolean }> {
+    const rawBody = req.rawBody || req.body;
+    return this.paymentService.handleStripeWebhook(rawBody, signature || '');
+  }
+
+  // ── Offline Cashier Payment Flow ─────────────────────────────────────
+
+  @Post('request-offline')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: '[Customer/Waiter] Request offline payment (Cash or Card)',
+    description: 'Registers an offline payment request for the cashier, transitions session to BILL_REQUESTED, and emits real-time alert.',
+  })
+  @ApiCreatedResponse({ type: PaymentRecordResponseDto, description: 'Offline payment request registered' })
+  @ApiStandardErrors(400, 404, 500)
+  async requestOfflinePayment(
+    @Body() dto: RequestOfflinePaymentDto,
+  ): Promise<any> {
+    return this.paymentService.requestOfflinePayment(dto);
+  }
+
+  @Get('offline/requests')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Cashier] Get pending offline payment requests',
+    description: "Returns all UNPAID offline cash/card payment requests for the staff member's branch.",
+  })
+  @ApiQuery({ name: 'branchId', required: false, type: String, description: 'Branch UUID' })
+  @ApiOkResponse({ type: [OfflinePaymentRequestItemDto], description: 'Pending offline payment requests' })
+  @ApiStandardErrors(400, 401, 500)
+  async getOfflinePaymentRequests(
+    @CurrentUser() user: JwtPayload,
+    @Query('branchId') branchId?: string,
+  ): Promise<OfflinePaymentRequestItemDto[]> {
+    const targetBranchId = branchId || (user?.branchId ? user.branchId : undefined);
+    return this.paymentService.getOfflinePaymentRequests(targetBranchId);
+  }
+
+  @Post('confirm-offline')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Cashier] Confirm offline payment received (body paymentId)',
+    description: 'Cashier authoritatively confirms physical cash receipt or in-person card terminal transaction.',
+  })
+  @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment marked PAID' })
+  @ApiStandardErrors(400, 401, 404, 500)
+  async confirmOfflinePaymentBody(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: ConfirmOfflinePaymentDto,
+  ): Promise<any> {
+    const id = dto.paymentId;
+    if (!id) {
+      throw new BadRequestException('paymentId is required in body');
+    }
+    return this.paymentService.confirmOfflinePayment(id, user?.sub || '', dto);
+  }
+
+  @Post('offline/:id/confirm')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Cashier] Confirm offline payment received (param ID)',
+    description: 'Cashier authoritatively confirms physical cash receipt or in-person card terminal transaction.',
+  })
+  @ApiParam({ name: 'id', type: String, description: 'Payment Request UUID' })
+  @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment marked PAID' })
+  @ApiStandardErrors(400, 401, 404, 500)
+  async confirmOfflinePayment(
+    @Param('id') paymentId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: ConfirmOfflinePaymentDto,
+  ): Promise<any> {
+    return this.paymentService.confirmOfflinePayment(paymentId, user?.sub || '', dto);
+  }
+
+  @Post('reject-offline')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Cashier] Reject offline payment request (body paymentId)',
+    description: 'Cashier rejects or cancels an offline payment request, returning table session to ACTIVE status.',
+  })
+  @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment marked FAILED' })
+  @ApiStandardErrors(400, 401, 404, 500)
+  async rejectOfflinePaymentBody(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: RejectOfflinePaymentDto,
+  ): Promise<any> {
+    const id = dto.paymentId;
+    if (!id) {
+      throw new BadRequestException('paymentId is required in body');
+    }
+    return this.paymentService.rejectOfflinePayment(id, user?.sub || '', dto);
+  }
+
+  @Post('offline/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Cashier] Reject offline payment request (param ID)',
+    description: 'Cashier rejects or cancels an offline payment request, returning table session to ACTIVE status.',
+  })
+  @ApiParam({ name: 'id', type: String, description: 'Payment Request UUID' })
+  @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment marked FAILED' })
+  @ApiStandardErrors(400, 401, 404, 500)
+  async rejectOfflinePayment(
+    @Param('id') paymentId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: RejectOfflinePaymentDto,
+  ): Promise<any> {
+    return this.paymentService.rejectOfflinePayment(paymentId, user?.sub || '', dto);
+  }
+
+  // ── Existing Bill & Session Endpoints ────────────────────────────────
 
   @Post(':id/refund')
   @HttpCode(HttpStatus.OK)

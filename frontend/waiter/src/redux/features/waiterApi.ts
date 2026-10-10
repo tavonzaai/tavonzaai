@@ -410,6 +410,19 @@ export const waiterService = {
     });
     return (res as any)?.data || res;
   },
+
+  requestOfflinePayment: async (payload: {
+    orderId: string;
+    tableSessionId?: string;
+    method: 'CASH' | 'CARD';
+    notes?: string;
+  }): Promise<{ success: boolean; paymentId: string; status: string; message: string }> => {
+    const res = await baseApiFetch<{ success: boolean; paymentId: string; status: string; message: string }>('/payments/request-offline', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
 };
 
 export const fetchWaiterTables = createAsyncThunk<WaiterTableAssignment[], string, { rejectValue: string }>(

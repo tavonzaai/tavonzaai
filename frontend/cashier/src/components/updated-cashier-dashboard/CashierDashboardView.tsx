@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import CashierSidebar from "./Sidebar";
 import ProfileView from "./ProfileView";
 import { CashierOrder, BillQueueItem } from "./types";
-import { cashierService, getActiveBranchId } from "@/redux/features/cashierApi";
+import { cashierService, getActiveBranchId, OfflinePaymentRequestItem } from "@/redux/features/cashierApi";
 import { useAppSelector } from "@/redux/store";
 import {
   Search,
@@ -102,16 +102,22 @@ export default function CashierDashboardView({
   const [customerName, setCustomerName] = useState<string>("Walk-in Guest");
   const [customerPhone, setCustomerPhone] = useState<string>("");
   const [customerEmail, setCustomerEmail] = useState<string>("");
+  const [offlineRequests, setOfflineRequests] = useState<OfflinePaymentRequestItem[]>([]);
 
   useEffect(() => {
     let mounted = true;
     const loadCashierData = async () => {
       try {
         const branchId = getActiveBranchId();
-        const [rawOrders, rawMenu] = await Promise.all([
+        const [rawOrders, rawMenu, rawRequests] = await Promise.all([
           cashierService.getOrders(branchId),
           cashierService.getMenuItems(branchId),
+          cashierService.getOfflinePaymentRequests(branchId).catch(() => []),
         ]);
+
+        if (mounted && Array.isArray(rawRequests)) {
+          setOfflineRequests(rawRequests);
+        }
 
         if (mounted && Array.isArray(rawMenu)) {
           setMenuItems(
@@ -281,19 +287,29 @@ export default function CashierDashboardView({
   const handleConfirmCashPaid = async (orderId: string) => {
     try {
       const targetOrd = orders.find((o) => o.id === orderId);
-      if (targetOrd) {
-        await cashierService
-          .processPayment({
-            orderId: targetOrd.id,
-            scope: "FULL_ORDER",
-            amount: targetOrd.totalAmount,
-            method: "CASH",
-          })
-          .catch((e) => {
-            console.warn("Backend confirm cash payment warning:", e);
-          });
+      if (!targetOrd) {
+        toast.error("Order not found");
+        return;
       }
+
+      // Check if an offline payment request exists for this order
+      const matchingReq = offlineRequests.find((r) => r.orderId === orderId);
+      if (matchingReq) {
+        await cashierService.confirmOfflinePayment(matchingReq.id, {
+          receivedAmount: targetOrd.totalAmount,
+        });
+      } else {
+        await cashierService.processPayment({
+          orderId: targetOrd.id,
+          scope: "FULL_ORDER",
+          amount: targetOrd.totalAmount,
+          method: "CASH",
+        });
+      }
+
       toast.success("Cash payment confirmed and recorded!");
+
+      // Authoritative state update
       setOrders((prev) =>
         prev.map((ord) => {
           if (ord.id === orderId) {
