@@ -32,6 +32,8 @@ import {
   Printer,
 } from "lucide-react";
 import { toast } from "sonner";
+import AskAiModal from "./AskAiModal";
+import DraggableAiButton from "../common/DraggableAiButton";
 
 export interface CashierDashboardViewProps {
   initialNav?: string;
@@ -65,6 +67,7 @@ export default function CashierDashboardView({
 
   const [activeNav, setActiveNav] = useState<string>(() => getNavFromPath());
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+  const [isAskAiOpen, setIsAskAiOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (initialNav) {
@@ -1631,6 +1634,16 @@ export default function CashierDashboardView({
       </div>
 
       {modalOverlays}
+
+      {/* Draggable Floating Ask AI Assistant Button */}
+      <DraggableAiButton
+        isOpen={isAskAiOpen}
+        onToggle={() => setIsAskAiOpen((prev) => !prev)}
+        storageKey="updated_cashier_ask_ai_pos"
+      />
+
+      {/* Ask AI Assistant Floating Chat Modal */}
+      <AskAiModal isOpen={isAskAiOpen} onClose={() => setIsAskAiOpen(false)} />
     </div>
   );
 }

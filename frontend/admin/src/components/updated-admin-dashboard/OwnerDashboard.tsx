@@ -37,6 +37,7 @@ import RestaurantsView from './restaurants/RestaurantsView';
 import { INITIAL_RESTAURANTS } from './restaurants/restaurantsData';
 import { RestaurantBranch } from './restaurants/types';
 import AskAiModal from '../new-admin-dashboard/modals/AskAiModal';
+import DraggableAiButton from '../common/DraggableAiButton';
 
 export interface OwnerDashboardProps {
   initialTab?: string;
@@ -739,16 +740,12 @@ export default function OwnerDashboard({
         </main>
       </div>
 
-      {/* Floating Ask AI Assistant Button */}
-      <button
-        type="button"
-        onClick={() => setIsAskAiOpen((prev) => !prev)}
-        className="fixed bottom-7 right-8 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-neutral-950 font-semibold text-xs sm:text-sm rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-yellow-300/60 flex items-center gap-2 cursor-pointer transition-all duration-200 z-50 font-sans group hover:shadow-yellow-400/20"
-        aria-label={isAskAiOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
-      >
-        <Sparkles className="w-4 h-4 text-black group-hover:rotate-12 transition-transform duration-200" />
-        <span>{isAskAiOpen ? 'Close AI' : 'Ask AI'}</span>
-      </button>
+      {/* Draggable Floating Ask AI Assistant Button */}
+      <DraggableAiButton
+        isOpen={isAskAiOpen}
+        onToggle={() => setIsAskAiOpen((prev) => !prev)}
+        storageKey="owner_admin_ask_ai_pos"
+      />
 
       {/* Ask AI Assistant Floating Popup */}
       <AskAiModal isOpen={isAskAiOpen} onClose={() => setIsAskAiOpen(false)} />

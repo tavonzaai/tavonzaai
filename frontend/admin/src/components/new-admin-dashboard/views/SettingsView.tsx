@@ -38,7 +38,7 @@ import {
   verifyOtpThunk,
   resetPasswordThunk,
   resendOtpThunk,
-  changePasswordThunk,
+  changePassword,
   logoutUser,
 } from '@/redux/features/authApi';
 import { updateMe } from '@/redux/features/userApi';
@@ -249,7 +249,7 @@ export default function SettingsView() {
     setIsDirectChangingPass(true);
     try {
       const res = await dispatch(
-        changePasswordThunk({
+        changePassword({
           oldPassword: currentPassword,
           newPassword: directNewPassword,
           email: adminProfile.email,
@@ -257,7 +257,7 @@ export default function SettingsView() {
       );
       setIsDirectChangingPass(false);
 
-      if (changePasswordThunk.fulfilled.match(res)) {
+      if (changePassword.fulfilled.match(res)) {
         toast.success((res.payload as string) || 'Password updated successfully!');
         setCurrentPassword('');
         setDirectNewPassword('');

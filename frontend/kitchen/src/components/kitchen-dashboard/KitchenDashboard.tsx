@@ -19,6 +19,7 @@ import {
   KitchenPerformanceSection,
   AskKitchenAIModal,
 } from './dashboard';
+import DraggableAiButton from '../common/DraggableAiButton';
 import KitchenQueueView from './kitchen-queue/KitchenQueueView';
 import ActiveOrdersView from './active-orders/ActiveOrdersView';
 import KitchenStationsView from './stations/KitchenStationsView';
@@ -224,15 +225,14 @@ export default function KitchenDashboard({ initialNav = 'Dashboard' }: KitchenDa
         </main>
       </div>
 
-      {/* 3. Floating "Ask Tavonza AI" Button (Bottom Right) */}
-      <button
-        type="button"
-        onClick={() => setIsAIModalOpen(true)}
-        className="fixed bottom-6 right-6 z-40 h-11 px-4 bg-yellow-500 hover:bg-yellow-400 text-white rounded-xl shadow-[0px_4px_12px_rgba(255,185,0,0.50)] outline outline-1 outline-offset-[-1px] outline-white flex items-center gap-2 font-bold text-sm tracking-tight transition-transform transform hover:scale-105 active:scale-95 cursor-pointer"
-      >
-        <Sparkles className="w-4 h-4 text-white" />
-        <span>Ask Tavonza AI</span>
-      </button>
+      {/* 3. Draggable Floating "Ask AI" Button (Drag & drop anywhere) */}
+      <DraggableAiButton
+        isOpen={isAIModalOpen}
+        onToggle={() => setIsAIModalOpen((prev) => !prev)}
+        defaultBottom={24}
+        defaultRight={24}
+        storageKey="kitchen_kds_ask_ai_pos"
+      />
 
       {/* 4. Interactive AI Chat Modal */}
       <AskKitchenAIModal

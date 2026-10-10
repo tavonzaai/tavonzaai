@@ -19,8 +19,7 @@ import {
   PaymentInsightsSection,
   CustomerFeedbackSection,
 } from './dashboard';
-import { Sparkles, X, Send } from 'lucide-react';
-import { toast } from 'sonner';
+import { Sparkles } from 'lucide-react';
 import POSView from './pos/POSView';
 import OrdersView from './orders/OrdersView';
 import PaymentsView from './payments/PaymentsView';
@@ -31,6 +30,8 @@ import { ShiftReportView } from './shift-report/ShiftReportView';
 import { AIInsightsView } from './ai-insights/AIInsightsView';
 import { SettingsView } from './settings/SettingsView';
 import CashierDashboardView from '../updated-cashier-dashboard/CashierDashboardView';
+import AskAiModal from '../updated-cashier-dashboard/AskAiModal';
+import DraggableAiButton from '../common/DraggableAiButton';
 import { navToRoute, routeToNav } from './routes';
 
 export interface CashierDashboardProps {
@@ -58,7 +59,6 @@ export default function CashierDashboard({ initialNav = 'Dashboard' }: CashierDa
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
 
   // Sync active navigation whenever pathname changes
   useEffect(() => {
@@ -81,13 +81,6 @@ export default function CashierDashboard({ initialNav = 'Dashboard' }: CashierDa
     setActiveNav(nav);
     const targetRoute = navToRoute[nav] || `/cashier-dashboard/${nav.toLowerCase().replace(/\s+/g, '-')}`;
     router.push(targetRoute);
-  };
-
-  const handleSendAiPrompt = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!aiPrompt.trim()) return;
-    toast.success(`Tavonza AI: Analyzing checkout operations for "${aiPrompt}"...`);
-    setAiPrompt('');
   };
 
   return (
@@ -215,52 +208,15 @@ export default function CashierDashboard({ initialNav = 'Dashboard' }: CashierDa
         </main>
       </div>
 
-      {/* AI Copilot Quick Modal */}
-      {isAIModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 font-['Inter']">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-amber-400" />
-                <h3 className="text-lg font-bold text-white font-['Inter']">
-                  Ask Tavonza AI — Cashier Assistant
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAIModalOpen(false)}
-                className="text-zinc-400 hover:text-white p-1 rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* Draggable Floating Ask AI Assistant Button */}
+      <DraggableAiButton
+        isOpen={isAIModalOpen}
+        onToggle={() => setIsAIModalOpen((prev) => !prev)}
+        storageKey="cashier_pos_ask_ai_pos"
+      />
 
-            <div className="space-y-2 text-sm text-zinc-300 font-['Inter']">
-              <p className="p-3 bg-white/5 rounded-xl border border-white/5">
-                💡 Ask anything about checkout rush forecasts, payment failure recovery, split bills, or promotional upsells.
-              </p>
-            </div>
-
-            <form onSubmit={handleSendAiPrompt} className="flex gap-2">
-              <input
-                type="text"
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="Ask Tavonza AI (e.g., 'How to handle failed QR codes?')..."
-                className="flex-1 bg-black border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white placeholder:text-zinc-500 focus:outline-amber-500/50 font-['Inter']"
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-white font-semibold text-sm rounded-xl flex items-center gap-1 cursor-pointer font-['Inter'] transition-colors"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Send</span>
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Ask AI Assistant Floating Chat Modal */}
+      <AskAiModal isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} />
     </div>
     </AuthGuard>
   );

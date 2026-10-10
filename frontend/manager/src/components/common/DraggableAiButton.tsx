@@ -1,41 +1,33 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
-import CustomerAskAiModal from './CustomerAskAiModal';
 
-export interface DraggableAskAiProps {
-  /** Optional custom click callback (e.g. for modal ask AI query). Defaults to router.push('/jarvis') */
-  onClick?: () => void;
-  /** Initial distance from bottom in px (default: 24) */
+export interface DraggableAiButtonProps {
+  isOpen: boolean;
+  onToggle: () => void;
   defaultBottom?: number;
-  /** Initial distance from right in px (default: 24) */
   defaultRight?: number;
-  /** Additional custom classes */
-  className?: string;
-  /** Storage key to persist drag position across navigation */
   storageKey?: string;
-  /** Button label (default: 'Ask AI') */
   label?: string;
+  openLabel?: string;
+  className?: string;
 }
 
-export default function DraggableAskAi({
-  onClick,
-  defaultBottom = 24,
-  defaultRight = 24,
-  className = '',
-  storageKey = 'draggable_ask_ai_pos',
+export default function DraggableAiButton({
+  isOpen,
+  onToggle,
+  defaultBottom = 28,
+  defaultRight = 32,
+  storageKey = 'manager_ask_ai_pos',
   label = 'Ask AI',
-}: DraggableAskAiProps) {
-  const router = useRouter();
+  openLabel = 'Close AI',
+  className = '',
+}: DraggableAiButtonProps) {
   const btnRef = useRef<HTMLButtonElement | null>(null);
-
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Drag tracking refs
   const dragInfoRef = useRef({
     isDown: false,
     startX: 0,
@@ -47,10 +39,9 @@ export default function DraggableAskAi({
 
   const justDraggedRef = useRef(false);
 
-  // 1. Initial position setup & restore from sessionStorage if available
   useEffect(() => {
     const computeDefault = () => {
-      const btnW = btnRef.current?.offsetWidth || 115;
+      const btnW = btnRef.current?.offsetWidth || 120;
       const btnH = btnRef.current?.offsetHeight || 44;
       const x = Math.max(12, window.innerWidth - btnW - defaultRight);
       const y = Math.max(12, window.innerHeight - btnH - defaultBottom);
@@ -63,7 +54,7 @@ export default function DraggableAskAi({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-            const btnW = btnRef.current?.offsetWidth || 115;
+            const btnW = btnRef.current?.offsetWidth || 120;
             const btnH = btnRef.current?.offsetHeight || 44;
             const clampedX = Math.max(12, Math.min(parsed.x, window.innerWidth - btnW - 12));
             const clampedY = Math.max(12, Math.min(parsed.y, window.innerHeight - btnH - 12));
@@ -72,19 +63,18 @@ export default function DraggableAskAi({
           }
         }
       } catch {
-        // Ignore JSON error
+        // Ignore parse error
       }
 
       setPosition(computeDefault());
     }
   }, [defaultBottom, defaultRight, storageKey]);
 
-  // 2. Clamp on viewport resize (desktop resizing or mobile rotation)
   useEffect(() => {
     const handleResize = () => {
       setPosition((prev) => {
         if (!prev) return prev;
-        const btnW = btnRef.current?.offsetWidth || 115;
+        const btnW = btnRef.current?.offsetWidth || 120;
         const btnH = btnRef.current?.offsetHeight || 44;
         const clampedX = Math.max(12, Math.min(prev.x, window.innerWidth - btnW - 12));
         const clampedY = Math.max(12, Math.min(prev.y, window.innerHeight - btnH - 12));
@@ -96,9 +86,7 @@ export default function DraggableAskAi({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 3. Pointer move & up handlers attached to window while dragging
   const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    // Only primary button (left click) or touch
     if (e.button !== 0) return;
 
     const btn = btnRef.current;
@@ -118,11 +106,10 @@ export default function DraggableAskAi({
       hasMoved: false,
     };
 
-    // Try pointer capture on button
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
-      // Ignore if not supported
+      // Ignore
     }
 
     const onPointerMove = (moveEv: PointerEvent) => {
@@ -132,7 +119,6 @@ export default function DraggableAskAi({
       const deltaY = moveEv.clientY - dragInfoRef.current.startY;
       const dist = Math.hypot(deltaX, deltaY);
 
-      // Threshold to distinguish click vs drag (5px)
       if (dist > 5) {
         if (!dragInfoRef.current.hasMoved) {
           dragInfoRef.current.hasMoved = true;
@@ -140,14 +126,13 @@ export default function DraggableAskAi({
           setIsDragging(true);
         }
 
-        const btnW = btnRef.current?.offsetWidth || 115;
+        const btnW = btnRef.current?.offsetWidth || 120;
         const btnH = btnRef.current?.offsetHeight || 44;
         const minX = 12;
         const maxX = Math.max(minX, window.innerWidth - btnW - 12);
         const minY = 12;
         const maxY = Math.max(minY, window.innerHeight - btnH - 12);
 
-        // Allow movement in all directions: above (Y-), bottom (Y+), left (X-), right (X+)
         const targetX = Math.max(minX, Math.min(dragInfoRef.current.elemStartX + deltaX, maxX));
         const targetY = Math.max(minY, Math.min(dragInfoRef.current.elemStartY + deltaY, maxY));
 
@@ -173,13 +158,11 @@ export default function DraggableAskAi({
       window.removeEventListener('pointercancel', onPointerUp);
 
       if (hadMoved) {
-        // Prevent click trigger
         justDraggedRef.current = true;
         setTimeout(() => {
           justDraggedRef.current = false;
-        }, 120);
+        }, 150);
 
-        // Save position to sessionStorage
         setPosition((currentPos) => {
           if (currentPos && typeof window !== 'undefined') {
             try {
@@ -199,66 +182,50 @@ export default function DraggableAskAi({
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    // If it was just dragged, ignore click
     if (justDraggedRef.current || dragInfoRef.current.hasMoved) {
       e.preventDefault();
       e.stopPropagation();
       return;
     }
-
-    if (onClick) {
-      onClick();
-    } else {
-      setIsModalOpen((prev) => !prev);
-    }
+    onToggle();
   };
 
   return (
-    <>
-      <div
+    <div
+      style={{
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        transform: position
+          ? `translate3d(${position.x}px, ${position.y}px, 0)`
+          : undefined,
+        bottom: position ? undefined : `${defaultBottom}px`,
+        right: position ? undefined : `${defaultRight}px`,
+        zIndex: 9999,
+        touchAction: 'none',
+        userSelect: 'none',
+      }}
+      className="pointer-events-auto"
+    >
+      <button
+        ref={btnRef}
+        type="button"
+        onPointerDown={handlePointerDown}
+        onClick={handleClick}
+        aria-label={isOpen ? openLabel : label}
+        title="Drag anywhere on screen. Tap to toggle AI Assistant."
+        className={`px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-neutral-950 font-semibold text-xs sm:text-sm rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-yellow-300/60 flex items-center gap-2 select-none touch-none transition-all duration-200 group ${
+          isDragging
+            ? 'scale-105 shadow-[0px_16px_36px_rgba(250,204,21,0.65)] ring-2 ring-white/60 cursor-grabbing'
+            : 'hover:shadow-yellow-400/20 cursor-grab hover:scale-105'
+        } ${className}`}
         style={{
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          transform: position
-            ? `translate3d(${position.x}px, ${position.y}px, 0)`
-            : undefined,
-          bottom: position ? undefined : `${defaultBottom}px`,
-          right: position ? undefined : `${defaultRight}px`,
-          zIndex: 9999,
           touchAction: 'none',
-          userSelect: 'none',
         }}
-        className="pointer-events-auto"
       >
-        <button
-          ref={btnRef}
-          type="button"
-          onPointerDown={handlePointerDown}
-          onClick={handleClick}
-          aria-label="Ask AI assistant (drag anywhere on screen)"
-          title="Drag in any direction (up, down, left, right) to move. Tap to Ask AI."
-          className={`px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-400 text-neutral-950 text-sm font-semibold font-sans rounded-full border border-yellow-300/60 flex items-center gap-2 select-none touch-none ${
-            isDragging
-              ? 'scale-105 shadow-[0px_16px_36px_rgba(245,158,11,0.65)] ring-2 ring-white/50 cursor-grabbing'
-              : 'shadow-[0px_8px_24px_rgba(0,0,0,0.35)] hover:shadow-[0px_12px_28px_rgba(245,158,11,0.5)] hover:scale-105 cursor-grab active:scale-95 transition-transform transition-shadow duration-200'
-          } ${className}`}
-          style={{
-            touchAction: 'none',
-          }}
-        >
-          <Sparkles className="w-4 h-4 text-black fill-black shrink-0" />
-          <span className="font-semibold tracking-tight">
-            {isModalOpen ? 'Close AI' : label}
-          </span>
-        </button>
-      </div>
-
-      {/* Interactive AI Dining Concierge Floating Chat Modal */}
-      <CustomerAskAiModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
-    </>
+        <Sparkles className="w-4 h-4 text-black group-hover:rotate-12 transition-transform duration-200 shrink-0" />
+        <span className="font-semibold tracking-tight">{isOpen ? openLabel : label}</span>
+      </button>
+    </div>
   );
 }

@@ -394,6 +394,7 @@ export const changePassword = createAsyncThunk(
 );
 
 // Backward-compatibility aliases
+export const changePasswordThunk = changePassword;
 export const verifyOtp = verifyOtpThunk;
 export const resendOtp = resendOtpThunk;
 export const forgotPassword = forgotPasswordThunk;

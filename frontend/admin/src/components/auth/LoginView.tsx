@@ -163,8 +163,8 @@ export default function LoginView({
             disabled={isSubmitting}
             className="w-full h-12 bg-yellow-400 hover:bg-yellow-300 text-black text-sm font-semibold font-['Inter'] rounded-xl flex items-center justify-center gap-2 transition shadow-lg shadow-yellow-500/10 active:scale-[0.99] mt-2 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
           >
-            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isSubmitting ? 'Signing in…' : 'Log In to Console'}
+            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin text-black" />}
+            <span>{isSubmitting ? 'Logging in...' : 'Log In'}</span>
           </button>
         </form>
       </div>
