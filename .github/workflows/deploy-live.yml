@@ -258,7 +258,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
         include:
           - app: customer
@@ -389,12 +388,11 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --region ${{ env.AWS_REGION }} \
             --parameters "commands=[
-              \"docker system prune -af --volumes=false 2>/dev/null || true\",
               \"docker pull $IMAGE\",
               \"docker stop $CONTAINER 2>/dev/null || true\",
               \"docker rm $CONTAINER 2>/dev/null || true\",
               \"docker run -d --name $CONTAINER --restart always --log-opt max-size=20m --log-opt max-file=3 -e NODE_ENV=production -e PORT=$PORT -e NEXT_PUBLIC_API_URL=https://api.tavonza.com -e API_BASE_URL=https://api.tavonza.com -e NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com -p $PORT:$PORT $IMAGE\",
-              \"docker image prune -af 2>/dev/null || true\"
+              \"docker image prune -f 2>/dev/null || true\"
             ]" \
             --query "Command.CommandId" --output text)
 
