@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -73,6 +73,35 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
     return rows.map((r) => this.mapPayment(r));
   }
 
+  async findByTransactionRef(transactionRef: string): Promise<PaymentEntity | null> {
+    const [row] = await this.db
+      .select()
+      .from(payments)
+      .where(eq(payments.transactionRef, transactionRef))
+      .limit(1);
+
+    return row ? this.mapPayment(row) : null;
+  }
+
+  async findPendingByOrderOrSession(params: {
+    orderId?: string;
+    tableSessionId?: string;
+  }): Promise<PaymentEntity | null> {
+    if (!params.orderId && !params.tableSessionId) return null;
+
+    const condition = params.orderId
+      ? and(eq(payments.orderId, params.orderId), eq(payments.status, 'UNPAID'))
+      : and(eq(payments.tableSessionId, params.tableSessionId!), eq(payments.status, 'UNPAID'));
+
+    const [row] = await this.db
+      .select()
+      .from(payments)
+      .where(condition)
+      .limit(1);
+
+    return row ? this.mapPayment(row) : null;
+  }
+
   async updateStatus(
     id: string,
     status: PaymentEntity['status'],
@@ -80,6 +109,7 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
       transactionRef?: string;
       paidAt?: Date;
       settledById?: string;
+      collectedById?: string;
       refundRef?: string;
       refundAmount?: number;
     }
@@ -91,6 +121,7 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
         ...(extras?.transactionRef ? { transactionRef: extras.transactionRef } : {}),
         ...(extras?.paidAt ? { paidAt: extras.paidAt } : {}),
         ...(extras?.settledById ? { settledById: extras.settledById } : {}),
+        ...(extras?.collectedById ? { collectedById: extras.collectedById } : {}),
         ...(extras?.refundRef ? { refundRef: extras.refundRef, refundedAt: new Date() } : {}),
         ...(extras?.refundAmount !== undefined ? { refundAmount: extras.refundAmount } : {}),
       })

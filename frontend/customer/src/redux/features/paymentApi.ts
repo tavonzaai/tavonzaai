@@ -56,6 +56,33 @@ export interface CreateAlertPayload {
   message?: string;
 }
 
+export interface StripePaymentIntentPayload {
+  orderId?: string;
+  tableSessionId?: string;
+  payerGuestSessionId?: string;
+  tipAmount?: number;
+  discountCode?: string;
+}
+
+export interface StripePaymentIntentResponse {
+  clientSecret: string;
+  paymentIntentId: string;
+  amount: number;
+  currency: string;
+  publishableKey: string;
+  orderId?: string | null;
+  tableSessionId?: string | null;
+}
+
+export interface RequestOfflinePaymentPayload {
+  orderId?: string;
+  tableSessionId?: string;
+  payerGuestSessionId?: string;
+  method: 'CASH' | 'CARD';
+  tipAmount?: number;
+  discountCode?: string;
+}
+
 export const paymentService = {
   getPaymentOptions: async (branchId?: string): Promise<PaymentOptionsResponse> => {
     const url = branchId ? `/payments/options?branchId=${encodeURIComponent(branchId)}` : '/payments/options';
@@ -73,6 +100,30 @@ export const paymentService = {
 
   createSplitPayment: async (payload: CreateSplitPaymentPayload): Promise<{ payment: PaymentResponse; allocations: any[] }> => {
     const res = await baseApiFetch<{ payment: PaymentResponse; allocations: any[] }>('/payments/split', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  createStripePaymentIntent: async (payload: StripePaymentIntentPayload): Promise<StripePaymentIntentResponse> => {
+    const res = await baseApiFetch<StripePaymentIntentResponse>('/payments/stripe/create-intent', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  verifyStripePayment: async (paymentIntentId: string): Promise<PaymentResponse> => {
+    const res = await baseApiFetch<PaymentResponse>('/payments/stripe/verify', {
+      method: 'POST',
+      body: JSON.stringify({ paymentIntentId }),
+    });
+    return (res as any)?.data || res;
+  },
+
+  requestOfflinePayment: async (payload: RequestOfflinePaymentPayload): Promise<PaymentResponse> => {
+    const res = await baseApiFetch<PaymentResponse>('/payments/request-offline', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

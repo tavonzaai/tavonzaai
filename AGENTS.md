@@ -19,6 +19,7 @@ Before implementing any feature, bug fix, schema change, or endpoint, inspect th
 - [**`.agent/FLOWS.md`**](file:///home/euhan/projects/tavonzaai/.agent/FLOWS.md) — Detailed operational user and system workflows.
 - [**`.agent/REALTIME_AND_NOTIFICATIONS.md`**](file:///home/euhan/projects/tavonzaai/.agent/REALTIME_AND_NOTIFICATIONS.md) — Socket.IO Realtime Gateway, server room partitioning, RTK Query cache invalidation, and persistent notification subsystem.
 - [**`.agent/DEVOPS.md`**](file:///home/euhan/projects/tavonzaai/.agent/DEVOPS.md) — AWS ECS, RDS, SQS, S3, CloudFront infrastructure and deployment guidelines.
+- [**`.agent/STRIPE.md`**](file:///home/euhan/projects/tavonzaai/.agent/STRIPE.md) — Stripe PaymentIntents lifecycle, authoritative webhook events, HMAC signature verification, and idempotency.
 
 
 ---
