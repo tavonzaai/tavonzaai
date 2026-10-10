@@ -10,7 +10,9 @@ import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 import BottomNav from '@/components/dashboard/BottomNav';
 import JarvisChatView from '@/components/dashboard/JarvisChatView';
 import MenuPage from './menu/page';
- 
+
+// test comment
+
 function LandingPageContent() {
   const router = useRouter();
   const dispatch = useAppDispatch();

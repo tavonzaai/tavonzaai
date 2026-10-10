@@ -55,6 +55,7 @@ async function bootstrap() {
   });
 }
 
+// test file
 // Global safety net for unhandled asynchronous errors
 process.on('unhandledRejection', (reason: any) => {
   const logger = new AppLogger('Process');
