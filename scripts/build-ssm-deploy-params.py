@@ -13,9 +13,9 @@ import os
 import sys
 
 service   = os.environ.get("SERVICE", "backend")      # backend | frontend app name
-registry  = os.environ["REGISTRY"]
+registry  = os.environ.get("REGISTRY", "ghcr.io")
 image     = os.environ["IMAGE"]
-region    = os.environ["REGION"]
+region    = os.environ.get("REGION", "eu-west-2")
 secret_id = os.environ.get("SECRET_ID", f"/live/tavonzaai/{service}")
 env_file  = os.environ.get("ENV_FILE", f"/opt/tavonzaai/{service}.env")
 container = os.environ.get("CONTAINER", f"tavonzaai-{service}")
@@ -34,9 +34,7 @@ fetch_secret_cmd = (
 )
 
 commands = [
-    # 1. Authenticate Docker with ECR
-    f"aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {registry}",
-    # 2. Pull latest image
+    # 1. Pull latest image from public registry
     f"docker pull {image}",
     # 3. Ensure config dir exists
     f"mkdir -p {os.path.dirname(env_file)}",

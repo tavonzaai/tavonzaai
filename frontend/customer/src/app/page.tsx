@@ -11,7 +11,7 @@ import BottomNav from '@/components/dashboard/BottomNav';
 import JarvisChatView from '@/components/dashboard/JarvisChatView';
 import MenuPage from './menu/page';
 
-// test comment
+
 
 function LandingPageContent() {
   const router = useRouter();
@@ -25,8 +25,8 @@ function LandingPageContent() {
   const forwardParam = qrParam
     ? `?qr=${encodeURIComponent(qrParam)}`
     : tableParam
-    ? `?table=${encodeURIComponent(tableParam)}`
-    : '';
+      ? `?table=${encodeURIComponent(tableParam)}`
+      : '';
 
   useEffect(() => {
     setMounted(true);
@@ -84,14 +84,14 @@ function LandingPageContent() {
   return (
     <>
       {/* <MenuPage /> */}
-      
+
       <AuthDesktopLayout>
         <CreateAccountView
           onAccountCreated={handleAccountCreated}
           onGoBackToLogin={handleGoBackToLogin}
         />
-      </AuthDesktopLayout> 
-     
+      </AuthDesktopLayout>
+
     </>
   );
 }

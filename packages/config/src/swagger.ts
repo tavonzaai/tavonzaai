@@ -130,6 +130,12 @@ export const SWAGGER_TAGS: SwaggerTagDefinition[] = [
     name: 'Health',
     description: 'Service uptime and diagnostics health endpoints',
   },
+
+  // ── Authorization & Access Control ───────────────────────────────────────
+  {
+    name: 'Authorization & Roles',
+    description: 'Dynamic roles, permissions catalog, user capability assignments, and authorization evaluation',
+  },
 ];
 
 export interface SwaggerConfigOptions {
