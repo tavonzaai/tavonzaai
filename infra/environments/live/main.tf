@@ -67,20 +67,6 @@ module "security_groups" {
   allow_public_rds        = var.rds_publicly_accessible
 }
 
-# 3. AWS Elastic Container Registry (ECR) Repositories Module
-module "ecr" {
-  source = "../../modules/ecr"
-
-  project_name               = var.project_name
-  environment                = var.environment
-  repository_names           = var.ecr_repository_names
-  image_tag_mutability       = var.ecr_image_tag_mutability
-  scan_on_push               = var.ecr_scan_on_push
-  force_delete               = var.ecr_force_delete
-  untagged_image_expiry_days = var.ecr_untagged_image_expiry_days
-  max_tagged_image_count     = var.ecr_max_tagged_image_count
-}
-
 # 4. Private S3 Bucket Module
 module "s3" {
   source = "../../modules/s3"
@@ -145,7 +131,8 @@ module "iam" {
   secrets_manager_arn            = module.secrets_manager.secret_arn
   enable_ec2_admin_secret_access = true
   ec2_admin_secret_arn           = module.ec2_admin_secret.secret_arn
-  ecr_repository_arns            = module.ecr.repository_arns_list
+  enable_ecr_pull                = false
+  ecr_repository_arns            = []
   enable_ses_access              = true # ECS/EC2 role needs SES SendEmail permission for SDK-based dispatch
   ses_domain_identity_arn        = var.enable_ses && length(module.ses) > 0 ? module.ses[0].domain_identity_arn : ""
   enable_github_actions_role     = var.enable_github_actions_ecr_role

@@ -228,14 +228,22 @@ export const rawAuthApi = {
   /** GET /me/assignments — Retrieve staff assignments */
   getMyAssignments: async () => {
     try {
-      const response = await baseApiFetch('/me/assignments', {
-        method: 'GET',
-      });
-      return response.data || response;
+      let response: any;
+      try {
+        response = await baseApiFetch('/me/assignments', {
+          method: 'GET',
+        });
+      } catch {
+        response = await baseApiFetch('/users/me/assignments', {
+          method: 'GET',
+        });
+      }
+      return response?.data || response;
     } catch {
       return { staffId: null, assignments: [] };
     }
   },
+
 
   /** POST /auth/refresh — Refresh access token */
   refresh: async (refreshTokenOverride?: string): Promise<AuthTokensResponse> => {
@@ -300,12 +308,18 @@ export const loginUser = createAsyncThunk(
         }
         try {
           const assignmentsRes = await rawAuthApi.getMyAssignments();
+          const mergedAssignments =
+            Array.isArray(assignmentsRes?.assignments) && assignmentsRes.assignments.length > 0
+              ? assignmentsRes.assignments
+              : (userProfile?.assignments || []);
+
           userProfile = {
             ...userProfile,
-            staffId: assignmentsRes?.staffId,
-            assignments: assignmentsRes?.assignments || [],
+            staffId: assignmentsRes?.staffId || userProfile?.staffId || null,
+            assignments: mergedAssignments,
           };
         } catch {}
+
       } catch {
         // Fallback to user profile returned in authData
       }
@@ -390,13 +404,19 @@ export const getMe = createAsyncThunk(
       let userProfile = await rawAuthApi.getMe();
       try {
         const assignmentsRes = await rawAuthApi.getMyAssignments();
+        const mergedAssignments =
+          Array.isArray(assignmentsRes?.assignments) && assignmentsRes.assignments.length > 0
+            ? assignmentsRes.assignments
+            : (userProfile?.assignments || []);
+
         userProfile = {
           ...userProfile,
-          staffId: assignmentsRes?.staffId,
-          assignments: assignmentsRes?.assignments || [],
+          staffId: assignmentsRes?.staffId || userProfile?.staffId || null,
+          assignments: mergedAssignments,
         };
       } catch {}
       return userProfile;
+
     } catch (err: any) {
       removeAuthToken();
       return rejectWithValue(err.message || 'Session expired.');

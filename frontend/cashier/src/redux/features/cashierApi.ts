@@ -55,26 +55,41 @@ const isUUID = (val?: string | null): boolean =>
 export function getActiveBranchId(): string {
   if (typeof window !== 'undefined') {
     try {
-      const match = document.cookie.match(/(?:^|;\s*)(?:active_branch_id|tavonza_branch_id|branch_id)=([^;]+)/);
+      // 1. Direct branch cookies
+      const match = document.cookie.match(/(?:^|;\s*)(?:active_branch_id|tavonza_branch_id|cashier_branch_id|branch_id)=([^;]+)/);
       if (match && match[1]) {
         const val = decodeURIComponent(match[1]);
         if (isUUID(val)) return val;
       }
-      const rawUser = localStorage.getItem('tavonza_user');
-      if (rawUser) {
-        const parsed = JSON.parse(rawUser);
-        if (isUUID(parsed?.branchId)) return parsed.branchId;
-        if (isUUID(parsed?.assignments?.[0]?.branchId)) {
-          return parsed.assignments[0].branchId;
-        }
-        if (isUUID(parsed?.assignments?.[0]?.branch?.id)) {
-          return parsed.assignments[0].branch.id;
+
+      // 2. User cookies (cashier_user, tavonza_user, user)
+      const userCookieMatch = document.cookie.match(/(?:^|;\s*)(?:cashier_user|tavonza_user|user)=([^;]+)/);
+      if (userCookieMatch && userCookieMatch[1]) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(userCookieMatch[1]));
+          if (isUUID(parsed?.branchId)) return parsed.branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
+        } catch {}
+      }
+
+      // 3. localStorage keys
+      for (const key of ['cashier_user', 'tavonza_user', 'user']) {
+        const rawUser = localStorage.getItem(key);
+        if (rawUser) {
+          try {
+            const parsed = JSON.parse(rawUser);
+            if (isUUID(parsed?.branchId)) return parsed.branchId;
+            if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
+            if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
+          } catch {}
         }
       }
     } catch {}
   }
   return '';
 }
+
 
 export const cashierService = {
   getOrders: async (branchId: string): Promise<any[]> => {

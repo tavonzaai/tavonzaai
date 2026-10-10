@@ -1,26 +1,40 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { baseApiFetch } from '../api/baseApi';
 
-const isUUID = (val?: string | null): boolean =>
+export const isUUID = (val?: string | null): boolean =>
   Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
 export function getActiveBranchId(): string {
   if (typeof window !== 'undefined') {
     try {
+      // 1. Direct branch cookies
       const match = document.cookie.match(/(?:^|;\s*)(?:active_branch_id|tavonza_branch_id|waiter_branch_id|branch_id)=([^;]+)/);
       if (match && match[1]) {
         const val = decodeURIComponent(match[1]);
         if (isUUID(val)) return val;
       }
-      const rawUser = localStorage.getItem('tavonza_user');
-      if (rawUser) {
-        const parsed = JSON.parse(rawUser);
-        if (isUUID(parsed?.branchId)) return parsed.branchId;
-        if (isUUID(parsed?.assignments?.[0]?.branchId)) {
-          return parsed.assignments[0].branchId;
-        }
-        if (isUUID(parsed?.assignments?.[0]?.branch?.id)) {
-          return parsed.assignments[0].branch.id;
+
+      // 2. User cookies (waiter_user, tavonza_user, user)
+      const userCookieMatch = document.cookie.match(/(?:^|;\s*)(?:waiter_user|tavonza_user|user)=([^;]+)/);
+      if (userCookieMatch && userCookieMatch[1]) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(userCookieMatch[1]));
+          if (isUUID(parsed?.branchId)) return parsed.branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
+        } catch {}
+      }
+
+      // 3. localStorage keys
+      for (const key of ['waiter_user', 'tavonza_user', 'user']) {
+        const rawUser = localStorage.getItem(key);
+        if (rawUser) {
+          try {
+            const parsed = JSON.parse(rawUser);
+            if (isUUID(parsed?.branchId)) return parsed.branchId;
+            if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
+            if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
+          } catch {}
         }
       }
     } catch {}
@@ -116,8 +130,10 @@ export interface CreateOrderOnBehalfPayload {
 }
 
 export const waiterService = {
-  getMyTables: async (branchId: string): Promise<WaiterTableAssignment[]> => {
-    const res = await baseApiFetch<WaiterTableAssignment[]>(`/waiter/tables?branchId=${encodeURIComponent(branchId)}`, {
+  getMyTables: async (branchId?: string): Promise<WaiterTableAssignment[]> => {
+    const resolvedBranchId = (branchId && isUUID(branchId)) ? branchId : getActiveBranchId();
+    const query = resolvedBranchId && isUUID(resolvedBranchId) ? `?branchId=${encodeURIComponent(resolvedBranchId)}` : '';
+    const res = await baseApiFetch<WaiterTableAssignment[]>(`/waiter/tables${query}`, {
       method: 'GET',
     });
     return (res as any)?.data || res;
@@ -141,17 +157,22 @@ export const waiterService = {
     limit?: number;
   } = {}): Promise<WaiterOrderSummary[]> => {
     const q = new URLSearchParams();
-    if (params.branchId) q.append('branchId', params.branchId);
+    const resolvedBranchId = (params.branchId && isUUID(params.branchId)) ? params.branchId : getActiveBranchId();
+    if (resolvedBranchId && isUUID(resolvedBranchId)) q.append('branchId', resolvedBranchId);
     if (params.scope) q.append('scope', params.scope);
     if (params.status) q.append('status', params.status);
-    if (params.tableId) q.append('tableId', params.tableId);
+    if (params.tableId && params.tableId.trim() && params.tableId !== 'T-01') {
+      q.append('tableId', params.tableId.trim());
+    }
     if (params.search) q.append('search', params.search);
     if (params.page) q.append('page', String(params.page));
     if (params.limit) q.append('limit', String(params.limit));
 
-    const res = await baseApiFetch<any[]>(`/waiter/orders?${q.toString()}`, {
+    const qs = q.toString();
+    const res = await baseApiFetch<any[]>(`/waiter/orders${qs ? `?${qs}` : ''}`, {
       method: 'GET',
     });
+
     const data = (res as any)?.data || res;
     if (Array.isArray(data)) {
       return data.map((o: any) => ({

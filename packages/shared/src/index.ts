@@ -125,3 +125,11 @@ export function formatTimeAgo(timestamp: string | number | Date | null | undefin
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
 }
+
+/**
+ * 🆔 UUID Validation Helper
+ */
+export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function isUUID(val?: string | null): boolean {
+  return typeof val === 'string' && UUID_REGEX.test(val.trim());
+}

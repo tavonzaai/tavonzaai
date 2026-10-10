@@ -12,7 +12,9 @@ import {
   waiterTableAssignments,
   tables,
 } from '@tavonza/database';
+import { isUUID } from '@tavonza/shared';
 import { DrizzleQueryBuilder } from '../../../../common/database';
+
 import type {
   StaffProfile,
   BranchStaffAssignment,
@@ -144,6 +146,9 @@ export class DrizzleWaiterRepository {
   }
 
   async isStaffAssignedToBranch(staffId: string, branchId: string): Promise<boolean> {
+    if (!staffId || !branchId || !isUUID(staffId) || !isUUID(branchId)) {
+      return false;
+    }
     const result = await this.db
       .select({ id: staffAssignments.id })
       .from(staffAssignments)
@@ -158,6 +163,7 @@ export class DrizzleWaiterRepository {
 
     return result.length > 0;
   }
+
 
   // ── Waiter Table Assignments ────────────────────────────────────────
 
@@ -217,6 +223,10 @@ export class DrizzleWaiterRepository {
     branchId: string,
     additionalId?: string,
   ): Promise<any[]> {
+    if (!branchId || !isUUID(branchId)) {
+      return [];
+    }
+
     const qb = new DrizzleQueryBuilder<any>(this.db, waiterTableAssignments)
       .select({
         id: waiterTableAssignments.id,
@@ -272,7 +282,11 @@ export class DrizzleWaiterRepository {
     tableId: string,
     branchId: string,
   ): Promise<boolean> {
+    if (!tableId || !branchId || !isUUID(tableId) || !isUUID(branchId)) {
+      return false;
+    }
     const profile = await this.findProfileByUserId(waiterId);
+
     const result = await this.db
       .select({ id: waiterTableAssignments.id })
       .from(waiterTableAssignments)

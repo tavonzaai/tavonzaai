@@ -181,41 +181,6 @@ output "ec2_admin_secret_arn" {
   value       = module.ec2_admin_secret.secret_arn
 }
 
-# ECR & CI/CD Outputs
-output "ecr_repository_urls" {
-  description = "Map of microservice names to their ECR repository URLs"
-  value       = module.ecr.repository_urls
-}
-
-output "ecr_repository_arns" {
-  description = "Map of microservice names to their ECR repository ARNs"
-  value       = module.ecr.repository_arns
-}
-
-output "ecr_backend_repository_url" {
-  description = "ECR repository URL for backend Docker images"
-  value       = module.ecr.backend_repository_url
-}
-
-output "ecr_frontend_repository_url" {
-  description = "ECR repository URL for frontend Docker images"
-  value       = module.ecr.frontend_repository_url
-}
-
-output "ecr_ai_repository_url" {
-  description = "ECR repository URL for AI service Docker images"
-  value       = module.ecr.ai_repository_url
-}
-
-output "ecr_kitchen_repository_url" {
-  description = "ECR repository URL for kitchen frontend Docker images"
-  value       = module.ecr.kitchen_repository_url
-}
-
-output "ecr_cashier_repository_url" {
-  description = "ECR repository URL for cashier frontend Docker images"
-  value       = module.ecr.cashier_repository_url
-}
 
 output "alb_target_group_arns" {
   description = "ARNs for all service target groups attached to the ALB"

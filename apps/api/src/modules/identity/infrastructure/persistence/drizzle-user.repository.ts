@@ -363,11 +363,25 @@ export class DrizzleUserRepository {
 
   // ── Staff Assignments ──────────────────────────────────────────────────
 
+  async findStaffProfileByUserId(userId: string) {
+    try {
+      const [record] = await this.db
+        .select()
+        .from(schema.staff)
+        .where(eq(schema.staff.userId, userId))
+        .limit(1);
+      return record || null;
+    } catch {
+      return null;
+    }
+  }
+
   async findStaffAssignments(userId: string) {
     try {
       const results = await this.db
         .select({
           id: schema.staffAssignments.id,
+          staffId: schema.staffAssignments.staffId,
           branchId: schema.staffAssignments.branchId,
           branchName: schema.branches.name,
           role: schema.staffAssignments.role,
@@ -384,3 +398,4 @@ export class DrizzleUserRepository {
     }
   }
 }
+

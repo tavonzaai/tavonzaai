@@ -30,6 +30,7 @@ import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
 import { Permission } from '@tavonza/authorization';
+import { isUUID } from '@tavonza/shared';
 import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 import {
   AssignTableDto,
@@ -69,7 +70,7 @@ export class WaiterTablesController {
   @ApiOkResponse({ type: [TableAssignmentDto], description: 'List of assigned tables' })
   @ApiQuery({
     name: 'branchId',
-    required: true,
+    required: false,
     type: String,
     description: 'Branch UUID',
     example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27',
@@ -77,10 +78,12 @@ export class WaiterTablesController {
   @ApiStandardErrors(400, 401, 403, 500)
   async getMyTables(
     @CurrentUser() user: JwtPayload,
-    @Query('branchId') branchId: string,
+    @Query('branchId') qBranchId?: string,
   ): Promise<TableAssignmentDto[]> {
+    const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
     return this.waiterService.getMyTables(user.sub, branchId);
   }
+
 
   /**
    * POST /waiter/tables/assign
@@ -136,8 +139,8 @@ export class WaiterOrdersController {
     @Query('tableId') tableId?: string,
     @Query('search') search?: string,
   ): Promise<WaiterOrderSummaryDto[]> {
-    const branchId = user.branchId || qBranchId;
-    if (!branchId) throw new BadRequestException('Branch ID is required');
+    const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
+    if (!branchId) throw new BadRequestException('A valid branch UUID is required');
     return this.waiterService.getOrders(user.sub, branchId, {
       scope,
       status,
@@ -156,12 +159,14 @@ export class WaiterOrdersController {
     description: 'Queue of submitted orders awaiting staff review and acceptance.',
   })
   @ApiOkResponse({ type: [WaiterOrderSummaryDto], description: 'List of pending orders' })
-  @ApiQuery({ name: 'branchId', required: true, type: String, example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiQuery({ name: 'branchId', required: false, type: String, example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiStandardErrors(400, 401, 403, 500)
   async getPendingOrders(
     @CurrentUser() user: JwtPayload,
-    @Query('branchId') branchId: string,
+    @Query('branchId') qBranchId?: string,
   ): Promise<WaiterOrderSummaryDto[]> {
+    const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
+    if (!branchId) throw new BadRequestException('A valid branch UUID is required');
     return this.waiterService.getPendingOrders(user.sub, branchId);
   }
 
@@ -175,14 +180,17 @@ export class WaiterOrdersController {
     description: 'Lists active orders in ACCEPTED, PREPARING, and READY states for live floor tracking.',
   })
   @ApiOkResponse({ type: [WaiterOrderSummaryDto], description: 'List of active orders' })
-  @ApiQuery({ name: 'branchId', required: true, type: String, example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiQuery({ name: 'branchId', required: false, type: String, example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiStandardErrors(400, 401, 403, 500)
   async getActiveOrders(
     @CurrentUser() user: JwtPayload,
-    @Query('branchId') branchId: string,
+    @Query('branchId') qBranchId?: string,
   ): Promise<WaiterOrderSummaryDto[]> {
+    const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
+    if (!branchId) throw new BadRequestException('A valid branch UUID is required');
     return this.waiterService.getActiveOrders(user.sub, branchId);
   }
+
 
   /**
    * GET /waiter/orders/:id

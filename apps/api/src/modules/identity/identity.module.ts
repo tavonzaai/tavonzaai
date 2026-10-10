@@ -12,6 +12,7 @@ import { DrizzleUserRepository } from './infrastructure/persistence/drizzle-user
 import { JwtStrategy } from './infrastructure/adapters/jwt.strategy';
 import { AuthController } from './presentation/http/auth.controller';
 import { UserController } from './presentation/http/user.controller';
+import { MeController } from './presentation/http/me.controller';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { UserController } from './presentation/http/user.controller';
       signOptions: { expiresIn: '15m' as unknown as number },
     }),
   ],
-  controllers: [AuthController, UserController],
+  controllers: [AuthController, UserController, MeController],
   providers: [AuthService, UserService, DrizzleUserRepository, JwtStrategy],
   exports: [AuthService, UserService, DrizzleUserRepository, JwtModule, PassportModule],
 })
