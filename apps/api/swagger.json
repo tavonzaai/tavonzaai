@@ -1534,6 +1534,73 @@
         ]
       }
     },
+    "/users/me/assignments": {
+      "get": {
+        "operationId": "UserController_getMyAssignments",
+        "summary": "Get staff assignments for current authenticated user",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyAssignmentsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized: Missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden: Insufficient capabilities or tenant boundary mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Identity | User Management"
+        ],
+        "security": [
+          {
+            "access-token": []
+          }
+        ]
+      }
+    },
     "/users": {
       "get": {
         "operationId": "UserController_getUsers",
@@ -2037,6 +2104,120 @@
           },
           "409": {
             "description": "Email or phone already in use"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Identity | User Management"
+        ],
+        "security": [
+          {
+            "access-token": []
+          }
+        ]
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "MeController_getMe",
+        "summary": "Get current authenticated user profile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized: Missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Identity | User Management"
+        ],
+        "security": [
+          {
+            "access-token": []
+          }
+        ]
+      }
+    },
+    "/me/assignments": {
+      "get": {
+        "operationId": "MeController_getAssignments",
+        "summary": "Get staff assignments for current authenticated user",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyAssignmentsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized: Missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error",
@@ -5184,7 +5365,7 @@
         "parameters": [
           {
             "name": "branchId",
-            "required": true,
+            "required": false,
             "in": "query",
             "description": "Branch UUID",
             "schema": {
@@ -5547,7 +5728,7 @@
         "parameters": [
           {
             "name": "branchId",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "example": "ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27",
@@ -5628,7 +5809,7 @@
         "parameters": [
           {
             "name": "branchId",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "example": "ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27",
@@ -15134,6 +15315,25 @@
         "required": [
           "email",
           "type"
+        ]
+      },
+      "MyAssignmentsResponseDto": {
+        "type": "object",
+        "properties": {
+          "staffId": {
+            "type": "object",
+            "example": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+            "nullable": true
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StaffAssignmentSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "assignments"
         ]
       },
       "UserPaginationMetaDto": {

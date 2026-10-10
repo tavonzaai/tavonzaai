@@ -5,6 +5,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { eq, and, inArray } from 'drizzle-orm';
 import { DRIZZLE, type DrizzleDatabase, orders, orderItems, tables } from '@tavonza/database';
+import { isUUID } from '@tavonza/shared';
 import { DrizzleQueryBuilder } from '../../../../common/database';
 
 @Injectable()
@@ -16,6 +17,10 @@ export class DrizzleWaiterOrderRepository {
     branchId: string,
     filters: { scope?: string; status?: string; tableId?: string; search?: string },
   ): Promise<any[]> {
+    if (!branchId || !isUUID(branchId)) {
+      return [];
+    }
+
     const isAllTables = filters.scope?.toUpperCase() === 'ALL_TABLES';
     const isMyTables = filters.scope?.toUpperCase() === 'MY_TABLES';
 
@@ -23,14 +28,31 @@ export class DrizzleWaiterOrderRepository {
       .filterExact({ branchId })
       .sort('createdAt', 'desc');
 
-    if (filters.tableId) {
-      qb.filterExact({ tableId: filters.tableId });
+    if (filters.tableId && filters.tableId.trim()) {
+      const cleanTableId = filters.tableId.trim();
+      if (isUUID(cleanTableId)) {
+        qb.filterExact({ tableId: cleanTableId });
+      } else {
+        // Resolve table by label / tableNumber in this branch
+        const [tableRecord] = await this.db
+          .select({ id: tables.id })
+          .from(tables)
+          .where(and(eq(tables.branchId, branchId), eq(tables.label, cleanTableId)))
+          .limit(1);
+
+        if (tableRecord) {
+          qb.filterExact({ tableId: tableRecord.id });
+        } else {
+          return [];
+        }
+      }
     } else if (isMyTables) {
       if (tableIds.length === 0) return [];
       qb.filterIn({ tableId: tableIds });
     } else if (!isAllTables && tableIds.length > 0) {
       qb.filterIn({ tableId: tableIds });
     }
+
 
     const scopeUpper = filters.scope?.toUpperCase();
     if (filters.status) {

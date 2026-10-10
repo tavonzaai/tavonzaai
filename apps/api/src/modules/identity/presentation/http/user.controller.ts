@@ -46,6 +46,7 @@ import {
 import {
   UserDetailResponseDto,
   UsersListResponseDto,
+  MyAssignmentsResponseDto,
 } from './dto/user-response.dto';
 import { ApiStandardErrors } from '../../../../common/swagger';
 
@@ -108,6 +109,20 @@ export class UserController {
   async getMe(@CurrentUser() user: JwtPayload): Promise<UserDetailResponseDto> {
     return this.userService.getMe(user.sub);
   }
+
+  /**
+   * GET /users/me/assignments
+   * Get current authenticated user staff assignments
+   */
+  @Get('me/assignments')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get staff assignments for current authenticated user' })
+  @ApiOkResponse({ type: MyAssignmentsResponseDto })
+  async getMyAssignments(@CurrentUser() user: JwtPayload): Promise<MyAssignmentsResponseDto> {
+    return this.userService.getMyAssignments(user.sub);
+  }
+
 
   /**
    * GET /users

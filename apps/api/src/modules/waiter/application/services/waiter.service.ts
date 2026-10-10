@@ -21,6 +21,7 @@ import { DrizzleWaiterRepository } from '../../infrastructure/persistence/drizzl
 import { DrizzleWaiterOrderRepository } from '../../infrastructure/persistence/drizzle-waiter-order.repository';
 import { DrizzleAlertRepository } from '../../infrastructure/persistence/drizzle-alert.repository';
 import { DrizzleUserRepository } from '../../../identity/infrastructure/persistence/drizzle-user.repository';
+import { isUUID } from '@tavonza/shared';
 import {
   canWaiterTransition,
   ORDER_STATUS,
@@ -49,15 +50,28 @@ export class WaiterService {
 
   // ── Slice 2: Assigned Tables ────────────────────────────────────────
 
-  async getMyTables(waiterId: string, branchId: string): Promise<any[]> {
+  async getMyTables(waiterId: string, branchId?: string): Promise<any[]> {
     const profile = await this.waiterRepo.findProfileByUserId(waiterId);
     if (!profile) throw new NotFoundException('Staff profile not found');
 
-    const isAssigned = await this.waiterRepo.isStaffAssignedToBranch(profile.id, branchId);
+    let resolvedBranchId = branchId;
+    if (!resolvedBranchId || !isUUID(resolvedBranchId)) {
+      const branches = await this.waiterRepo.findActiveBranchesForStaff(profile.id);
+      const firstBranchId = branches?.[0]?.branchId;
+      if (firstBranchId && isUUID(firstBranchId)) {
+        resolvedBranchId = firstBranchId;
+      } else {
+        throw new BadRequestException('A valid branch UUID is required');
+      }
+    }
+
+
+    const isAssigned = await this.waiterRepo.isStaffAssignedToBranch(profile.id, resolvedBranchId);
     if (!isAssigned) throw new ForbiddenException('You are not assigned to this branch');
 
-    return this.waiterRepo.findActiveTableAssignmentsForWaiter(waiterId, branchId, profile.id);
+    return this.waiterRepo.findActiveTableAssignmentsForWaiter(waiterId, resolvedBranchId, profile.id);
   }
+
 
   async assignTable(dto: AssignTableDto, assignedById: string): Promise<any> {
     const start = dto.sessionStart ? new Date(dto.sessionStart) : new Date();
