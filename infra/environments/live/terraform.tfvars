@@ -60,8 +60,8 @@ health_check_unhealthy_threshold = 3
 # EC2 Compute Settings (Rightsized for Cost & Performance)
 backend_instance_type     = "t3.small"
 frontend_instance_type    = "t3.small"
-backend_ami_id            = ""
-frontend_ami_id           = ""
+backend_ami_id            = "ami-05a81b93a249716f9"
+frontend_ami_id           = "ami-05a81b93a249716f9"
 ssh_key_name              = ""
 backend_root_volume_size  = 30
 frontend_root_volume_size = 40
@@ -97,19 +97,6 @@ elasticache_max_storage_gb           = 1
 elasticache_max_ecpu_per_second      = 1000
 elasticache_snapshot_retention_limit = 7
 
-# Elastic Container Registry (ECR) Repositories
-ecr_repository_names = [
-  "backend",
-  "frontend",
-  "ai",
-  "kitchen",
-  "cashier",
-  "admin-dashboard",
-  "manager",
-  "branch-manager",
-  "waiter",
-  "worker"
-]
 
 manager_subdomain = "manager"
 manager_port      = 3103
