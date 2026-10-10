@@ -165,3 +165,6 @@ Phase 1 (Database Modeling), Phase 2 (Shared Foundation & RBAC), Phase 3 (Backen
 - **Order & Production Separation**: Orders progress through explicit state machines; kitchen & bar stations process line items independently.
 - **Financial Integrity**: Auditable split-bill support with atomic payment allocations.
 - **AI Subsystem**: `apps/ai` is fully built and accesses business logic only via authorized internal endpoints (`/internal/*`).
+
+
+<!-- test -->
