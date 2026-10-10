@@ -32,7 +32,7 @@ export default function Header({ onOpenSidebar, onSelectTab }: HeaderProps) {
   const displayRole = user?.role ? (user.role.includes('ADMIN') ? 'Admin' : user.role) : 'Admin';
 
   return (
-    <header className="h-[73px] px-6 lg:px-8 border-b border-neutral-800 bg-black/95 backdrop-blur-md shadow-[0px_0px_10.8px_0px_rgba(255,255,255,0.15)] sticky top-0 z-30 flex items-center justify-between">
+    <header className="h-[73px] px-6 lg:px-8 border-b border-neutral-800 bg-black/95 backdrop-blur-md shadow-[0px_0px_10.8px_0px_rgba(255,255,255,0.15)] sticky top-0 z-30 flex items-center justify-between shrink-0">
       {/* Left Mobile Menu Trigger */}
       <div className="flex items-center gap-3">
         <button

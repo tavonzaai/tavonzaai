@@ -190,7 +190,7 @@ export default function OwnerDashboard({
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white flex">
+    <div className="h-screen bg-black text-white flex overflow-hidden">
       {/* Owner Sidebar */}
       <OwnerSidebar
         activeNav={activeNav}
@@ -207,9 +207,9 @@ export default function OwnerDashboard({
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:pl-72 flex flex-col min-w-0">
+      <div className="flex-1 lg:pl-72 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Top Header Bar */}
-        <header className="sticky top-0 z-30 h-20 bg-black/90 backdrop-blur-md border-b border-zinc-800 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+        <header className="shrink-0 sticky top-0 z-30 h-20 bg-black/90 backdrop-blur-md border-b border-zinc-800 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -285,7 +285,7 @@ export default function OwnerDashboard({
         </header>
 
         {/* Dynamic Main View */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar">
           {activeNav === 'restaurants' && (
             <RestaurantsView
               initialBranchRestaurantId={initialBranchRestaurantId}

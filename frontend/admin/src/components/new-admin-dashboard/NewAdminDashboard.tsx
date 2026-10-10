@@ -77,7 +77,7 @@ export default function NewAdminDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans flex overflow-x-hidden selection:bg-amber-400 selection:text-black relative">
+    <div className="h-screen bg-black text-white font-sans flex overflow-hidden selection:bg-amber-400 selection:text-black relative">
       {/* Sidebar (Desktop w-72 fixed, Mobile slide-in) */}
       <Sidebar
         activeTab={activeTab}
@@ -87,7 +87,7 @@ export default function NewAdminDashboard({
       />
 
       {/* Main Content Area (offset by w-72 on desktop) */}
-      <div className="flex-1 lg:pl-72 flex flex-col min-h-screen min-w-0">
+      <div className="flex-1 lg:pl-72 flex flex-col h-screen min-w-0 overflow-hidden">
         {/* Top Header */}
         <Header
           onOpenSidebar={() => setSidebarOpen(true)}
@@ -95,7 +95,7 @@ export default function NewAdminDashboard({
         />
 
         {/* Dynamic View Body - full width matching other dashboards */}
-        <main className="flex-1 p-6 lg:p-8 w-full">
+        <main className="flex-1 overflow-y-auto p-6 lg:p-8 w-full custom-scrollbar relative">
           {activeTab === 'dashboard' && (
             <DashboardView onNavigateTab={handleTabSelect} />
           )}
