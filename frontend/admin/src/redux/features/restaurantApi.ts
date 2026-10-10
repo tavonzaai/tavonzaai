@@ -261,6 +261,24 @@ export const restaurantService = {
     });
     return (res as any)?.data || res || [];
   },
+
+  getMyOrganization: async (): Promise<any> => {
+    try {
+      const res = await baseApiFetch<any>('/organizations/my', { method: 'GET' });
+      const orgs = (res as any)?.data || res;
+      return Array.isArray(orgs) ? orgs[0] : orgs;
+    } catch {
+      return null;
+    }
+  },
+
+  updateOrganization: async (id: string, payload: any): Promise<any> => {
+    const res = await baseApiFetch<any>(`/organizations/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
 };
 
 export const branchService = restaurantService;
