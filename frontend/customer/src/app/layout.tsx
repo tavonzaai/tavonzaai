@@ -46,6 +46,7 @@ import { Suspense } from "react";
 import ReduxProvider from "@/redux/ReduxProvider";
 import { CartProvider } from "@/context/CartContext";
 import QrSessionSync from "@/components/common/QrSessionSync";
+import { Toaster } from "sonner";
 
 export default function RootLayout({
   children,
@@ -72,6 +73,7 @@ export default function RootLayout({
             <QrSessionSync />
           </Suspense>
           <CartProvider>{children}</CartProvider>
+          <Toaster richColors position="top-right" theme="dark" closeButton />
         </ReduxProvider>
       </body>
     </html>

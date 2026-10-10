@@ -200,60 +200,44 @@ export default function RevenueAndHealthSection({
           </div>
         </div>
 
-        {/* 3-Color Donut Gauge Meter */}
+        {/* 3-Color Donut Gauge Matching Image 1 */}
         <div className="flex flex-col items-center justify-center my-3">
-          <div className="relative size-36 flex items-center justify-center">
-            <svg className="size-full -rotate-90" viewBox="0 0 40 40">
-              {/* Background ring */}
-              <circle
-                cx="20"
-                cy="20"
-                r="15"
-                strokeWidth="4.5"
-                stroke="#27272a"
+          <div className="relative size-44 flex items-center justify-center">
+            <svg className="size-full" viewBox="0 0 160 160">
+              {/* Segment 1: Vibrant Green (from 220° to 52° clockwise) */}
+              <path
+                d="M 44.65 122.13 A 55 55 0 1 1 123.34 46.14"
                 fill="none"
+                stroke="#00c853"
+                strokeWidth="26"
+                strokeLinecap="butt"
               />
-              {/* Segment 1: Green (bg-green-600 ~50%) */}
-              <circle
-                cx="20"
-                cy="20"
-                r="15"
-                strokeWidth="4.8"
-                stroke="#16a34a"
-                strokeDasharray="50 100"
-                strokeDashoffset="0"
+
+              {/* Segment 2: Royal Periwinkle Blue (from 52° to 106° clockwise) */}
+              <path
+                d="M 123.34 46.14 A 55 55 0 0 1 132.87 95.16"
                 fill="none"
+                stroke="#5b75f5"
+                strokeWidth="26"
+                strokeLinecap="butt"
               />
-              {/* Segment 2: Indigo (bg-indigo-500 ~25%) */}
-              <circle
-                cx="20"
-                cy="20"
-                r="15"
-                strokeWidth="4.8"
-                stroke="#6366f1"
-                strokeDasharray="25 100"
-                strokeDashoffset="-50"
+
+              {/* Segment 3: Golden Amber (from 106° to 220° clockwise) */}
+              <path
+                d="M 132.87 95.16 A 55 55 0 0 1 44.65 122.13"
                 fill="none"
-              />
-              {/* Segment 3: Yellow (bg-yellow-500 ~20%) */}
-              <circle
-                cx="20"
-                cy="20"
-                r="15"
-                strokeWidth="4.8"
-                stroke="#eab308"
-                strokeDasharray="20 100"
-                strokeDashoffset="-75"
-                fill="none"
+                stroke="#f9a825"
+                strokeWidth="26"
+                strokeLinecap="butt"
               />
             </svg>
 
             {/* Center Score */}
-            <div className="absolute flex flex-col items-center justify-center">
-              <span className="text-white text-4xl font-bold font-['Plus_Jakarta_Sans'] leading-8">
+            <div className="absolute flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-white text-4xl sm:text-5xl font-bold font-['Plus_Jakarta_Sans'] tracking-tight leading-none">
                 91
               </span>
-              <span className="text-slate-500 text-xs font-normal font-['Inter'] leading-4">
+              <span className="text-neutral-400 text-xs font-medium font-['Inter'] mt-1">
                 / 100
               </span>
             </div>
