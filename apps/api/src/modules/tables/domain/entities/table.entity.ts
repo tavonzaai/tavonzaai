@@ -31,6 +31,13 @@ export type ReservationStatus =
   | 'CANCELLED'
   | 'NO_SHOW';
 
+export interface AssignedWaiterInfo {
+  waiterId: string;
+  waiterName?: string;
+  sessionStart?: Date;
+  sessionEnd?: Date;
+}
+
 export interface Table {
   id: string;
   branchId: string;
@@ -41,6 +48,7 @@ export interface Table {
   qrCodeToken?: string | null;
   shape: TableShape;
   floor: number;
+  assignedWaiter?: AssignedWaiterInfo | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -8,6 +8,7 @@ const tabMap: Record<string, string> = {
   'table-view': 'Table View',
   'create-order': 'Create Order',
   'bill-queue': 'Bill Queue',
+  'profile': 'Profile',
   'dashboard': 'Table View',
 };
 

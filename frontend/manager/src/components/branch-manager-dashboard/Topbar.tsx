@@ -6,6 +6,8 @@ import { mockManagerProfile } from './data';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import { logoutUser } from '../../redux/features/authApi';
 
+import { NotificationCenter } from '../common/NotificationCenter';
+
 interface TopbarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -57,8 +59,12 @@ export default function Topbar({
         </div>
       </div>
 
-      {/* User Profile Pill matching Figma & connected to Redux Auth */}
-      <div className="relative">
+      <div className="flex items-center gap-3">
+        {/* Realtime Notification Center */}
+        <NotificationCenter />
+
+        {/* User Profile Pill matching Figma & connected to Redux Auth */}
+        <div className="relative">
         <button
           type="button"
           onClick={() => setShowUserDropdown(!showUserDropdown)}
@@ -83,6 +89,14 @@ export default function Topbar({
               <span className="text-white text-xs font-semibold">{displayName}</span>
               <span className="text-neutral-500 text-[10px]">{reduxUser?.email || 'manager@tavonza.com'}</span>
             </div>
+            <a
+              href="/branch-manager-dashboard/profile"
+              onClick={() => setShowUserDropdown(false)}
+              className="w-full mt-1 px-3 py-2 text-left text-xs text-amber-400 hover:bg-neutral-800 rounded-lg flex items-center gap-2 transition cursor-pointer font-medium"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>My Profile &amp; Settings</span>
+            </a>
             <button
               type="button"
               onClick={handleLogout}
@@ -93,6 +107,7 @@ export default function Topbar({
             </button>
           </div>
         )}
+      </div>
       </div>
     </header>
   );

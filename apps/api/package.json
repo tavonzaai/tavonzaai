@@ -1,6 +1,6 @@
 {
   "name": "@tavonza/api",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "build": "nest build",
@@ -17,7 +17,9 @@
     "@nestjs/jwt": "^12.0.2",
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.3.8",
+    "@nestjs/platform-socket.io": "^10.3.8",
     "@nestjs/swagger": "^7.4.2",
+    "@nestjs/websockets": "^10.3.8",
     "@tavonza/authorization": "workspace:*",
     "@tavonza/config": "workspace:*",
     "@tavonza/contracts": "workspace:*",
@@ -35,6 +37,7 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "socket.io": "^4.7.5",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {

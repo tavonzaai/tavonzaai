@@ -4,12 +4,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
 import { LayoutGrid, Home, UtensilsCrossed, Bell, User } from 'lucide-react';
+import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
+import { getCookie } from '@/redux/api/baseApi';
 
 interface BottomDockProps {
   activeTab?: 'floor' | 'home' | 'order' | 'orders' | 'jarvis' | 'alert' | 'alerts' | 'profile';
   onNavigateTab?: (tab: string) => void;
   showFloorLabel?: boolean;
   forceVisible?: boolean;
+  alertCount?: number;
 }
 
 export default function BottomDock({
@@ -17,11 +20,51 @@ export default function BottomDock({
   onNavigateTab,
   showFloorLabel = true,
   forceVisible = false,
+  alertCount: propAlertCount,
 }: BottomDockProps) {
   const router = useRouter();
   const pathname = usePathname();
   const dockRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(true);
+  const [liveAlertCount, setLiveAlertCount] = useState<number>(0);
+
+  // Poll live active customer alerts from backend API GET /waiter/alerts?branchId=...
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAlertCount() {
+      try {
+        const branchId = getActiveBranchId();
+        if (!branchId) return;
+
+        const apiAlerts = await waiterService.getMyAlerts(branchId);
+        if (isMounted && Array.isArray(apiAlerts)) {
+          const activeCount = apiAlerts.filter(
+            (a) => a.status === 'pending' || a.status === 'acknowledged'
+          ).length;
+          setLiveAlertCount(activeCount);
+        }
+      } catch (err) {
+        // ignore background poll errors
+      }
+    }
+
+    fetchAlertCount();
+    const handleRealtime = () => {
+      fetchAlertCount();
+    };
+    window.addEventListener('tavonza:notification_created', handleRealtime);
+    window.addEventListener('tavonza:notification_read', handleRealtime);
+    window.addEventListener('tavonza:waiter_called', handleRealtime);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('tavonza:notification_created', handleRealtime);
+      window.removeEventListener('tavonza:notification_read', handleRealtime);
+      window.removeEventListener('tavonza:waiter_called', handleRealtime);
+    };
+  }, []);
+
+  const displayAlertCount = propAlertCount !== undefined ? propAlertCount : liveAlertCount;
 
   // Automatically derive active tab from URL route if not explicitly supplied
   const derivedTab = (() => {
@@ -164,7 +207,7 @@ export default function BottomDock({
 
       <div
         ref={dockRef}
-        className={`w-full h-24 bg-black/85 backdrop-blur-xl border-t border-white/10 shadow-[0px_-10px_30px_rgba(0,0,0,0.8)] flex flex-col justify-between px-3 pt-2 pb-2 absolute bottom-0 left-0 right-0 z-40 select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
+        className={`w-full h-18 bg-black/85 backdrop-blur-xl border-t border-white/10 shadow-[0px_-10px_30px_rgba(0,0,0,0.8)] flex flex-col justify-between px-3 pt-2 pb-2 absolute bottom-0 left-0 right-0 z-40 select-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ${
           isVisible
             ? 'translate-y-0 opacity-100 pointer-events-auto'
             : 'translate-y-[140%] opacity-0 pointer-events-none'
@@ -173,11 +216,11 @@ export default function BottomDock({
         <div className="flex items-center justify-around w-full">
           {/* 1. Floor (matching Figma with 4-square LayoutGrid icon) */}
           <button
-            onClick={() => handleNav('floor', '/new-waiter-dashboard/floor')}
+            onClick={() => handleNav('home', '/new-waiter-dashboard/home')}
             className="flex flex-col items-center justify-center gap-1 w-14 cursor-pointer transition-transform duration-150 active:scale-90 group"
           >
             {showFloorLabel ? (
-              <LayoutGrid
+              <Home
                 className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 ${
                   isFloorActive
                     ? 'text-yellow-400 stroke-[2.2]'
@@ -200,7 +243,7 @@ export default function BottomDock({
                   : 'text-neutral-400'
               }`}
             >
-              {showFloorLabel ? 'Floor' : 'Home'}
+              {showFloorLabel ? 'Home' : 'Floor'}
             </span>
           </button>
 
@@ -233,13 +276,13 @@ export default function BottomDock({
             className="flex flex-col items-center justify-center -mt-6 cursor-pointer group transition-transform duration-150 active:scale-95"
           >
             <div
-              className={`w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-active:scale-95 overflow-hidden ${
+              className={`w-12 h-12 rounded-full   flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-active:scale-95 overflow-hidden ${
                 isJarvisActive
                   ? 'border-2 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.5)] ring-2 ring-yellow-400/30'
                   : 'border-2 border-neutral-500 shadow-[0_0_15px_rgba(0,0,0,0.6)]'
               }`}
             >
-              <div className="relative w-8 h-8 rounded-full overflow-hidden flex items-center justify-center">
+              <div className="relative w-full h-full overflow-hidden flex items-center justify-center">
                 <Image
                   src="/images/jarvis-robot.jpg"
                   alt="JARVIS"
@@ -272,9 +315,11 @@ export default function BottomDock({
                     : 'text-neutral-400 group-hover:text-white'
                 }`}
               />
-              <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center absolute -top-1 -right-2 text-white text-[9px] font-bold animate-pulse shadow-sm">
-                2
-              </div>
+              {displayAlertCount > 0 && (
+                <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center absolute -top-1 -right-2 text-white text-[9px] font-bold animate-pulse shadow-sm">
+                  {displayAlertCount > 99 ? '99+' : displayAlertCount}
+                </div>
+              )}
             </div>
             <span
               className={`text-[10px] font-medium font-['Inter'] ${
@@ -310,9 +355,6 @@ export default function BottomDock({
             </span>
           </button>
         </div>
-
-        {/* iPhone Bottom Home Indicator Bar */}
-        <div className="w-16 h-0.5 bg-stone-300 rounded-[38px] mx-auto mt-2" />
       </div>
     </>
   );

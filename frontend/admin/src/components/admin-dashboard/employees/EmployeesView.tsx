@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   EmployeesHeader,
   EmployeesKPICards,
@@ -10,7 +10,8 @@ import {
   AddEmployeeModal,
 } from './components';
 import { INITIAL_EMPLOYEES, INITIAL_EMPLOYEES_KPIS } from './employeesData';
-import { Employee } from './types';
+import { Employee, EmployeeRole } from './types';
+import { rawUserApi } from '@/redux/features/userApi';
 
 export default function EmployeesView() {
   const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
@@ -21,6 +22,49 @@ export default function EmployeesView() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+
+  // Fetch live staff/users from backend
+  useEffect(() => {
+    let mounted = true;
+    async function loadBackendEmployees() {
+      try {
+        const res = await rawUserApi.getUsers();
+        if (mounted && res.data && res.data.length > 0) {
+          const mapped: Employee[] = res.data.map((u, idx) => {
+            const role = (
+              u.role === 'ADMIN' ? 'Manager' :
+              u.role === 'SUPER_ADMIN' ? 'Manager' :
+              u.role === 'STAFF' ? (idx % 2 === 0 ? 'Waiter' : 'Chef') :
+              'Waiter'
+            ) as EmployeeRole;
+            return {
+              id: u.id,
+              name: u.name || u.email.split('@')[0],
+              avatar: u.avatar || `https://images.unsplash.com/photo-${1534528741775 + (idx % 5)}?w=150&auto=format&fit=crop&q=80`,
+              role,
+              status: u.status === 'ACTIVE' ? 'On Shift' : 'Off Duty',
+              shiftHours: '09:00 AM - 05:00 PM',
+              shiftType: 'Morning',
+              rating: 4.8,
+              tablesToday: 8,
+              accuracy: 98,
+              phone: u.contactNo || '+880 1711-000000',
+              email: u.email,
+              bio: `Hospitality professional on the Tavonza platform.`,
+              hireDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '2024-01-15',
+            };
+          });
+          setEmployees(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not load backend employees, using local fallback:', err);
+      }
+    }
+    loadBackendEmployees();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Filtered employees
   const filteredEmployees = employees.filter((emp) => {

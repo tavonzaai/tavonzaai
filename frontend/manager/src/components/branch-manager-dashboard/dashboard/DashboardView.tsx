@@ -47,10 +47,19 @@ export default function DashboardView({
     };
 
     loadDashboardData();
-    const interval = setInterval(loadDashboardData, 10000);
+    const handleUpdate = () => loadDashboardData();
+    window.addEventListener('tavonza:table_status_changed', handleUpdate);
+    window.addEventListener('tavonza:table_session_changed', handleUpdate);
+    window.addEventListener('tavonza:order_created', handleUpdate);
+    window.addEventListener('tavonza:order_status_changed', handleUpdate);
+    window.addEventListener('tavonza:payment_status_changed', handleUpdate);
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:table_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:table_session_changed', handleUpdate);
+      window.removeEventListener('tavonza:order_created', handleUpdate);
+      window.removeEventListener('tavonza:order_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:payment_status_changed', handleUpdate);
     };
   }, []);
 

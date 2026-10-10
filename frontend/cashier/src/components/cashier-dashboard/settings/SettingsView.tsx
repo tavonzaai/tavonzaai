@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SettingsHeader,
   ProfileCard,
@@ -12,19 +12,63 @@ import {
 import { AllCashierSettings } from './types';
 import { initialCashierSettings } from './settingsData';
 import { toast } from 'sonner';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { getMe } from '@/redux/features/authApi';
+import { updateMe } from '@/redux/features/userApi';
 
 export const SettingsView: React.FC = () => {
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector((state) => state.auth);
+
   const [settings, setSettings] = useState<AllCashierSettings>(
     initialCashierSettings
   );
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
+  useEffect(() => {
+    dispatch(getMe());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (user) {
+      const assignedBranch =
+        user.branchName ||
+        user.assignments?.[0]?.branchName ||
+        (user.assignments?.[0] as any)?.branch?.name ||
+        'Downtown HQ';
+
+      setSettings((prev) => ({
+        ...prev,
+        profile: {
+          ...prev.profile,
+          cashierName: user.name || (user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : prev.profile.cashierName),
+          email: user.email || (prev.profile as any).email,
+          phone: user.phone || user.contactNo || '',
+          branch: assignedBranch,
+        } as any,
+      }));
+    }
+  }, [user]);
+
+  const handleSave = async () => {
     setIsSaving(true);
-    setTimeout(() => {
+    try {
+      const res = await dispatch(
+        updateMe({
+          name: settings.profile.cashierName,
+          contactNo: (settings.profile as any).phone || (settings.profile as any).contactNo,
+        })
+      );
       setIsSaving(false);
-      toast.success('Cashier preferences and POS configuration saved!');
-    }, 300);
+      if (updateMe.fulfilled.match(res)) {
+        toast.success('Cashier profile and preferences updated successfully!');
+      } else {
+        toast.error((res.payload as string) || 'Failed to update cashier profile');
+      }
+    } catch (err: any) {
+      setIsSaving(false);
+      toast.error(err?.message || 'Failed to update cashier profile');
+    }
   };
 
   const handleResetSettings = () => {
@@ -46,6 +90,7 @@ export const SettingsView: React.FC = () => {
         <div className="space-y-5">
           <ProfileCard
             profile={settings.profile}
+            user={user}
             onChange={(updated) =>
               setSettings((prev) => ({
                 ...prev,

@@ -19,25 +19,6 @@ export interface KitchenUser {
   }>;
 }
 
-export const DEMO_KITCHEN_USER: KitchenUser = {
-  id: 'ktc-101',
-  name: 'Chef Marco',
-  email: 'kitchen@tavonza.demo',
-  role: 'KITCHEN',
-  station: 'Main Kitchen Display (KDS)',
-  assignments: [
-    {
-      id: 'asg-ktc-1',
-      role: 'KITCHEN',
-      branch: { id: 'br-1', name: 'Main Kitchen Station' },
-    },
-  ],
-};
-
-/**
- * Check if kitchen session is currently active (STRICTLY COOKIES ONLY - NO LOCALSTORAGE)
- * Must only check kitchen_token to avoid interference from other app sessions.
- */
 export function isKitchenAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
   const kitchenToken = getCookie(KITCHEN_TOKEN_KEY);
@@ -74,9 +55,14 @@ export function loginKitchenSession(customUser?: Partial<KitchenUser>): KitchenU
     : `ktc_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
   const user: KitchenUser = {
-    ...DEMO_KITCHEN_USER,
-    ...customUser,
+    id: customUser?.id || '',
+    name: customUser?.name || 'Kitchen Staff',
+    email: customUser?.email || '',
+    role: customUser?.role || 'KITCHEN',
+    station: customUser?.station || 'Main Kitchen Station',
+    assignments: customUser?.assignments || [],
     shiftStartedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    ...customUser,
   };
 
   // Store strictly in Cookies (NO LOCALSTORAGE)

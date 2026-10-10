@@ -1,6 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DRIZZLE, type DrizzleDatabase, organizations } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import type { Organization } from '../../domain/entities/organization.entity';
 
 @Injectable()
@@ -40,13 +41,28 @@ export class DrizzleOrganizationRepository {
     return row ? this.mapToEntity(row) : null;
   }
 
-  async findByOwnerId(ownerId: string): Promise<Organization[]> {
-    const rows = await this.db
-      .select()
-      .from(organizations)
-      .where(eq(organizations.ownerId, ownerId));
+  async findAll(options?: {
+    ownerId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{ data: Organization[]; meta: any }> {
+    const builder = DrizzleQueryBuilder.from(this.db, organizations)
+      .paginate({ page: options?.page, limit: options?.limit })
+      .filterExact({ ownerId: options?.ownerId })
+      .search(options?.search, [organizations.name, organizations.slug])
+      .sort(options?.sortBy, options?.sortOrder, organizations.createdAt);
 
-    return rows.map((r) => this.mapToEntity(r));
+    return builder.execute((r) => this.mapToEntity(r));
+  }
+
+  async findByOwnerId(ownerId: string): Promise<Organization[]> {
+    return DrizzleQueryBuilder.from(this.db, organizations)
+      .filterExact({ ownerId })
+      .sort(organizations.createdAt, 'desc')
+      .executePlain((r) => this.mapToEntity(r));
   }
 
   async update(id: string, data: Partial<{ name: string; slug: string }>): Promise<Organization | null> {

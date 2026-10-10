@@ -6,6 +6,7 @@ import AuthGuard from "@/components/auth/AuthGuard";
 import { TavonzaLogoIcon } from "../TavonzaLogo";
 import KitchenAIModal from "./KitchenAIModal";
 import Sidebar, { updatedKitchenNavItems } from "./Sidebar";
+import ProfileView from "./ProfileView";
 import {
   ChefHat,
   Clock,
@@ -25,6 +26,7 @@ import {
   Menu as MenuIcon,
   RotateCcw,
 } from "lucide-react";
+import { NotificationCenter } from "../common/NotificationCenter";
 import { toast } from "sonner";
 import { KITCHEN_STATIONS, INITIAL_INVENTORY, RECIPES, SHIFT_STATS, FLAG_REASONS } from "./data";
 import { KitchenOrder, OrderStatus } from "./types";
@@ -93,10 +95,20 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
       }
     };
     loadKitchenData();
-    const interval = setInterval(loadKitchenData, 7000);
+    const handleRealtimeUpdate = () => {
+      loadKitchenData();
+    };
+    window.addEventListener("tavonza:order_created", handleRealtimeUpdate);
+    window.addEventListener("tavonza:order_status_changed", handleRealtimeUpdate);
+    window.addEventListener("tavonza:order_item_changed", handleRealtimeUpdate);
+    window.addEventListener("tavonza:table_status_changed", handleRealtimeUpdate);
+
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener("tavonza:order_created", handleRealtimeUpdate);
+      window.removeEventListener("tavonza:order_status_changed", handleRealtimeUpdate);
+      window.removeEventListener("tavonza:order_item_changed", handleRealtimeUpdate);
+      window.removeEventListener("tavonza:table_status_changed", handleRealtimeUpdate);
     };
   }, []);
 
@@ -195,6 +207,9 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: "PREPARING" as OrderStatus } : o))
     );
+    kitchenService.updateOrderStatus(orderId, "PREPARING").catch((e) => {
+      console.warn("Backend order preparing status update:", e);
+    });
     playChime("new");
     toast.success("Order status updated to Preparing");
   };
@@ -214,6 +229,9 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           : order.status;
 
         if (allCompleted && order.status !== "READY") {
+          kitchenService.updateOrderStatus(orderId, "READY").catch((e) => {
+            console.warn("Backend order ready status update:", e);
+          });
           playChime("ready");
           const notif = `Ticket ${order.orderNumber} items completed! Table ${order.table} ready.`;
           setReadyNotification(notif);
@@ -241,6 +259,9 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
         };
       })
     );
+    kitchenService.updateOrderStatus(orderId, "READY").catch((e) => {
+      console.warn("Backend order ready status update:", e);
+    });
     playChime("ready");
     const targetOrder = orders.find((o) => o.id === orderId);
     const notif = `Ticket ${targetOrder?.orderNumber || ""} items completed! Table ${targetOrder?.table || ""} ready.`;
@@ -328,14 +349,14 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           
           {/* Left: Tavonza Logo & Branch / Staff Info */}
           <div className="flex items-center gap-4 lg:gap-6">
-            <button
+            {/* <button
               type="button"
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden text-zinc-400 hover:text-white p-2 rounded-xl bg-zinc-900 border border-zinc-800"
               title="Open Navigation"
             >
               <MenuIcon className="w-5 h-5" />
-            </button>
+            </button> */}
 
             {/* Tavonza Brand Logo */}
             <div className="flex items-center gap-3">
@@ -497,51 +518,8 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           {/* Right: Notification Bell, Speaker, Live Clock & Date */}
           <div className="flex items-center gap-3 lg:gap-4">
             
-            {/* Notification Bell */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setAlertsOpen(!alertsOpen)}
-                className="w-10 h-10 rounded-xl bg-[#18181b] border border-zinc-800 flex items-center justify-center text-zinc-300 hover:text-white hover:bg-zinc-800 transition cursor-pointer relative"
-                title="Kitchen Alerts"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 bg-yellow-400 text-black text-[10px] font-bold px-1.5 py-0.2 rounded-full border border-black shadow">
-                  02
-                </span>
-              </button>
-
-              {/* Alerts Dropdown */}
-              {alertsOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40 bg-transparent"
-                    onClick={() => setAlertsOpen(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-2 w-72 bg-[#121214] border border-zinc-800 rounded-2xl shadow-2xl p-4 z-50 space-y-3">
-                    <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                      <span className="text-xs font-bold text-white uppercase tracking-wider">Kitchen Alerts (2)</span>
-                      <button
-                        onClick={() => setAlertsOpen(false)}
-                        className="text-zinc-500 hover:text-white text-xs"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <div className="space-y-2 text-xs">
-                      <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200">
-                        <span className="font-bold block text-red-400">Order #1524 Overdue</span>
-                        Table T-01 burger wait time exceeded 15 mins.
-                      </div>
-                      <div className="p-2.5 rounded-xl bg-yellow-950/60 border border-yellow-500/40 text-yellow-200">
-                        <span className="font-bold block text-yellow-400">Special Request: No Onions</span>
-                        Verified for Classic Burger on Grill Station.
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            {/* Realtime Notification Center */}
+            <NotificationCenter />
 
             {/* Volume Speaker Toggle */}
             <button
@@ -591,7 +569,10 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
 
         {/* MAIN KDS TICKETS WORKSPACE MATCHING USER SCREENSHOT */}
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
+          {activeNav === "Profile" ? (
+            <ProfileView onBack={() => setActiveNav("Dashboard")} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
             {filteredOrders.map((order, idx) => {
               const isReady = order.status === "READY";
               const isOverdue = !isReady && (order.status === "OVERDUE" || !!order.flaggedIssue);
@@ -746,6 +727,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
               );
             })}
           </div>
+          )}
         </main>
 
         {/* FLOATING AI ROBOT BUTTON IN BOTTOM CORNER MATCHING USER SPEC */}

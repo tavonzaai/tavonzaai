@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Eye, EyeOff, Loader2, AlertCircle, UserCheck } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { TavonzaLogo } from '../TavonzaLogo';
 import { useAppDispatch } from '@/redux/store';
 import { loginUser } from '@/redux/features/authApi';
@@ -22,8 +22,8 @@ export default function LoginView({
   onForgotPassword,
 }: LoginViewProps) {
   const dispatch = useAppDispatch();
-  const [email, setEmail] = useState('waiter@tavonza.demo');
-  const [password, setPassword] = useState('Demo1234!');
+  const [email, setEmail] = useState('waiter@tavonza.ai');
+  const [password, setPassword] = useState('Waiter@1234');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,29 +89,24 @@ export default function LoginView({
         userRole,
         userProfile
       );
-    } catch {
-      // Offline / demo fallback - only if waiter demo
-      if (email.toLowerCase().includes('waiter')) {
-        handleCompleteSession(
-          'Michael Davis',
-          email.trim(),
-          'WAITER'
-        );
-      } else {
-        setError('Invalid credentials or unauthorized station access.');
-      }
+    } catch (err: any) {
+      setError(
+        typeof err === 'string'
+          ? err
+          : err?.message || 'Invalid credentials or unauthorized station access. Please check your email and password.'
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleQuickWaiterLogin = () => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      handleCompleteSession('Michael Davis', 'waiter@tavonza.demo', 'WAITER');
-      setIsSubmitting(false);
-    }, 250);
-  };
+  // const handleQuickWaiterLogin = () => {
+  //   setIsSubmitting(true);
+  //   setTimeout(() => {
+  //     handleCompleteSession('Michael Davis', ' ', 'WAITER');
+  //     setIsSubmitting(false);
+  //   }, 250);
+  // };
 
   return (
     <div className="w-full max-w-md mx-auto flex flex-col items-center justify-between min-h-[640px] lg:min-h-[680px] p-4 text-white relative font-sans">
@@ -145,7 +140,7 @@ export default function LoginView({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="waiter@tavonza.demo"
+                placeholder="Enter your email"
                 className="w-full bg-transparent text-xs text-white placeholder:text-zinc-100/50 font-['Inter'] focus:outline-none"
               />
             </div>
@@ -200,7 +195,7 @@ export default function LoginView({
           </button>
 
           {/* Quick Waiter Login Helper */}
-          <button
+          {/* <button
             type="button"
             onClick={handleQuickWaiterLogin}
             disabled={isSubmitting}
@@ -208,7 +203,7 @@ export default function LoginView({
           >
             <UserCheck className="w-3.5 h-3.5 text-yellow-400" />
             <span>⚡ One-Click Waiter Sign In (<strong>Michael Davis</strong>)</span>
-          </button>
+          </button> */}
         </form>
       </div>
 

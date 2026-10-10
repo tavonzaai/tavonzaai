@@ -10,8 +10,10 @@ import {
   LogOut,
   X,
   UserCheck,
+  User,
 } from "lucide-react";
 import { useLogout } from "@/hooks/useLogout";
+import { useAppSelector } from "@/redux/store";
 
 export function TavonzaLogoIcon({ className = "w-10 h-10" }: { className?: string }) {
   return (
@@ -32,11 +34,11 @@ export interface CashierSidebarProps {
   setSidebarOpen: (open: boolean) => void;
 }
 
-// Exactly 3 routes matching Figma Cashier Dashboard design specifications
 export const cashierNavItems = [
   { name: "Table View", icon: LayoutGrid, href: "/updated-cashier-dashboard/table-view" },
   { name: "Create Order", icon: PlusCircle, href: "/updated-cashier-dashboard/create-order" },
   { name: "Bill Queue", icon: Receipt, href: "/updated-cashier-dashboard/bill-queue" },
+  { name: "Profile", icon: User, href: "/updated-cashier-dashboard/profile" },
 ];
 
 export default function CashierSidebar({
@@ -46,7 +48,11 @@ export default function CashierSidebar({
   setSidebarOpen,
 }: CashierSidebarProps) {
   const { handleLogout } = useLogout();
+  const { user } = useAppSelector((state) => state.auth);
   const pathname = usePathname();
+
+  const userName = user?.name || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Nobin Mille');
+  const userRole = user?.role ? String(user.role).charAt(0) + String(user.role).slice(1).toLowerCase() : 'Cashier';
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -136,20 +142,28 @@ export default function CashierSidebar({
 
         {/* User Profile & Logout Footer */}
         <div className="p-4 border-t border-neutral-800 bg-black shrink-0">
-          <div className="flex items-center justify-between gap-2 p-2 bg-zinc-900 rounded-lg border border-neutral-800">
-            <div className="flex items-center gap-2.5 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 p-2 bg-zinc-900 hover:bg-zinc-800/80 transition rounded-lg border border-neutral-800">
+            <Link
+              href="/updated-cashier-dashboard/profile"
+              onClick={() => {
+                setActiveNav("Profile");
+                setSidebarOpen(false);
+              }}
+              className="flex items-center gap-2.5 overflow-hidden flex-1 cursor-pointer"
+              title="View Profile"
+            >
               <div className="w-9 h-9 p-2.5 bg-amber-400 rounded-full flex items-center justify-center shrink-0">
                 <UserCheck className="w-4 h-4 text-black" />
               </div>
               <div className="flex flex-col truncate">
                 <span className="text-sm font-medium text-white truncate font-['Poppins'] leading-4">
-                  Nobin Mille
+                  {userName}
                 </span>
                 <span className="text-xs font-medium text-slate-500 truncate font-['Poppins'] leading-4">
-                  Cashier
+                  {userRole}
                 </span>
               </div>
-            </div>
+            </Link>
             <button
               type="button"
               onClick={handleLogout}

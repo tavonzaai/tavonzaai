@@ -21,8 +21,8 @@ export default function LoginView({
   onForgotPassword,
 }: LoginViewProps) {
   const dispatch = useAppDispatch();
-  const [email, setEmail] = useState('euhan.dev@gmail.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('owner@tavonza.ai');
+  const [password, setPassword] = useState('Owner@1234');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,29 +82,15 @@ export default function LoginView({
       const userRole = userProfile?.role ? String(userProfile.role).toUpperCase() : 'SUPER_ADMIN';
 
       handleCompleteSession(userName, email.trim(), userRole, userProfile);
-    } catch {
-      // Offline / demo fallback - only if admin email
-      const emailLower = email.toLowerCase();
-      if (emailLower.includes('euhan') || emailLower.includes('admin')) {
-        handleCompleteSession(
-          'System Administrator',
-          email.trim(),
-          'SUPER_ADMIN'
-        );
-      } else {
-        setError('Invalid credentials or unauthorized administrator access.');
-      }
+    } catch (err: any) {
+      setError(
+        typeof err === 'string'
+          ? err
+          : err?.message || 'Invalid credentials or unauthorized administrator access.'
+      );
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickAdminLogin = () => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      handleCompleteSession('System Administrator', 'euhan.dev@gmail.com', 'SUPER_ADMIN');
-      setIsSubmitting(false);
-    }, 250);
   };
 
   return (
@@ -136,7 +122,7 @@ export default function LoginView({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="euhan.dev@gmail.com"
+                placeholder="owner@tavonza.ai"
                 className="w-full bg-transparent text-xs text-white placeholder:text-zinc-100/50 font-['Inter'] focus:outline-none"
               />
             </div>
@@ -179,16 +165,6 @@ export default function LoginView({
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {isSubmitting ? 'Signing in…' : 'Log In to Console'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleQuickAdminLogin}
-            disabled={isSubmitting}
-            className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 text-xs text-amber-300 font-medium rounded-xl transition flex items-center justify-center gap-2 cursor-pointer font-['Inter']"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-yellow-400" />
-            <span>⚡ One-Click Admin Sign In (<strong>System Administrator</strong>)</span>
           </button>
         </form>
       </div>

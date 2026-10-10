@@ -33,6 +33,9 @@ import {
   tableAuthOtps,
   OutboxService,
 } from '@tavonza/database';
+import { RealtimeGateway } from '../../../realtime/realtime.gateway';
+import { NotificationService } from '../../../notifications/application/services/notification.service';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 
 function generateJoinCode(): string {
   // 6-char alphanumeric code — displayed on "Share Code" screen
@@ -45,6 +48,8 @@ export class TableSessionService {
     @Inject(DRIZZLE) private readonly db: DrizzleDatabase,
     private readonly outboxService: OutboxService,
     private readonly jwtService: JwtService,
+    private readonly realtimeGateway: RealtimeGateway,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -170,6 +175,29 @@ export class TableSessionService {
           activeSessionId: created.id,
           updatedAt: new Date().toISOString(),
         },
+      });
+
+      this.realtimeGateway.emitTableStatusChanged({
+        eventType: 'TABLE_STATUS_CHANGED',
+        eventId: dto.tableId,
+        branchId: dto.branchId,
+        tableId: dto.tableId,
+        tableLabel: dto.tableNumber ?? 'Table',
+        serviceStatus: 'OCCUPIED',
+        operationalFlag: 'NORMAL',
+        activeSessionId: created.id,
+        occurredAt: new Date().toISOString(),
+      });
+
+      this.realtimeGateway.emitTableSessionStatusChanged({
+        eventType: 'TABLE_SESSION_STATUS_CHANGED',
+        eventId: created.id,
+        branchId: dto.branchId,
+        tableId: dto.tableId,
+        tableSessionId: created.id,
+        status: 'ACTIVE',
+        guestCount: 1,
+        occurredAt: new Date().toISOString(),
       });
 
       await this.outboxService.publishEvent({
@@ -375,12 +403,22 @@ export class TableSessionService {
 
     if (!session) throw new NotFoundException('Session not found');
 
-    const guests = await this.db
-      .select()
-      .from(guestSessions)
-      .where(eq(guestSessions.tableSessionId, sessionId));
+    const guestsQb = new DrizzleQueryBuilder<typeof guestSessions>(this.db, guestSessions)
+      .filterExact({ tableSessionId: sessionId });
+    const guests = await guestsQb.executePlain();
 
     return { session, guests };
+  }
+
+  /**
+   * Get all table sessions for a branch with optional status filter.
+   */
+  async findSessionsByBranch(branchId: string, status?: string) {
+    const qb = new DrizzleQueryBuilder<typeof tableSessions>(this.db, tableSessions)
+      .filterExact({ branchId, status })
+      .sort('startedAt', 'desc');
+
+    return qb.executePlain();
   }
 
   /**
@@ -535,6 +573,28 @@ export class TableSessionService {
       .set({ serviceStatus: 'AVAILABLE', updatedAt: new Date() })
       .where(eq(tables.id, session.tableId));
 
+    this.realtimeGateway.emitTableSessionStatusChanged({
+      eventType: 'TABLE_SESSION_STATUS_CHANGED',
+      eventId: session.id,
+      branchId: session.branchId,
+      tableId: session.tableId,
+      tableSessionId: session.id,
+      status: 'COMPLETED',
+      occurredAt: new Date().toISOString(),
+    });
+
+    this.realtimeGateway.emitTableStatusChanged({
+      eventType: 'TABLE_STATUS_CHANGED',
+      eventId: session.tableId,
+      branchId: session.branchId,
+      tableId: session.tableId,
+      tableLabel: 'Table',
+      serviceStatus: 'AVAILABLE',
+      operationalFlag: 'NORMAL',
+      activeSessionId: null,
+      occurredAt: new Date().toISOString(),
+    });
+
     await this.outboxService.publishEvent({
       aggregateType: 'TABLE',
       aggregateId: session.tableId,
@@ -565,5 +625,100 @@ export class TableSessionService {
         closedAt: new Date().toISOString(),
       },
     });
+  }
+
+  /**
+   * POST /sessions/:id/request-bill
+   * Guest requests bill settlement
+   */
+  async requestBill(sessionId: string) {
+    const [session] = await this.db
+      .select()
+      .from(tableSessions)
+      .where(eq(tableSessions.id, sessionId))
+      .limit(1);
+
+    if (!session) throw new NotFoundException('Session not found');
+
+    await this.db
+      .update(tableSessions)
+      .set({ status: 'BILL_REQUESTED', updatedAt: new Date() })
+      .where(eq(tableSessions.id, sessionId));
+
+    await this.db
+      .update(tables)
+      .set({ serviceStatus: 'PAYMENT_PENDING', updatedAt: new Date() })
+      .where(eq(tables.id, session.tableId));
+
+    this.realtimeGateway.emitTableSessionStatusChanged({
+      eventType: 'TABLE_SESSION_STATUS_CHANGED',
+      eventId: session.id,
+      branchId: session.branchId,
+      tableId: session.tableId,
+      tableSessionId: session.id,
+      status: 'BILL_REQUESTED',
+      occurredAt: new Date().toISOString(),
+    });
+
+    this.realtimeGateway.emitTableStatusChanged({
+      eventType: 'TABLE_STATUS_CHANGED',
+      eventId: session.tableId,
+      branchId: session.branchId,
+      tableId: session.tableId,
+      tableLabel: 'Table',
+      serviceStatus: 'PAYMENT_PENDING',
+      operationalFlag: 'NORMAL',
+      activeSessionId: session.id,
+      occurredAt: new Date().toISOString(),
+    });
+
+    // Persistent notifications for Cashier and Waitstaff
+    await this.notificationService.create({
+      branchId: session.branchId,
+      targetRole: 'CASHIER',
+      type: 'BILL_REQUESTED',
+      title: 'Bill Requested',
+      message: `Table session has requested the bill.`,
+      entityType: 'TABLE_SESSION',
+      entityId: session.id,
+    });
+
+    await this.notificationService.create({
+      branchId: session.branchId,
+      targetRole: 'WAITER',
+      type: 'BILL_REQUESTED',
+      title: 'Bill Requested',
+      message: `Table session has requested the bill.`,
+      entityType: 'TABLE_SESSION',
+      entityId: session.id,
+    });
+
+    return { success: true, status: 'BILL_REQUESTED' };
+  }
+
+  /**
+   * POST /sessions/:id/call-waiter
+   * Guest calls staff to table
+   */
+  async callWaiter(sessionId: string, reason?: string) {
+    const [session] = await this.db
+      .select()
+      .from(tableSessions)
+      .where(eq(tableSessions.id, sessionId))
+      .limit(1);
+
+    if (!session) throw new NotFoundException('Session not found');
+
+    await this.notificationService.create({
+      branchId: session.branchId,
+      targetRole: 'WAITER',
+      type: 'CALL_WAITER',
+      title: 'Customer Calling Waiter',
+      message: reason ? `Assistance requested: ${reason}` : 'Guest requested waiter assistance.',
+      entityType: 'TABLE_SESSION',
+      entityId: session.id,
+    });
+
+    return { success: true };
   }
 }

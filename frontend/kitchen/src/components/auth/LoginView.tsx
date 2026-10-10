@@ -22,8 +22,8 @@ export default function LoginView({
   onNavigateToVerify,
 }: LoginViewProps) {
   const dispatch = useAppDispatch();
-  const [email, setEmail] = useState('kitchen@tavonza.demo');
-  const [password, setPassword] = useState('Demo1234!');
+  const [email, setEmail] = useState('kitchen@tavonza.ai');
+  const [password, setPassword] = useState('Kitchen@1234');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,19 +93,11 @@ export default function LoginView({
       setError(
         typeof err === 'string'
           ? err
-          : err?.message || 'Login failed. Please check your credentials or use the demo sign-in below.'
+          : err?.message || 'Login failed. Please check your credentials.'
       );
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleQuickDemoLogin = () => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      handleCompleteSession('Chef Marco', 'kitchen@tavonza.demo', 'KITCHEN');
-      setIsSubmitting(false);
-    }, 200);
   };
 
   return (
@@ -186,17 +178,6 @@ export default function LoginView({
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {isSubmitting ? 'Verifying Kitchen Session…' : 'Access Kitchen Station'}
-          </button>
-
-          {/* One-Click Kitchen Sign In */}
-          <button
-            type="button"
-            onClick={handleQuickDemoLogin}
-            disabled={isSubmitting}
-            className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 text-xs text-amber-300 font-medium rounded-xl transition flex items-center justify-center gap-2 cursor-pointer font-['Inter'] border border-amber-500/20"
-          >
-            <ChefHat className="w-3.5 h-3.5 text-yellow-400" />
-            <span>⚡ One-Click Kitchen Sign In (<strong>Chef Marco</strong>)</span>
           </button>
 
           {/* Admin Provisioning Notice */}

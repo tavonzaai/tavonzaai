@@ -55,10 +55,13 @@ export default function PaymentsView() {
       }
     };
     loadStats();
-    const interval = setInterval(loadStats, 10000);
+    const handleUpdate = () => loadStats();
+    window.addEventListener('tavonza:payment_status_changed', handleUpdate);
+    window.addEventListener('tavonza:payment_requested', handleUpdate);
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:payment_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:payment_requested', handleUpdate);
     };
   }, []);
 

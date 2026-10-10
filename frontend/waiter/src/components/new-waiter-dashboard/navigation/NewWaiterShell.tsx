@@ -22,8 +22,8 @@ export default function NewWaiterShell({ children }: NewWaiterShellProps) {
     <NewWaiterShellContext.Provider value={{ inShell: true }}>
       <div className="w-full min-h-screen bg-neutral-950 flex flex-col items-center justify-start p-0 sm:p-4 md:p-6 font-sans selection:bg-amber-400 selection:text-black">
         {/* Central Mobile Frame (Figma: w-96 / 384px - 420px) */}
-        <div className="w-full max-w-[420px] h-[100dvh] sm:h-auto sm:min-h-[868px] sm:max-h-[94vh] sm:rounded-[36px] bg-black relative flex flex-col justify-between overflow-hidden sm:border sm:border-white/10 sm:shadow-[0_0_50px_rgba(0,0,0,0.9)]">
-          
+        {/* <div className="w-full max-w-[420px] h-[100dvh] sm:h-auto sm:min-h-[868px] sm:max-h-[94vh] sm:rounded-[36px] bg-black relative flex flex-col justify-between overflow-hidden sm:border sm:border-white/10 sm:shadow-[0_0_50px_rgba(0,0,0,0.9)]"> */}
+          <div className="w-full h-[100dvh] max-w-[420px] sm:h-auto sm:min-h-[700px] sm:max-h-[94vh] md:max-w-[600px] md:min-h-[800px] lg:max-w-[420px] lg:min-h-[868px] lg:max-h-[94vh] bg-black relative flex flex-col justify-between overflow-hidden   sm:border sm:border-white/10 sm:shadow-[0_0_50px_rgba(0,0,0,0.9)]"> 
           {/* Scrollable Content Container */}
           <div
             id="new-waiter-scroll-container"

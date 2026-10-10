@@ -13,11 +13,14 @@ import type {
 } from '../../presentation/http/dto/table.dto';
 import type { Table, Reservation, ReservationStatus, TableServiceStatus } from '../../domain/entities/table.entity';
 
+import { RealtimeGateway } from '../../../realtime/realtime.gateway';
+
 @Injectable()
 export class TableService {
   constructor(
     private readonly tableRepo: DrizzleTableRepository,
     private readonly outboxService: OutboxService,
+    private readonly realtimeGateway: RealtimeGateway,
   ) {}
 
   // ── Tables ────────────────────────────────────────────────────────────
@@ -74,6 +77,31 @@ export class TableService {
       throw new NotFoundException(`Failed to update table`);
     }
 
+    this.realtimeGateway.emitTableStatusChanged({
+      eventType: 'TABLE_STATUS_CHANGED',
+      eventId: updated.id,
+      branchId: updated.branchId,
+      tableId: updated.id,
+      tableLabel: updated.label,
+      serviceStatus: updated.serviceStatus as any,
+      operationalFlag: updated.operationalFlag as any,
+      occurredAt: new Date().toISOString(),
+    });
+
+    return this.toTableResponseDto(updated);
+  }
+
+  async softDelete(id: string): Promise<TableResponseDto> {
+    const table = await this.tableRepo.findTableById(id);
+    if (!table) {
+      throw new NotFoundException(`Table with ID "${id}" not found`);
+    }
+
+    const updated = await this.tableRepo.softDeleteTable(id);
+    if (!updated) {
+      throw new NotFoundException(`Failed to soft-delete table "${id}"`);
+    }
+
     return this.toTableResponseDto(updated);
   }
 
@@ -86,6 +114,18 @@ export class TableService {
     if (!table) {
       throw new NotFoundException(`Table with ID "${tableId}" not found`);
     }
+
+    this.realtimeGateway.emitTableStatusChanged({
+      eventType: 'TABLE_STATUS_CHANGED',
+      eventId: table.id,
+      branchId: table.branchId,
+      tableId: table.id,
+      tableLabel: table.label,
+      serviceStatus: table.serviceStatus as any,
+      operationalFlag: table.operationalFlag as any,
+      activeSessionId: activeSessionId ?? null,
+      occurredAt: new Date().toISOString(),
+    });
 
     await this.outboxService.publishEvent({
       aggregateType: 'TABLE',
@@ -126,6 +166,28 @@ export class TableService {
   async getReservations(branchId: string): Promise<ReservationResponseDto[]> {
     const reservations = await this.tableRepo.findReservationsByBranch(branchId);
     return reservations.map((r) => this.toReservationResponseDto(r));
+  }
+
+  async getReservationById(id: string): Promise<ReservationResponseDto> {
+    const reservation = await this.tableRepo.findReservationById(id);
+    if (!reservation) {
+      throw new NotFoundException(`Reservation with ID "${id}" not found`);
+    }
+    return this.toReservationResponseDto(reservation);
+  }
+
+  async softDeleteReservation(id: string): Promise<ReservationResponseDto> {
+    const reservation = await this.tableRepo.findReservationById(id);
+    if (!reservation) {
+      throw new NotFoundException(`Reservation with ID "${id}" not found`);
+    }
+
+    const updated = await this.tableRepo.softDeleteReservation(id);
+    if (!updated) {
+      throw new NotFoundException(`Failed to cancel reservation`);
+    }
+
+    return this.toReservationResponseDto(updated);
   }
 
   async updateReservationStatus(

@@ -11,8 +11,12 @@ import {
   Wine,
   CheckCircle2,
   UtensilsCrossed,
+  QrCode,
+  Download,
+  Copy,
+  Check,
 } from 'lucide-react';
-import { branchManagerService, getActiveBranchId, LiveOrderItem } from '../../../redux/features/branchManagerApi';
+import { branchManagerService, getActiveBranchId, LiveOrderItem, buildTableQrCodeUrl } from '../../../redux/features/branchManagerApi';
 
 interface TableDetailViewProps {
   table: TableItem;
@@ -27,27 +31,49 @@ export default function TableDetailView({
   onOpenReassign,
   onOpenAskAi,
 }: TableDetailViewProps) {
+  const [liveTable, setLiveTable] = useState<TableItem>(table);
   const [tableOrders, setTableOrders] = useState<LiveOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    async function loadTableOrders() {
+    async function loadTableData() {
       try {
         setLoading(true);
         const branchId = getActiveBranchId();
-        const orders = await branchManagerService.getOrders(branchId, { tableId: table.id });
+        const [freshTable, orders] = await Promise.all([
+          branchManagerService.getTable(table.id).catch(() => table),
+          branchManagerService.getOrders(branchId, { tableId: table.id }).catch(() => []),
+        ]);
+
         if (isMounted) {
+          if (freshTable) {
+            const rawTable = freshTable as any;
+            const waiterName =
+              rawTable.assignedWaiter?.name ||
+              rawTable.assignedWaiter?.waiterName ||
+              rawTable.waiter ||
+              table.waiter ||
+              'Floor Team';
+
+            setLiveTable({
+              ...table,
+              ...freshTable,
+              waiter: waiterName,
+              assignedWaiter: rawTable.assignedWaiter || null,
+            });
+          }
           setTableOrders(Array.isArray(orders) ? orders : []);
         }
       } catch (err) {
-        console.warn('Failed to load table orders:', err);
+        console.warn('Failed to load table details via findOne:', err);
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    loadTableOrders();
+    loadTableData();
     return () => {
       isMounted = false;
     };
@@ -108,20 +134,31 @@ export default function TableDetailView({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-3">
             <h1 className="text-white text-2xl sm:text-3xl font-bold font-['Inter']">
-              {table.number} Overview
+              {liveTable.number} Overview
             </h1>
             <span className={`px-2.5 py-1 rounded-md text-xs font-medium border ${
-              table.status === 'occupied'
+              liveTable.status === 'occupied'
                 ? 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/30'
                 : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
             }`}>
-              {table.status.toUpperCase()}
+              {liveTable.status.toUpperCase()}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-neutral-400 font-['Inter']">
-            <span>Capacity: {table.capacity || 4} guests</span>
+            <span>Capacity: {liveTable.capacity || 4} guests</span>
             <span>•</span>
-            <span>Assigned Waiter: <strong className="text-white font-medium">{table.waiter || 'Floor Team'}</strong></span>
+            <span>Assigned Waiter: <strong className="text-white font-medium">{liveTable.waiter || 'Floor Team'}</strong></span>
+            {liveTable.assignedWaiter?.sessionStart && liveTable.assignedWaiter?.sessionEnd && (
+              <>
+                <span>•</span>
+                <span className="flex items-center gap-1 text-amber-300">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>
+                    Shift: {new Date(liveTable.assignedWaiter.sessionStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(liveTable.assignedWaiter.sessionEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </span>
+              </>
+            )}
             {activeOrder && (
               <>
                 <span>•</span>
@@ -234,9 +271,77 @@ export default function TableDetailView({
               <div className="p-3 bg-neutral-950/60 rounded-lg border border-neutral-800 flex items-center justify-between">
                 <span className="text-neutral-400">Table Session</span>
                 <span className="text-neutral-300 font-mono text-xs">
-                  {table.activeSessionId ? `${table.activeSessionId.slice(0, 8)}...` : 'Available'}
+                  {liveTable.activeSessionId ? `${liveTable.activeSessionId.slice(0, 8)}...` : 'Available'}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Table QR Access & Tracking Card */}
+          <div className="p-5 bg-neutral-900 rounded-xl border border-neutral-800 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-white text-base font-semibold font-['Poppins'] flex items-center gap-2">
+                <QrCode className="w-4 h-4 text-amber-400" />
+                <span>Table QR Code</span>
+              </span>
+              <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                Active Access
+              </span>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl mx-auto w-fit shadow-md">
+              <img
+                src={liveTable.qrCodeUrl || buildTableQrCodeUrl(liveTable.qrCodeToken || liveTable.id)}
+                alt={`QR code for ${liveTable.number}`}
+                className="w-36 h-36 object-contain"
+              />
+            </div>
+
+            <div className="space-y-1.5 text-xs font-['Inter'] bg-neutral-950/60 p-3 rounded-lg border border-neutral-800">
+              <div className="flex justify-between items-center text-neutral-400">
+                <span>Table Token:</span>
+                <span className="text-neutral-200 font-mono">
+                  {liveTable.qrCodeToken ? `${liveTable.qrCodeToken.slice(0, 14)}...` : liveTable.id.slice(0, 8)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-neutral-400">
+                <span>Customer Link:</span>
+                <span className="text-amber-400 font-mono truncate max-w-[170px]">
+                  ?qr={liveTable.qrCodeToken || liveTable.id}
+                </span>
+              </div>
+              <p className="text-[11px] text-neutral-500 pt-1 leading-normal">
+                Customers scan this QR code to visit http://localhost:3100?qr=..., login, and place live dine-in orders.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const base = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+                    ? `${window.location.protocol}//${window.location.hostname}:3100`
+                    : 'http://localhost:3100';
+                  const url = `${base}?qr=${encodeURIComponent(liveTable.qrCodeToken || liveTable.id)}`;
+                  navigator.clipboard.writeText(url);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied' : 'Copy Link'}</span>
+              </button>
+              <a
+                href={liveTable.qrCodeUrl || buildTableQrCodeUrl(liveTable.qrCodeToken || liveTable.id)}
+                download={`qr-${liveTable.number}.png`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-2 bg-yellow-400 hover:bg-yellow-300 text-neutral-950 font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 transition text-center cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Save QR</span>
+              </a>
             </div>
           </div>
         </div>

@@ -15,7 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import AddTableModal, { NewTableData } from './AddTableModal';
-import { branchManagerService, getActiveBranchId } from '@/redux/features/branchManagerApi';
+import { branchManagerService, getActiveBranchId, buildTableQrCodeUrl } from '@/redux/features/branchManagerApi';
 
 type ConfigSubTab =
   | 'Branch Info & Hours'
@@ -46,6 +46,8 @@ interface ConfigTable {
   zone: string;
   capacity: string;
   status: 'Active' | 'Maintenance';
+  qrCodeUrl?: string | null;
+  qrCodeToken?: string | null;
 }
 
 interface KitchenStationItem {
@@ -56,16 +58,6 @@ interface KitchenStationItem {
   ip: string;
   active: boolean;
 }
-
-const INITIAL_CONFIG_TABLES: ConfigTable[] = [
-  { id: 't1', number: 'T-01', zone: 'Indoor Dining', capacity: '2 Guests', status: 'Active' },
-  { id: 't2', number: 'T-02', zone: 'Indoor Dining', capacity: '4 Guests', status: 'Active' },
-  { id: 't3', number: 'T-03', zone: 'Indoor Dining', capacity: '4 Guests', status: 'Active' },
-  { id: 't4', number: 'T-04', zone: 'VIP Section', capacity: '6 Guest', status: 'Active' },
-  { id: 't5', number: 'P-01', zone: 'Patio Terrace', capacity: '4 Guests', status: 'Active' },
-  { id: 't6', number: 'P-02', zone: 'Patio Terrace', capacity: '4 Guests', status: 'Maintenance' },
-  { id: 't7', number: 'B-01', zone: 'Bar Counter', capacity: '1 Guest', status: 'Active' },
-];
 
 const INITIAL_STATIONS: KitchenStationItem[] = [
   {
@@ -100,16 +92,6 @@ const INITIAL_STATIONS: KitchenStationItem[] = [
     ip: '192.168.1.104',
     active: true,
   },
-];
-
-const DAYS_OF_WEEK = [
-  { day: 'Monday', isOpen: true, openTime: '09 : 00 AM', closeTime: '10 : 00 PM' },
-  { day: 'Tuesday', isOpen: true, openTime: '09 : 00 AM', closeTime: '10 : 00 PM' },
-  { day: 'Wednesday', isOpen: true, openTime: '09 : 00 AM', closeTime: '10 : 00 PM' },
-  { day: 'Thursday', isOpen: true, openTime: '09 : 00 AM', closeTime: '10 : 00 PM' },
-  { day: 'Friday', isOpen: true, openTime: '09 : 00 AM', closeTime: '11 : 00 PM' },
-  { day: 'Saturday', isOpen: true, openTime: '08 : 30 AM', closeTime: '11 : 30 PM' },
-  { day: 'Sunday', isOpen: true, openTime: '09 : 00 AM', closeTime: '09 : 30 PM' },
 ];
 
 function BranchConfigContent() {
@@ -232,13 +214,19 @@ function BranchConfigContent() {
           }
 
           if (tablesRes.status === 'fulfilled' && Array.isArray(tablesRes.value)) {
-            const mappedTables: ConfigTable[] = tablesRes.value.map((t) => ({
-              id: t.id,
-              number: t.label || (t as any).number || 'Table',
-              zone: 'Indoor Dining',
-              capacity: `${t.capacity} Guests`,
-              status: t.isActive !== false ? 'Active' : 'Maintenance',
-            }));
+            const mappedTables: ConfigTable[] = tablesRes.value.map((t) => {
+              const qrToken = t.qrCodeToken || t.id;
+              const qrUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
+              return {
+                id: t.id,
+                number: t.label || (t as any).number || 'Table',
+                zone: 'Indoor Dining',
+                capacity: `${t.capacity} Guests`,
+                status: t.isActive !== false ? 'Active' : 'Maintenance',
+                qrCodeUrl: qrUrl,
+                qrCodeToken: qrToken,
+              };
+            });
             setConfigTables(mappedTables);
           }
         }
@@ -301,26 +289,42 @@ function BranchConfigContent() {
   };
 
   const handleSaveNewTable = async (newTable: NewTableData) => {
-    const tableItem: ConfigTable = {
-      id: `table-${Date.now()}`,
-      number: newTable.number,
-      zone: newTable.zone,
-      capacity: `${newTable.capacity} Guests`,
-      status: 'Active',
-    };
-    setConfigTables((prev) => [...prev, tableItem]);
-
     try {
-      await branchManagerService.createTable({
+      const createdTable = await branchManagerService.createTable({
         branchId: getActiveBranchId(),
         label: newTable.number,
         capacity: Number(newTable.capacity) || 4,
       });
+
+      const qrToken = createdTable.qrCodeToken || createdTable.id || `token-${Date.now()}`;
+      const qrUrl = createdTable.qrCodeUrl || buildTableQrCodeUrl(qrToken);
+
+      const tableItem: ConfigTable = {
+        id: createdTable.id,
+        number: createdTable.label || newTable.number,
+        zone: newTable.zone,
+        capacity: `${createdTable.capacity || newTable.capacity} Guests`,
+        status: createdTable.isActive !== false ? 'Active' : 'Maintenance',
+        qrCodeUrl: qrUrl,
+        qrCodeToken: qrToken,
+      };
+      setConfigTables((prev) => [...prev, tableItem]);
+      triggerSaveToast('New table configuration successfully added with QR Code!');
     } catch (err) {
       console.warn('Backend table create warning (saved to state):', err);
+      const fallbackToken = `table-${Date.now()}`;
+      const tableItem: ConfigTable = {
+        id: `table-${Date.now()}`,
+        number: newTable.number,
+        zone: newTable.zone,
+        capacity: `${newTable.capacity} Guests`,
+        status: 'Active',
+        qrCodeToken: fallbackToken,
+        qrCodeUrl: buildTableQrCodeUrl(fallbackToken),
+      };
+      setConfigTables((prev) => [...prev, tableItem]);
+      triggerSaveToast('New table configuration successfully added with QR Code (local)!');
     }
-
-    triggerSaveToast('New table configuration successfully added!');
   };
 
   const triggerSaveToast = (msg?: string) => {
@@ -851,6 +855,40 @@ function BranchConfigContent() {
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-neutral-400 font-normal">Capacity:</span>
                         <span className="text-gray-200 font-medium">{table.capacity}</span>
+                      </div>
+
+                      <div className="w-full h-px bg-neutral-800" />
+
+                      <div className="flex flex-col gap-2 pt-1 pb-1">
+                        <span className="text-xs text-neutral-400 font-medium text-center">Table QR Code</span>
+                        {table.qrCodeUrl ? (
+                          <div className="bg-white p-2 rounded-lg w-fit mx-auto shadow-sm">
+                            <img src={table.qrCodeUrl} alt={`QR Code for ${table.number}`} className="w-24 h-24 object-contain" />
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-2 p-3 bg-neutral-950 rounded-lg border border-neutral-800 mx-auto w-full max-w-[140px]">
+                            <span className="text-xs text-neutral-500 text-center leading-tight">No QR Code<br/>generated</span>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const res = await branchManagerService.getTableQr(table.id);
+                                  if (res.qrCodeUrl) {
+                                    setConfigTables(prev => prev.map(t => t.id === table.id ? { ...t, qrCodeUrl: res.qrCodeUrl } : t));
+                                    triggerSaveToast('QR Code generated successfully');
+                                  }
+                                } catch (err) {
+                                  console.error("Failed to generate QR", err);
+                                  triggerSaveToast('Failed to generate QR Code');
+                                }
+                              }}
+                              className="text-xs px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-neutral-950 font-medium rounded transition"
+                            >
+                              Generate QR
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="w-full h-px bg-neutral-800" />

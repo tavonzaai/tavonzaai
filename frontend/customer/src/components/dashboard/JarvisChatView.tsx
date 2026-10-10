@@ -16,6 +16,8 @@ import {
   UtensilsCrossed,
   Loader2,
 } from 'lucide-react';
+import { useAppSelector } from '@/redux/store';
+import { getItemImage } from '@/lib/menuUtils';
 import { rawChatApi } from '@/redux/features/chatApi';
 import FormattedMessage from '@/components/chat/FormattedMessage';
 
@@ -33,6 +35,7 @@ export default function JarvisChatView({
   onInputBlur,
 }: JarvisChatViewProps) {
   const router = useRouter();
+  const { items: backendMenuItems } = useAppSelector((state) => state.menuItems);
   const [jarvisQuery, setJarvisQuery] = useState('');
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [chatLog, setChatLog] = useState<{ sender: 'user' | 'jarvis'; text: string }[]>([]);
@@ -74,47 +77,49 @@ export default function JarvisChatView({
     { name: 'Pizza', icon: '🍕' },
   ];
 
-  const trendingDishes = [
-    {
-      id: 1,
-      title: 'Classic Wagyu Smash',
-      restaurant: 'The Burger Lab',
-      price: '$26.50',
-      image: '/images/burger.jpg',
-    },
-    {
-      id: 2,
-      title: 'Classic Wagyu Smash',
-      restaurant: 'The Burger Lab',
-      price: '$26.50',
-      image: '/images/burger.jpg',
-    },
-  ];
+  const trendingDishes = (backendMenuItems && backendMenuItems.length > 0)
+    ? backendMenuItems.slice(0, 4).map((item) => ({
+        id: item.id,
+        title: item.name,
+        restaurant: item.category?.name || 'Chef Specialty',
+        price: `$${Number(item.basePrice || 0).toFixed(2)}`,
+        image: item.imageUrl || getItemImage(item.name),
+      }))
+    : [
+        {
+          id: 1,
+          title: 'Classic Wagyu Smash',
+          restaurant: 'The Burger Lab',
+          price: '$26.50',
+          image: '/images/burger.jpg',
+        },
+      ];
 
-  const dietaryDishes = [
-    {
-      id: 101,
-      match: '99% Health Match',
-      price: '€88',
-      restaurant: 'Le Gabriel • Contemporary French',
-      title: 'Pan-Seared Line-Caught Seabass',
-      desc: 'Crispy skin sea bass resting on braised carrots & herb reduction.',
-      macros: ['Protein : 48g', 'Carbs : 06g', 'Fat : 22g'],
-      tags: ['Keto & Low Carb', 'High Protein'],
-      image: '/images/seabass.jpg',
-    },
-    {
-      id: 102,
-      match: '99% Health Match',
-      price: '€88',
-      restaurant: 'Le Gabriel • Contemporary French',
-      title: 'Pan-Seared Line-Caught Seabass',
-      desc: 'Crispy skin sea bass resting on braised carrots & herb reduction.',
-      macros: ['Protein : 48g', 'Carbs : 06g', 'Fat : 22g'],
-      tags: ['Keto & Low Carb', 'High Protein'],
-      image: '/images/seabass.jpg',
-    },
-  ];
+  const dietaryDishes = (backendMenuItems && backendMenuItems.length > 0)
+    ? backendMenuItems.slice(0, 4).map((item) => ({
+        id: item.id,
+        match: '99% Health Match',
+        price: `$${Number(item.basePrice || 0).toFixed(2)}`,
+        restaurant: item.category?.name || 'Tavonza Kitchen',
+        title: item.name,
+        desc: item.description || 'Prepared fresh with high-quality organic ingredients.',
+        macros: [item.isVegetarian ? 'Vegetarian' : 'High Protein', 'Gluten-Free Friendly'],
+        tags: [item.isVegetarian ? 'Plant-Based' : 'Chef Choice'],
+        image: item.imageUrl || getItemImage(item.name),
+      }))
+    : [
+        {
+          id: 101,
+          match: '99% Health Match',
+          price: '$28.00',
+          restaurant: 'Le Gabriel • Contemporary French',
+          title: 'Pan-Seared Line-Caught Seabass',
+          desc: 'Crispy skin sea bass resting on braised carrots & herb reduction.',
+          macros: ['Protein : 48g', 'Carbs : 06g', 'Fat : 22g'],
+          tags: ['Keto & Low Carb', 'High Protein'],
+          image: '/images/seabass.jpg',
+        },
+      ];
 
   const handleSendPrompt = async (text: string) => {
     if (!text.trim() || isLoading) return;
