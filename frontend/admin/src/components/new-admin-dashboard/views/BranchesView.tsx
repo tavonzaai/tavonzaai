@@ -179,7 +179,7 @@ export default function BranchesView({ onBack, initialBranchId }: BranchesViewPr
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="w-full space-y-6 animate-in fade-in duration-300">
       {/* Header */}
       <BranchesHeader
         onBack={handleBack}

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Sparkles } from 'lucide-react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import DashboardView from './views/DashboardView';
@@ -13,6 +14,7 @@ import ReportsView from './views/ReportsView';
 import SubscriptionView from './views/SubscriptionView';
 import SettingsView from './views/SettingsView';
 import RestaurantBranchesDetailView from './views/RestaurantBranchesDetailView';
+import AskAiModal from './modals/AskAiModal';
 import { MOCK_RESTAURANTS } from './data';
 import { AdminNavTab } from './types';
 
@@ -46,6 +48,7 @@ export default function NewAdminDashboard({
 
   const [activeTab, setActiveTab] = useState<AdminNavTab>(normalizedInitial);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isAskAiOpen, setIsAskAiOpen] = useState(false);
 
   // Sync tab if initialTab prop changes
   useEffect(() => {
@@ -74,7 +77,7 @@ export default function NewAdminDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans flex overflow-x-hidden selection:bg-amber-400 selection:text-black">
+    <div className="min-h-screen bg-black text-white font-sans flex overflow-x-hidden selection:bg-amber-400 selection:text-black relative">
       {/* Sidebar (Desktop w-72 fixed, Mobile slide-in) */}
       <Sidebar
         activeTab={activeTab}
@@ -91,8 +94,8 @@ export default function NewAdminDashboard({
           onSelectTab={handleTabSelect}
         />
 
-        {/* Dynamic View Body */}
-        <main className="flex-1 p-6 lg:p-8 max-w-[1440px] w-full mx-auto">
+        {/* Dynamic View Body - full width matching other dashboards */}
+        <main className="flex-1 p-6 lg:p-8 w-full">
           {activeTab === 'dashboard' && (
             <DashboardView onNavigateTab={handleTabSelect} />
           )}
@@ -127,6 +130,20 @@ export default function NewAdminDashboard({
           {activeTab === 'settings' && <SettingsView />}
         </main>
       </div>
+
+      {/* Floating Ask AI Assistant Button */}
+      <button
+        type="button"
+        onClick={() => setIsAskAiOpen((prev) => !prev)}
+        className="fixed bottom-7 right-8 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-neutral-950 font-semibold text-xs sm:text-sm rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-yellow-300/60 flex items-center gap-2 cursor-pointer transition-all duration-200 z-50 font-sans group hover:shadow-yellow-400/20"
+        aria-label={isAskAiOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
+      >
+        <Sparkles className="w-4 h-4 text-black group-hover:rotate-12 transition-transform duration-200" />
+        <span>{isAskAiOpen ? 'Close AI' : 'Ask AI'}</span>
+      </button>
+
+      {/* Ask AI Assistant Floating Popup */}
+      <AskAiModal isOpen={isAskAiOpen} onClose={() => setIsAskAiOpen(false)} />
     </div>
   );
 }

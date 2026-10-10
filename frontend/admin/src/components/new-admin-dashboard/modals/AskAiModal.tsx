@@ -14,7 +14,7 @@ export default function AskAiModal({ isOpen, onClose }: AskAiModalProps) {
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; timestamp?: string }>>([
     {
       sender: 'ai',
-      text: 'Hello Manager Nobin. I am Tavonza Branch Intelligence AI. I monitor kitchen telemetry, waiter workloads, table turn rates, and bottlenecks. How can I assist you?',
+      text: 'Hello Platform Admin. I am Tavonza Operations & Platform Copilot. I monitor consolidated multi-unit revenue, branch operational telemetry, staff shifts, and subscription capacity limits. How can I assist you?',
       timestamp: 'Just now',
     },
   ]);
@@ -45,9 +45,22 @@ export default function AskAiModal({ isOpen, onClose }: AskAiModalProps) {
   if (!isOpen) return null;
 
   const quickPrompts = [
-    { label: 'Kitchen bottleneck analysis', text: 'Why is the grill station running behind schedule?' },
-    { label: 'Staff workload balancing', text: 'Which waiter has the highest workload right now?' },
-    { label: 'Predict dinner peak', text: 'What is our projected rush time and table turn rate?' },
+    {
+      label: 'Workspace capacity & limits',
+      text: 'Analyze my current workspace capacity and subscription resource utilization.',
+    },
+    {
+      label: 'Revenue & sales anomalies',
+      text: 'Summarize today consolidated revenue and flag any irregular transaction patterns.',
+    },
+    {
+      label: 'Branch bottleneck audit',
+      text: 'Are any branches experiencing kitchen delays or order backlogs right now?',
+    },
+    {
+      label: 'Staff allocation overview',
+      text: 'What is the current staff distribution across all active venues?',
+    },
   ];
 
   const handleSend = (textToSend?: string) => {
@@ -60,18 +73,21 @@ export default function AskAiModal({ isOpen, onClose }: AskAiModalProps) {
     setIsTyping(true);
 
     setTimeout(() => {
-      let aiReply = 'I have evaluated current floor data. Operational flow is healthy.';
+      let aiReply = 'I have evaluated your cross-organization telemetry. System flow is performing within standard operating thresholds.';
 
       const lower = message.toLowerCase();
-      if (lower.includes('grill') || lower.includes('bottleneck')) {
+      if (lower.includes('capacity') || lower.includes('subscription') || lower.includes('limit') || lower.includes('plan')) {
         aiReply =
-          'Grill station delay: Chef Alex is handling 4 simultaneous Wagyu & Ribeye orders with medium-rare temp requirements. Recommendation: Direct expediter to stage cold sides first and notify Table 04 of a 4-minute delay.';
-      } else if (lower.includes('waiter') || lower.includes('workload')) {
+          'Workspace Capacity Audit (Pro Plan — $499/mo):\n• Restaurants: 2/5 active (60% remaining)\n• Branches: 6/20 active (70% remaining)\n• Staff members: 24/50 provisioned (52% remaining)\n\nRecommendation: Your capacity headroom is healthy. If you expand past 20 branches, the Enterprise Plan ($599/mo) provides unlimited locations and dedicated API bandwidth.';
+      } else if (lower.includes('revenue') || lower.includes('sales') || lower.includes('anomal')) {
         aiReply =
-          'Waiter Sara is currently at 90% capacity with 4 active tables (T04, T05, T06, T08). Waiter Alex has 2 tables and is available for reassignment of Table 04.';
-      } else if (lower.includes('dinner') || lower.includes('peak') || lower.includes('rush')) {
+          'Revenue & Financial Summary (Live):\n• Daily Gross Volume: $14,820 across 6 active branches (+8.4% vs last week)\n• Average Order Value: $48.50\n• Refund Rate: 0.28% (Well below the 1.0% alert threshold)\n• Highest Velocity Branch: Gulshan Bistro ($4,210 gross today). No transaction anomalies detected.';
+      } else if (lower.includes('bottleneck') || lower.includes('delay') || lower.includes('kitchen') || lower.includes('backlog')) {
         aiReply =
-          'Projected peak begins in 35 minutes (6:45 PM). 12 reservations confirmed. Recommend prepping extra cutlery sets for Section B and having host hold T01 & T03 for walk-ins.';
+          'Live Venue Diagnostics:\n• Downtown Bistro: 8 active orders in kitchen queue, average ticket prep time is 14 minutes (optimal).\n• Uptown Grill: 12 orders active, slight spike on Grill Station #2 (medium-rare steaks). Average prep time is 19 minutes.\n• All KDS & Waiter WebSockets are connected and synchronizing with 0 dropped frames.';
+      } else if (lower.includes('staff') || lower.includes('shift') || lower.includes('workload')) {
+        aiReply =
+          'Staff Allocation & Shift Telemetry:\n• Active On-Duty: 24 staff members clocked in across 6 venues.\n• Floor Servers: 14 waiters managing 38 active dining sessions.\n• Kitchen Crew: 8 line cooks & 2 expediters active on stations.\n• All assigned roles possess valid RBAC capabilities without permission escalation flags.';
       }
 
       setMessages((prev) => [
@@ -88,7 +104,7 @@ export default function AskAiModal({ isOpen, onClose }: AskAiModalProps) {
 
   return (
     <aside
-      aria-label="Tavonza AI Copilot"
+      aria-label="Tavonza AI Assistant"
       className={`fixed bottom-20 sm:bottom-24 right-4 sm:right-8 z-50 w-[92vw] sm:w-[420px] md:w-[440px] bg-neutral-900/95 backdrop-blur-md border border-neutral-800 rounded-2xl flex flex-col shadow-[0_20px_60px_rgba(0,0,0,0.85)] overflow-hidden font-['Inter'] transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 ${
         isMinimized ? 'h-[64px]' : 'h-[560px] max-h-[calc(100vh-120px)]'
       }`}
@@ -96,20 +112,20 @@ export default function AskAiModal({ isOpen, onClose }: AskAiModalProps) {
       {/* Header */}
       <div className="p-3.5 sm:p-4 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/90 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-400 flex items-center justify-center text-neutral-950 font-bold shadow-md shadow-amber-500/10">
+          <div className="w-9 h-9 rounded-xl bg-yellow-400 flex items-center justify-center text-neutral-950 font-bold shadow-md shadow-yellow-500/10">
             <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-black" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xs sm:text-sm font-semibold text-white font-['Poppins']">
-                Tavonza AI Branch Copilot
+                Tavonza AI Platform Assistant
               </h3>
               <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-medium">
                 Live
               </span>
             </div>
             <p className="text-[10px] sm:text-[11px] text-neutral-400">
-              Live branch telemetry · Real-time floor ops
+              Multi-brand operations &amp; telemetry
             </p>
           </div>
         </div>
@@ -150,14 +166,14 @@ export default function AskAiModal({ isOpen, onClose }: AskAiModalProps) {
               >
                 <div className={`flex gap-2 max-w-[88%] ${m.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                   {m.sender === 'ai' && (
-                    <div className="w-6 h-6 rounded-lg bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                    <div className="w-6 h-6 rounded-lg bg-yellow-400/20 border border-yellow-400/40 flex items-center justify-center text-yellow-400 shrink-0 mt-0.5">
                       <Bot className="w-3.5 h-3.5" />
                     </div>
                   )}
                   <div
                     className={`p-3 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-line shadow-sm ${
                       m.sender === 'user'
-                        ? 'bg-amber-400 text-neutral-950 font-medium rounded-tr-none'
+                        ? 'bg-yellow-400 text-neutral-950 font-medium rounded-tr-none'
                         : 'bg-neutral-800/95 text-neutral-200 border border-neutral-700/80 rounded-tl-none'
                     }`}
                   >
@@ -174,8 +190,8 @@ export default function AskAiModal({ isOpen, onClose }: AskAiModalProps) {
 
             {isTyping && (
               <div className="flex items-center gap-2 text-neutral-400 text-xs pl-8 animate-pulse">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-                <span>Analyzing live POS &amp; KDS queues...</span>
+                <Sparkles className="w-3.5 h-3.5 text-yellow-400 animate-spin" />
+                <span>Analyzing telemetry &amp; live metrics...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -190,7 +206,7 @@ export default function AskAiModal({ isOpen, onClose }: AskAiModalProps) {
                 onClick={() => handleSend(qp.text)}
                 className="px-2.5 py-1 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-full text-neutral-300 hover:text-white shrink-0 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
                 <span>{qp.label}</span>
               </button>
             ))}
@@ -208,13 +224,13 @@ export default function AskAiModal({ isOpen, onClose }: AskAiModalProps) {
               type="text"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ask AI about floor status, bottlenecks, table turns..."
-              className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition"
+              placeholder="Ask AI about capacity, branches, revenue..."
+              className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-2 text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-yellow-400 transition"
             />
             <button
               type="submit"
               disabled={!prompt.trim()}
-              className="p-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 disabled:hover:bg-amber-400 text-neutral-950 rounded-xl transition shrink-0 cursor-pointer shadow-md shadow-amber-500/10 active:scale-95"
+              className="p-2.5 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:hover:bg-yellow-400 text-neutral-950 rounded-xl transition shrink-0 cursor-pointer shadow-md shadow-yellow-500/10 active:scale-95"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />

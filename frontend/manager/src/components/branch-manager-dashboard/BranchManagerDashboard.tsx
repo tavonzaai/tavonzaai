@@ -302,11 +302,12 @@ export default function BranchManagerDashboard({
           {!selectedTableId && !selectedOrderId && !selectedStaffId && !selectedPaymentId && (
             <button
               type="button"
-              onClick={() => setIsAskAiOpen(true)}
-              className="fixed bottom-7 right-8 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-neutral-950 font-semibold text-xs sm:text-sm rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.5)] flex items-center gap-2 cursor-pointer transition z-20 font-['DM_Sans']"
+              onClick={() => setIsAskAiOpen((prev) => !prev)}
+              className="fixed bottom-7 right-8 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:scale-95 text-neutral-950 font-semibold text-xs sm:text-sm rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.5)] border border-yellow-300/60 flex items-center gap-2 cursor-pointer transition z-50 font-['DM_Sans'] group hover:shadow-yellow-400/20"
+              aria-label={isAskAiOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
             >
-              <Sparkles className="w-4 h-4 text-black" />
-              <span>Ask AI</span>
+              <Sparkles className="w-4 h-4 text-black group-hover:rotate-12 transition-transform duration-200" />
+              <span>{isAskAiOpen ? 'Close AI' : 'Ask AI'}</span>
             </button>
           )}
         </main>

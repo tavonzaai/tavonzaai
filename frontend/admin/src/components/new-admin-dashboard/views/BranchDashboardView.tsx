@@ -26,7 +26,7 @@ export default function BranchDashboardView({
   const d = useBranchDashboard({ initialBranch, onUpdateBranch });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="w-full space-y-6 animate-in fade-in duration-300">
       {/* Header and SubTab Navigation */}
       <BranchDashboardHeader
         branch={d.branch}
