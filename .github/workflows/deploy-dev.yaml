@@ -292,59 +292,53 @@ jobs:
           echo "services=$SERVICES" >> $GITHUB_OUTPUT
           echo "Services to update: $SERVICES"
 
-      - name: Execute Remote Deployment via SSH
+      - name: Copy Docker Configs to Server
         if: steps.target-services.outputs.services != ''
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER != '' && secrets.USER || 'admin' }}
+          key: ${{ secrets.KEY }}
+          source: "docker/docker-compose.dev.yaml,docker/Caddyfile"
+          target: "/home/admin/server"
+          strip_components: 1
+
+      - name: Deploy Services via SSH
+        if: steps.target-services.outputs.services != ''
+        uses: appleboy/ssh-action@v1
         env:
-          SSH_HOST: ${{ secrets.HOST }}
-          SSH_USER: ${{ secrets.USER != '' && secrets.USER || 'admin' }}
-          SSH_KEY: ${{ secrets.KEY }}
           GH_ACTOR: ${{ github.actor }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SERVICES: ${{ steps.target-services.outputs.services }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-
-          SSH_CMD="ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key $SSH_USER@$SSH_HOST"
-          SCP_CMD="scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key"
-
-          echo "🚀 Connecting to $SSH_USER@$SSH_HOST..."
-
-          # 1. Ensure target directory exists
-          $SSH_CMD "mkdir -p /home/admin/server"
-
-          # 2. Sync docker-compose.dev.yaml and Caddyfile to /home/admin/server
-          $SCP_CMD docker/docker-compose.dev.yaml $SSH_USER@$SSH_HOST:/home/admin/server/docker-compose.dev.yaml
-          $SCP_CMD docker/Caddyfile $SSH_USER@$SSH_HOST:/home/admin/server/Caddyfile
-
-          # 3. Authenticate with GitHub Container Registry on remote host
-          $SSH_CMD "echo '$GH_TOKEN' | docker login ghcr.io -u '$GH_ACTOR' --password-stdin"
-
-          # 4. Stop updated containers, pull new images, and restart
-          $SSH_CMD "bash -se" << EOF
-            set -e
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER != '' && secrets.USER || 'admin' }}
+          key: ${{ secrets.KEY }}
+          envs: GH_ACTOR,GH_TOKEN,SERVICES
+          script_stop: true
+          script: |
             cd /home/admin/server
             [ -f .env ] || touch .env
 
-            # Ensure essential database, redis, and reverse proxy containers are running
+            # Authenticate with GitHub Container Registry
+            echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
+
+            # Ensure core services (PostgreSQL, Redis, Caddy) are running
             docker compose -f docker-compose.dev.yaml up -d postgres redis caddy
 
-            # Down/stop updated services
+            # Stop and remove updated services
             echo "🛑 Stopping updated services: $SERVICES"
             docker compose -f docker-compose.dev.yaml stop $SERVICES 2>/dev/null || true
             docker compose -f docker-compose.dev.yaml rm -f $SERVICES 2>/dev/null || true
 
-            # Pull newly pushed images
+            # Pull latest container images
             echo "⬇️ Pulling latest images for: $SERVICES"
             docker compose -f docker-compose.dev.yaml pull $SERVICES
 
-            # Start updated services
+            # Launch updated services
             echo "▶️ Launching updated services: $SERVICES"
             docker compose -f docker-compose.dev.yaml up -d --no-build $SERVICES
 
             # Prune dangling images to conserve disk space
             docker image prune -f 2>/dev/null || true
             echo "✅ Deployment completed successfully for: $SERVICES"
-          EOF
