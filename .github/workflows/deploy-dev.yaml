@@ -47,6 +47,7 @@ jobs:
       cashier: ${{ steps.filter.outputs.cashier }}
       manager: ${{ steps.filter.outputs.manager }}
       waiter: ${{ steps.filter.outputs.waiter }}
+      config: ${{ steps.filter.outputs.config }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -92,6 +93,9 @@ jobs:
               - 'frontend/waiter/**'
               - 'packages/**'
               - 'docker/frontend*.Dockerfile'
+            config:
+              - 'docker/**'
+              - '.github/workflows/deploy-dev.yaml'
 
   # ─── 2. Build & Push Images in Parallel ─────────────────────────────────────
   build-and-push:
@@ -105,64 +109,86 @@ jobs:
           - service: api
             dockerfile: docker/api.Dockerfile
             image_name: tavonzaai-dev-api
+            live_name: tavonzaai-live-backend
             build_args: ""
             changed_key: api
           - service: worker
             dockerfile: docker/worker.Dockerfile
             image_name: tavonzaai-dev-worker
+            live_name: tavonzaai-live-worker
             build_args: ""
             changed_key: worker
           - service: realtime
             dockerfile: docker/realtime.Dockerfile
             image_name: tavonzaai-dev-realtime
+            live_name: tavonzaai-live-realtime
             build_args: ""
             changed_key: realtime
           - service: ai
             dockerfile: docker/ai.Dockerfile
             image_name: tavonzaai-dev-ai
+            live_name: tavonzaai-live-ai
             build_args: ""
             changed_key: ai
           - service: customer
             dockerfile: docker/frontend-app.Dockerfile
             image_name: tavonzaai-dev-customer
+            live_name: tavonzaai-live-frontend
             build_args: |
               APP_NAME=customer
               APP_PORT=3000
+              NEXT_PUBLIC_API_URL=https://api.tavonza.com
+              NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
             changed_key: customer
           - service: admin
             dockerfile: docker/frontend-app.Dockerfile
             image_name: tavonzaai-dev-admin
+            live_name: tavonzaai-live-admin-dashboard
             build_args: |
               APP_NAME=admin
               APP_PORT=3043
+              NEXT_PUBLIC_API_URL=https://api.tavonza.com
+              NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
             changed_key: admin
           - service: kitchen
             dockerfile: docker/frontend-app.Dockerfile
             image_name: tavonzaai-dev-kitchen
+            live_name: tavonzaai-live-kitchen
             build_args: |
               APP_NAME=kitchen
               APP_PORT=3105
+              NEXT_PUBLIC_API_URL=https://api.tavonza.com
+              NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
             changed_key: kitchen
           - service: cashier
             dockerfile: docker/frontend-app.Dockerfile
             image_name: tavonzaai-dev-cashier
+            live_name: tavonzaai-live-cashier
             build_args: |
               APP_NAME=cashier
               APP_PORT=3104
+              NEXT_PUBLIC_API_URL=https://api.tavonza.com
+              NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
             changed_key: cashier
           - service: manager
             dockerfile: docker/frontend-app.Dockerfile
             image_name: tavonzaai-dev-manager
+            live_name: tavonzaai-live-manager
             build_args: |
               APP_NAME=manager
               APP_PORT=3103
+              NEXT_PUBLIC_API_URL=https://api.tavonza.com
+              NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
             changed_key: manager
           - service: waiter
             dockerfile: docker/frontend-app.Dockerfile
             image_name: tavonzaai-dev-waiter
+            live_name: tavonzaai-live-waiter
             build_args: |
               APP_NAME=waiter
               APP_PORT=3101
+              NEXT_PUBLIC_API_URL=https://api.tavonza.com
+              NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
             changed_key: waiter
     steps:
       - name: Check if build needed
@@ -236,9 +262,11 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.image_name }}:${{ github.sha }}
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.image_name }}:latest
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.live_name }}:${{ github.sha }}
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.live_name }}:latest
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.description=Tavonza AI Dev ${{ matrix.service }}
+            org.opencontainers.image.description=Tavonza AI ${{ matrix.service }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -266,6 +294,7 @@ jobs:
           CASHIER_CHANGED: ${{ needs.detect-changes.outputs.cashier }}
           MANAGER_CHANGED: ${{ needs.detect-changes.outputs.manager }}
           WAITER_CHANGED: ${{ needs.detect-changes.outputs.waiter }}
+          CONFIG_CHANGED: ${{ needs.detect-changes.outputs.config }}
         run: |
           SERVICES=""
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
@@ -292,8 +321,15 @@ jobs:
           echo "services=$SERVICES" >> $GITHUB_OUTPUT
           echo "Services to update: $SERVICES"
 
+          SHOULD_DEPLOY="false"
+          if [ -n "$SERVICES" ] || [ "$CONFIG_CHANGED" = "true" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            SHOULD_DEPLOY="true"
+          fi
+          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+          echo "Should execute deployment: $SHOULD_DEPLOY"
+
       - name: Copy Docker Configs to Server
-        if: steps.target-services.outputs.services != ''
+        if: steps.target-services.outputs.should_deploy == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.HOST }}
@@ -304,7 +340,7 @@ jobs:
           strip_components: 1
 
       - name: Deploy Services via SSH
-        if: steps.target-services.outputs.services != ''
+        if: steps.target-services.outputs.should_deploy == 'true'
         uses: appleboy/ssh-action@v1
         env:
           GH_ACTOR: ${{ github.actor }}
@@ -323,22 +359,28 @@ jobs:
             # Authenticate with GitHub Container Registry
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
-            # Ensure core services (PostgreSQL, Redis, Caddy) are running
+            # Ensure core infrastructure services are running
             docker compose -f docker-compose.dev.yaml up -d postgres redis caddy
 
-            # Stop and remove updated services
-            echo "🛑 Stopping updated services: $SERVICES"
-            docker compose -f docker-compose.dev.yaml stop $SERVICES 2>/dev/null || true
-            docker compose -f docker-compose.dev.yaml rm -f $SERVICES 2>/dev/null || true
+            if [ -n "$SERVICES" ]; then
+              # Stop and remove updated services
+              echo "🛑 Stopping updated services: $SERVICES"
+              docker compose -f docker-compose.dev.yaml stop $SERVICES 2>/dev/null || true
+              docker compose -f docker-compose.dev.yaml rm -f $SERVICES 2>/dev/null || true
 
-            # Pull latest container images
-            echo "⬇️ Pulling latest images for: $SERVICES"
-            docker compose -f docker-compose.dev.yaml pull $SERVICES
+              # Pull latest container images
+              echo "⬇️ Pulling latest images for: $SERVICES"
+              docker compose -f docker-compose.dev.yaml pull $SERVICES
 
-            # Launch updated services
-            echo "▶️ Launching updated services: $SERVICES"
-            docker compose -f docker-compose.dev.yaml up -d --no-build $SERVICES
+              # Launch updated services
+              echo "▶️ Launching updated services: $SERVICES"
+              docker compose -f docker-compose.dev.yaml up -d --no-build $SERVICES
 
-            # Prune dangling images to conserve disk space
-            docker image prune -f 2>/dev/null || true
-            echo "✅ Deployment completed successfully for: $SERVICES"
+              # Prune dangling images to conserve disk space
+              docker image prune -f 2>/dev/null || true
+              echo "✅ Deployment completed successfully for: $SERVICES"
+            else
+              # Only docker configurations/Caddyfile updated
+              docker compose -f docker-compose.dev.yaml exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || docker compose -f docker-compose.dev.yaml restart caddy
+              echo "✅ Configurations updated and Caddy proxy reloaded successfully."
+            fi
