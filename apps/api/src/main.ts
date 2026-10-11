@@ -13,6 +13,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     // Disable NestJS's default logger — we use our own structured one
     logger: false,
+    rawBody: true,
   });
 
   // Enable graceful shutdown hooks (SIGTERM/SIGINT)

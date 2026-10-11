@@ -49,6 +49,24 @@ export interface CashierPaymentRecord {
   paidAt: string;
 }
 
+export interface OfflinePaymentRequestItem {
+  id: string;
+  paymentId?: string;
+  orderId?: string | null;
+  orderNumber?: string;
+  tableId?: string | null;
+  tableLabel?: string;
+  customerName?: string;
+  tableSessionId?: string | null;
+  payerGuestSessionId?: string | null;
+  amount: number;
+  tipAmount: number;
+  method: string;
+  status: string;
+  transactionRef: string;
+  createdAt: string | Date;
+}
+
 const isUUID = (val?: string | null): boolean =>
   Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
@@ -157,6 +175,31 @@ export const cashierService = {
     const res = await baseApiFetch<CashierPaymentRecord>(`/payments/${encodeURIComponent(paymentId)}/refund`, {
       method: 'POST',
       body: JSON.stringify({ refundAmount, reason }),
+    });
+    return (res as any)?.data || res;
+  },
+
+  getOfflinePaymentRequests: async (branchId?: string): Promise<OfflinePaymentRequestItem[]> => {
+    const url = branchId ? `/payments/offline/requests?branchId=${encodeURIComponent(branchId)}` : '/payments/offline/requests';
+    const res = await baseApiFetch<OfflinePaymentRequestItem[]>(url, { method: 'GET' });
+    return (res as any)?.data || res;
+  },
+
+  confirmOfflinePayment: async (
+    paymentId: string,
+    payload?: { receivedAmount?: number; tipAmount?: number }
+  ): Promise<CashierPaymentRecord> => {
+    const res = await baseApiFetch<CashierPaymentRecord>(`/payments/offline/${encodeURIComponent(paymentId)}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    });
+    return (res as any)?.data || res;
+  },
+
+  rejectOfflinePayment: async (paymentId: string, reason: string): Promise<CashierPaymentRecord> => {
+    const res = await baseApiFetch<CashierPaymentRecord>(`/payments/offline/${encodeURIComponent(paymentId)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
     });
     return (res as any)?.data || res;
   },
