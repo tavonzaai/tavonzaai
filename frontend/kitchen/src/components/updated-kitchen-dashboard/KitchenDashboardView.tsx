@@ -5,6 +5,8 @@ import Image from "next/image";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { TavonzaLogoIcon } from "../TavonzaLogo";
 import KitchenAIModal from "./KitchenAIModal";
+import AskAiModal from "./AskAiModal";
+import DraggableAiButton from "../common/DraggableAiButton";
 import Sidebar, { updatedKitchenNavItems } from "./Sidebar";
 import ProfileView from "./ProfileView";
 import {
@@ -119,6 +121,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
 
   // Kitchen AI Modal State
   const [aiModalOpen, setAiModalOpen] = useState<boolean>(false);
+  const [isAskAiOpen, setIsAskAiOpen] = useState<boolean>(false);
 
   // Notifications Popover State
   const [alertsOpen, setAlertsOpen] = useState<boolean>(false);
@@ -824,13 +827,28 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           </div>
         )}
 
-        {/* KITCHEN AI CO-PILOT MODAL CONNECTED TO AI ENGINE */}
+        {/* KITCHEN AI CO-PILOT MODAL CONNECTED TO AI ENGINE (Voice) */}
         <KitchenAIModal
           isOpen={aiModalOpen}
           onClose={() => setAiModalOpen(false)}
           activeStation={selectedStation}
         />
 
+        {/* Draggable Floating Ask AI Assistant Button */}
+        <DraggableAiButton
+          isOpen={isAskAiOpen}
+          onToggle={() => setIsAskAiOpen((prev) => !prev)}
+          defaultBottom={24}
+          defaultRight={24}
+          storageKey="updated_kitchen_ask_ai_pos"
+        />
+
+        {/* Floating Ask AI Interactive Modal */}
+        <AskAiModal
+          isOpen={isAskAiOpen}
+          onClose={() => setIsAskAiOpen(false)}
+          activeStation={selectedStation}
+        />
       </div>
     </AuthGuard>
   );

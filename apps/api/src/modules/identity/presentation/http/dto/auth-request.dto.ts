@@ -3,7 +3,7 @@
 // Figma screens: Login, Create Account, Verify OTP, New Password
 // ============================================================================
 
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
 
 // ─── Register ─────────────────────────────────────────────────────────
@@ -121,5 +121,24 @@ export class ResendOtpDto {
   })
   @IsIn(['email_verification', 'phone_verification', 'password_reset'])
   type!: 'email_verification' | 'phone_verification' | 'password_reset';
+}
+
+// ─── Change Password ──────────────────────────────────────────────────
+
+export class ChangePasswordDto {
+  @ApiPropertyOptional({ example: 'CurrentPass123!' })
+  @IsString()
+  @IsOptional()
+  oldPassword?: string;
+
+  @ApiPropertyOptional({ example: 'CurrentPass123!' })
+  @IsString()
+  @IsOptional()
+  currentPassword?: string;
+
+  @ApiProperty({ example: 'NewSecurePass123!' })
+  @IsString()
+  @IsNotEmpty()
+  newPassword!: string;
 }
 

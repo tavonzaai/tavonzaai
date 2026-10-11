@@ -44,6 +44,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   ResendOtpDto,
+  ChangePasswordDto,
 } from './dto/auth-request.dto';
 import { UpdateUserProfileDto } from './dto/user-request.dto';
 import { AuthTokensDto, UserProfileDto, MessageResponseDto, RegisterResponseDto } from './dto/auth-response.dto';
@@ -97,16 +98,33 @@ export class AuthController {
    */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: '[Customer] Refresh access token' })
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiOkResponse({ type: AuthTokensDto })
-  @ApiUnauthorizedResponse()
+  @ApiUnauthorizedResponse({ description: 'Invalid or expired refresh token' })
   async refresh(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: JwtPayload | undefined,
     @Body() dto: RefreshTokenDto,
   ): Promise<AuthTokensDto> {
-    return this.authService.refreshTokens(user.sub, dto.refreshToken);
+    return this.authService.refreshTokens(user?.sub, dto.refreshToken);
+  }
+
+  /**
+   * POST /auth/change-password
+   * Authenticated endpoint to change current password
+   */
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Change password for currently authenticated user' })
+  @ApiOkResponse({ type: MessageResponseDto })
+  @ApiBadRequestResponse({ description: 'Current password incorrect or weak new password' })
+  async changePassword(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<MessageResponseDto> {
+    await this.authService.changePassword(user.sub, dto);
+    return { message: 'Password changed successfully' };
   }
 
   /**

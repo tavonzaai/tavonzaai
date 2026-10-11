@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { logoutAdminSession } from '@/lib/auth';
 import { useAppDispatch } from '@/redux/store';
-import { setUser } from '@/redux/slices/authSlice';
+import { logout } from '@/redux/slices/authSlice';
 import { logoutUser } from '@/redux/features/authApi';
+import { rtkBaseApi } from '@/redux/api/baseApi';
 
 export function useLogout() {
   const router = useRouter();
@@ -18,7 +19,8 @@ export function useLogout() {
       // Ignore network errors on logout
     } finally {
       logoutAdminSession();
-      dispatch(setUser(null));
+      dispatch(logout());
+      dispatch(rtkBaseApi.util.resetApiState());
       toast.success('Admin console session logged out.');
       router.replace('/login');
     }

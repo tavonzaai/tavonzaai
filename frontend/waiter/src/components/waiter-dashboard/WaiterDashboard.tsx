@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Sparkles } from 'lucide-react';
 import { getCookie, setCookie } from '@/redux/api/baseApi';
 import AuthGuard from '@/components/auth/AuthGuard';
 import Sidebar, { waiterNavItems } from './Sidebar';
@@ -20,6 +21,7 @@ import {
   WaiterAIModal,
   VoiceActionModal,
 } from './dashboard';
+import DraggableAiButton from '../common/DraggableAiButton';
 import {
   mockWaiterProfile,
   mockKPIs,
@@ -371,6 +373,13 @@ export default function WaiterDashboard({ initialNav = 'Dashboard' }: WaiterDash
           )}
         </main>
       </div>
+
+      {/* Draggable Floating Ask AI Assistant Button */}
+      <DraggableAiButton
+        isOpen={isAIModalOpen}
+        onToggle={() => setIsAIModalOpen((prev) => !prev)}
+        storageKey="waiter_copilot_ask_ai_pos"
+      />
 
       {/* Interactive AI Waiter Copilot Modal */}
       <WaiterAIModal

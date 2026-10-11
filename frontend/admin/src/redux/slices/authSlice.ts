@@ -62,6 +62,15 @@ const authSlice = createSlice({
     setOtpCode: (state, action: PayloadAction<string | null>) => {
       state.otpCode = action.payload;
     },
+    logout: (state) => {
+      state.user = null;
+      state.isAuthenticated = false;
+      state.loading = false;
+      state.error = null;
+      state.successMessage = null;
+      state.forgotEmail = null;
+      state.otpCode = null;
+    },
   },
   extraReducers: (builder) => {
     // 1. Login
@@ -223,6 +232,7 @@ export const {
   clearSuccessMessage,
   setForgotEmail,
   setOtpCode,
+  logout,
 } = authSlice.actions;
 
 export default authSlice.reducer;
