@@ -28,6 +28,7 @@ ARG NEXT_PUBLIC_API_URL=https://api.tavonza.com
 ARG NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HOSTNAME="0.0.0.0"
 ENV PORT=${APP_PORT}
 ENV APP_TARGET=${APP_NAME}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
@@ -36,17 +37,17 @@ ENV API_BASE_URL=${NEXT_PUBLIC_API_URL}
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/frontend/${APP_NAME}/.next ./frontend/${APP_NAME}/.next
-COPY --from=builder /app/frontend/${APP_NAME}/public ./frontend/${APP_NAME}/public
-COPY --from=builder /app/frontend/${APP_NAME}/next.config.js ./frontend/${APP_NAME}/next.config.js
-COPY --from=builder /app/frontend/${APP_NAME}/package.json ./frontend/${APP_NAME}/package.json
-COPY --from=builder /app/frontend/${APP_NAME}/node_modules ./frontend/${APP_NAME}/node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=builder --chown=nextjs:nodejs /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/packages ./packages
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/.next ./frontend/${APP_NAME}/.next
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/public ./frontend/${APP_NAME}/public
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/next.config.js ./frontend/${APP_NAME}/next.config.js
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/package.json ./frontend/${APP_NAME}/package.json
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/node_modules ./frontend/${APP_NAME}/node_modules
 
 USER nextjs
 EXPOSE ${APP_PORT}
-CMD ["sh", "-c", "pnpm --filter @frontend/${APP_TARGET} start"]
+CMD ["sh", "-c", "pnpm --filter @frontend/${APP_TARGET} exec next start -H 0.0.0.0 -p ${PORT}"]
