@@ -28,6 +28,7 @@ import {
   TableDetailsModal,
   TavonzaAIModal,
 } from './dashboard';
+import DraggableAiButton from '../common/DraggableAiButton';
 import { AdHocRequestsView, LiveAlertsView } from './alerts';
 import TakingOrderView from './orders';
 import OrderStatusView from './order-status';
@@ -987,6 +988,16 @@ export default function WaiterDashboard({ initialTab = 'floor-view' }: WaiterDas
         table={selectedTable}
         isOpen={isDetailsModalOpen}
         onClose={() => setIsDetailsModalOpen(false)}
+      />
+
+      {/* Draggable Floating Ask AI Assistant Button */}
+      <DraggableAiButton
+        isOpen={isAIModalOpen}
+        onToggle={() => {
+          setAiMode('chat');
+          setIsAIModalOpen((prev) => !prev);
+        }}
+        storageKey="updated_waiter_ask_ai_pos"
       />
 
       <TavonzaAIModal

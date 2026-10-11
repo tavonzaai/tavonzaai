@@ -21,6 +21,7 @@ import DishDetailModal, { DishData } from './DishDetailModal';
 import CartFlowModal, { CartStep } from './CartFlowModal';
 import FeedbackModal from './FeedbackModal';
 import AuthSuccessModal from './AuthSuccessModal';
+import DraggableAskAi from '@/components/common/DraggableAskAi';
 import BottomNav, { DashboardTab } from './BottomNav';
 import SearchView from './SearchView';
 import JarvisChatView from './JarvisChatView';
@@ -538,7 +539,8 @@ export default function CustomerDashboardView({
         />
       )}
 
-      {/* Sticky Bottom Nav Bar (Removed as requested) */}
+      {/* Floating Draggable Ask AI Concierge Button & Popup Modal */}
+      <DraggableAskAi defaultBottom={24} defaultRight={24} />
     </div>
   );
 }

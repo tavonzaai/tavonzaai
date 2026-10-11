@@ -1,10 +1,15 @@
-'use client';
+import {
+  getCookie,
+  setCookie,
+  removeCookie,
+  getAuthToken,
+  removeAuthToken,
+  ADMIN_TOKEN_KEY,
+  ADMIN_REFRESH_TOKEN_KEY,
+  ADMIN_USER_KEY,
+} from '@/redux/api/baseApi';
 
-import { getCookie, setCookie, removeCookie } from '@/redux/api/baseApi';
-
-export const ADMIN_TOKEN_KEY = 'admin_token';
-export const ADMIN_REFRESH_TOKEN_KEY = 'admin_refresh_token';
-export const ADMIN_USER_KEY = 'admin_user';
+export { ADMIN_TOKEN_KEY, ADMIN_REFRESH_TOKEN_KEY, ADMIN_USER_KEY };
 
 export interface AdminUser {
   id: string;
@@ -22,7 +27,7 @@ export interface AdminUser {
 
 export function isAdminAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
-  const token = getCookie(ADMIN_TOKEN_KEY);
+  const token = getAuthToken();
   return Boolean(token && token.trim().length > 0);
 }
 
@@ -43,32 +48,28 @@ export function getAdminProfile(): AdminUser | null {
 }
 
 export function loginAdminSession(customUser?: Partial<AdminUser>): AdminUser {
-  const existingToken = getCookie(ADMIN_TOKEN_KEY);
-  // Keep existing JWT access token if set by rawAuthApi.login, otherwise generate demo token
-  const token = (existingToken && !existingToken.startsWith('adm_tok_'))
-    ? existingToken
-    : `adm_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const token = getAuthToken();
 
   const user: AdminUser = {
     id: customUser?.id || '',
-    name: customUser?.name || 'System Administrator',
+    name: customUser?.name || 'Administrator',
     email: customUser?.email || '',
-    role: customUser?.role || 'SUPER_ADMIN',
+    role: customUser?.role || 'ADMIN',
     assignments: customUser?.assignments || [],
     shiftStartedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     ...customUser,
   };
 
-  setCookie(ADMIN_TOKEN_KEY, token);
+  if (token) {
+    setCookie(ADMIN_TOKEN_KEY, token);
+  }
   setCookie(ADMIN_USER_KEY, JSON.stringify(user));
 
   return user;
 }
 
 export function logoutAdminSession(): void {
-  removeCookie(ADMIN_TOKEN_KEY);
-  removeCookie(ADMIN_USER_KEY);
-  removeCookie(ADMIN_REFRESH_TOKEN_KEY);
+  removeAuthToken();
 }
 
 // Backwards compatibility aliases

@@ -27,14 +27,20 @@ export const ADMIN_USER_KEY = 'admin_user';
  * 🍪 Cookie Management for Authentication Tokens (STRICTLY COOKIES ONLY - NO LOCALSTORAGE)
  */
 export function getAuthToken(): string | null {
-  // Strictly check admin_token cookie
   const adminToken = getCookie(ADMIN_TOKEN_KEY);
   if (adminToken && adminToken.trim().length > 0) return adminToken;
+  const tavonzaToken = getCookie('tavonza_token') || getCookie('token');
+  if (tavonzaToken && tavonzaToken.trim().length > 0) return tavonzaToken;
   return null;
 }
 
 export function getRefreshToken(): string | null {
-  return getCookie(ADMIN_REFRESH_TOKEN_KEY);
+  return (
+    getCookie(ADMIN_REFRESH_TOKEN_KEY) ||
+    getCookie('admin_refresh_token') ||
+    getCookie('tavonza_refresh_token') ||
+    getCookie('refresh_token')
+  );
 }
 
 export function setAuthToken(token: string) {
@@ -52,6 +58,57 @@ export function removeAuthToken() {
   removeCookie(ADMIN_TOKEN_KEY);
   removeCookie(ADMIN_REFRESH_TOKEN_KEY);
   removeCookie(ADMIN_USER_KEY);
+  removeCookie('tavonza_token');
+  removeCookie('tavonza_refresh_token');
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+export async function refreshAuthSession(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        removeAuthToken();
+        return false;
+      }
+
+      const json = await res.json().catch(() => null);
+      const data = json?.data || json;
+      const newAccessToken = data?.accessToken || data?.access_token;
+      const newRefreshToken = data?.refreshToken || data?.refresh_token || refreshToken;
+
+      if (newAccessToken) {
+        setAuthTokens({
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
+        });
+        return true;
+      }
+
+      removeAuthToken();
+      return false;
+    } catch {
+      removeAuthToken();
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export function getApiBaseUrl(): string {
@@ -172,7 +229,24 @@ export async function baseApiFetch<T = any>(
   const rawJson: any = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (
+      response.status === 401 &&
+      !cleanEndpoint.includes('/auth/login') &&
+      !cleanEndpoint.includes('/auth/refresh') &&
+      !(options as any)?._isRetry
+    ) {
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        return baseApiFetch<T>(endpoint, {
+          ...options,
+          _isRetry: true,
+        } as any);
+      }
+      removeAuthToken();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    } else if (response.status === 401) {
       removeAuthToken();
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
@@ -215,19 +289,49 @@ export async function baseApiFetch<T = any>(
 }
 
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
+
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: getApiBaseUrl(),
+  credentials: 'include',
+  prepareHeaders: (headers) => {
+    const token = getAuthToken();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return headers;
+  },
+});
+
+const baseQueryWithReauth: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError
+> = async (args, api, extraOptions) => {
+  let result = await rawBaseQuery(args, api, extraOptions);
+
+  if (result.error && result.error.status === 401) {
+    const url = typeof args === 'string' ? args : args.url;
+    if (!url.includes('/auth/login') && !url.includes('/auth/refresh')) {
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        result = await rawBaseQuery(args, api, extraOptions);
+      } else {
+        removeAuthToken();
+        api.dispatch(rtkBaseApi.util.resetApiState());
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
+      }
+    }
+  }
+
+  return result;
+};
 
 export const rtkBaseApi = createApi({
   reducerPath: 'api',
-  baseQuery: fetchBaseQuery({
-    baseUrl: getApiBaseUrl(),
-    prepareHeaders: (headers) => {
-      const token = getAuthToken();
-      if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
-      }
-      return headers;
-    },
-  }),
+  baseQuery: baseQueryWithReauth,
   tagTypes: [
     'TABLE',
     'ORDER',
@@ -239,6 +343,7 @@ export const rtkBaseApi = createApi({
     'USER',
     'ORGANIZATION',
     'BRANCH',
+    'AUTH',
   ],
   endpoints: () => ({}),
 });

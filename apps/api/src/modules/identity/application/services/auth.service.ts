@@ -18,6 +18,7 @@ import type {
   VerifyOtpDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  ChangePasswordDto,
 } from '../../presentation/http/dto/auth-request.dto';
 import type {
   AuthTokensDto,
@@ -79,14 +80,50 @@ export class AuthService {
     return this.issueTokens(user);
   }
 
-  async refreshTokens(userId: string, _refreshToken: string): Promise<AuthTokensDto> {
-    const user = await this.userRepo.findById(userId);
+  async refreshTokens(userId?: string, refreshToken?: string): Promise<AuthTokensDto> {
+    let resolvedUserId = userId;
+    if (!resolvedUserId && refreshToken) {
+      try {
+        const payload: any = this.jwtService.verify(refreshToken, {
+          secret: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET,
+        });
+        resolvedUserId = payload?.sub;
+      } catch {
+        throw new UnauthorizedException('Invalid or expired refresh token');
+      }
+    }
+
+    if (!resolvedUserId) {
+      throw new UnauthorizedException('Access denied');
+    }
+
+    const user = await this.userRepo.findById(resolvedUserId);
     if (!user || user.status !== 'ACTIVE') {
       throw new UnauthorizedException('Access denied');
     }
 
-    // Refresh token validation skipped for stateless JWT
     return this.issueTokens(user);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.userRepo.findById(userId);
+    if (!user || !user.password) {
+      throw new BadRequestException('User account not found or has no local password');
+    }
+
+    const currentPass = dto.currentPassword || dto.oldPassword;
+    if (!currentPass) {
+      throw new BadRequestException('Current password is required');
+    }
+
+    const match = await argon2.verify(user.password, currentPass);
+    if (!match) {
+      throw new BadRequestException('Current password does not match');
+    }
+
+    this.validatePassword(dto.newPassword);
+    const newHash = await argon2.hash(dto.newPassword);
+    await this.userRepo.updatePassword(user.id, newHash);
   }
 
   async logout(_userId: string): Promise<void> {
