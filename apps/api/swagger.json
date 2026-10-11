@@ -926,7 +926,7 @@
     "/auth/refresh": {
       "post": {
         "operationId": "AuthController_refresh",
-        "summary": "[Customer] Refresh access token",
+        "summary": "Refresh access token using refresh token",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -960,7 +960,62 @@
             }
           },
           "401": {
-            "description": ""
+            "description": "Invalid or expired refresh token"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Identity | Authentication"
+        ]
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "operationId": "AuthController_changePassword",
+        "summary": "Change password for currently authenticated user",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Current password incorrect or weak new password"
+          },
+          "401": {
+            "description": "Unauthorized: Missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error",
@@ -11194,6 +11249,623 @@
         ]
       }
     },
+    "/payments/stripe/create-intent": {
+      "post": {
+        "operationId": "PaymentController_createStripePaymentIntent",
+        "summary": "[Customer] Create Stripe PaymentIntent",
+        "description": "Calculates authoritative order/session balance and generates a Stripe client secret for Stripe Elements.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStripePaymentIntentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Stripe PaymentIntent generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StripePaymentIntentResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments & Billing"
+        ]
+      }
+    },
+    "/payments/stripe/verify": {
+      "post": {
+        "operationId": "PaymentController_verifyStripePayment",
+        "summary": "[Customer] Authoritatively verify Stripe PaymentIntent",
+        "description": "Queries Stripe API to confirm PaymentIntent status and updates payment and order records.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyStripePaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment verified and settled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRecordResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments & Billing"
+        ]
+      }
+    },
+    "/payments/stripe/webhook": {
+      "post": {
+        "operationId": "PaymentController_handleStripeWebhook",
+        "summary": "[Stripe] Webhook event listener",
+        "description": "Receives signed webhook events from Stripe (e.g. payment_intent.succeeded) and performs authoritative settlement.",
+        "parameters": [
+          {
+            "name": "stripe-signature",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Payments & Billing"
+        ]
+      }
+    },
+    "/payments/request-offline": {
+      "post": {
+        "operationId": "PaymentController_requestOfflinePayment",
+        "summary": "[Customer/Waiter] Request offline payment (Cash or Card)",
+        "description": "Registers an offline payment request for the cashier, transitions session to BILL_REQUESTED, and emits real-time alert.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestOfflinePaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Offline payment request registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRecordResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments & Billing"
+        ]
+      }
+    },
+    "/payments/offline/requests": {
+      "get": {
+        "operationId": "PaymentController_getOfflinePaymentRequests",
+        "summary": "[Cashier] Get pending offline payment requests",
+        "description": "Returns all UNPAID offline cash/card payment requests for the staff member's branch.",
+        "parameters": [
+          {
+            "name": "branchId",
+            "required": false,
+            "in": "query",
+            "description": "Branch UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending offline payment requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OfflinePaymentRequestItemDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized: Missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments & Billing"
+        ],
+        "security": [
+          {
+            "access-token": []
+          }
+        ]
+      }
+    },
+    "/payments/confirm-offline": {
+      "post": {
+        "operationId": "PaymentController_confirmOfflinePaymentBody",
+        "summary": "[Cashier] Confirm offline payment received (body paymentId)",
+        "description": "Cashier authoritatively confirms physical cash receipt or in-person card terminal transaction.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmOfflinePaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment marked PAID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRecordResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized: Missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments & Billing"
+        ],
+        "security": [
+          {
+            "access-token": []
+          }
+        ]
+      }
+    },
+    "/payments/offline/{id}/confirm": {
+      "post": {
+        "operationId": "PaymentController_confirmOfflinePayment",
+        "summary": "[Cashier] Confirm offline payment received (param ID)",
+        "description": "Cashier authoritatively confirms physical cash receipt or in-person card terminal transaction.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Payment Request UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmOfflinePaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment marked PAID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRecordResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized: Missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments & Billing"
+        ],
+        "security": [
+          {
+            "access-token": []
+          }
+        ]
+      }
+    },
+    "/payments/reject-offline": {
+      "post": {
+        "operationId": "PaymentController_rejectOfflinePaymentBody",
+        "summary": "[Cashier] Reject offline payment request (body paymentId)",
+        "description": "Cashier rejects or cancels an offline payment request, returning table session to ACTIVE status.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectOfflinePaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment marked FAILED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRecordResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized: Missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments & Billing"
+        ],
+        "security": [
+          {
+            "access-token": []
+          }
+        ]
+      }
+    },
+    "/payments/offline/{id}/reject": {
+      "post": {
+        "operationId": "PaymentController_rejectOfflinePayment",
+        "summary": "[Cashier] Reject offline payment request (param ID)",
+        "description": "Cashier rejects or cancels an offline payment request, returning table session to ACTIVE status.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Payment Request UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectOfflinePaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment marked FAILED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRecordResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request / Validation Failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized: Missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments & Billing"
+        ],
+        "security": [
+          {
+            "access-token": []
+          }
+        ]
+      }
+    },
     "/payments/{id}/refund": {
       "post": {
         "operationId": "PaymentController_refundPayment",
@@ -15014,6 +15686,26 @@
         },
         "required": [
           "refreshToken"
+        ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "oldPassword": {
+            "type": "string",
+            "example": "CurrentPass123!"
+          },
+          "currentPassword": {
+            "type": "string",
+            "example": "CurrentPass123!"
+          },
+          "newPassword": {
+            "type": "string",
+            "example": "NewSecurePass123!"
+          }
+        },
+        "required": [
+          "newPassword"
         ]
       },
       "MessageResponseDto": {
@@ -19701,6 +20393,252 @@
           "discountAmount",
           "subtotal",
           "netTotal"
+        ]
+      },
+      "CreateStripePaymentIntentDto": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "Order ID"
+          },
+          "tableSessionId": {
+            "type": "string",
+            "description": "Table session ID"
+          },
+          "payerGuestSessionId": {
+            "type": "string",
+            "description": "Payer guest session ID"
+          },
+          "tipAmount": {
+            "type": "number",
+            "description": "Tip amount",
+            "example": 5
+          },
+          "discountCode": {
+            "type": "string",
+            "description": "Discount promo code",
+            "example": "WELCOME10"
+          }
+        }
+      },
+      "StripePaymentIntentResponseDto": {
+        "type": "object",
+        "properties": {
+          "clientSecret": {
+            "type": "string",
+            "description": "Stripe client secret for Stripe Elements"
+          },
+          "paymentIntentId": {
+            "type": "string",
+            "description": "Stripe PaymentIntent ID"
+          },
+          "amount": {
+            "type": "number",
+            "description": "Chargeable amount in currency units"
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO Currency code",
+            "example": "USD"
+          },
+          "publishableKey": {
+            "type": "string",
+            "description": "Stripe publishable key"
+          },
+          "orderId": {
+            "type": "object",
+            "description": "Associated order ID"
+          },
+          "tableSessionId": {
+            "type": "object",
+            "description": "Associated table session ID"
+          }
+        },
+        "required": [
+          "clientSecret",
+          "paymentIntentId",
+          "amount",
+          "currency",
+          "publishableKey"
+        ]
+      },
+      "VerifyStripePaymentDto": {
+        "type": "object",
+        "properties": {
+          "paymentIntentId": {
+            "type": "string",
+            "description": "Stripe PaymentIntent ID to verify"
+          }
+        },
+        "required": [
+          "paymentIntentId"
+        ]
+      },
+      "RequestOfflinePaymentDto": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "Order ID"
+          },
+          "tableSessionId": {
+            "type": "string",
+            "description": "Table session ID"
+          },
+          "payerGuestSessionId": {
+            "type": "string",
+            "description": "Payer guest session ID"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "CASH",
+              "CARD"
+            ],
+            "example": "CASH",
+            "description": "Offline payment method"
+          },
+          "tipAmount": {
+            "type": "number",
+            "description": "Tip amount",
+            "example": 2
+          },
+          "discountCode": {
+            "type": "string",
+            "description": "Discount promo code"
+          }
+        },
+        "required": [
+          "method"
+        ]
+      },
+      "OfflinePaymentRequestItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "55667788-99aa-bbcc-ddee-112233445566",
+            "description": "Payment record ID"
+          },
+          "orderId": {
+            "type": "object",
+            "example": "8877332f-4512-40bc-8012-d881e6e58003",
+            "description": "Order ID"
+          },
+          "orderNumber": {
+            "type": "string",
+            "example": "ORD-10590",
+            "description": "Order number"
+          },
+          "tableId": {
+            "type": "object",
+            "example": "11223344-5566-7788-99aa-bbccddeeff00",
+            "description": "Table ID"
+          },
+          "tableLabel": {
+            "type": "string",
+            "example": "Table 08",
+            "description": "Table label"
+          },
+          "customerName": {
+            "type": "string",
+            "example": "John Doe",
+            "description": "Customer or guest name"
+          },
+          "tableSessionId": {
+            "type": "object",
+            "description": "Table session ID"
+          },
+          "payerGuestSessionId": {
+            "type": "object",
+            "description": "Payer guest session ID"
+          },
+          "amount": {
+            "type": "number",
+            "example": 45.5,
+            "description": "Payable amount"
+          },
+          "tipAmount": {
+            "type": "number",
+            "example": 5,
+            "description": "Tip amount"
+          },
+          "method": {
+            "type": "string",
+            "example": "CASH",
+            "enum": [
+              "CASH",
+              "CARD"
+            ]
+          },
+          "paymentId": {
+            "type": "string",
+            "example": "55667788-99aa-bbcc-ddee-112233445566",
+            "description": "Payment record ID"
+          },
+          "status": {
+            "type": "string",
+            "example": "UNPAID",
+            "description": "Current status"
+          },
+          "transactionRef": {
+            "type": "string",
+            "example": "REQ-172839281-4829",
+            "description": "Reference"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Request timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "amount",
+          "tipAmount",
+          "method",
+          "status",
+          "transactionRef",
+          "createdAt"
+        ]
+      },
+      "ConfirmOfflinePaymentDto": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "description": "Payment Request UUID (if passing in body)",
+            "example": "55667788-99aa-bbcc-ddee-112233445566"
+          },
+          "receivedAmount": {
+            "type": "number",
+            "description": "Received amount",
+            "example": 45.5
+          },
+          "tipAmount": {
+            "type": "number",
+            "description": "Tip amount",
+            "example": 5
+          }
+        }
+      },
+      "RejectOfflinePaymentDto": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "description": "Payment Request UUID (if passing in body)",
+            "example": "55667788-99aa-bbcc-ddee-112233445566"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Rejection reason",
+            "example": "Customer cancelled offline payment request"
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "RefundPaymentDto": {

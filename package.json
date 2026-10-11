@@ -21,6 +21,7 @@
     "db:studio": "pnpm --filter @tavonza/database db:studio"
   },
   "devDependencies": {
+    "docx": "^9.9.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.5"
   },

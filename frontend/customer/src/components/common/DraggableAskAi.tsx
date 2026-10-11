@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sparkles } from 'lucide-react';
+import CustomerAskAiModal from './CustomerAskAiModal';
 
 export interface DraggableAskAiProps {
   /** Optional custom click callback (e.g. for modal ask AI query). Defaults to router.push('/jarvis') */
@@ -32,6 +33,7 @@ export default function DraggableAskAi({
 
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Drag tracking refs
   const dragInfoRef = useRef({
@@ -207,46 +209,56 @@ export default function DraggableAskAi({
     if (onClick) {
       onClick();
     } else {
-      router.push('/chat');
+      setIsModalOpen((prev) => !prev);
     }
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        transform: position
-          ? `translate3d(${position.x}px, ${position.y}px, 0)`
-          : undefined,
-        bottom: position ? undefined : `${defaultBottom}px`,
-        right: position ? undefined : `${defaultRight}px`,
-        zIndex: 9999,
-        touchAction: 'none',
-        userSelect: 'none',
-      }}
-      className="pointer-events-auto"
-    >
-      <button
-        ref={btnRef}
-        type="button"
-        onPointerDown={handlePointerDown}
-        onClick={handleClick}
-        aria-label="Ask AI assistant (drag anywhere on screen)"
-        title="Drag in any direction (up, down, left, right) to move. Tap to Ask AI."
-        className={`px-4 py-2.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-500 text-neutral-950 text-sm font-semibold font-dm-sans rounded-full border border-amber-400/50 flex items-center gap-2 select-none touch-none ${
-          isDragging
-            ? 'scale-105 shadow-[0px_16px_36px_rgba(245,158,11,0.65)] ring-2 ring-white/50 cursor-grabbing'
-            : 'shadow-[0px_8px_24px_rgba(0,0,0,0.35)] hover:shadow-[0px_12px_28px_rgba(245,158,11,0.5)] hover:scale-105 cursor-grab active:scale-95 transition-transform transition-shadow duration-200'
-        } ${className}`}
+    <>
+      <div
         style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          transform: position
+            ? `translate3d(${position.x}px, ${position.y}px, 0)`
+            : undefined,
+          bottom: position ? undefined : `${defaultBottom}px`,
+          right: position ? undefined : `${defaultRight}px`,
+          zIndex: 9999,
           touchAction: 'none',
+          userSelect: 'none',
         }}
+        className="pointer-events-auto"
       >
-        <Sparkles className="w-4 h-4 text-black fill-black shrink-0" />
-        <span className="font-semibold tracking-tight">{label}</span>
-      </button>
-    </div>
+        <button
+          ref={btnRef}
+          type="button"
+          onPointerDown={handlePointerDown}
+          onClick={handleClick}
+          aria-label="Ask AI assistant (drag anywhere on screen)"
+          title="Drag in any direction (up, down, left, right) to move. Tap to Ask AI."
+          className={`px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-400 text-neutral-950 text-sm font-semibold font-sans rounded-full border border-yellow-300/60 flex items-center gap-2 select-none touch-none ${
+            isDragging
+              ? 'scale-105 shadow-[0px_16px_36px_rgba(245,158,11,0.65)] ring-2 ring-white/50 cursor-grabbing'
+              : 'shadow-[0px_8px_24px_rgba(0,0,0,0.35)] hover:shadow-[0px_12px_28px_rgba(245,158,11,0.5)] hover:scale-105 cursor-grab active:scale-95 transition-transform transition-shadow duration-200'
+          } ${className}`}
+          style={{
+            touchAction: 'none',
+          }}
+        >
+          <Sparkles className="w-4 h-4 text-black fill-black shrink-0" />
+          <span className="font-semibold tracking-tight">
+            {isModalOpen ? 'Close AI' : label}
+          </span>
+        </button>
+      </div>
+
+      {/* Interactive AI Dining Concierge Floating Chat Modal */}
+      <CustomerAskAiModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
+    </>
   );
 }
