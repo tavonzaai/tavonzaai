@@ -208,12 +208,15 @@ jobs:
           CASHIER_CHANGED: ${{ needs.detect-changes.outputs.cashier }}
           MANAGER_CHANGED: ${{ needs.detect-changes.outputs.manager }}
           WAITER_CHANGED: ${{ needs.detect-changes.outputs.waiter }}
+          CONFIG_CHANGED: ${{ needs.detect-changes.outputs.config }}
         run: |
           SHOULD_BUILD="false"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$SERVICE" ]; then
               SHOULD_BUILD="true"
             fi
+          elif [ "$CONFIG_CHANGED" = "true" ]; then
+            SHOULD_BUILD="true"
           else
             case "$SERVICE" in
               api)      [ "$API_CHANGED"      = "true" ] && SHOULD_BUILD="true" ;;
@@ -303,6 +306,8 @@ jobs:
             else
               SERVICES="$INPUT_SERVICE"
             fi
+          elif [ "$CONFIG_CHANGED" = "true" ]; then
+            SERVICES="api worker realtime ai customer admin kitchen cashier manager waiter"
           else
             [ "$API_CHANGED"      = "true" ] && SERVICES="$SERVICES api"
             [ "$WORKER_CHANGED"   = "true" ] && SERVICES="$SERVICES worker"
