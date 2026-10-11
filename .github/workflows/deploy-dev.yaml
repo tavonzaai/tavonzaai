@@ -381,6 +381,10 @@ jobs:
               echo "▶️ Launching updated services: $SERVICES"
               docker compose -f docker-compose.dev.yaml up -d --no-build $SERVICES
 
+              # Always restart Caddy reverse proxy so it refreshes upstream container IPs and connections
+              echo "🔄 Restarting Caddy reverse proxy..."
+              docker compose -f docker-compose.dev.yaml restart caddy
+
               # Prune dangling images to conserve disk space
               docker image prune -f 2>/dev/null || true
               echo "✅ Deployment completed successfully for: $SERVICES"
