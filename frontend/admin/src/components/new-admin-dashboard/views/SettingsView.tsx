@@ -104,19 +104,11 @@ export default function SettingsView() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [directNewPassword, setDirectNewPassword] = useState('');
   const [directConfirmPassword, setDirectConfirmPassword] = useState('');
+  const [showDirectCurrentPass, setShowDirectCurrentPass] = useState(false);
   const [showDirectNewPass, setShowDirectNewPass] = useState(false);
+  const [showDirectConfirmPass, setShowDirectConfirmPass] = useState(false);
   const [isDirectChangingPass, setIsDirectChangingPass] = useState(false);
-
-  // Password Reset / Change Password Authentication Modal State (OTP Flow)
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [pwdStep, setPwdStep] = useState<'request' | 'verify' | 'new-password'>('request');
-  const [pwdEmail, setPwdEmail] = useState('');
-  const [pwdOtp, setPwdOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [isPwdLoading, setIsPwdLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
 
   // 1. Load Authenticated User Profile & Organization on Mount (GET /auth/me & GET /organizations/my)
   useEffect(() => {
@@ -156,8 +148,6 @@ export default function SettingsView() {
         organizationId: user.organizationId || '',
       });
 
-      setPwdEmail(user.email || '');
-
       setSettings((prev) => ({
         ...prev,
         contactEmail: user.email || prev.contactEmail,
@@ -165,15 +155,6 @@ export default function SettingsView() {
       }));
     }
   }, [user]);
-
-  // 3. Resend OTP Countdown Timer
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setResendCooldown((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [resendCooldown]);
 
   // Handle Avatar Selection
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -263,8 +244,9 @@ export default function SettingsView() {
         setCurrentPassword('');
         setDirectNewPassword('');
         setDirectConfirmPassword('');
+        setIsPasswordModalOpen(false);
       } else {
-        toast.error((res.payload as string) || 'Failed to change password');
+        toast.error((res.payload as string) || 'Failed to change password. Check your current password.');
       }
     } catch (err: any) {
       setIsDirectChangingPass(false);
@@ -296,127 +278,7 @@ export default function SettingsView() {
     }
   };
 
-  // 7. API: Request Password Reset OTP (POST /auth/forgot-password)
-  const handleRequestOtp = async () => {
-    const targetEmail = (pwdEmail || user?.email || settings.contactEmail).trim();
-    if (!targetEmail) {
-      toast.error('Please enter an account email.');
-      return;
-    }
-
-    setIsPwdLoading(true);
-    try {
-      const res = await dispatch(forgotPasswordThunk({ email: targetEmail }));
-      setIsPwdLoading(false);
-
-      if (forgotPasswordThunk.fulfilled.match(res)) {
-        toast.success(`Verification OTP sent to ${targetEmail}`);
-        setPwdStep('verify');
-        setResendCooldown(60);
-      } else {
-        toast.error((res.payload as string) || 'Failed to send OTP code.');
-      }
-    } catch (err: any) {
-      setIsPwdLoading(false);
-      toast.error(err?.message || 'Failed to request OTP code.');
-    }
-  };
-
-  // 8. API: Verify OTP Code (POST /auth/verify-otp)
-  const handleVerifyOtp = async () => {
-    if (pwdOtp.trim().length < 4) {
-      toast.error('Please enter the verification code.');
-      return;
-    }
-
-    setIsPwdLoading(true);
-    try {
-      const targetEmail = (pwdEmail || user?.email || settings.contactEmail).trim();
-      const res = await dispatch(
-        verifyOtpThunk({
-          email: targetEmail,
-          code: pwdOtp.trim(),
-          type: 'password_reset',
-        })
-      );
-      setIsPwdLoading(false);
-
-      if (verifyOtpThunk.fulfilled.match(res)) {
-        toast.success('OTP code verified successfully!');
-        setPwdStep('new-password');
-      } else {
-        toast.error((res.payload as string) || 'Invalid or expired OTP code.');
-      }
-    } catch (err: any) {
-      setIsPwdLoading(false);
-      toast.error(err?.message || 'Verification failed.');
-    }
-  };
-
-  // 9. API: Resend OTP Code (POST /auth/resend-otp)
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0) return;
-    const targetEmail = (pwdEmail || user?.email || settings.contactEmail).trim();
-
-    try {
-      const res = await dispatch(
-        resendOtpThunk({
-          email: targetEmail,
-          type: 'password_reset',
-        })
-      );
-
-      if (resendOtpThunk.fulfilled.match(res)) {
-        toast.success('New OTP verification code sent to your email!');
-        setResendCooldown(60);
-      } else {
-        toast.error((res.payload as string) || 'Failed to resend OTP.');
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to resend OTP.');
-    }
-  };
-
-  // 10. API: Set New Password (POST /auth/reset-password)
-  const handleSetNewPassword = async () => {
-    if (newPassword.length < 8) {
-      toast.error('New password must be at least 8 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match.');
-      return;
-    }
-
-    setIsPwdLoading(true);
-    try {
-      const targetEmail = (pwdEmail || user?.email || settings.contactEmail).trim();
-      const res = await dispatch(
-        resetPasswordThunk({
-          email: targetEmail,
-          code: pwdOtp.trim(),
-          newPassword: newPassword.trim(),
-        })
-      );
-      setIsPwdLoading(false);
-
-      if (resetPasswordThunk.fulfilled.match(res)) {
-        toast.success('Password updated successfully! Your new password is now active.');
-        setIsPasswordModalOpen(false);
-        setPwdStep('request');
-        setPwdOtp('');
-        setNewPassword('');
-        setConfirmPassword('');
-      } else {
-        toast.error((res.payload as string) || 'Failed to reset password.');
-      }
-    } catch (err: any) {
-      setIsPwdLoading(false);
-      toast.error(err?.message || 'Password update failed.');
-    }
-  };
-
-  // 11. API: Sign Out / Invalidate Session (POST /auth/logout)
+  // 7. API: Sign Out / Invalidate Session (POST /auth/logout)
   const handleLogoutSession = async () => {
     await handleLogout();
   };
@@ -840,14 +702,11 @@ export default function SettingsView() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setIsPasswordModalOpen(true);
-                  setPwdStep('request');
-                }}
+                onClick={() => setIsPasswordModalOpen(true)}
                 className="text-xs text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
               >
-                <Key className="w-3.5 h-3.5" />
-                <span>Forgot password? Use OTP reset</span>
+                <Lock className="w-3.5 h-3.5" />
+                <span>Open Password Dialog</span>
               </button>
             </div>
 
@@ -1025,14 +884,11 @@ export default function SettingsView() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setIsPasswordModalOpen(true);
-                  setPwdStep('request');
-                }}
+                onClick={() => setIsPasswordModalOpen(true)}
                 className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-semibold text-xs sm:text-sm rounded-lg flex items-center gap-2 transition cursor-pointer shadow-md"
               >
                 <Key className="w-4 h-4 text-black" />
-                <span>Reset / Change Password</span>
+                <span>Change Password</span>
               </button>
             </div>
 
@@ -1071,20 +927,17 @@ export default function SettingsView() {
                       Account Password
                     </span>
                     <span className="text-xs text-neutral-400">
-                      Managed via backend OTP reset endpoints (<code className="text-amber-400/90 font-mono">/auth/forgot-password</code> &amp; <code className="text-amber-400/90 font-mono">/auth/reset-password</code>).
+                      Managed securely via authenticated backend endpoint (<code className="text-amber-400/90 font-mono">/auth/change-password</code>).
                     </span>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsPasswordModalOpen(true);
-                    setPwdStep('request');
-                  }}
+                  onClick={() => setIsPasswordModalOpen(true)}
                   className="px-3.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg text-xs font-medium transition cursor-pointer"
                 >
-                  Manage Password
+                  Change Password
                 </button>
               </div>
             </div>
@@ -1168,7 +1021,7 @@ export default function SettingsView() {
         </div>
       )}
 
-      {/* 6. Authentication Password Modal (Full Forgot / Verify / Reset OTP Flow) */}
+      {/* 6. Change Password Modal (Direct Authenticated POST /auth/change-password) */}
       {isPasswordModalOpen && (
         <div
           className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
@@ -1186,14 +1039,10 @@ export default function SettingsView() {
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-white">
-                    {pwdStep === 'request'
-                      ? 'Request Password Reset'
-                      : pwdStep === 'verify'
-                      ? 'Enter 5-Digit Verification Code'
-                      : 'Set New Account Password'}
+                    Change Account Password
                   </h3>
                   <span className="text-[11px] text-neutral-400">
-                    Step {pwdStep === 'request' ? '1' : pwdStep === 'verify' ? '2' : '3'} of 3
+                    Direct authenticated security update
                   </span>
                 </div>
               </div>
@@ -1208,180 +1057,96 @@ export default function SettingsView() {
               </button>
             </div>
 
-            {/* Step 1: Send OTP to Email */}
-            {pwdStep === 'request' && (
-              <div className="space-y-4">
-                <p className="text-xs text-neutral-300 leading-relaxed">
-                  We will send a 5-digit verification code to your verified email address to confirm your identity.
-                </p>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-neutral-400">Account Email</label>
+            <form onSubmit={handleDirectChangePassword} className="space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-neutral-400 font-medium">Current Password *</label>
+                <div className="relative flex items-center">
                   <input
-                    type="email"
-                    value={pwdEmail}
-                    onChange={(e) => setPwdEmail(e.target.value)}
-                    className="w-full h-10 px-3 bg-black border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400 transition"
-                    placeholder="owner@tavonza.com"
+                    type={showDirectCurrentPass ? 'text' : 'password'}
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full h-10 px-3 pr-10 bg-black border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400 transition"
+                    placeholder="Enter current password"
                   />
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
                   <button
                     type="button"
-                    onClick={() => setIsPasswordModalOpen(false)}
-                    className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+                    onClick={() => setShowDirectCurrentPass((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isPwdLoading}
-                    onClick={handleRequestOtp}
-                    className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isPwdLoading ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Sending Code...</span>
-                      </>
-                    ) : (
-                      <span>Send OTP Code</span>
-                    )}
+                    {showDirectCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
-            )}
 
-            {/* Step 2: Verify 5-Digit OTP */}
-            {pwdStep === 'verify' && (
-              <div className="space-y-4">
-                <p className="text-xs text-neutral-300 leading-relaxed">
-                  A verification code has been dispatched to{' '}
-                  <strong className="text-white">{pwdEmail}</strong>. Please enter the code below.
-                </p>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-neutral-400">5-Digit Verification Code</label>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-neutral-400 font-medium">New Password *</label>
+                <div className="relative flex items-center">
                   <input
-                    type="text"
-                    maxLength={6}
-                    value={pwdOtp}
-                    onChange={(e) => setPwdOtp(e.target.value)}
-                    className="w-full h-11 px-3 bg-black border border-neutral-800 rounded-lg text-base font-mono tracking-widest text-center text-amber-400 focus:outline-none focus:border-amber-400 transition"
-                    placeholder="•••••"
+                    type={showDirectNewPass ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    value={directNewPassword}
+                    onChange={(e) => setDirectNewPassword(e.target.value)}
+                    className="w-full h-10 px-3 pr-10 bg-black border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400 transition"
+                    placeholder="Min 8 characters"
                   />
-                </div>
-
-                <div className="flex items-center justify-between text-xs pt-1">
                   <button
                     type="button"
-                    disabled={resendCooldown > 0}
-                    onClick={handleResendOtp}
-                    className="text-amber-400 hover:underline disabled:text-neutral-500 cursor-pointer"
+                    onClick={() => setShowDirectNewPass((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white"
                   >
-                    {resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : 'Resend Code'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPwdStep('request')}
-                    className="text-neutral-400 hover:text-white cursor-pointer"
-                  >
-                    Change Email
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
-                  <button
-                    type="button"
-                    onClick={() => setIsPasswordModalOpen(false)}
-                    className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isPwdLoading}
-                    onClick={handleVerifyOtp}
-                    className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isPwdLoading ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Verifying...</span>
-                      </>
-                    ) : (
-                      <span>Verify Code</span>
-                    )}
+                    {showDirectNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
-            )}
 
-            {/* Step 3: Enter New Password */}
-            {pwdStep === 'new-password' && (
-              <div className="space-y-4">
-                <p className="text-xs text-neutral-300 leading-relaxed">
-                  Code verified. Choose a strong new password with at least 8 characters.
-                </p>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-neutral-400">New Password</label>
-                  <div className="relative flex items-center">
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full h-10 px-3 pr-10 bg-black border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400 transition"
-                      placeholder="••••••••"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword((prev) => !prev)}
-                      className="absolute right-3 text-neutral-400 hover:text-white"
-                    >
-                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-neutral-400">Confirm New Password</label>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-neutral-400 font-medium">Confirm New Password *</label>
+                <div className="relative flex items-center">
                   <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full h-10 px-3 bg-black border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400 transition"
-                    placeholder="••••••••"
+                    type={showDirectConfirmPass ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    value={directConfirmPassword}
+                    onChange={(e) => setDirectConfirmPassword(e.target.value)}
+                    className="w-full h-10 px-3 pr-10 bg-black border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400 transition"
+                    placeholder="Confirm new password"
                   />
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
                   <button
                     type="button"
-                    onClick={() => setIsPasswordModalOpen(false)}
-                    className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+                    onClick={() => setShowDirectConfirmPass((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isPwdLoading}
-                    onClick={handleSetNewPassword}
-                    className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isPwdLoading ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Updating...</span>
-                      </>
-                    ) : (
-                      <span>Update Password</span>
-                    )}
+                    {showDirectConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
-            )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isDirectChangingPass}
+                  className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isDirectChangingPass ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Updating...</span>
+                    </>
+                  ) : (
+                    <span>Update Password</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

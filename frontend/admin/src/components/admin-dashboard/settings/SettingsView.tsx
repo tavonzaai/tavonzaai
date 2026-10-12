@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
-import { getMe } from '@/redux/features/authApi';
+import { getMe, changePassword } from '@/redux/features/authApi';
 import { updateMe } from '@/redux/features/userApi';
 
 export type SettingsTab =
@@ -109,6 +109,40 @@ export default function SettingsView() {
 
   // 5. Security state
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
+  const [adminCurrentPass, setAdminCurrentPass] = useState('');
+  const [adminNewPass, setAdminNewPass] = useState('');
+  const [isChangingAdminPass, setIsChangingAdminPass] = useState(false);
+
+  const handleUpdateMasterPassword = async () => {
+    if (!adminCurrentPass || !adminNewPass) {
+      toast.error('Please enter current and new password');
+      return;
+    }
+    if (adminNewPass.length < 8) {
+      toast.error('New password must be at least 8 characters');
+      return;
+    }
+    setIsChangingAdminPass(true);
+    try {
+      const res = await dispatch(
+        changePassword({
+          currentPassword: adminCurrentPass,
+          newPassword: adminNewPass,
+        })
+      );
+      setIsChangingAdminPass(false);
+      if (changePassword.fulfilled.match(res)) {
+        toast.success((res.payload as string) || 'Master password updated successfully!');
+        setAdminCurrentPass('');
+        setAdminNewPass('');
+      } else {
+        toast.error((res.payload as string) || 'Failed to update master password. Check your current password.');
+      }
+    } catch (err: any) {
+      setIsChangingAdminPass(false);
+      toast.error(err?.message || 'Failed to update password');
+    }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -925,19 +959,24 @@ export default function SettingsView() {
                     <input
                       type="password"
                       placeholder="Current Password"
+                      value={adminCurrentPass}
+                      onChange={(e) => setAdminCurrentPass(e.target.value)}
                       className="h-9 px-3 bg-zinc-950 border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                     />
                     <input
                       type="password"
-                      placeholder="New Strong Password"
+                      placeholder="New Strong Password (min 8 chars)"
+                      value={adminNewPass}
+                      onChange={(e) => setAdminNewPass(e.target.value)}
                       className="h-9 px-3 bg-zinc-950 border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
                     />
                     <button
                       type="button"
-                      onClick={() => toast.success('Password updated successfully.')}
-                      className="h-9 px-4 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                      disabled={isChangingAdminPass}
+                      onClick={handleUpdateMasterPassword}
+                      className="h-9 px-4 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
                     >
-                      Update Password
+                      {isChangingAdminPass ? 'Updating...' : 'Update Password'}
                     </button>
                   </div>
                 </div>

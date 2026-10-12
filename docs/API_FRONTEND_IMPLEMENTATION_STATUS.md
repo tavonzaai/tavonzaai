@@ -1,19 +1,30 @@
 # Tavonza AI — Backend API & Frontend Implementation Status Matrix
 
 > **Authoritative Tracking Document**  
-> Comprehensive audit of all backend REST & RPC endpoints across `apps/api` and their implementation status across the 6 frontend applications (`@frontend/customer`, `@frontend/waiter`, `@frontend/kitchen`, `@frontend/cashier`, `@frontend/manager`, `@frontend/admin`).
+> Comprehensive full-project audit of all backend REST & RPC endpoints, WebSocket events, and internal gateways across `apps/api` and `apps/ai`, paired with their exact implementation and integration status across all 6 frontend applications:
+> - `@frontend/customer` (Customer Mobile & Desktop Web App)
+> - `@frontend/waiter` (Waiter POS & Floor Terminal)
+> - `@frontend/kitchen` (Kitchen Display System — KDS)
+> - `@frontend/cashier` (Cashier POS & Offline Settle Terminal)
+> - `@frontend/manager` (Branch Manager Operations Portal)
+> - `@frontend/admin` (Platform Multi-Tenant Admin Console)
 
 ---
 
 ## 📊 Executive Summary
 
-- **Total Backend Controller Endpoints Audited:** 88 endpoints across 21 controllers
-- **Frontend Implemented Endpoints:** 53 endpoints (`[x]` Checked)
-- **Pending Frontend Endpoints (Faka / Empty):** 35 endpoints (`[ ]` Blank / Unimplemented in UI/Redux)
+| Category | Count | Status Notes |
+| :--- | :---: | :--- |
+| **Total Backend Controllers Audited** | **23 Controllers** | 22 NestJS HTTP controllers + 1 WebSocket Realtime Gateway |
+| **Total Backend REST Endpoints Audited** | **112 Endpoints** | All controller routes in `apps/api` |
+| **Frontend Implemented Endpoints** | **71 Endpoints (`[x]`)** | Fully wired in Redux API slices and frontend UI views |
+| **Pending Frontend Endpoints (Faka / Empty)** | **41 Endpoints (`[ ]`)** | Backend endpoint complete & verified; pending frontend UI/Redux wiring |
+| **Realtime WebSocket Channels & Broadcasts** | **9 Broadcast Topics** | Socket.IO Gateway (`apps/api/src/modules/realtime/realtime.gateway.ts`) |
+| **Python AI Microservice Endpoints** | **6 Endpoints** | FastAPI service (`apps/ai/src/main.py`) consumed via Tool Gateway & chat client |
 
 ### Legend
-- `[x]` **Done** — Endpoint exists and is actively integrated in frontend Redux API / components.
-- `[ ]` **Empty (Faka / Pending)** — Backend endpoint is complete, but frontend has not yet integrated or wired this endpoint to the UI.
+- `[x]` **Done** — Endpoint exists in backend and is actively integrated into frontend Redux features, hooks, and UI components.
+- `[ ]` **Empty (Faka / Pending)** — Backend endpoint is complete and available, but frontend has not yet integrated or wired this endpoint to the UI.
 
 ---
 
@@ -23,29 +34,40 @@
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| `POST /auth/register` | [x] | [x] | `frontend/customer/src/redux/features/authApi.ts` (`registerCustomer`) → Register modal | Customer registration with OTP trigger |
-| `POST /auth/login` | [x] | [x] | `frontend/*/src/redux/features/authApi.ts` (`loginUser`) in all 6 apps | Email/password credential login |
-| `POST /auth/refresh` | [x] | [x] | `frontend/*/src/redux/api/baseApi.ts` (Automatic 401 token interceptor) | Access token rotation using refresh token |
-| `POST /auth/logout` | [x] | [x] | `frontend/*/src/redux/features/authApi.ts` (`logoutUser`) in all 6 apps | Invalidate refresh token and session cookies |
+| `POST /auth/register` | [x] | [x] | `frontend/customer/src/redux/features/authApi.ts` (`registerCustomer`) → Register Modal | Customer registration with OTP trigger |
+| `POST /auth/login` | [x] | [x] | `frontend/*/src/redux/features/authApi.ts` (`loginUser`) across all 6 applications | Email/password credential login |
+| `POST /auth/refresh` | [x] | [x] | `frontend/*/src/redux/api/baseApi.ts` (Automatic 401 token refresh interceptor) | Access token rotation using refresh token |
+| `POST /auth/change-password` | [x] | [x] | `frontend/*/src/redux/features/authApi.ts` (`changePassword`) in all 6 applications → Settings/Profile views | Authenticated password change with 8+ character validation |
+| `POST /auth/logout` | [x] | [x] | `frontend/*/src/redux/features/authApi.ts` (`logoutUser`) across all 6 applications | Invalidate refresh token and session cookies |
 | `GET /auth/me` | [x] | [x] | `frontend/*/src/redux/features/authApi.ts` (`getMe`) fallback | Fetch active authenticated profile |
 | `PATCH /auth/me` | [x] | [x] | `frontend/*/src/redux/features/userApi.ts` (`updateMe`) | Update personal profile details |
 | `POST /auth/verify-otp` | [x] | [x] | `frontend/customer/src/redux/features/authApi.ts` (`verifyOtpThunk`) | 5-digit verification code check |
-| `POST /auth/forgot-password` | [x] | [x] | `frontend/customer/src/redux/features/authApi.ts` (`forgotPasswordThunk`) | Send password reset OTP code |
+| `POST /auth/forgot-password` | [x] | [x] | `frontend/customer/src/redux/features/authApi.ts` (`forgotPasswordThunk`) | Public reset password OTP dispatch |
 | `POST /auth/reset-password` | [x] | [x] | `frontend/customer/src/redux/features/authApi.ts` (`resetPasswordThunk`) | Submit new password after OTP verification |
 | `POST /auth/resend-otp` | [x] | [x] | `frontend/customer/src/redux/features/authApi.ts` (`resendOtpThunk`) | Resend 5-digit verification code |
 
 ---
 
-### 1.2 User Management (`UserController` — `apps/api/src/modules/identity/presentation/http/user.controller.ts`)
+### 1.2 User Profile & Staff Assignments (`MeController` — `apps/api/src/modules/identity/presentation/http/me.controller.ts`)
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| `PATCH /users/me` | [x] | [x] | `frontend/*/src/redux/features/userApi.ts` (`updateMe`) with avatar file upload | Profile updates with avatar image multipart upload |
+| `GET /me` | [x] | [x] | `frontend/*/src/redux/features/authApi.ts` (`getMe`) primary profile lookup | Retrieve current authenticated user profile |
+| `GET /me/assignments` | [x] | [x] | `frontend/*/src/redux/features/authApi.ts` (`getMyAssignments`) in staff apps | Retrieve active branch staff role assignments and permissions |
+
+---
+
+### 1.3 User Management (`UserController` — `apps/api/src/modules/identity/presentation/http/user.controller.ts`)
+
+| HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `PATCH /users/me` | [x] | [x] | `frontend/*/src/redux/features/userApi.ts` (`updateMe`) with avatar file upload | Profile updates with multipart avatar image upload |
 | `GET /users/me` | [x] | [x] | `frontend/*/src/redux/features/userApi.ts` / `authApi.ts` (`getMe`) | Current user profile |
+| `GET /users/me/assignments` | [x] | [x] | `frontend/*/src/redux/features/authApi.ts` (`getMyAssignments` fallback) | Staff role assignments lookup fallback |
 | `GET /users` | [x] | [x] | `frontend/admin/src/redux/features/userApi.ts` (`getUsersList`) | Paginated user management directory |
 | `GET /users/:id` | [x] | [x] | `frontend/admin/src/redux/features/userApi.ts` (`getUserById`) | Single user record detail |
 | `PATCH /users/status/:id` | [x] | [x] | `frontend/admin/src/redux/features/userApi.ts` (`changeUserStatus`) | Toggle ACTIVE, INACTIVE, BANNED |
-| `DELETE /users/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/userApi.ts` (`deleteUser`) & `frontend/admin/src/app/admin-dashboard/` | Soft delete user account |
+| `DELETE /users/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/userApi.ts` (`deleteUser`) & `frontend/admin/src/components/new-admin-dashboard/` | Soft delete user account |
 | `POST /users/create-customer` | [x] | [x] | `frontend/customer/src/redux/features/userApi.ts` (`createCustomerUser`) | Direct customer profile creation |
 | `POST /users/create-admin` | [x] | [x] | `frontend/admin/src/redux/features/userApi.ts` (`createAdminUser`) | Platform admin creation (SUPER_ADMIN only) |
 
@@ -57,12 +79,12 @@
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| `POST /organizations` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/restaurantApi.ts` (or `organizationApi.ts`) & `frontend/admin/src/app/admin-dashboard/` | Create a new tenant organization |
+| `POST /organizations` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/restaurantApi.ts` (`createOrganization`) & Admin Organization modal | Create a new tenant organization |
 | `GET /organizations` | [x] | [x] | `frontend/admin/src/redux/features/restaurantApi.ts` (`getOrganizations`) | List all organizations |
-| `GET /organizations/my` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/restaurantApi.ts` & Admin tenant switchers | List organizations owned by logged-in user |
-| `GET /organizations/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/restaurantApi.ts` & Admin Organization detail page | Get organization details by ID |
-| `PATCH /organizations/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/restaurantApi.ts` & Admin Organization settings form | Update organization details |
-| `DELETE /organizations/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/restaurantApi.ts` & Admin Organization management modal | Delete organization |
+| `GET /organizations/my` | [x] | [x] | `frontend/admin/src/redux/features/restaurantApi.ts` (`getMyOrganization`) | List organizations owned by logged-in user |
+| `GET /organizations/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/restaurantApi.ts` (`getOrganizationById`) & Admin Org Detail page | Get organization details by ID |
+| `PATCH /organizations/:id` | [x] | [x] | `frontend/admin/src/redux/features/restaurantApi.ts` (`updateOrganization`) | Update organization details |
+| `DELETE /organizations/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/restaurantApi.ts` (`deleteOrganization`) & Admin Org management modal | Delete organization |
 
 ---
 
@@ -87,8 +109,8 @@
 | `GET /branches/:id` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`getBranch`) & `frontend/admin/src/redux/features/restaurantApi.ts` (`getBranchById`) | Get branch details by ID |
 | `PATCH /branches/:id` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`updateBranch`) & `frontend/admin/src/redux/features/restaurantApi.ts` (`updateBranch`) | Update branch metadata |
 | `DELETE /branches/:id` | [x] | [x] | `frontend/admin/src/redux/features/restaurantApi.ts` (`deleteBranch`) | Soft delete branch |
-| `GET /branches/:id/settings` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`getSettings`, `fetchBranchSettings`) | Fetch branch order acceptance mode & tax/service rates |
-| `PATCH /branches/:id/settings` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`updateSettings`, `updateBranchSettingsThunk`) | Update branch operational settings |
+| `GET /branches/:id/settings` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`getSettings`) & `frontend/admin/src/redux/features/restaurantApi.ts` (`getBranchSettings`) | Fetch branch order acceptance mode & tax/service rates |
+| `PATCH /branches/:id/settings` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`updateSettings`) & `frontend/admin/src/redux/features/restaurantApi.ts` (`updateBranchSettings`) | Update branch operational settings |
 | `GET /branches/:id/operating-hours` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`getOperatingHours`) | Get weekly operating schedule |
 | `PUT /branches/:id/operating-hours` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`updateOperatingHours`) | Set/replace weekly opening & closing hours |
 | `GET /branches/:id/holidays` | [x] | [ ] | **Where to implement:** `frontend/manager/src/redux/features/branchManagerApi.ts` & `frontend/manager/src/components/branch-manager-dashboard/BranchConfigView.tsx` | View branch holiday calendar |
@@ -108,8 +130,8 @@
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| `GET /menus/:branchId/categories` | [x] | [x] | `frontend/customer/src/redux/features/menuCategoryApi.ts`, cashier, kitchen, manager | Active categories list |
-| `GET /menus/:branchId/items` | [x] | [x] | `frontend/customer/src/redux/features/menuItemApi.ts`, waiter, cashier, kitchen, manager | Active menu items with search/filter |
+| `GET /menus/:branchId/categories` | [x] | [x] | `frontend/customer/src/redux/features/menuCategoryApi.ts`, cashier, kitchen, manager | Active categories list with counts |
+| `GET /menus/:branchId/items` | [x] | [x] | `frontend/customer/src/redux/features/menuItemApi.ts`, waiter, cashier, kitchen, manager | Active menu items with search & category filter |
 | `GET /menus/items/:itemId` | [x] | [x] | `frontend/customer/src/redux/features/menuItemApi.ts` (`findById`) | Item detail with add-ons & nutrition |
 | `POST /menus/categories` | [x] | [ ] | **Where to implement:** `frontend/manager/src/redux/features/branchManagerApi.ts` (`createCategory`) & Manager Menu tab | Create new category (e.g. Burgers, Drinks) |
 | `PATCH /menus/categories/:id` | [x] | [ ] | **Where to implement:** `frontend/manager/src/redux/features/branchManagerApi.ts` (`updateCategory`) & Manager Menu tab | Edit category details |
@@ -120,9 +142,20 @@
 
 ---
 
+### 3.2 Legacy Menu Compatibility Endpoints (`MenuCompatibilityController` — `apps/api/src/modules/menus/presentation/controllers/menu-compatibility.controller.ts`)
+
+| HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `GET /menu-categories` | [x] | [x] | `frontend/customer/src/redux/features/menuCategoryApi.ts` | Legacy category listing by restaurant/branch query params |
+| `GET /menu-categories/:id` | [x] | [x] | `frontend/customer/src/redux/features/menuCategoryApi.ts` | Legacy single category detail |
+| `GET /menu-items` | [x] | [x] | `frontend/customer/src/redux/features/menuItemApi.ts` | Legacy items listing with search and category filters |
+| `GET /menu-items/:itemId` | [x] | [x] | `frontend/customer/src/redux/features/menuItemApi.ts` | Legacy single item specifications and add-ons |
+
+---
+
 ## 4. Tables, Floor & Reservation Domain
 
-### 4.1 Tables (`TableController` — `apps/api/src/modules/tables/presentation/http/table.controller.ts`)
+### 4.1 Tables & Floor Plan (`TableController` — `apps/api/src/modules/tables/presentation/http/table.controller.ts`)
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
@@ -166,7 +199,7 @@
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| `POST /feedback` | [x] | [ ] | **Where to implement:** `frontend/customer/src/redux/features/feedbackApi.ts` & `frontend/customer/src/app/review/page.tsx` | Submit 1–5 star order rating and comments |
+| `POST /feedback` | [x] | [ ] | **Where to implement:** `frontend/customer/src/redux/features/feedbackApi.ts`, `frontend/customer/src/app/feedback/page.tsx` & `FeedbackModal.tsx` | Submit 1–5 star order rating and comments |
 | `GET /feedback/order/:orderId` | [x] | [ ] | **Where to implement:** `frontend/customer/src/redux/features/feedbackApi.ts` & Customer Order Status screen | Check if order has already been reviewed |
 
 ---
@@ -225,7 +258,7 @@
 
 ## 7. Billing, Payments & Discounts Domain
 
-### 7.1 Payments (`PaymentController` — `apps/api/src/modules/payments/presentation/payment.controller.ts`)
+### 7.1 Core Payments & Billing (`PaymentController` — `apps/api/src/modules/payments/presentation/payment.controller.ts`)
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
@@ -238,6 +271,29 @@
 | `GET /payments/:id` | [x] | [ ] | **Where to implement:** `frontend/cashier/src/redux/features/cashierApi.ts` (`getPaymentReceipt`) & Cashier Receipt modal | Fetch payment receipt breakdown |
 | `GET /payments/order/:orderId` | [x] | [ ] | **Where to implement:** `frontend/cashier/src/redux/features/cashierApi.ts` & Manager Order Detail | Get all payments under specific order |
 | `GET /payments/session/:sessionId/bill` | [x] | [ ] | **Where to implement:** `frontend/cashier/src/redux/features/cashierApi.ts` & Customer Checkout view | Authoritative bill total and balance due |
+
+---
+
+### 7.2 Stripe Online Payment Flow (`PaymentController`)
+
+| HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `POST /payments/stripe/create-intent` | [x] | [x] | `frontend/customer/src/redux/features/paymentApi.ts` (`createStripePaymentIntent`) | Calculates balance & generates Stripe client secret |
+| `POST /payments/stripe/verify` | [x] | [x] | `frontend/customer/src/redux/features/paymentApi.ts` (`verifyStripePayment`) | Confirm PaymentIntent status and settle order |
+| `POST /payments/stripe/webhook` | [x] | [x] | Backend webhook receiver (`handleStripeWebhook`) with HMAC signature check | Webhook listener for asynchronous Stripe settlement |
+
+---
+
+### 7.3 Cashier Offline Cash/Card Payment Flow (`PaymentController`)
+
+| HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `POST /payments/request-offline` | [x] | [x] | `frontend/customer/src/redux/features/paymentApi.ts` (`requestOfflinePayment`) | Customer requests cash/terminal payment at table |
+| `GET /payments/offline/requests` | [x] | [x] | `frontend/cashier/src/redux/features/cashierApi.ts` (`getOfflinePaymentRequests`) | Cashier fetches pending physical payment requests |
+| `POST /payments/confirm-offline` | [x] | [x] | Backend alternate body route (`paymentId` in body) | Alternate cashier payment confirmation |
+| `POST /payments/offline/:id/confirm` | [x] | [x] | `frontend/cashier/src/redux/features/cashierApi.ts` (`confirmOfflinePayment`) | Cashier confirms cash receipt, releases table |
+| `POST /payments/reject-offline` | [x] | [x] | Backend alternate body route (`paymentId` in body) | Alternate cashier payment rejection |
+| `POST /payments/offline/:id/reject` | [x] | [x] | `frontend/cashier/src/redux/features/cashierApi.ts` (`rejectOfflinePayment`) | Cashier rejects request, returns session to ACTIVE |
 
 ---
 
@@ -299,9 +355,40 @@
 
 ---
 
-## 11. System, Mailer & Storage
+## 11. Realtime WebSocket Gateway Subsystem (Socket.IO)
 
-### 11.1 Mailer Diagnostics (`MailController` — `apps/api/src/modules/notifications/presentation/http/mail.controller.ts`)
+### 11.1 Realtime Gateway (`RealtimeGateway` — `apps/api/src/modules/realtime/realtime.gateway.ts`)
+
+> *Room Partitioning: `user:<id>`, `branch:<id>`, `table:<id>`, `session:<id>`, `order:<id>`, `branch:<id>:waiter`, `branch:<id>:cashier`, `branch:<id>:kitchen:<stationType>`.*
+
+| Event / Topic Name | Direction | Backend Done | Frontend Consumed | Active Consumers / Handlers | Description |
+| :--- | :---: | :---: | :---: | :--- | :--- |
+| `join_room` | Client → Server | [x] | [x] | Frontends join authorized room channels on connection | Client requests room subscription |
+| `leave_room` | Client → Server | [x] | [x] | Frontends leave room channels on route transitions | Client leaves room subscription |
+| `TABLE_STATUS_CHANGED` | Server → Client | [x] | [x] | Manager Floor Map, Waiter Tables view, Customer Session | Live table status (AVAILABLE, SEATED, DIRTY, RESERVED) |
+| `TABLE_SESSION_STATUS_CHANGED` | Server → Client | [x] | [x] | Customer header, Cashier table monitors, Waiter app | Session transitions (ACTIVE, BILL_REQUESTED, CLOSED) |
+| `ORDER_CREATED` | Server → Client | [x] | [x] | Waiter Orders Queue, Manager live orders, Customer timeline | Dispatched when customer submits cart |
+| `ORDER_STATUS_CHANGED` | Server → Client | [x] | [x] | Customer Order Tracker, Waiter, Kitchen KDS, Cashier POS | Order status transitions (PENDING, APPROVED, PREPARING, READY, SERVED) |
+| `ORDER_ITEM_STATUS_CHANGED` | Server → Client | [x] | [x] | Kitchen Station KDS, Bartender Screen, Customer Tracker | Granular station item status update |
+| `PAYMENT_STATUS_CHANGED` | Server → Client | [x] | [x] | Customer Checkout screen, Cashier POS, Waiter table view | Payment completion / failure notification |
+| `PAYMENT_REQUESTED` | Server → Client | [x] | [x] | Cashier offline queue, Waiter alerts | Customer requested offline bill settlement |
+| `NOTIFICATION_CREATED` | Server → Client | [x] | [x] | All 6 frontends `<NotificationCenter />` | Real-time push alert dispatched to user/role |
+| `NOTIFICATION_READ` | Server → Client | [x] | [x] | Header notification badges | Synchronize read status across multiple client tabs |
+
+---
+
+## 12. System, Health, Mailer & Storage
+
+### 12.1 System Health & Diagnostics (`AppController` — `apps/api/src/app.controller.ts`)
+
+| HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `GET /health` | [x] | [x] | Devops & Docker healthchecks / ECS target group monitors | Application liveness & DB connection check |
+| `GET /` | [x] | [x] | Root API check | Service banner and Swagger docs link (`/docs`) |
+
+---
+
+### 12.2 Mailer Diagnostics (`MailController` — `apps/api/src/modules/notifications/presentation/http/mail.controller.ts`)
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
@@ -311,7 +398,7 @@
 
 ---
 
-### 11.2 Storage & File Service (`StorageController` — `apps/api/src/modules/storage/storage.controller.ts`)
+### 12.3 Storage & File Service (`StorageController` — `apps/api/src/modules/storage/storage.controller.ts`)
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
@@ -329,9 +416,11 @@
 
 ---
 
-## 12. Internal AI Tool Gateway (`InternalAiController` — `apps/api/src/modules/ai/presentation/http/internal-ai.controller.ts`)
+## 13. AI Subsystem & Runtime Gateways
 
-> *Note: These are `/internal/*` routes protected by `InternalServiceGuard`. They are consumed exclusively by the Python AI agent runtime (`apps/ai`), not called directly by the browser.*
+### 13.1 Internal AI Tool Gateway (`InternalAiController` — `apps/api/src/modules/ai/presentation/http/internal-ai.controller.ts`)
+
+> *Note: These are `/internal/*` routes protected by `InternalServiceGuard`. They are consumed strictly by the Python AI agent runtime (`apps/ai`), not called directly by the browser.*
 
 | HTTP Method & Route | Backend Done | Python AI Runtime Done | Description |
 | :--- | :---: | :---: | :--- |
@@ -341,19 +430,31 @@
 | `POST /internal/tools/execute/confirm` | [x] | [x] | Confirms sensitive mutations (order submission, payment) |
 | `POST /internal/audit` | [x] | [x] | Ingests structured AI action events into audit log |
 
-*(Customer, Waiter, and Kitchen frontends interact with the AI subsystem via `apps/ai` endpoints `/ai/chat`, `/ai/voice/transcribe`, and `/ai/voice/synthesize` implemented in `frontend/*/src/redux/features/chatApi.ts`).*
+---
+
+### 13.2 Python AI Runtime Microservice (`apps/ai/src/main.py` — FastAPI)
+
+| HTTP Method & Route | Microservice Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `GET /health` | [x] | [x] | Devops healthcheck | Python microservice health status |
+| `GET /` | [x] | [x] | Root API check | Service banner and environment info |
+| `POST /ai/chat` | [x] | [x] | `frontend/customer/src/redux/features/chatApi.ts` & `frontend/waiter/src/redux/features/chatApi.ts` | Dining concierge AI assistant conversation |
+| `POST /ai/chat/stream` | [x] | [ ] | **Where to implement:** `frontend/*/src/redux/features/chatApi.ts` (Streaming SSE listener) | Streaming token-by-token chat response |
+| `POST /ai/voice/transcribe` | [x] | [ ] | **Where to implement:** Customer & Waiter Voice Mic input modal | Audio speech-to-text transcription via Whisper |
+| `POST /ai/voice/synthesize` | [x] | [ ] | **Where to implement:** Audio player in Customer Concierge | Text-to-speech audio synthesis |
 
 ---
 
-## 🎯 Summary of Pending Frontend Implementations (Faka Checklist by App)
+## 🎯 Categorized Pending Frontend Action Checklist (Faka Checklist by App)
 
 To achieve 100% full-stack parity across all features, implement the following categorized endpoints in their target frontend applications:
 
 ### 📱 1. Customer Application (`@frontend/customer`)
-- [ ] **Feedback Submission:** Wire up `POST /feedback` and `GET /feedback/order/:orderId` in `feedbackApi.ts` with a post-dining rating screen.
+- [ ] **Feedback Submission:** Wire up `POST /feedback` and `GET /feedback/order/:orderId` in `feedbackApi.ts` connected to `frontend/customer/src/app/feedback/page.tsx` and `FeedbackModal.tsx`.
 - [ ] **Table Reservations:** Wire up `POST /tables/reservations` in `reservationApi.ts` for advance table booking.
 - [ ] **Direct Waiter Call & Bill Request:** Wire up `POST /sessions/:sessionId/call-waiter` and `POST /sessions/:sessionId/request-bill` in `sessionApi.ts`.
 - [ ] **Authoritative Session Bill Lookup:** Wire up `GET /payments/session/:sessionId/bill` in `paymentApi.ts` before settling payment.
+- [ ] **AI Voice Concierge:** Wire up `POST /ai/voice/transcribe` for voice ordering.
 
 ### 🍽️ 2. Waiter Application (`@frontend/waiter`)
 - [ ] **Cancel Order:** Wire up `DELETE /orders/:orderId` in `waiterApi.ts` (soft delete/cancel order).
@@ -377,7 +478,7 @@ To achieve 100% full-stack parity across all features, implement the following c
 - [ ] **Shift Scheduling & Attendance:** Wire up `POST /shifts` and `PATCH /shifts/:id/cancel` in `branchManagerApi.ts`.
 
 ### 🛡️ 6. Platform Admin Console (`@frontend/admin`)
-- [ ] **Organization CRUD:** Wire up `POST /organizations`, `GET /organizations/:id`, `PATCH /organizations/:id`, and `DELETE /organizations/:id` in `restaurantApi.ts` (or `organizationApi.ts`).
+- [ ] **Organization Creation & Deletion:** Wire up `POST /organizations`, `GET /organizations/:id`, and `DELETE /organizations/:id` in `restaurantApi.ts`.
 - [ ] **Soft Delete User:** Wire up `DELETE /users/:id` in `userApi.ts`.
 - [ ] **Media & S3 File Browser:** Wire up `POST /storage/presigned-upload-url`, `GET /storage/files`, and `DELETE /storage/file` in `storageApi.ts`.
 - [ ] **Email Diagnostics:** Wire up `POST /mail/test-send`, `POST /mail/test-otp`, and `GET /mail/status`.

@@ -124,14 +124,14 @@ export default function ProfileView() {
       setMessage({ text: 'New passwords do not match', type: 'error' });
       return;
     }
-    if (newPassword.length < 6) {
-      setMessage({ text: 'New password must be at least 6 characters', type: 'error' });
+    if (newPassword.length < 8) {
+      setMessage({ text: 'New password must be at least 8 characters', type: 'error' });
       return;
     }
     setIsChangingPass(true);
     setMessage(null);
     try {
-      const res = await dispatch(changePasswordThunk({ oldPassword: currentPassword, newPassword }));
+      const res = await dispatch(changePasswordThunk({ currentPassword, newPassword }));
       setIsChangingPass(false);
       if (changePasswordThunk.fulfilled.match(res)) {
         setMessage({ text: 'Password updated successfully!', type: 'success' });

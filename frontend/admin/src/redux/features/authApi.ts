@@ -385,7 +385,7 @@ export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   }
 });
 
-/** 8. Change / Reset Password (Using Backend Auth Endpoints) */
+/** 8. Change Password (Direct Authenticated POST /auth/change-password) */
 export const changePassword = createAsyncThunk(
   'auth/changePassword',
   async (
@@ -394,49 +394,28 @@ export const changePassword = createAsyncThunk(
       oldPassword?: string;
       newPassword?: string;
       newPass?: string;
-      email?: string;
-      code?: string;
-      otp?: string;
     },
-    { rejectWithValue, getState }
+    { rejectWithValue }
   ) => {
     try {
-      const state: any = getState();
-      const userEmail = payload.email || state?.auth?.user?.email;
-
       const currentPass = payload.currentPassword || payload.oldPassword;
-      const newPass = payload.newPassword || payload.newPass;
-      const otpCode = payload.code || payload.otp;
+      const nextPass = payload.newPassword || payload.newPass;
 
-      // 1. Authenticated Direct Password Change: POST /auth/change-password
-      if (currentPass && newPass) {
-        const res = await rawAuthApi.changePassword({
-          currentPassword: currentPass,
-          newPassword: newPass,
-        });
-        return res.message || 'Password changed successfully!';
+      if (!currentPass) {
+        throw new Error('Current password is required.');
+      }
+      if (!nextPass) {
+        throw new Error('New password is required.');
+      }
+      if (nextPass.length < 8) {
+        throw new Error('Password must be at least 8 characters long.');
       }
 
-      // 2. OTP Reset Password: POST /auth/reset-password
-      if (otpCode && newPass && userEmail) {
-        const res = await rawAuthApi.resetPassword({
-          email: userEmail.trim().toLowerCase(),
-          code: otpCode.trim(),
-          newPassword: newPass.trim(),
-        });
-        return res.message || 'Password updated successfully!';
-      }
-
-      // 3. Trigger OTP if only email is provided: POST /auth/forgot-password
-      if (userEmail) {
-        const res = await rawAuthApi.forgotPassword({ email: userEmail.trim().toLowerCase() });
-        return (
-          res.message ||
-          'A 5-digit verification code has been sent to your email. Please enter the OTP code to complete.'
-        );
-      }
-
-      throw new Error('Please provide your current password and new password.');
+      const res = await rawAuthApi.changePassword({
+        currentPassword: currentPass,
+        newPassword: nextPass,
+      });
+      return res.message || 'Password changed successfully!';
     } catch (err: any) {
       return rejectWithValue(err.message || 'Failed to update password.');
     }

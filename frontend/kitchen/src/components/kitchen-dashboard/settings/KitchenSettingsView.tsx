@@ -149,14 +149,14 @@ export default function KitchenSettingsView() {
       toast.error('New passwords do not match');
       return;
     }
-    if (passwordData.newPass.length < 6) {
-      toast.error('Password must be at least 6 characters long');
+    if (passwordData.newPass.length < 8) {
+      toast.error('Password must be at least 8 characters long');
       return;
     }
     try {
       const res = await dispatch(
         changePassword({
-          oldPassword: passwordData.current,
+          currentPassword: passwordData.current,
           newPassword: passwordData.newPass,
         })
       );

@@ -8,6 +8,7 @@ import {
   NotificationsCard,
   AIAutomationCard,
   DangerZoneCard,
+  SecurityCard,
 } from './components';
 import { AllCashierSettings } from './types';
 import { initialCashierSettings } from './settingsData';
@@ -131,6 +132,8 @@ export const SettingsView: React.FC = () => {
               }))
             }
           />
+
+          <SecurityCard />
 
           <DangerZoneCard
             onResetSettings={handleResetSettings}
