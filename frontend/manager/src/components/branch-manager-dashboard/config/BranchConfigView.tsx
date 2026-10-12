@@ -295,6 +295,8 @@ function BranchConfigContent() {
         branchId: getActiveBranchId(),
         label: newTable.number,
         capacity: Number(newTable.capacity) || 4,
+        shape: newTable.shape || 'SQUARE',
+        floor: newTable.floor || 1,
       });
 
       const qrToken = createdTable.qrCodeToken || createdTable.id || `token-${Date.now()}`;

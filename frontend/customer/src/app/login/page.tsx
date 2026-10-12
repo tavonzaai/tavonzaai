@@ -6,6 +6,8 @@ import LoginView from '@/components/auth/LoginView';
 import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { setCookie } from '@/redux/api/baseApi';
+import { resolveDynamicBranchId, resolveDynamicTableId } from '@/context/CartContext';
+import { getActiveCustomerOrder } from '@/redux/features/orderApi';
 
 function LoginContent() {
   const router = useRouter();
@@ -36,7 +38,22 @@ function LoginContent() {
           : `Table ${table.padStart(2, '0')}`;
         setCookie('tavonza_table', formatted);
       }
-      router.replace(`/menu${forwardParam}`);
+
+      const branchId = resolveDynamicBranchId();
+      const tableId = resolveDynamicTableId(null, table);
+      getActiveCustomerOrder(branchId, tableId)
+        .then((activeOrder) => {
+          if (activeOrder) {
+            router.replace(
+              `/orders/track?order=${encodeURIComponent(activeOrder.orderId || activeOrder.id)}&table=${encodeURIComponent(table || '')}`
+            );
+          } else {
+            router.replace(`/menu${forwardParam}`);
+          }
+        })
+        .catch(() => {
+          router.replace(`/menu${forwardParam}`);
+        });
     }
   }, [mounted, isInitialized, isCustomer, table, forwardParam, router]);
 
@@ -45,7 +62,7 @@ function LoginContent() {
       <div className="w-full min-h-screen bg-black flex flex-col items-center justify-center text-white p-4">
         <div className="w-10 h-10 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-stone-300 text-sm font-medium tracking-wide">
-          {isCustomer ? 'Redirecting to menu...' : 'Loading Tavonza...'}
+          {isCustomer ? 'Checking your orders...' : 'Loading Tavonza...'}
         </p>
       </div>
     );
@@ -56,10 +73,27 @@ function LoginContent() {
     router.push(`/verify-otp?email=${encodeURIComponent(email)}&type=email_verification${qrParam}`);
   };
 
+  const handleLoginSuccess = async () => {
+    try {
+      const branchId = resolveDynamicBranchId();
+      const tableId = resolveDynamicTableId(null, table);
+      const activeOrder = await getActiveCustomerOrder(branchId, tableId);
+      if (activeOrder) {
+        router.push(
+          `/orders/track?order=${encodeURIComponent(activeOrder.orderId || activeOrder.id)}&table=${encodeURIComponent(table || '')}`
+        );
+        return;
+      }
+    } catch {
+      // fallback to menu
+    }
+    router.push(`/menu${forwardParam}`);
+  };
+
   return (
     <AuthDesktopLayout>
       <LoginView
-        onLoginSuccess={() => router.push(`/menu${forwardParam}`)}
+        onLoginSuccess={handleLoginSuccess}
         onForgotPassword={() => router.push(`/forgot-password${forwardParam}`)}
         onCreateAccount={() => router.push(`/register${forwardParam}`)}
         onNavigateToVerify={handleNavigateToVerify}

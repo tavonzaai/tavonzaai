@@ -82,7 +82,7 @@ interface TableOrderDetail {
   id: string;
   orderNumber: string;
   tableId: string;
-  status: 'Pending' | 'Cooking' | 'Ready to Serve' | 'Completed';
+  status: 'Pending' | 'Cooking' | 'Ready to Serve' | 'Completed' | 'Served';
   targetTime: string;
   targetDuration: string;
   items: {
@@ -538,7 +538,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
 
   const handleMarkTableOrderServed = (orderId: string) => {
     setTableOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'Completed' } : o))
+      prev.map((o) => (o.id === orderId ? { ...o, status: 'Served' } : o))
     );
     setTables((prev) =>
       prev.map((t) =>
@@ -547,7 +547,12 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
           : t
       )
     );
-    toast.success('Order #1230 marked as Served to Table-01!');
+    toast.success('Order marked as Served!');
+  };
+
+  const handleDeleteTableOrder = (orderId: string) => {
+    setTableOrders((prev) => prev.filter((o) => o.id !== orderId));
+    toast.success('Order deleted/dismissed.');
   };
 
   // Submit New Order to Kitchen
@@ -1021,25 +1026,50 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                         </div>
                       )}
 
-                      {/* State 2: Waiting to Serve (Simulates Kitchen cooking -> Click to make Ready) */}
+                      {/* State 2: Cooking in Kitchen (Disabled, toast on click) */}
                       {isCooking && (
                         <button
-                          onClick={() => handleAdvanceToReadyToServe(order.id)}
-                          className="w-full h-9 py-1.5 px-2 bg-yellow-700 hover:bg-yellow-600 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-800 flex justify-center items-center text-zinc-900 text-xs font-medium font-['Poppins'] transition cursor-pointer shadow-sm"
-                          title="Click to advance to Ready to Serve"
+                          type="button"
+                          onClick={() => {
+                            toast.warning(`Order #${order.orderNumber} is currently cooking in the kitchen! Please wait until kitchen marks it "Ready to Serve".`, {
+                              duration: 4000,
+                            });
+                          }}
+                          className="w-full h-9 bg-neutral-800/80 border border-neutral-700/80 rounded-md flex justify-center items-center gap-2 text-zinc-400 text-xs font-medium cursor-not-allowed transition hover:bg-neutral-800"
+                          title="Food is cooking in the kitchen. Cannot serve yet."
                         >
-                          Waiting to Serve
+                          <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-pulse" />
+                          <span>Cooking in Kitchen (Not Ready to Serve)</span>
                         </button>
                       )}
 
-                      {/* State 3: Mark as Served */}
+                      {/* State 3: Mark as Served (Only when Ready to Serve) */}
                       {isReadyToServe && (
                         <button
                           onClick={() => handleMarkTableOrderServed(order.id)}
-                          className="w-full h-9 bg-yellow-400 hover:bg-yellow-300 rounded-lg flex justify-center items-center text-black text-sm font-medium font-['Inter'] transition shadow-sm cursor-pointer"
+                          className="w-full h-9 bg-yellow-400 hover:bg-yellow-300 rounded-lg flex justify-center items-center text-black text-sm font-semibold font-['Inter'] transition shadow-sm cursor-pointer active:scale-[0.99]"
                         >
                           Mark as Served
                         </button>
+                      )}
+
+                      {/* State 4: Served & Completed (Show Served badge + Delete button) */}
+                      {(order.status === 'Served' || order.status === 'Completed') && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <div className="flex-1 h-9 bg-emerald-500/10 border border-emerald-500/20 rounded-md flex items-center justify-center gap-1.5 text-emerald-400 text-xs font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Served &amp; Completed</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTableOrder(order.id)}
+                            className="h-9 px-3 bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 rounded-md flex items-center justify-center gap-1 text-red-400 text-xs font-medium transition cursor-pointer active:scale-95"
+                            title="Delete / Dismiss order"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   );

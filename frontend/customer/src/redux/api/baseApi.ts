@@ -74,7 +74,8 @@ export function getApiBaseUrl(): string {
     }
   }
 
-  return 'https://api.tavonza.com';
+  return 'http://localhost:3000';
+  // return 'https://api.tavonza.com';
 }
 
 export const API_BASE_URL = getApiBaseUrl();

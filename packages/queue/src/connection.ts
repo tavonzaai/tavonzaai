@@ -34,9 +34,14 @@ export function getRedisConnection(config?: RedisConnectionConfig): Redis {
   // Attach error handler to prevent Node.js from throwing unhandled 'error' events if Redis is temporarily unreachable
   client.on('error', (err) => {
     if (process.env.NODE_ENV !== 'production') {
-      // Debounce or quietly log connection issues in development
-      if (err.message.includes('ECONNREFUSED')) {
-        // Quietly handled — developer might not have started Redis container yet
+      // Quietly handle connection errors in development if developer hasn't started Redis container
+      if (
+        err.message.includes('ECONNREFUSED') ||
+        err.message.includes('ETIMEDOUT') ||
+        err.message.includes('ENOTFOUND') ||
+        (err as any).code === 'ECONNREFUSED' ||
+        (err as any).code === 'ETIMEDOUT'
+      ) {
         return;
       }
     }

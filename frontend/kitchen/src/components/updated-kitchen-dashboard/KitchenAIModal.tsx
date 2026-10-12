@@ -16,6 +16,7 @@ import {
   Play,
   Square,
   CheckCircle2,
+  Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -50,6 +51,7 @@ export default function KitchenAIModal({
   const [soundMuted, setSoundMuted] = useState<boolean>(false);
   const [micBlocked, setMicBlocked] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string>(() => `kitchen_${activeStation.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`);
+  const [textInput, setTextInput] = useState<string>('');
 
   const isOpenRef = useRef<boolean>(isOpen);
   isOpenRef.current = isOpen;
@@ -86,7 +88,7 @@ export default function KitchenAIModal({
       try {
         const aiBaseUrl =
           (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
-          'http://localhost:8000';
+          'https://ai.tavonza.com';
         const res = await fetch(`${aiBaseUrl}/health`, { signal: AbortSignal.timeout(2000) });
         setIsAiOnline(res.ok);
       } catch {
@@ -321,7 +323,7 @@ export default function KitchenAIModal({
 
       const aiBaseUrl =
         (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
-        'http://localhost:8000';
+        'https://ai.tavonza.com';
 
       const sentences = splitSentencesForSpeech(spokenText);
       if (!sentences.length) {
@@ -469,7 +471,7 @@ export default function KitchenAIModal({
       const currentStation = activeStationRef.current || 'Grill Station';
       const aiBaseUrl =
         (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
-        'http://localhost:8000';
+        'https://ai.tavonza.com';
 
       const chatAbort = new AbortController();
       chatAbortControllerRef.current = chatAbort;
@@ -981,11 +983,39 @@ export default function KitchenAIModal({
           )}
         </div>
 
-        {/* QUICK VOICE TRIGGER CHIPS (One-Touch Hands-Free Activation) */}
-        <div className="px-6 py-3 bg-[#141416] border-t border-zinc-800 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        {/* TEXT INPUT BAR (Type or Speak) */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const q = textInput.trim();
+            if (!q) return;
+            setTextInput('');
+            processVoiceCommand(q);
+          }}
+          className="px-6 py-3 bg-[#141416] border-t border-zinc-800 flex items-center gap-2"
+        >
+          <input
+            type="text"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            placeholder="Type a question / command or speak into the mic above..."
+            className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-xl px-4 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-400 font-sans"
+          />
+          <button
+            type="submit"
+            disabled={!textInput.trim() || voiceState === 'processing'}
+            className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold text-xs rounded-xl flex items-center gap-1.5 transition active:scale-95 cursor-pointer shrink-0 shadow-sm"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Send</span>
+          </button>
+        </form>
+
+        {/* QUICK PROMPT CHIPS */}
+        <div className="px-6 py-3 bg-[#141416] border-t border-zinc-800/80 flex items-center gap-2 overflow-x-auto no-scrollbar">
           <span className="text-[11px] text-zinc-400 font-semibold uppercase tracking-wider shrink-0 flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-yellow-400" />
-            Quick Voice:
+            Quick Prompts:
           </span>
           {VOICE_PRESETS.map((preset, idx) => (
             <button
@@ -1002,7 +1032,7 @@ export default function KitchenAIModal({
           ))}
         </div>
 
-        {/* FOOTER CONTROLS (NO KEYBOARD / NO TYPING) */}
+        {/* FOOTER CONTROLS */}
         <div className="px-6 py-4 bg-[#18181b] border-t border-zinc-800 flex items-center justify-between">
           <label className="flex items-center gap-2.5 text-xs text-zinc-300 cursor-pointer select-none">
             <input
@@ -1019,7 +1049,7 @@ export default function KitchenAIModal({
             onClick={onClose}
             className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition cursor-pointer"
           >
-            Close Voice Co-Pilot
+            Close AI Assistant
           </button>
         </div>
       </div>

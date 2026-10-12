@@ -99,13 +99,15 @@ function TrackContent() {
       return;
     }
 
-    if (!orderId) return;
+    fetchTrackData();
+    const interval = setInterval(fetchTrackData, 6000);
     const handleRealtime = () => {
       fetchTrackData();
     };
     window.addEventListener('tavonza:order_status_changed', handleRealtime);
     window.addEventListener('tavonza:order_item_changed', handleRealtime);
     return () => {
+      clearInterval(interval);
       window.removeEventListener('tavonza:order_status_changed', handleRealtime);
       window.removeEventListener('tavonza:order_item_changed', handleRealtime);
     };
@@ -364,26 +366,101 @@ function TrackContent() {
 
             {/* ORDER ITEMS ITEMIZED CARD */}
             {orderTracking?.items && orderTracking.items.length > 0 && (
-              <div className="w-full bg-[#141414] border border-[#1A1A1A] rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
-                <span className="text-white text-sm font-semibold font-montserrat border-b border-neutral-800 pb-2">
-                  Itemized Order Details
-                </span>
-                <div className="flex flex-col gap-2 text-xs">
-                  {orderTracking.items.map((it, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-zinc-300">
-                      <span>
-                        {it.quantity}x {it.name}
-                      </span>
-                      <span className="text-white font-semibold">${Number(it.lineTotal || 0).toFixed(2)}</span>
-                    </div>
-                  ))}
+              <div className="w-full bg-[#141414] border border-[#222222] rounded-2xl overflow-hidden shadow-2xl">
+                <div className="px-4 py-3 bg-[#181818] border-b border-[#262626] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Utensils className="w-4 h-4 text-yellow-400" />
+                    <span className="text-white text-sm font-semibold font-montserrat">
+                      Ordered Dishes ({orderTracking.items.length})
+                    </span>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-yellow-400">
+                    {orderTracking.orderNumber || (orderId ? `#${orderId.slice(0, 8)}` : '')}
+                  </span>
                 </div>
 
-                <div className="pt-2 border-t border-neutral-800 flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 font-semibold">Total Paid / Due</span>
-                  <span className="text-yellow-400 font-bold text-sm font-['DM_Sans']">
-                    ${Number(orderTracking.totalAmount || orderTracking.total || 0).toFixed(2)}
-                  </span>
+                <div className="p-4 flex flex-col divide-y divide-neutral-800/80">
+                  {orderTracking.items.map((it, idx) => {
+                    const lineTotal = Number(
+                      it.lineTotal || Number(it.unitPrice || 0) * (it.quantity || 1)
+                    ).toFixed(2);
+                    const unitPrice = Number(it.unitPrice || 0).toFixed(2);
+
+                    return (
+                      <div key={it.id || idx} className="py-3 first:pt-0 last:pb-0 flex flex-col gap-1.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-2.5">
+                            <span className="px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 font-bold text-xs rounded border border-yellow-400/30 font-mono shrink-0 mt-0.5">
+                              {it.quantity}x
+                            </span>
+                            <div className="flex flex-col">
+                              <span className="text-white text-sm font-semibold font-montserrat leading-tight">
+                                {it.name}
+                              </span>
+                              <span className="text-zinc-400 text-xs font-montserrat">
+                                ${unitPrice} each
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-white font-bold text-sm font-poppins shrink-0">
+                            ${lineTotal}
+                          </span>
+                        </div>
+
+                        {/* Add-ons */}
+                        {it.addOns && it.addOns.length > 0 && (
+                          <div className="ml-8 flex flex-wrap gap-1.5 pt-0.5">
+                            {it.addOns.map((addon, aIdx) => (
+                              <span
+                                key={aIdx}
+                                className="inline-flex items-center text-[11px] bg-neutral-900 border border-neutral-700/80 text-zinc-300 px-2 py-0.5 rounded-full font-montserrat"
+                              >
+                                + {addon.name} ({addon.price ? `$${Number(addon.price).toFixed(2)}` : 'Free'})
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Special Instructions */}
+                        {it.specialInstructions && (
+                          <div className="ml-8 mt-1 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-1.5">
+                            <span className="font-semibold text-amber-400">Note:</span>
+                            <span>{it.specialInstructions}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="p-4 bg-[#181818]/80 border-t border-[#262626] flex flex-col gap-2 text-xs font-montserrat">
+                  {orderTracking.subtotal !== undefined && (
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span>Subtotal</span>
+                      <span className="text-zinc-200 font-mono font-medium">${Number(orderTracking.subtotal).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {!!orderTracking.taxAmount && (
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span>Estimated Tax</span>
+                      <span className="text-zinc-200 font-mono font-medium">${Number(orderTracking.taxAmount).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {!!orderTracking.serviceCharge && (
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span>Service Charge</span>
+                      <span className="text-zinc-200 font-mono font-medium">${Number(orderTracking.serviceCharge).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-neutral-800 flex items-center justify-between">
+                    <span className="text-white font-semibold text-sm">Total Paid / Due</span>
+                    <span className="text-yellow-400 font-extrabold text-base sm:text-lg font-poppins">
+                      ${Number(orderTracking.totalAmount || orderTracking.total || 0).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}

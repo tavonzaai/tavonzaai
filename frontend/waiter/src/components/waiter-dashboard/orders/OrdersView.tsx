@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
 import { getCookie } from '@/redux/api/baseApi';
+import { toast } from 'sonner';
 
 export interface OrderItemRow {
   id: string;
@@ -544,7 +545,7 @@ export default function OrdersView() {
                 {renderStatusBadge(selectedOrder.status)}
               </div>
               <div className="flex items-center gap-1.5">
-                {selectedOrder.status !== 'Ready to Serve' && (
+                {selectedOrder.status !== 'Ready to Serve' && selectedOrder.status !== 'Served' && (
                   <button
                     type="button"
                     onClick={() => handleUpdateStatus(selectedOrder.id, 'Ready to Serve')}
@@ -553,13 +554,25 @@ export default function OrdersView() {
                     Set Ready
                   </button>
                 )}
-                {selectedOrder.status !== 'Served' && (
+                {selectedOrder.status === 'Ready to Serve' && (
                   <button
                     type="button"
                     onClick={() => handleUpdateStatus(selectedOrder.id, 'Served')}
                     className="px-2.5 py-1 bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 rounded-lg text-sm font-semibold cursor-pointer"
                   >
                     Set Served
+                  </button>
+                )}
+                {selectedOrder.status === 'Preparing' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toast.warning(`Order #${selectedOrder.orderNumber} is currently preparing in kitchen! Please wait until kitchen marks it "Ready to Serve".`);
+                    }}
+                    className="px-2.5 py-1 bg-neutral-800 border border-neutral-700 text-zinc-400 rounded-lg text-xs font-medium cursor-not-allowed flex items-center gap-1.5"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-500 animate-pulse" />
+                    <span>Cooking in Kitchen</span>
                   </button>
                 )}
               </div>

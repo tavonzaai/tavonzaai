@@ -10,9 +10,15 @@ interface BottomNavProps {
   activeTab: DashboardTab;
   onTabChange: (tab: DashboardTab) => void;
   isVisible?: boolean;
+  hasActiveOrder?: boolean;
 }
 
-export default function BottomNav({ activeTab, onTabChange, isVisible = true }: BottomNavProps) {
+export default function BottomNav({
+  activeTab,
+  onTabChange,
+  isVisible = true,
+  hasActiveOrder = false,
+}: BottomNavProps) {
   const isMenuActive = activeTab === 'menu' || activeTab === 'home';
 
   return (
@@ -113,13 +119,19 @@ export default function BottomNav({ activeTab, onTabChange, isVisible = true }: 
           </span>
         </button>
 
-        {/* 4. Orders Tab */}
+          {/* 4. Orders Tab */}
         <button
           onClick={() => onTabChange('orders')}
           className="flex flex-col items-center justify-center w-14 h-14 relative group transition active:scale-95"
         >
           {activeTab === 'orders' && (
             <div className="absolute top-1 w-7 h-7 bg-yellow-400/20 rounded-full blur-[10px] -z-10" />
+          )}
+          {hasActiveOrder && (
+            <span className="absolute top-1 right-2.5 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-yellow-400" />
+            </span>
           )}
           <FileText
             className={`w-5 h-5 transition-all ${

@@ -30,6 +30,8 @@ import ProfileView from './ProfileView';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { fetchMenuItems, BackendMenuItem } from '@/redux/features/menu-items/menuItemApi';
 import { getItemImage } from '@/lib/menuUtils';
+import { resolveDynamicBranchId, resolveDynamicTableId } from '@/context/CartContext';
+import { getActiveCustomerOrder } from '@/redux/features/orderApi';
 
 interface CustomerDashboardViewProps {
   showAuthSuccessModal?: boolean;
@@ -56,6 +58,27 @@ export default function CustomerDashboardView({
   const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
   const [chatMessages, setChatMessages] = useState<string[]>([]);
   const [isNavVisible, setIsNavVisible] = useState(true);
+  const [hasActiveOrder, setHasActiveOrder] = useState(false);
+
+  // Poll active kitchen order to highlight live indicator in BottomNav
+  useEffect(() => {
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+    const checkActive = () => {
+      getActiveCustomerOrder(branchId, tableId)
+        .then((ord) => setHasActiveOrder(Boolean(ord)))
+        .catch(() => setHasActiveOrder(false));
+    };
+
+    checkActive();
+    const timer = setInterval(checkActive, 8000);
+    const handleEvt = () => checkActive();
+    window.addEventListener('tavonza:order_status_changed', handleEvt);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('tavonza:order_status_changed', handleEvt);
+    };
+  }, []);
 
   useEffect(() => {
     if (!backendMenuItems || backendMenuItems.length === 0) {
@@ -541,6 +564,14 @@ export default function CustomerDashboardView({
 
       {/* Floating Draggable Ask AI Concierge Button & Popup Modal */}
       <DraggableAskAi defaultBottom={24} defaultRight={24} />
+
+      {/* Persistent Bottom Nav */}
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        isVisible={isNavVisible}
+        hasActiveOrder={hasActiveOrder}
+      />
     </div>
   );
 }

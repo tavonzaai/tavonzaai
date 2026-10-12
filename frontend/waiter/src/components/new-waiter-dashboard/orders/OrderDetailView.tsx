@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
@@ -13,15 +13,18 @@ import {
   Plus,
   Check,
   CheckCircle2,
+  Trash2,
 } from 'lucide-react';
 import { TavonzaLogoIcon } from '@/components/TavonzaLogo';
 import { YellowSparkleIcon, FuchsiaCookingPanIcon, GreenClockIcon } from './orderIcons';
-import { OrderItemData, OrderFoodItem } from './orderData';
+import { OrderItemData, OrderFoodItem, OrderStatus } from './orderData';
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
 import { toast } from 'sonner';
+import { waiterService } from '@/redux/features/waiterApi';
+import { baseApiFetch } from '@/redux/api/baseApi';
 
-export type DetailViewVariation = 'pending' | 'quantities' | 'cooking_ready' | 'addon_request';
+export type DetailViewVariation = 'pending' | 'quantities' | 'cooking_ready' | 'addon_request' | 'served';
 
 interface OrderDetailViewProps {
   order?: OrderItemData;
@@ -44,8 +47,11 @@ export default function OrderDetailView({
 }: OrderDetailViewProps) {
   const router = useRouter();
 
-  // Active variation mode matching the 4 Figma designs
+  // Active variation mode matching the Figma designs
   const [variation, setVariation] = useState<DetailViewVariation>(() => {
+    if (initialOrder?.status === 'Served') {
+      return 'served';
+    }
     if (initialOrder?.status === 'Ready to Serve' || initialOrder?.status === 'Cooking') {
       return 'cooking_ready';
     }
@@ -56,15 +62,30 @@ export default function OrderDetailView({
   });
 
   // Current order state
-  const [currentStatus, setCurrentStatus] = useState(initialOrder?.status || 'Pending');
+  const [currentStatus, setCurrentStatus] = useState<OrderStatus>(initialOrder?.status || 'Pending');
   const [orderNumber] = useState(initialOrder?.orderNumber || '1230');
+
+  // Synchronize state when initialOrder changes
+  useEffect(() => {
+    if (initialOrder?.status) {
+      setCurrentStatus(initialOrder.status);
+      if (initialOrder.status === 'Served') {
+        setVariation('served');
+      } else if (initialOrder.status === 'Ready to Serve' || initialOrder.status === 'Cooking') {
+        setVariation('cooking_ready');
+      } else if (initialOrder.status === 'New Add On') {
+        setVariation('addon_request');
+      } else {
+        setVariation('pending');
+      }
+    }
+  }, [initialOrder]);
 
   // Quantities & selection for interactive demo
   const [item1Qty, setItem1Qty] = useState(4);
   const [item2Qty, setItem2Qty] = useState(4);
   const [item1Checked, setItem1Checked] = useState(true);
   const [item2Checked, setItem2Checked] = useState(false);
-
 
   // Add-on card state
   const [addonAccepted, setAddonAccepted] = useState(false);
@@ -80,26 +101,74 @@ export default function OrderDetailView({
     }
   };
 
-  const handleAcceptOrder = () => {
-    setCurrentStatus('Cooking');
-    setVariation('cooking_ready');
-    toast.success(`Order #${orderNumber} accepted! Sent to Kitchen.`, {
-      description: 'Kitchen is now preparing the items.',
-    });
+  const handleAcceptOrder = async () => {
+    try {
+      if (initialOrder?.realId) {
+        await waiterService.acceptOrder(initialOrder.realId);
+      }
+      setCurrentStatus('Cooking');
+      setVariation('cooking_ready');
+      toast.success(`Order #${orderNumber} accepted! Sent to Kitchen.`, {
+        description: 'Kitchen is now preparing the items.',
+      });
+    } catch (err: any) {
+      toast.error(`Failed to accept order: ${err.message || 'Error occurred'}`);
+    }
   };
 
-  const handleRejectOrder = () => {
-    toast.error(`Order #${orderNumber} rejected`, {
-      description: 'Notification sent to station manager.',
-    });
-    setTimeout(() => {
-      handleBack();
-    }, 1200);
+  const handleRejectOrder = async () => {
+    try {
+      if (initialOrder?.realId) {
+        await waiterService.rejectOrder({
+          orderId: initialOrder.realId,
+          reason: 'Rejected by floor waiter',
+          reasonCode: 'OTHER',
+        });
+      }
+      toast.error(`Order #${orderNumber} rejected`, {
+        description: 'Notification sent to station manager.',
+      });
+      setTimeout(() => {
+        handleBack();
+      }, 1000);
+    } catch (err: any) {
+      toast.error(`Failed to reject order: ${err.message || 'Error occurred'}`);
+    }
   };
 
-  const handleMarkServed = () => {
-    setCurrentStatus('Served');
-    toast.success(`Order #${orderNumber} marked as Served! 🎉`);
+  const handleMarkServed = async () => {
+    if (currentStatus === 'Cooking') {
+      toast.warning(`Order #${orderNumber} is currently cooking in the kitchen! Please wait until the kitchen marks it "Ready to Serve".`, {
+        duration: 4000,
+      });
+      return;
+    }
+    try {
+      if (initialOrder?.realId) {
+        await waiterService.serveOrder(initialOrder.realId);
+      }
+      setCurrentStatus('Served');
+      setVariation('served');
+      toast.success(`Order #${orderNumber} marked as Served! 🎉`);
+    } catch (err: any) {
+      toast.error(`Failed to mark served: ${err.message || 'Error occurred'}`);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    try {
+      if (initialOrder?.realId) {
+        await baseApiFetch(`/orders/${encodeURIComponent(initialOrder.realId)}`, {
+          method: 'DELETE',
+        }).catch(() => null);
+      }
+      toast.success(`Order #${orderNumber} deleted/dismissed.`);
+      setTimeout(() => {
+        handleBack();
+      }, 500);
+    } catch (err: any) {
+      toast.error(`Failed to delete order: ${err.message || 'Error occurred'}`);
+    }
   };
 
   const handleAcceptAddon = () => {
@@ -124,71 +193,108 @@ export default function OrderDetailView({
       {/* Quick Variation Switcher Bar */}
       <div className="px-5 pt-2 pb-1">
         <div className="flex items-center gap-1 bg-neutral-900/90 p-1 rounded-lg border border-white/10 overflow-x-auto no-scrollbar">
-              <button
-                onClick={() => setVariation('pending')}
-                className={`flex-1 px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
-                  variation === 'pending'
-                    ? 'bg-yellow-400 text-black font-semibold'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                1. Pending
-              </button>
-              <button
-                onClick={() => setVariation('quantities')}
-                className={`flex-1 px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
-                  variation === 'quantities'
-                    ? 'bg-yellow-400 text-black font-semibold'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                2. Selection & Qty
-              </button>
-              <button
-                onClick={() => setVariation('cooking_ready')}
-                className={`flex-1 px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
-                  variation === 'cooking_ready'
-                    ? 'bg-yellow-400 text-black font-semibold'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                3. Cooking / Served
-              </button>
-              <button
-                onClick={() => setVariation('addon_request')}
-                className={`flex-1 px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
-                  variation === 'addon_request'
-                    ? 'bg-yellow-400 text-black font-semibold'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                4. New Add-on
-              </button>
-            </div>
-          </div>
+          <button
+            onClick={() => {
+              setVariation('pending');
+              setCurrentStatus('Pending');
+            }}
+            className={`flex-1 px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
+              variation === 'pending'
+                ? 'bg-yellow-400 text-black font-semibold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            1. Pending
+          </button>
+          <button
+            onClick={() => {
+              setVariation('quantities');
+              setCurrentStatus('Pending');
+            }}
+            className={`flex-1 px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
+              variation === 'quantities'
+                ? 'bg-yellow-400 text-black font-semibold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            2. Selection &amp; Qty
+          </button>
+          <button
+            onClick={() => {
+              setVariation('cooking_ready');
+              if (currentStatus === 'Served' || currentStatus === 'Pending') {
+                setCurrentStatus('Cooking');
+              }
+            }}
+            className={`flex-1 px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
+              variation === 'cooking_ready'
+                ? 'bg-yellow-400 text-black font-semibold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            3. Cooking / Ready
+          </button>
+          <button
+            onClick={() => {
+              setVariation('served');
+              setCurrentStatus('Served');
+            }}
+            className={`flex-1 px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
+              variation === 'served'
+                ? 'bg-yellow-400 text-black font-semibold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            4. Served
+          </button>
+          <button
+            onClick={() => {
+              setVariation('addon_request');
+              setCurrentStatus('New Add On');
+            }}
+            className={`flex-1 px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer whitespace-nowrap ${
+              variation === 'addon_request'
+                ? 'bg-yellow-400 text-black font-semibold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            5. New Add-on
+          </button>
+        </div>
+      </div>
 
-          {/* Header Row: Back Button + Order No #1230 + Status Badge */}
-          <div className="px-5 pt-3 pb-3 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleBack}
-                className="w-7 h-7 p-1 bg-neutral-900 hover:bg-neutral-800 rounded-full flex justify-center items-center cursor-pointer transition border border-white/10"
-                title="Back to Orders"
-              >
-                <ChevronLeft className="w-4 h-4 text-white" />
-              </button>
-              <h1 className="text-white text-base font-semibold font-['Montserrat']">
-                Oder No #{orderNumber}
-              </h1>
-            </div>
+      {/* Header Row: Back Button + Order No #1230 + Status Badge */}
+      <div className="px-5 pt-3 pb-3 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleBack}
+            className="w-7 h-7 p-1 bg-neutral-900 hover:bg-neutral-800 rounded-full flex justify-center items-center cursor-pointer transition border border-white/10"
+            title="Back to Orders"
+          >
+            <ChevronLeft className="w-4 h-4 text-white" />
+          </button>
+          <h1 className="text-white text-base font-semibold font-['Montserrat']">
+            Oder No #{orderNumber}
+          </h1>
+        </div>
 
-            {/* Status Badge */}
-            <div className="h-6 px-3.5 py-1 bg-stone-800 rounded-[5px] flex justify-center items-center">
-              <span className="text-center text-amber-500 text-xs font-medium font-['Inter'] leading-4">
-                {currentStatus}
-              </span>
-            </div>
-          </div>
+        {/* Status Badge */}
+        <div
+          className={`h-6 px-3.5 py-1 rounded-[5px] flex justify-center items-center ${
+            currentStatus === 'Served'
+              ? 'bg-orange-700/20 text-orange-400 border border-orange-700/30'
+              : currentStatus === 'Ready to Serve'
+              ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+              : currentStatus === 'Cooking'
+              ? 'bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/30'
+              : 'bg-stone-800 text-amber-500 border border-amber-500/20'
+          }`}
+        >
+          <span className="text-center text-xs font-medium font-['Inter'] leading-4">
+            {currentStatus}
+          </span>
+        </div>
+      </div>
 
           {/* Order Details Body */}
           <div className="px-5 flex flex-col gap-5">
@@ -420,32 +526,72 @@ export default function OrderDetailView({
             </div>
 
             {/* ──────────────── ACTION BUTTONS ──────────────── */}
-            {/* If Pending or Quantities: Reject & Accept buttons */}
-            {(variation === 'pending' || variation === 'quantities') && (
+            {/* Case 1: If Served -> NEVER show Accept or Serve. ONLY show Served badge + Delete Order button */}
+            {(currentStatus === 'Served' || variation === 'served') && (
+              <div className="w-full flex flex-col gap-2.5 pt-1">
+                <div className="w-full py-3 px-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span className="text-emerald-400 text-xs font-semibold font-['Inter']">
+                    Order Served &amp; Completed
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDeleteOrder}
+                  className="w-full h-11 bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 rounded-xl text-red-400 text-sm font-medium font-['Inter'] flex items-center justify-center gap-2 transition cursor-pointer active:scale-[0.99]"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete / Dismiss Order</span>
+                </button>
+              </div>
+            )}
+
+            {/* Case 2: If Pending or Quantities: Reject & Accept buttons (ONLY when not served) */}
+            {currentStatus !== 'Served' && variation !== 'served' && (variation === 'pending' || variation === 'quantities') && (
               <div className="w-full flex items-center gap-2 pt-1">
                 <button
+                  type="button"
                   onClick={handleRejectOrder}
                   className="flex-1 py-2.5 px-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-red-400 text-red-400 text-xs font-medium font-['Poppins'] hover:bg-red-500/10 transition cursor-pointer"
                 >
                   Reject Order
                 </button>
                 <button
+                  type="button"
                   onClick={handleAcceptOrder}
-                  className="flex-1 py-2.5 px-3 bg-green-500 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-zinc-900 text-xs font-medium font-['Poppins'] hover:bg-green-400 transition cursor-pointer font-semibold shadow-sm"
+                  className="flex-1 py-2.5 px-3 bg-green-500 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-zinc-900 text-xs font-semibold font-['Poppins'] hover:bg-green-400 transition cursor-pointer shadow-sm"
                 >
                   Accept Order
                 </button>
               </div>
             )}
 
-            {/* If Cooking / Ready or Add-on view: Mark as Served */}
-            {(variation === 'cooking_ready' || variation === 'addon_request') && (
-              <button
-                onClick={handleMarkServed}
-                className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 rounded-lg text-black text-sm font-medium font-['Inter'] leading-5 flex items-center justify-center transition cursor-pointer font-semibold shadow-sm"
-              >
-                Mark as Served
-              </button>
+            {/* Case 3: If Cooking or Ready to Serve (ONLY when not served) */}
+            {currentStatus !== 'Served' && variation !== 'served' && (variation === 'cooking_ready' || variation === 'addon_request') && (
+              currentStatus === 'Ready to Serve' ? (
+                <button
+                  type="button"
+                  onClick={handleMarkServed}
+                  className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 rounded-lg text-black text-sm font-semibold font-['Inter'] leading-5 flex items-center justify-center gap-2 transition cursor-pointer shadow-sm active:scale-[0.99]"
+                >
+                  <Check className="w-4 h-4 stroke-[2.5]" />
+                  <span>Mark as Served</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.warning(`Order #${orderNumber} is currently cooking in the kitchen! Please wait until the kitchen marks it "Ready to Serve".`, {
+                      duration: 4000,
+                    });
+                  }}
+                  className="w-full h-11 bg-neutral-800/80 border border-neutral-700/80 rounded-lg text-zinc-400 text-xs sm:text-sm font-medium font-['Inter'] leading-5 flex items-center justify-center gap-2 cursor-not-allowed transition hover:bg-neutral-800"
+                  title="Food is cooking in the kitchen. Cannot serve yet."
+                >
+                  <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-pulse" />
+                  <span>Cooking in Kitchen (Not Ready to Serve)</span>
+                </button>
+              )
             )}
 
             {/* ──────────────── NEW ADD-ON REQUEST SECTION (VARIATION 4) ──────────────── */}

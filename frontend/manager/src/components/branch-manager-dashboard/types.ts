@@ -31,6 +31,10 @@ export interface TableItem {
   qrCodeUrl?: string | null;
   qrCodeToken?: string | null;
   waiterId?: string;
+  shape?: string;
+  floor?: number;
+  label?: string;
+  zone?: string;
   assignedWaiter?: {
     waiterId: string;
     waiterName?: string;

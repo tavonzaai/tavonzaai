@@ -13,6 +13,9 @@ import MenuPage from './menu/page';
 
 
 
+import { resolveDynamicBranchId, resolveDynamicTableId } from '@/context/CartContext';
+import { getActiveCustomerOrder } from '@/redux/features/orderApi';
+
 function LandingPageContent() {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -38,16 +41,29 @@ function LandingPageContent() {
   useEffect(() => {
     if (mounted && isInitialized) {
       if (isCustomer) {
-        // Authenticated customer: redirect to menu
         if (tableParam && typeof window !== 'undefined') {
           const formatted = tableParam.toLowerCase().startsWith('table')
             ? tableParam
             : `Table ${tableParam.padStart(2, '0')}`;
           setCookie('tavonza_table', formatted);
         }
-        router.replace(`/menu${forwardParam}`);
+
+        const branchId = resolveDynamicBranchId();
+        const tableId = resolveDynamicTableId(null, tableParam);
+        getActiveCustomerOrder(branchId, tableId)
+          .then((activeOrder) => {
+            if (activeOrder) {
+              router.replace(
+                `/orders/track?order=${encodeURIComponent(activeOrder.orderId || activeOrder.id)}&table=${encodeURIComponent(tableParam || '')}`
+              );
+            } else {
+              router.replace(`/menu${forwardParam}`);
+            }
+          })
+          .catch(() => {
+            router.replace(`/menu${forwardParam}`);
+          });
       } else if (!isAuthenticated) {
-        // Unauthenticated customer: redirect to login preserving ?qr=
         router.replace(`/login${forwardParam}`);
       }
     }

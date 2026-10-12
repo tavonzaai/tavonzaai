@@ -15,8 +15,10 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
+  Flame,
+  Clock,
 } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
+import { useCart, resolveDynamicBranchId, resolveDynamicTableId } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { fetchMenuCategories } from '@/redux/features/menu-category/menuCategoryApi';
@@ -24,6 +26,7 @@ import { fetchMenuItems } from '@/redux/features/menu-items/menuItemApi';
 import { getCategoryIcon, getItemImage } from '@/lib/menuUtils';
 import { getAuthToken, setCookie } from '@/redux/api/baseApi';
 import { TavonzaLogoIcon } from '@/components/TavonzaLogo';
+import { getActiveCustomerOrder, OrderListResponse } from '@/redux/features/orderApi';
 
 interface DisplayMenuItem {
   id: string;
@@ -67,6 +70,7 @@ function MenuContent() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showAllItemsView, setShowAllItemsView] = useState(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [activeOrder, setActiveOrder] = useState<OrderListResponse | null>(null);
 
   const activeTable = searchParams.get('table') || tableNumber || '';
   const isConnected = searchParams.get('connected') === 'true' || Boolean(searchParams.get('connect'));
@@ -95,6 +99,28 @@ function MenuContent() {
       setCookie('tavonza_table_number', tableVal);
     }
   }, [searchParams]);
+
+  // Continuously check and poll for active order preparing in kitchen
+  useEffect(() => {
+    if (!mounted) return;
+
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId(null, activeTable);
+    const checkActive = () => {
+      getActiveCustomerOrder(branchId, tableId)
+        .then((ord) => setActiveOrder(ord))
+        .catch(() => setActiveOrder(null));
+    };
+
+    checkActive();
+    const timer = setInterval(checkActive, 7000);
+    const handleEvt = () => checkActive();
+    window.addEventListener('tavonza:order_status_changed', handleEvt);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('tavonza:order_status_changed', handleEvt);
+    };
+  }, [mounted, activeTable]);
 
   // Fetch dynamic categories via Backend API on mount & on category search
   useEffect(() => {
@@ -308,6 +334,44 @@ function MenuContent() {
               className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium font-montserrat rounded-lg transition shrink-0 cursor-pointer"
             >
               Table QR
+            </button>
+          </div>
+        )}
+
+        {/* ACTIVE KITCHEN ORDER PREPARING BANNER */}
+        {activeOrder && (
+          <div className="w-full bg-gradient-to-r from-yellow-500/20 via-amber-500/15 to-neutral-900 border border-yellow-400/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_4px_25px_rgba(234,179,8,0.15)] animate-in fade-in slide-in-from-top-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-yellow-400/20 text-yellow-400 flex items-center justify-center shrink-0 border border-yellow-400/30">
+                <Flame className="w-5 h-5 animate-pulse text-yellow-400" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-white text-xs sm:text-sm font-bold font-montserrat truncate">
+                    Order #{activeOrder.orderNumber} in Progress
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 text-[10px] font-semibold animate-pulse">
+                    {activeOrder.displayStatus || activeOrder.status || 'PREPARING'}
+                  </span>
+                </div>
+                <span className="text-neutral-400 text-[11px] font-poppins truncate">
+                  {activeOrder.items?.length || activeOrder.itemCount || 1} items • Est. wait ~{activeOrder.estimatedPrepTime || 15} mins • Kitchen preparing
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() =>
+                router.push(
+                  `/orders/track?order=${encodeURIComponent(
+                    activeOrder.orderId || activeOrder.id
+                  )}&table=${encodeURIComponent(activeTable)}`
+                )
+              }
+              className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-bold font-montserrat rounded-xl transition flex items-center justify-center gap-1.5 shrink-0 shadow-md cursor-pointer self-start sm:self-auto"
+            >
+              <span>Track Live Status</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
         )}

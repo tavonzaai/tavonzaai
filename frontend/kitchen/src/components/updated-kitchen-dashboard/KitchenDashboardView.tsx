@@ -5,7 +5,6 @@ import Image from "next/image";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { TavonzaLogoIcon } from "../TavonzaLogo";
 import KitchenAIModal from "./KitchenAIModal";
-import AskAiModal from "./AskAiModal";
 import DraggableAiButton from "../common/DraggableAiButton";
 import Sidebar, { updatedKitchenNavItems } from "./Sidebar";
 import ProfileView from "./ProfileView";
@@ -120,7 +119,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
   const [selectedFlagReason, setSelectedFlagReason] = useState<string>("Food Quality / Problem");
 
   // Kitchen AI Modal State
-  const [aiModalOpen, setAiModalOpen] = useState<boolean>(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState<boolean>(false);
 
   // Notifications Popover State
@@ -733,32 +731,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           )}
         </main>
 
-        {/* FLOATING AI ROBOT BUTTON IN BOTTOM CORNER MATCHING USER SPEC */}
-        <div className="fixed bottom-8 right-8 z-40">
-          <button
-            type="button"
-            onClick={() => setAiModalOpen(true)}
-            className="w-14 h-14 rounded-full border-2 border-yellow-400 bg-zinc-900 shadow-[0_0_25px_rgba(250,204,21,0.5)] flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all group relative overflow-hidden"
-            title="Ask Tavonza AI Kitchen Co-Pilot"
-          >
-            {/* Robot Image */}
-            <Image
-              src="/images/jarvis-robot.jpg"
-              alt="Tavonza AI Robot"
-              width={56}
-              height={56}
-              className="w-full h-full object-cover rounded-full"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
-            />
-            {/* Fallback Icon */}
-            <Bot className="w-7 h-7 text-yellow-400 absolute" />
-            
-            {/* Sparkling pulse indicator */}
-            <div className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-black animate-pulse" />
-          </button>
-        </div>
 
         {/* FLAG ISSUE MODAL */}
         {flagModalOpen && selectedOrderForFlag && (
@@ -827,10 +799,10 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           </div>
         )}
 
-        {/* KITCHEN AI CO-PILOT MODAL CONNECTED TO AI ENGINE (Voice) */}
+        {/* KITCHEN AI CO-PILOT MODAL CONNECTED TO AI ENGINE (Voice & Chat APIs) */}
         <KitchenAIModal
-          isOpen={aiModalOpen}
-          onClose={() => setAiModalOpen(false)}
+          isOpen={isAskAiOpen}
+          onClose={() => setIsAskAiOpen(false)}
           activeStation={selectedStation}
         />
 
@@ -841,13 +813,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           defaultBottom={24}
           defaultRight={24}
           storageKey="updated_kitchen_ask_ai_pos"
-        />
-
-        {/* Floating Ask AI Interactive Modal */}
-        <AskAiModal
-          isOpen={isAskAiOpen}
-          onClose={() => setIsAskAiOpen(false)}
-          activeStation={selectedStation}
         />
       </div>
     </AuthGuard>

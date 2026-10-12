@@ -41,7 +41,8 @@ export function getActiveBranchId(): string {
     }
   }
 
-  return '';
+  // Fallback to primary seed branch ID (Downtown HQ)
+  return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
 }
 
 export interface BranchSettings {
@@ -289,7 +290,7 @@ export const branchManagerService = {
     };
   },
 
-  createTable: async (payload: { branchId: string; label: string; capacity: number; shape?: string }): Promise<TableItem> => {
+  createTable: async (payload: { branchId: string; label: string; capacity: number; shape?: string; floor?: number }): Promise<TableItem> => {
     const res = await baseApiFetch<TableItem>('/tables', {
       method: 'POST',
       body: JSON.stringify(payload),

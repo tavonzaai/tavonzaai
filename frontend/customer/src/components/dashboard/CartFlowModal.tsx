@@ -38,6 +38,7 @@ export default function CartFlowModal({
   const { cart, updateQuantity, removeFromCart, totalCount, subtotal, serviceCharge, tax, totalAmount, tableNumber } = useCart();
   const [selectedCardIdx, setSelectedCardIdx] = useState(0);
   const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
+  const [submittedOrderData, setSubmittedOrderData] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
 
@@ -83,7 +84,13 @@ export default function CartFlowModal({
           const draft = await orderService.getCart(branchId, activeTableId);
           if (draft?.id) {
             const res = await orderService.submitOrder(draft.id);
+            setSubmittedOrderData(res);
             setSubmittedOrderId(res.orderNumber || res.id);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(res));
+              if (res.id) localStorage.setItem('tavonza_last_submitted_order_id', res.id);
+              if (res.orderNumber) localStorage.setItem('tavonza_last_submitted_order_number', res.orderNumber);
+            }
           }
         }
       } catch (err) {
@@ -238,23 +245,52 @@ export default function CartFlowModal({
               <div className="w-full bg-neutral-900 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 text-left shadow-lg">
                 <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
                   <span className="text-xs font-semibold text-white">Order Summary</span>
-                  <span className="text-xs font-mono font-bold text-yellow-400">LT-2847</span>
+                  <span className="text-xs font-mono font-bold text-yellow-400">
+                    {submittedOrderData?.orderNumber || submittedOrderId || 'Order Placed'}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-neutral-400">Order Ref</span>
-                  <span className="text-white font-mono font-semibold">LT-2847</span>
+                  <span className="text-white font-mono font-semibold">
+                    {submittedOrderData?.orderNumber || submittedOrderId || 'Received'}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-neutral-400">Estimated Preparation</span>
-                  <span className="text-yellow-400 font-semibold">15–20 min</span>
+                  <span className="text-yellow-400 font-semibold">
+                    ~{submittedOrderData?.estimatedPrepTime || 15} min
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-neutral-400">Table Number</span>
-                  <span className="text-white font-semibold">Table 08</span>
+                  <span className="text-white font-semibold">{tableNumber || 'Table 08'}</span>
                 </div>
+
+                {/* Itemized dishes list if available */}
+                {submittedOrderData?.items && submittedOrderData.items.length > 0 && (
+                  <div className="pt-2 border-t border-neutral-800 flex flex-col gap-1.5">
+                    <span className="text-[11px] font-semibold text-zinc-400">Dishes Ordered:</span>
+                    {submittedOrderData.items.map((it: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between text-xs text-zinc-300">
+                        <span>
+                          {it.quantity}x {it.name}
+                        </span>
+                        <span className="text-white font-semibold font-mono">
+                          ${Number(it.lineTotal || (it.unitPrice * it.quantity)).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="pt-1 flex items-center justify-between text-xs border-t border-neutral-800/80">
+                      <span className="text-zinc-400">Total</span>
+                      <span className="text-yellow-400 font-bold text-sm">
+                        ${Number(submittedOrderData.totalAmount || submittedOrderData.total || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
