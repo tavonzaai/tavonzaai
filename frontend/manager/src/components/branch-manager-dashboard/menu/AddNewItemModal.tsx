@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, ChevronDown, Plus, Trash2, Clock, PackageCheck } from 'lucide-react';
 import { MenuItem } from '../types';
 
 interface AddNewItemModalProps {
@@ -9,6 +9,8 @@ interface AddNewItemModalProps {
   onClose: () => void;
   onItemCreated: (item: MenuItem) => void;
   categories: string[];
+  initialItem?: MenuItem | null;
+  isEdit?: boolean;
 }
 
 export default function AddNewItemModal({
@@ -16,6 +18,8 @@ export default function AddNewItemModal({
   onClose,
   onItemCreated,
   categories,
+  initialItem,
+  isEdit = false,
 }: AddNewItemModalProps) {
   const [itemName, setItemName] = useState('Grilled Chicken');
   const [category, setCategory] = useState<string>('Starters');
@@ -24,6 +28,9 @@ export default function AddNewItemModal({
   const [station, setStation] = useState('Grill');
   const [itemEnabled, setItemEnabled] = useState(true);
   const [stockState, setStockState] = useState<'In Stock' | 'Low Stock' | 'Out of Stock'>('In Stock');
+  const [estimatedPrepTime, setEstimatedPrepTime] = useState<number>(15);
+  const [isStockTracked, setIsStockTracked] = useState<boolean>(false);
+  const [stockQuantity, setStockQuantity] = useState<number>(50);
   const [modifierGroups, setModifierGroups] = useState<string[]>([]);
   const [showAddModifierInput, setShowAddModifierInput] = useState(false);
   const [newModifierName, setNewModifierName] = useState('');
@@ -32,6 +39,38 @@ export default function AddNewItemModal({
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showStationDropdown, setShowStationDropdown] = useState(false);
   const [showStockDropdown, setShowStockDropdown] = useState(false);
+
+  useEffect(() => {
+    if (initialItem) {
+      setItemName(initialItem.name);
+      setCategory(initialItem.category);
+      setPrice(initialItem.price);
+      setDescription(initialItem.description);
+      setStation(initialItem.stationBadge);
+      setItemEnabled(initialItem.enabled);
+      setEstimatedPrepTime(initialItem.estimatedPrepTime ?? 15);
+      setIsStockTracked(Boolean(initialItem.isStockTracked));
+      setStockQuantity(initialItem.stockQuantity ?? 50);
+      setStockState(
+        initialItem.availability === 'Out of stock'
+          ? 'Out of Stock'
+          : initialItem.availability.includes('Low Stock')
+          ? 'Low Stock'
+          : 'In Stock'
+      );
+    } else {
+      setItemName('Grilled Chicken');
+      setCategory(categories[0] || 'Starters');
+      setPrice('$ 10');
+      setDescription('');
+      setStation('Grill');
+      setItemEnabled(true);
+      setEstimatedPrepTime(15);
+      setIsStockTracked(false);
+      setStockQuantity(50);
+      setStockState('In Stock');
+    }
+  }, [initialItem, isOpen, categories]);
 
   if (!isOpen) return null;
 
@@ -55,9 +94,10 @@ export default function AddNewItemModal({
     if (!itemName.trim()) return;
 
     const formattedPrice = price.trim().startsWith('$') ? price.trim() : `$ ${price.trim()}`;
+    const cleanStock = Math.max(0, Number(stockQuantity) || 0);
 
     const newItem: MenuItem = {
-      id: `item-${Date.now()}`,
+      id: initialItem?.id || `item-${Date.now()}`,
       name: itemName.trim(),
       category: category as any,
       stationBadge: station,
@@ -74,15 +114,19 @@ export default function AddNewItemModal({
         description.trim() ||
         'Flame-grilled marinated specialty served with signature garnishes and rosemary potatoes.',
       status: itemEnabled ? 'Available' : 'Disabled',
-      availability:
-        stockState === 'In Stock'
-          ? 'In stock'
-          : stockState === 'Low Stock'
-          ? 'Low Stock (8 Left)'
-          : 'Out of stock',
+      availability: !isStockTracked
+        ? 'In stock'
+        : cleanStock === 0
+        ? 'Out of stock'
+        : cleanStock <= 10
+        ? `Low Stock (${cleanStock} Left)`
+        : 'In stock',
       modifiersCount:
         modifierGroups.length > 0 ? `${modifierGroups.length} group(s)` : '0 group(s)',
       enabled: itemEnabled,
+      estimatedPrepTime: Math.max(0, Number(estimatedPrepTime) || 0),
+      stockQuantity: isStockTracked ? cleanStock : undefined,
+      isStockTracked,
     };
 
     onItemCreated(newItem);
@@ -95,10 +139,10 @@ export default function AddNewItemModal({
         <div className="w-full flex justify-between items-start">
           <div className="flex flex-col gap-1">
             <h2 className="text-white text-lg font-medium font-['Poppins'] leading-5">
-              Add New Menu Item
+              {isEdit ? 'Edit Menu Item' : 'Add New Menu Item'}
             </h2>
             <span className="text-neutral-400 text-xs font-normal font-['Poppins'] leading-4">
-              Manager Actions
+              {isEdit ? 'Update preparation time, stock, and pricing' : 'Manager Actions'}
             </span>
           </div>
 
@@ -218,63 +262,87 @@ export default function AddNewItemModal({
                 PREPARATION & KDS STATION
               </span>
               <span className="text-yellow-400 text-sm font-normal font-['Inter'] leading-4">
-                KDS Routing Rule
+                KDS Routing & ETA
               </span>
             </div>
 
-            <div className="p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col gap-2">
-              <label className="text-white text-xs font-normal font-['Inter'] leading-4">
-                Preparation Station *
-              </label>
+            <div className="p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-white text-xs font-normal font-['Inter'] leading-4">
+                    Preparation Station *
+                  </label>
 
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowStationDropdown(!showStationDropdown);
-                    setShowCategoryDropdown(false);
-                    setShowStockDropdown(false);
-                  }}
-                  className="w-full px-3.5 py-2.5 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 flex justify-between items-center text-stone-300 text-sm font-normal font-['Inter'] hover:bg-neutral-800 transition"
-                >
-                  <span>{station}</span>
-                  <ChevronDown className="w-4 h-4 text-stone-300" />
-                </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowStationDropdown(!showStationDropdown);
+                        setShowCategoryDropdown(false);
+                        setShowStockDropdown(false);
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 flex justify-between items-center text-stone-300 text-sm font-normal font-['Inter'] hover:bg-neutral-800 transition"
+                    >
+                      <span>{station}</span>
+                      <ChevronDown className="w-4 h-4 text-stone-300" />
+                    </button>
 
-                {showStationDropdown && (
-                  <div className="absolute top-full left-0 mt-1 w-full bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl z-30 py-1 text-xs font-['Inter']">
-                    {stationOptions.map((stn) => (
-                      <button
-                        key={stn}
-                        type="button"
-                        onClick={() => {
-                          setStation(stn);
-                          setShowStationDropdown(false);
-                        }}
-                        className="w-full text-left px-3 py-2 text-stone-200 hover:bg-neutral-800 hover:text-yellow-400 transition"
-                      >
-                        {stn}
-                      </button>
-                    ))}
+                    {showStationDropdown && (
+                      <div className="absolute top-full left-0 mt-1 w-full bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl z-30 py-1 text-xs font-['Inter']">
+                        {stationOptions.map((stn) => (
+                          <button
+                            key={stn}
+                            type="button"
+                            onClick={() => {
+                              setStation(stn);
+                              setShowStationDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-stone-200 hover:bg-neutral-800 hover:text-yellow-400 transition"
+                          >
+                            {stn}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-white text-xs font-normal font-['Inter'] leading-4 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-yellow-400" />
+                    <span>Est. Prep Time (mins) *</span>
+                  </label>
+                  <div className="w-full px-3.5 py-2.5 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 flex items-center justify-between">
+                    <input
+                      type="number"
+                      min="0"
+                      max="240"
+                      required
+                      value={estimatedPrepTime}
+                      onChange={(e) => setEstimatedPrepTime(Math.max(0, parseInt(e.target.value) || 0))}
+                      placeholder="15"
+                      className="w-full bg-transparent text-stone-300 text-sm font-normal font-['Inter'] focus:outline-none"
+                    />
+                    <span className="text-xs text-neutral-400 font-mono ml-2">min</span>
+                  </div>
+                </div>
               </div>
 
-              <span className="text-zinc-600 text-xs font-normal font-['Inter'] leading-4">
-                Selected station determines kitchen display screen routing.
+              <span className="text-zinc-500 text-xs font-normal font-['Inter'] leading-4">
+                Station routes tickets to KDS; prep duration calculates kitchen schedules and customer ETA.
               </span>
             </div>
           </div>
 
-          {/* Section 3: Status & Availability Controls */}
+          {/* Section 3: Status & Inventory Controls */}
           <div className="w-full flex flex-col gap-2">
             <span className="text-white text-base font-medium font-['Poppins'] leading-5">
-              Status & Availability Controls
+              Status & Inventory Controls
             </span>
 
-            <div className="p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Item Status Toggle Box */}
-              <div className="flex-1 p-3 bg-stone-950 rounded-md outline outline-1 outline-offset-[-1px] outline-zinc-800 flex justify-between items-center">
+              <div className="p-3 bg-stone-950 rounded-md outline outline-1 outline-offset-[-1px] outline-zinc-800 flex justify-between items-center">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-white text-xs font-medium font-['Inter'] leading-4">
                     Item Status
@@ -298,43 +366,58 @@ export default function AddNewItemModal({
                 </div>
               </div>
 
-              {/* Stock State Dropdown Box */}
-              <div className="flex-1 flex flex-col gap-1.5 relative">
-                <label className="text-white text-xs font-normal font-['Inter'] leading-4">
-                  Inventory / Stock State
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowStockDropdown(!showStockDropdown);
-                    setShowCategoryDropdown(false);
-                    setShowStationDropdown(false);
-                  }}
-                  className="w-full px-3.5 py-2.5 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 flex justify-between items-center text-stone-300 text-sm font-normal font-['Inter'] hover:bg-neutral-800 transition"
-                >
-                  <span>{stockState}</span>
-                  <ChevronDown className="w-4 h-4 text-stone-300" />
-                </button>
+              {/* Stock Tracking Toggle Box */}
+              <div className="p-3 bg-stone-950 rounded-md outline outline-1 outline-offset-[-1px] outline-zinc-800 flex justify-between items-center">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-white text-xs font-medium font-['Inter'] leading-4 flex items-center gap-1.5">
+                    <PackageCheck className="w-3.5 h-3.5 text-yellow-400" />
+                    <span>Track Stock</span>
+                  </span>
+                  <span className="text-neutral-500 text-xs font-normal font-['Poppins'] leading-4">
+                    {isStockTracked ? 'Inventory tracked' : 'Unlimited quantity'}
+                  </span>
+                </div>
 
-                {showStockDropdown && (
-                  <div className="absolute top-full left-0 mt-1 w-full bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl z-30 py-1 text-xs font-['Inter']">
-                    {stockOptions.map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => {
-                          setStockState(opt);
-                          setShowStockDropdown(false);
-                        }}
-                        className="w-full text-left px-3 py-2 text-stone-200 hover:bg-neutral-800 hover:text-yellow-400 transition"
-                      >
-                        {opt}
-                      </button>
-                    ))}
+                <div
+                  onClick={() => setIsStockTracked(!isStockTracked)}
+                  className="cursor-pointer select-none"
+                >
+                  <div
+                    className={`w-8 h-4 rounded-full transition-colors relative flex items-center p-0.5 ${
+                      isStockTracked ? 'bg-yellow-400 justify-end' : 'bg-zinc-700 justify-start'
+                    }`}
+                  >
+                    <div className="w-3.5 h-3.5 bg-white rounded-full shadow-sm" />
                   </div>
-                )}
+                </div>
               </div>
             </div>
+
+            {/* If Stock Tracking Enabled: Show Stock Quantity Input */}
+            {isStockTracked && (
+              <div className="p-3.5 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col gap-1.5 animate-in fade-in">
+                <div className="flex justify-between items-center">
+                  <label className="text-white text-xs font-normal font-['Inter'] leading-4">
+                    Available Stock Quantity *
+                  </label>
+                  <span className="text-neutral-400 text-xs">
+                    Current units in pantry
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  value={stockQuantity}
+                  onChange={(e) => setStockQuantity(Math.max(0, parseInt(e.target.value) || 0))}
+                  placeholder="50"
+                  className="w-full px-3.5 py-2 bg-neutral-950 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-stone-300 text-sm focus:outline-neutral-500"
+                />
+                <span className="text-[11px] text-neutral-500">
+                  Customer ordering atomically deducts stock. Orders are blocked when stock reaches 0.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Section 4: MODIFIERS & ADD-ONS */}
@@ -411,7 +494,7 @@ export default function AddNewItemModal({
               type="submit"
               className="px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-neutral-800 text-base font-medium font-['Inter'] leading-5 transition cursor-pointer shadow-md active:scale-95"
             >
-              Create Item
+              {isEdit ? 'Save Changes' : 'Create Item'}
             </button>
           </div>
         </form>

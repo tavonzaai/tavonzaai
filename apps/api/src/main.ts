@@ -46,7 +46,7 @@ async function bootstrap() {
   const port = process.env.API_PORT || process.env.PORT || 3000;
   const env  = process.env.NODE_ENV || 'development';
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   logger.info(`API server started`, {
     port,

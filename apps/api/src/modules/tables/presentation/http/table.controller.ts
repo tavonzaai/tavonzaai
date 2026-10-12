@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -22,6 +23,11 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
+import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
+import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
+import { Permission } from '@tavonza/authorization';
+import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 import { TableService } from '../../application/services/table.service';
 import {
   CreateTableDto,
@@ -37,6 +43,24 @@ import { ApiStandardErrors } from '../../../../common/swagger';
 @Controller('tables')
 export class TableController {
   constructor(private readonly tableService: TableService) {}
+
+  private assertBranchAccess(user: JwtPayload, branchId: string): void {
+    const isGlobalAdmin =
+      user.role === 'SUPER_ADMIN' ||
+      user.globalRole === 'SUPER_ADMIN' ||
+      user.role === 'ADMIN' ||
+      user.role === 'RESTAURANT_OWNER';
+
+    if (isGlobalAdmin) {
+      return;
+    }
+
+    if (user.branchId && user.branchId !== branchId) {
+      throw new ForbiddenException(
+        'Cross-branch access forbidden. You cannot access tables belonging to another branch.',
+      );
+    }
+  }
 
   // ── Public QR Code Resolution ─────────────────────────────────────────
 
@@ -54,7 +78,8 @@ export class TableController {
   // ── Authenticated Table Management ────────────────────────────────────
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TABLES_UPDATE)
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new table in a branch' })
@@ -65,28 +90,34 @@ export class TableController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TABLES_READ)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all tables in a branch' })
   @ApiQuery({ name: 'branchId', required: true, type: String, description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'List of tables', type: [TableResponseDto] })
   @ApiStandardErrors(400, 401, 403, 500)
   async listByBranch(
+    @CurrentUser() user: JwtPayload,
     @Query('branchId', new ParseUUIDPipe()) branchId: string,
   ): Promise<TableResponseDto[]> {
+    this.assertBranchAccess(user, branchId);
     return this.tableService.findByBranch(branchId);
   }
 
   @Get('branch/:branchId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TABLES_READ)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all tables in a branch' })
   @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'List of tables', type: [TableResponseDto] })
   @ApiStandardErrors(400, 401, 403, 500)
   async listByBranchPath(
+    @CurrentUser() user: JwtPayload,
     @Param('branchId', new ParseUUIDPipe()) branchId: string,
   ): Promise<TableResponseDto[]> {
+    this.assertBranchAccess(user, branchId);
     return this.tableService.findByBranch(branchId);
   }
 

@@ -57,6 +57,9 @@ export class KitchenTicketItemResponseDto {
   @ApiProperty({ example: 'ORD-84920', description: 'Order display number' })
   orderNumber!: string;
 
+  @ApiPropertyOptional({ example: '5298804e-5847-4e5a-bdba-73a8f06d9ed2', description: 'Table UUID' })
+  tableId?: string | null;
+
   @ApiPropertyOptional({ example: 'Table 08', description: 'Table label' })
   tableLabel?: string | null;
 
@@ -74,6 +77,18 @@ export class KitchenTicketItemResponseDto {
 
   @ApiPropertyOptional({ example: 'Extra crispy fries', description: 'Customer culinary instructions' })
   specialInstructions?: string | null;
+
+  @ApiPropertyOptional({ example: 15, description: 'Estimated preparation time in minutes' })
+  estimatedPrepTime?: number | null;
+
+  @ApiPropertyOptional({ example: '2026-10-08T14:38:00.000Z', description: 'Cooking preparation started timestamp' })
+  preparingAt?: Date | null;
+
+  @ApiPropertyOptional({ example: '2026-10-08T14:50:00.000Z', description: 'Preparation ready timestamp' })
+  readyAt?: Date | null;
+
+  @ApiPropertyOptional({ example: '2026-10-08T14:52:00.000Z', description: 'Item served timestamp' })
+  servedAt?: Date | null;
 
   @ApiPropertyOptional({ example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', description: 'Branch UUID' })
   branchId?: string;

@@ -21,6 +21,7 @@ export interface KitchenTicketItemEntity {
   stationType: KitchenStationType;
   status: KitchenItemStatus;
   specialInstructions?: string | null;
+  estimatedPrepTime?: number | null;
   preparingAt?: Date | null;
   readyAt?: Date | null;
   servedAt?: Date | null;

@@ -58,10 +58,33 @@ export interface IMenuRepository {
   findItemById(id: string): Promise<MenuItem | null>;
 
   /** Create a menu item. */
-  createItem?(data: { restaurantId: string; categoryId: string; name: string; description?: string; basePrice: number; imageUrl?: string; isVegetarian?: boolean }): Promise<MenuItem>;
+  createItem?(data: {
+    restaurantId: string;
+    categoryId: string;
+    name: string;
+    description?: string;
+    basePrice: number;
+    imageUrl?: string;
+    isVegetarian?: boolean;
+    estimatedPrepTime?: number;
+    stockQuantity?: number;
+    isStockTracked?: boolean;
+  }): Promise<MenuItem>;
 
   /** Update a menu item. */
-  updateItem?(id: string, data: Partial<{ name: string; description: string | null; basePrice: number; isAvailable: boolean; imageUrl: string | null }>): Promise<MenuItem | null>;
+  updateItem?(
+    id: string,
+    data: Partial<{
+      name: string;
+      description: string | null;
+      basePrice: number;
+      isAvailable: boolean;
+      imageUrl: string | null;
+      estimatedPrepTime: number;
+      stockQuantity: number;
+      isStockTracked: boolean;
+    }>,
+  ): Promise<MenuItem | null>;
 
   /** Soft delete a menu item. */
   softDeleteItem?(id: string): Promise<MenuItem | null>;
