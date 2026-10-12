@@ -7,6 +7,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -34,6 +35,7 @@ import { isUUID } from '@tavonza/shared';
 import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 import {
   AssignTableDto,
+  UnassignTableDto,
   CreateOrderOnBehalfDto,
   CreateAlertDto,
   RejectOrderDto,
@@ -87,21 +89,84 @@ export class WaiterTablesController {
 
   /**
    * POST /waiter/tables/assign
-   * Manager assigns a table to a waiter for today's shift.
+   * Manager assigns one or multiple tables to a waiter for shift monitoring.
    */
   @Post('assign')
   @RequirePermissions(Permission.TABLES_UPDATE)
   @ApiOperation({
-    summary: '[Manager] Assign a table to a waiter',
-    description: 'Assigns a specific dining table to a waiter staff member for shift monitoring.',
+    summary: '[Manager] Assign one or multiple tables to a waiter',
+    description: 'Assigns dining tables to a waiter staff member and returns full waiter and assigned table details.',
   })
-  @ApiCreatedResponse({ type: TableAssignmentDto, description: 'Table assignment created' })
+  @ApiCreatedResponse({ type: TableAssignmentDto, description: 'Table assignment created with complete table details' })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async assignTable(
     @CurrentUser() user: JwtPayload,
     @Body() dto: AssignTableDto,
   ): Promise<TableAssignmentDto> {
     return this.waiterService.assignTable(dto, user.sub);
+  }
+
+  /**
+   * POST /waiter/tables/unassign
+   * Manager unassigns one or multiple tables from a waiter.
+   */
+  @Post('unassign')
+  @RequirePermissions(Permission.TABLES_UPDATE)
+  @ApiOperation({
+    summary: '[Manager] Unassign table(s) from a waiter',
+    description: 'Removes active dining table assignment(s) for a waiter staff member.',
+  })
+  @ApiOkResponse({ description: 'Table unassigned successfully' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async unassignTable(
+    @CurrentUser() _user: JwtPayload,
+    @Body() dto: UnassignTableDto,
+  ): Promise<any> {
+    return this.waiterService.unassignTable(dto);
+  }
+
+  /**
+   * DELETE /waiter/tables/assign/:assignmentId
+   * Manager removes a specific table assignment by UUID.
+   */
+  @Delete('assign/:assignmentId')
+  @RequirePermissions(Permission.TABLES_UPDATE)
+  @ApiOperation({
+    summary: '[Manager] Release a table assignment by assignment UUID',
+    description: 'Deactivates an active table assignment record.',
+  })
+  @ApiParam({ name: 'assignmentId', type: String, description: 'Table assignment UUID' })
+  @ApiOkResponse({ description: 'Assignment released successfully' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async releaseAssignment(
+    @Param('assignmentId') assignmentId: string,
+  ): Promise<{ success: boolean }> {
+    await this.waiterService.releaseAssignment(assignmentId);
+    return { success: true };
+  }
+
+  /**
+   * GET /waiter/tables/assignments
+   * Lists all active table assignments for a branch, optionally filtered by waiter.
+   */
+  @Get('assignments')
+  @RequirePermissions(Permission.TABLES_READ)
+  @ApiOperation({
+    summary: '[Manager/Waiter] List active table assignments for a branch',
+    description: 'Retrieves current active assignments with waiter names and table details.',
+  })
+  @ApiOkResponse({ type: [TableAssignmentDto], description: 'List of branch table assignments' })
+  @ApiQuery({ name: 'branchId', required: false, type: String, description: 'Branch UUID' })
+  @ApiQuery({ name: 'waiterId', required: false, type: String, description: 'Waiter User UUID' })
+  @ApiStandardErrors(400, 401, 403, 500)
+  async getAssignments(
+    @CurrentUser() user: JwtPayload,
+    @Query('branchId') qBranchId?: string,
+    @Query('waiterId') waiterId?: string,
+  ): Promise<any[]> {
+    const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
+    if (!branchId) throw new BadRequestException('A valid branch UUID is required');
+    return this.waiterService.getBranchAssignments(branchId, waiterId);
   }
 }
 

@@ -77,6 +77,15 @@ export class MenuItemListResponseDto {
   @ApiProperty({ example: 14.50, description: 'Base menu price before addons and modifiers' })
   basePrice!: number;
 
+  @ApiPropertyOptional({ example: 15, description: 'Estimated preparation time in minutes' })
+  estimatedPrepTime?: number | null;
+
+  @ApiPropertyOptional({ example: 50, description: 'Available stock quantity' })
+  stockQuantity?: number | null;
+
+  @ApiPropertyOptional({ example: true, description: 'Whether stock tracking is enabled' })
+  isStockTracked?: boolean;
+
   static fromEntity(entity: MenuItem): MenuItemListResponseDto {
     const dto = new MenuItemListResponseDto();
     dto.id = entity.id;
@@ -92,6 +101,9 @@ export class MenuItemListResponseDto {
     dto.dietBadge = entity.dietBadge;
     dto.categoryName = entity.categoryName;
     dto.categoryId = entity.categoryId;
+    dto.estimatedPrepTime = entity.estimatedPrepTime ?? entity.prepTime ?? 15;
+    dto.stockQuantity = entity.stockQuantity ?? 0;
+    dto.isStockTracked = entity.isStockTracked ?? false;
     return dto;
   }
 }
@@ -164,6 +176,15 @@ export class MenuItemDetailResponseDto {
   @ApiProperty({ example: true, description: 'Kitchen availability status' })
   isAvailable!: boolean;
 
+  @ApiPropertyOptional({ example: 15, description: 'Expected cooking/preparation duration in minutes' })
+  estimatedPrepTime?: number | null;
+
+  @ApiPropertyOptional({ example: 50, description: 'Available stock quantity' })
+  stockQuantity?: number | null;
+
+  @ApiPropertyOptional({ example: true, description: 'Whether stock tracking is enabled' })
+  isStockTracked?: boolean;
+
   @ApiProperty({ type: [MenuItemAddOnResponseDto], description: 'Available customize add-ons and toppings' })
   addOns!: MenuItemAddOnResponseDto[];
 
@@ -176,7 +197,10 @@ export class MenuItemDetailResponseDto {
     dto.imageUrl = entity.imageUrl;
     dto.categoryId = entity.categoryId;
     dto.categoryName = entity.categoryName;
-    dto.prepTime = entity.prepTime;
+    dto.prepTime = entity.estimatedPrepTime ?? entity.prepTime ?? 15;
+    dto.estimatedPrepTime = entity.estimatedPrepTime ?? entity.prepTime ?? 15;
+    dto.stockQuantity = entity.stockQuantity ?? 0;
+    dto.isStockTracked = entity.isStockTracked ?? false;
     dto.calories = entity.calories;
     dto.dietBadge = entity.dietBadge;
     dto.allergenDisplay = entity.allergenDisplay;

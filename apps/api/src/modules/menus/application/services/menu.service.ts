@@ -122,6 +122,9 @@ export class MenuService {
     basePrice: number;
     imageUrl?: string;
     isVegetarian?: boolean;
+    estimatedPrepTime?: number;
+    stockQuantity?: number;
+    isStockTracked?: boolean;
   }): Promise<MenuItem> {
     if (!this.menuRepository.createItem) {
       throw new Error('createItem is not supported');
@@ -137,6 +140,9 @@ export class MenuService {
       basePrice: number;
       isAvailable: boolean;
       imageUrl: string | null;
+      estimatedPrepTime: number;
+      stockQuantity: number;
+      isStockTracked: boolean;
     }>,
   ): Promise<MenuItem> {
     if (!this.menuRepository.updateItem) {

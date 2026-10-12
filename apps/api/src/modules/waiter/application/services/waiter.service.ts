@@ -31,6 +31,7 @@ import {
 } from '../../domain/entities/waiter.entity';
 import type {
   AssignTableDto,
+  UnassignTableDto,
   RejectOrderDto,
   CreateOrderOnBehalfDto,
   CreateAlertDto,
@@ -98,10 +99,29 @@ export class WaiterService {
       branchId: dto.branchId,
       waiterId: waiterStaffId,
       tableId: dto.tableId,
+      tableIds: dto.tableIds,
       assignedById: assignerStaffId,
       sessionStart: start,
       sessionEnd: end,
     });
+  }
+
+  async unassignTable(dto: UnassignTableDto): Promise<any> {
+    return this.waiterRepo.unassignTable({
+      branchId: dto.branchId,
+      waiterId: dto.waiterId,
+      tableId: dto.tableId,
+      tableIds: dto.tableIds,
+      assignmentId: dto.assignmentId,
+    });
+  }
+
+  async releaseAssignment(assignmentId: string): Promise<void> {
+    return this.waiterRepo.releaseTable(assignmentId);
+  }
+
+  async getBranchAssignments(branchId: string, waiterId?: string): Promise<any[]> {
+    return this.waiterRepo.findAssignmentsForBranch(branchId, waiterId);
   }
 
   // ── Slice 3: Accept Order ───────────────────────────────────────────

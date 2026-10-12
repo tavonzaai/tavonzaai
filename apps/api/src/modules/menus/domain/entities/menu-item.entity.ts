@@ -34,6 +34,9 @@ export interface MenuItemProps {
   isAvailable: boolean;
   isPopular: boolean;
   addOns: MenuItemAddOn[];
+  estimatedPrepTime?: number | null;
+  stockQuantity?: number | null;
+  isStockTracked?: boolean;
 }
 
 export class MenuItem {
@@ -58,6 +61,9 @@ export class MenuItem {
   readonly isAvailable: boolean;
   readonly isPopular: boolean;
   readonly addOns: MenuItemAddOn[];
+  readonly estimatedPrepTime: number | null;
+  readonly stockQuantity: number;
+  readonly isStockTracked: boolean;
 
   constructor(props: MenuItemProps) {
     this.id = props.id;
@@ -80,6 +86,9 @@ export class MenuItem {
     this.isAvailable = props.isAvailable;
     this.isPopular = props.isPopular;
     this.addOns = props.addOns;
+    this.estimatedPrepTime = props.estimatedPrepTime ?? props.prepTime ?? 15;
+    this.stockQuantity = props.stockQuantity ?? 0;
+    this.isStockTracked = props.isStockTracked ?? false;
 
     // Parse comma-separated allergens string into an array
     this.allergens = props.allergens
