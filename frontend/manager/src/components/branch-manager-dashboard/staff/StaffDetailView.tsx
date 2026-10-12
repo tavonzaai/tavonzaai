@@ -1,8 +1,39 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User, ChevronDown, Sliders, Activity, Check, Shield } from 'lucide-react';
-import { branchManagerService, getActiveBranchId, StaffAssignmentItem } from '../../../redux/features/branchManagerApi';
+import {
+  ArrowLeft,
+  User,
+  ChevronDown,
+  Sliders,
+  Activity,
+  Check,
+  Shield,
+  Plus,
+  Trash2,
+  UtensilsCrossed,
+  AlertCircle,
+  RefreshCw,
+} from 'lucide-react';
+import {
+  branchManagerService,
+  getActiveBranchId,
+  StaffAssignmentItem,
+  TableItem,
+} from '../../../redux/features/branchManagerApi';
+
+interface AssignedTableInfo {
+  id: string;
+  label: string;
+  tableNumber?: string;
+  capacity?: number;
+  serviceStatus?: string;
+  floor?: number;
+  assignmentId?: string;
+  sessionStart?: string;
+  sessionEnd?: string;
+  isActive?: boolean;
+}
 
 interface StaffDetailViewProps {
   staffId?: string;
@@ -19,10 +50,71 @@ export default function StaffDetailView({
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'Active' | 'Break' | 'Off Duty'>('Active');
   const [section, setSection] = useState('Floor Dining Room');
-  const [tables, setTables] = useState('Tables T-01, T-02');
   const [shiftSchedule, setShiftSchedule] = useState('Lunch Shift (10:00 AM - 4:00 PM)');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [updateSuccess, setUpdateSuccess] = useState(false);
+
+  // Live Table Assignment States
+  const [assignedTables, setAssignedTables] = useState<AssignedTableInfo[]>([]);
+  const [allBranchTables, setAllBranchTables] = useState<TableItem[]>([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [assigningTable, setAssigningTable] = useState(false);
+  const [unassigningTableId, setUnassigningTableId] = useState<string | null>(null);
+  const [selectedTableToAssign, setSelectedTableToAssign] = useState<string>('');
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const loadAssignments = async (targetStaffId: string) => {
+    try {
+      setLoadingAssignments(true);
+      const branchId = getActiveBranchId();
+      const [assignmentsRes, tablesRes] = await Promise.all([
+        branchManagerService.getWaiterAssignments(branchId, targetStaffId),
+        branchManagerService.getTables(branchId),
+      ]);
+
+      const extracted: AssignedTableInfo[] = [];
+      if (Array.isArray(assignmentsRes)) {
+        assignmentsRes.forEach((assignment: any) => {
+          if (Array.isArray(assignment.assignedTables) && assignment.assignedTables.length > 0) {
+            assignment.assignedTables.forEach((t: any) => {
+              if (!extracted.some((x) => x.id === t.id)) {
+                extracted.push({
+                  id: t.id,
+                  label: t.label || t.tableNumber || `Table ${t.id.slice(0, 4)}`,
+                  tableNumber: t.tableNumber || t.label,
+                  capacity: t.capacity,
+                  serviceStatus: t.serviceStatus || 'AVAILABLE',
+                  floor: t.floor,
+                  assignmentId: t.assignmentId || assignment.id,
+                  sessionStart: t.sessionStart,
+                  sessionEnd: t.sessionEnd,
+                  isActive: t.isActive !== false,
+                });
+              }
+            });
+          } else if (assignment.tableId) {
+            extracted.push({
+              id: assignment.tableId,
+              label: assignment.tableNumber || `Table ${assignment.tableId.slice(0, 4)}`,
+              tableNumber: assignment.tableNumber,
+              capacity: assignment.capacity,
+              serviceStatus: assignment.serviceStatus || 'AVAILABLE',
+              assignmentId: assignment.id,
+              isActive: assignment.isActive !== false,
+            });
+          }
+        });
+      }
+      setAssignedTables(extracted);
+      if (Array.isArray(tablesRes)) {
+        setAllBranchTables(tablesRes);
+      }
+    } catch (err: any) {
+      console.warn('Could not load waiter assignments:', err);
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -34,6 +126,8 @@ export default function StaffDetailView({
         if (isMounted && member) {
           setStaffMember(member);
           setStatus(member.isActive ? 'Active' : 'Break');
+          const targetId = member.staffId || staffId!;
+          loadAssignments(targetId);
         }
       } catch (err) {
         console.warn('Could not load staff detail via findOne:', err);
@@ -58,10 +152,77 @@ export default function StaffDetailView({
     setTimeout(() => setUpdateSuccess(false), 3000);
   };
 
+  const handleAssignTable = async () => {
+    if (!selectedTableToAssign) return;
+    const targetId = staffMember?.staffId || staffId;
+    if (!targetId) return;
+
+    try {
+      setAssigningTable(true);
+      setActionMessage(null);
+      const branchId = getActiveBranchId();
+      await branchManagerService.assignWaiterToTable({
+        branchId,
+        waiterId: targetId,
+        tableId: selectedTableToAssign,
+        shiftLabel: shiftSchedule,
+      });
+
+      const assignedTbl = allBranchTables.find((t) => t.id === selectedTableToAssign);
+      setActionMessage({
+        type: 'success',
+        text: `Table ${assignedTbl?.label || selectedTableToAssign} successfully assigned!`,
+      });
+      setSelectedTableToAssign('');
+      await loadAssignments(targetId);
+    } catch (err: any) {
+      setActionMessage({
+        type: 'error',
+        text: err?.message || 'Failed to assign table to waiter.',
+      });
+    } finally {
+      setAssigningTable(false);
+    }
+  };
+
+  const handleUnassignTable = async (table: AssignedTableInfo) => {
+    const targetId = staffMember?.staffId || staffId;
+    if (!targetId) return;
+
+    try {
+      setUnassigningTableId(table.id);
+      setActionMessage(null);
+      const branchId = getActiveBranchId();
+      await branchManagerService.unassignWaiterTable({
+        branchId,
+        waiterId: targetId,
+        tableId: table.id,
+        assignmentId: table.assignmentId,
+      });
+
+      setActionMessage({
+        type: 'success',
+        text: `Table ${table.label} unassigned successfully.`,
+      });
+      await loadAssignments(targetId);
+    } catch (err: any) {
+      setActionMessage({
+        type: 'error',
+        text: err?.message || 'Failed to unassign table.',
+      });
+    } finally {
+      setUnassigningTableId(null);
+    }
+  };
+
   const displayName = staffMember?.name || 'Staff Member';
   const displayRole = staffMember?.role ? staffMember.role.replace(/_/g, ' ') : 'Staff Member';
   const displayEmail = staffMember?.email || 'No email provided';
   const displayPhone = staffMember?.phone || 'No phone recorded';
+
+  const unassignedBranchTables = allBranchTables.filter(
+    (bt) => !assignedTables.some((at) => at.id === bt.id)
+  );
 
   return (
     <div className="flex-1 p-6 lg:p-8 space-y-6 max-w-7xl animate-in fade-in duration-200 font-['Inter']">
@@ -160,7 +321,7 @@ export default function StaffDetailView({
 
           <div className="p-3 bg-black/30 rounded-lg outline outline-1 outline-offset-[-1px] outline-zinc-800 flex flex-col gap-1.5">
             <span className="text-neutral-500 text-xs font-normal">
-              Assigned Station
+              Assigned Section
             </span>
             <span className="text-blue-400 text-sm font-semibold truncate">
               {section}
@@ -172,13 +333,17 @@ export default function StaffDetailView({
               Assigned Tables
             </span>
             <span className="text-green-500 text-sm font-semibold truncate">
-              {tables}
+              {loadingAssignments
+                ? 'Loading tables...'
+                : assignedTables.length > 0
+                ? `${assignedTables.length} Active (${assignedTables.map((t) => t.label).join(', ')})`
+                : 'No tables assigned'}
             </span>
           </div>
 
           <div className="p-3 bg-black/30 rounded-lg outline outline-1 outline-offset-[-1px] outline-zinc-800 flex flex-col gap-1.5">
             <span className="text-neutral-500 text-xs font-normal">
-              Database Staff ID
+              Staff Database ID
             </span>
             <span className="text-yellow-400 text-xs font-mono font-semibold truncate">
               {staffMember?.staffId || staffId || 'N/A'}
@@ -207,22 +372,153 @@ export default function StaffDetailView({
         )}
       </div>
 
-      {/* Two Column Layout: Manager Controls & Recent Activity */}
+      {/* Two Column Layout: Manager Controls & Metadata */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         {/* Controls */}
         <div className="p-5 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <Sliders className="w-5 h-5 text-white" />
-            <h2 className="text-white text-base font-medium font-['Poppins']">
-              Manager Operational Controls
-            </h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sliders className="w-5 h-5 text-white" />
+              <h2 className="text-white text-base font-medium font-['Poppins']">
+                Table & Floor Section Management
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const targetId = staffMember?.staffId || staffId;
+                if (targetId) loadAssignments(targetId);
+              }}
+              disabled={loadingAssignments}
+              className="p-1.5 text-neutral-400 hover:text-white transition rounded-md hover:bg-neutral-800 cursor-pointer disabled:opacity-50"
+              title="Refresh Assignments"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingAssignments ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {actionMessage && (
+            <div
+              className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
+                actionMessage.type === 'success'
+                  ? 'bg-emerald-950/70 border border-emerald-500/40 text-emerald-300'
+                  : 'bg-red-950/70 border border-red-500/40 text-red-300'
+              }`}
+            >
+              {actionMessage.type === 'success' ? (
+                <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+              )}
+              <span>{actionMessage.text}</span>
+            </div>
+          )}
+
+          <div className="w-full h-px bg-neutral-800" />
+
+          {/* Assigned Tables Section */}
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between items-center">
+              <label className="text-white text-sm font-medium flex items-center gap-1.5">
+                <UtensilsCrossed className="w-4 h-4 text-yellow-400" />
+                <span>Assigned Tables ({assignedTables.length})</span>
+              </label>
+              <span className="text-xs text-neutral-400">
+                Live Branch Scoped
+              </span>
+            </div>
+
+            {loadingAssignments ? (
+              <div className="p-4 text-center text-xs text-neutral-500 bg-neutral-950/40 rounded-lg">
+                Loading assigned tables...
+              </div>
+            ) : assignedTables.length === 0 ? (
+              <div className="p-4 text-center text-xs text-neutral-400 bg-neutral-950/40 rounded-lg border border-dashed border-neutral-800">
+                No tables currently assigned to this waiter. Use the assign form below to add tables.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                {assignedTables.map((t) => (
+                  <div
+                    key={t.id}
+                    className="p-3 bg-neutral-950/70 rounded-lg border border-neutral-800 flex items-center justify-between gap-2 hover:border-neutral-700 transition"
+                  >
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-white text-sm font-semibold truncate">
+                          {t.label}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase ${
+                            t.serviceStatus === 'OCCUPIED'
+                              ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20'
+                              : t.serviceStatus === 'RESERVED'
+                              ? 'bg-blue-400/10 text-blue-400 border border-blue-400/20'
+                              : 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20'
+                          }`}
+                        >
+                          {t.serviceStatus || 'AVAILABLE'}
+                        </span>
+                      </div>
+                      <span className="text-neutral-400 text-[11px]">
+                        Cap: {t.capacity || 4} · Floor: {t.floor || 1}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={unassigningTableId === t.id}
+                      onClick={() => handleUnassignTable(t)}
+                      className="p-2 text-neutral-400 hover:text-red-400 hover:bg-red-400/10 rounded-md transition cursor-pointer disabled:opacity-50"
+                      title="Unassign Table"
+                    >
+                      <Trash2 className={`w-3.5 h-3.5 ${unassigningTableId === t.id ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="w-full h-px bg-neutral-800" />
 
+          {/* Assign New Table Control */}
           <div className="flex flex-col gap-2">
-            <label className="text-white text-sm font-normal">
-              Reassign Floor Section & Station
+            <label className="text-white text-xs font-normal">
+              Assign Table to Waiter
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={selectedTableToAssign}
+                onChange={(e) => setSelectedTableToAssign(e.target.value)}
+                className="flex-1 px-3 py-2.5 bg-neutral-950/60 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm focus:outline-neutral-700 cursor-pointer"
+              >
+                <option value="">Select an available branch table...</option>
+                {unassignedBranchTables.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label || t.tableNumber || `Table ${t.id.slice(0, 4)}`} (Cap: {t.capacity || 4}, Floor {t.floor || 1})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleAssignTable}
+                disabled={!selectedTableToAssign || assigningTable}
+                className="px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-neutral-900 font-semibold text-xs rounded-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{assigningTable ? 'Assigning...' : 'Assign'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="w-full h-px bg-neutral-800" />
+
+          {/* Section & Shift Schedule */}
+          <div className="flex flex-col gap-2">
+            <label className="text-white text-xs font-normal">
+              Dining Section Label
             </label>
             <input
               type="text"
@@ -231,21 +527,12 @@ export default function StaffDetailView({
               className="w-full px-3.5 py-2.5 bg-neutral-950/60 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm focus:outline-neutral-700"
               placeholder="e.g. Floor Section A"
             />
-            <input
-              type="text"
-              value={tables}
-              onChange={(e) => setTables(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-neutral-950/60 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm focus:outline-neutral-700"
-              placeholder="e.g. Tables 01, 04, 12"
-            />
           </div>
-
-          <div className="w-full h-px bg-neutral-800" />
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3.5">
             <div className="flex-1 flex flex-col gap-2">
-              <label className="text-white text-sm font-normal">
-                Update Shift Schedule
+              <label className="text-white text-xs font-normal">
+                Shift Operating Hours
               </label>
               <select
                 value={shiftSchedule}
@@ -270,7 +557,7 @@ export default function StaffDetailView({
                   <span>Saved</span>
                 </>
               ) : (
-                <span>Update</span>
+                <span>Update Schedule</span>
               )}
             </button>
           </div>

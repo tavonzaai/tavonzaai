@@ -78,19 +78,42 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
               if (o.status === "PREPARING") status = "PREPARING";
               else if (o.status === "READY_TO_SERVE") status = "READY";
 
-              const createdDate = new Date(o.createdAt);
-              const elapsed = !isNaN(createdDate.getTime())
-                ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 60000))
-                : 0;
+              const prepStart = o.prepStartedAt ? new Date(o.prepStartedAt) : null;
+              const ready = o.readyAt ? new Date(o.readyAt) : null;
+              const created = new Date(o.createdAt);
+
+              let elapsed = 0;
+              if (ready && (prepStart || !isNaN(created.getTime()))) {
+                const startMs = (prepStart || created).getTime();
+                elapsed = Math.max(0, Math.floor((ready.getTime() - startMs) / 60000));
+              } else if (prepStart && !isNaN(prepStart.getTime())) {
+                elapsed = Math.max(0, Math.floor((Date.now() - prepStart.getTime()) / 60000));
+              } else if (!isNaN(created.getTime())) {
+                elapsed = Math.max(0, Math.floor((Date.now() - created.getTime()) / 60000));
+              }
+
+              const estimatedPrepTime = Number(o.estimatedPrepTime) || 15;
+              const isOverdue = status !== "READY" && estimatedPrepTime > 0 && elapsed > estimatedPrepTime;
+              if (isOverdue && status !== "READY") {
+                status = "OVERDUE";
+              }
+
+              const tableLabel =
+                o.tableLabel ||
+                (o.tableNumber ? `Table ${o.tableNumber}` : o.tableId ? `Table ${o.tableId.slice(0, 4)}` : "Takeaway");
 
               return {
                 id: o.orderId || o.id,
                 orderNumber: o.orderNumber,
-                table: o.tableLabel || (o.tableId ? `Table` : "Takeaway"),
+                table: tableLabel,
+                tableId: o.tableId,
                 orderType: "DINE_IN",
                 waiter: o.waiterName || "Staff Assigned",
                 status,
                 timeElapsedMinutes: elapsed,
+                estimatedPrepTime,
+                prepStartedAt: o.prepStartedAt,
+                readyAt: o.readyAt,
                 station: "Grill Station",
                 createdAt: o.createdAt,
                 items: (o.items || []).map((it: any, idx: number) => ({
@@ -99,6 +122,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                   quantity: it.quantity,
                   options: it.notes ? [it.notes] : [],
                   isCompleted: status === "READY",
+                  estimatedPrepTime: it.estimatedPrepTime,
                 })),
               };
             });
@@ -117,8 +141,31 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     window.addEventListener("tavonza:order_item_changed", handleRealtimeUpdate);
     window.addEventListener("tavonza:table_status_changed", handleRealtimeUpdate);
 
+    // Periodic timer to keep cooking timers accurate across the dashboard
+    const timerInterval = setInterval(() => {
+      setOrders((prev) =>
+        prev.map((o) => {
+          if (o.status === "READY") return o;
+          const startMs = o.prepStartedAt
+            ? new Date(o.prepStartedAt).getTime()
+            : new Date(o.createdAt).getTime();
+          const elapsed = !isNaN(startMs)
+            ? Math.max(0, Math.floor((Date.now() - startMs) / 60000))
+            : o.timeElapsedMinutes;
+          const est = o.estimatedPrepTime || 15;
+          const isOverdue = elapsed > est;
+          return {
+            ...o,
+            timeElapsedMinutes: elapsed,
+            status: isOverdue ? ("OVERDUE" as OrderStatus) : o.status,
+          };
+        })
+      );
+    }, 15000);
+
     return () => {
       mounted = false;
+      clearInterval(timerInterval);
       window.removeEventListener("tavonza:order_created", handleRealtimeUpdate);
       window.removeEventListener("tavonza:order_status_changed", handleRealtimeUpdate);
       window.removeEventListener("tavonza:order_item_changed", handleRealtimeUpdate);
@@ -218,8 +265,18 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
 
   // Action Handlers
   const handleStartPreparing = (orderId: string) => {
+    const nowIso = new Date().toISOString();
     setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: "PREPARING" as OrderStatus } : o))
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              status: "PREPARING" as OrderStatus,
+              prepStartedAt: o.prepStartedAt || nowIso,
+              timeElapsedMinutes: 0,
+            }
+          : o
+      )
     );
     kitchenService.updateOrderStatus(orderId, "PREPARING").catch((e) => {
       console.warn("Backend order preparing status update:", e);
@@ -247,7 +304,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
             console.warn("Backend order ready status update:", e);
           });
           playChime("ready");
-          const notif = `Ticket ${order.orderNumber} items completed! Table ${order.table} ready.`;
+          const notif = `Ticket ${order.orderNumber} items completed! ${order.table} ready.`;
           setReadyNotification(notif);
           toast.success(notif);
         }
@@ -256,12 +313,14 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           ...order,
           items: updatedItems,
           status: newStatus,
+          readyAt: allCompleted ? new Date().toISOString() : order.readyAt,
         };
       })
     );
   };
 
   const handleMarkOrderReady = (orderId: string) => {
+    const nowIso = new Date().toISOString();
     setOrders((prev) =>
       prev.map((order) => {
         if (order.id !== orderId) return order;
@@ -270,6 +329,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           ...order,
           items: updatedItems,
           status: "READY" as OrderStatus,
+          readyAt: order.readyAt || nowIso,
         };
       })
     );
@@ -278,7 +338,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     });
     playChime("ready");
     const targetOrder = orders.find((o) => o.id === orderId);
-    const notif = `Ticket ${targetOrder?.orderNumber || ""} items completed! Table ${targetOrder?.table || ""} ready.`;
+    const notif = `Ticket ${targetOrder?.orderNumber || ""} items completed! ${targetOrder?.table || "Table"} ready.`;
     setReadyNotification(notif);
     toast.success(notif);
   };
@@ -672,6 +732,31 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                       </div>
                     )}
 
+                    {/* Cooking Time Tracker Bar */}
+                    <div className="mb-3 px-3 py-2 bg-[#121214] border border-zinc-800/80 rounded-xl flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 text-zinc-300">
+                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>ETA: <strong className="text-white">{order.estimatedPrepTime || 15} min</strong></span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-zinc-500">Elapsed:</span>
+                        <span
+                          className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
+                            isReady
+                              ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                              : isOverdue
+                              ? "bg-red-950/80 text-red-300 border border-red-500/40 animate-pulse"
+                              : isPreparing
+                              ? "bg-amber-950/60 text-amber-300 border border-amber-500/30"
+                              : "bg-zinc-800 text-zinc-400"
+                          }`}
+                        >
+                          {order.timeElapsedMinutes} min
+                        </span>
+                      </div>
+                    </div>
+
                     {/* Food Items List */}
                     <div className="space-y-3">
                       {order.items.map((item) => (
@@ -704,6 +789,12 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                             >
                               {item.quantity}X {item.name}
                             </span>
+
+                            {item.estimatedPrepTime ? (
+                              <span className="ml-auto text-[10px] font-mono text-zinc-400 px-1.5 py-0.5 bg-zinc-800/80 rounded">
+                                {item.estimatedPrepTime}m
+                              </span>
+                            ) : null}
                           </div>
 
                           {/* Options Pills (e.g. Medium Well, No Onions) */}

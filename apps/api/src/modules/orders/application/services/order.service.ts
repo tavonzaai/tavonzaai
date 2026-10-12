@@ -37,9 +37,11 @@ import {
   branchSettings,
   tables,
   orders,
+  orderItems,
+  menuItems,
   OutboxService,
 } from '@tavonza/database';
-import { eq } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 
 import { RealtimeGateway } from '../../../realtime/realtime.gateway';
 import { NotificationService } from '../../../notifications/application/services/notification.service';
@@ -149,6 +151,64 @@ export class OrderService {
       throw new BadRequestException('Cannot submit an empty order');
     }
 
+    // Atomic stock validation and deduction + prep time calculation
+    let calculatedPrepTime = 15;
+    await this.db.transaction(async (tx) => {
+      let maxItemPrepTime = 0;
+      for (const item of order.items) {
+        const [menuItem] = await tx
+          .select()
+          .from(menuItems)
+          .where(eq(menuItems.id, item.menuItemId));
+
+        if (!menuItem) {
+          throw new BadRequestException(`Item "${item.name}" no longer exists`);
+        }
+        if (!menuItem.isAvailable) {
+          throw new BadRequestException(`Item "${menuItem.name}" is no longer available`);
+        }
+
+        const itemPrep = menuItem.estimatedPrepTime ?? 15;
+        if (itemPrep > maxItemPrepTime) {
+          maxItemPrepTime = itemPrep;
+        }
+
+        if (menuItem.isStockTracked) {
+          const updated = await tx
+            .update(menuItems)
+            .set({
+              stockQuantity: sql`${menuItems.stockQuantity} - ${item.quantity}`,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(menuItems.id, item.menuItemId),
+                eq(menuItems.isStockTracked, true),
+                sql`${menuItems.stockQuantity} >= ${item.quantity}`,
+              ),
+            )
+            .returning({ id: menuItems.id, stockQuantity: menuItems.stockQuantity });
+
+          if (updated.length === 0) {
+            throw new BadRequestException(
+              `Insufficient stock for "${menuItem.name}". Only ${menuItem.stockQuantity ?? 0} available.`,
+            );
+          }
+        }
+      }
+
+      calculatedPrepTime = maxItemPrepTime > 0 ? maxItemPrepTime : 15;
+
+      await tx
+        .update(orders)
+        .set({
+          estimatedPrepTime: calculatedPrepTime,
+          inventoryDeducted: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, orderId));
+    });
+
     const updatedOrder = await this.orderRepository.updateStatus(
       orderId,
       'SUBMITTED',
@@ -193,7 +253,7 @@ export class OrderService {
           branchId: finalOrder.branchId,
           payload: {
             tableId: finalOrder.tableId,
-            tableLabel: 'Table',
+            tableLabel: finalOrder.tableLabel ?? 'Table',
             branchId: finalOrder.branchId,
             serviceStatus: 'PREPARING',
             operationalFlag: 'NORMAL',
@@ -221,7 +281,7 @@ export class OrderService {
           eventId: finalOrder.tableId,
           branchId: finalOrder.branchId,
           tableId: finalOrder.tableId,
-          tableLabel: 'Table',
+          tableLabel: finalOrder.tableLabel ?? 'Table',
           serviceStatus: 'PREPARING',
           operationalFlag: 'NORMAL',
           activeSessionId: finalOrder.tableSessionId,
@@ -257,7 +317,7 @@ export class OrderService {
           eventId: finalOrder.tableId,
           branchId: finalOrder.branchId,
           tableId: finalOrder.tableId,
-          tableLabel: 'Table',
+          tableLabel: finalOrder.tableLabel ?? 'Table',
           serviceStatus: 'ORDERING',
           operationalFlag: 'NORMAL',
           activeSessionId: finalOrder.tableSessionId,
@@ -271,7 +331,7 @@ export class OrderService {
           branchId: finalOrder.branchId,
           payload: {
             tableId: finalOrder.tableId,
-            tableLabel: 'Table',
+            tableLabel: finalOrder.tableLabel ?? 'Table',
             branchId: finalOrder.branchId,
             serviceStatus: 'ORDERING',
             operationalFlag: 'NORMAL',
@@ -383,6 +443,91 @@ export class OrderService {
       );
     }
 
+    // Persist cooking timestamps according to status
+    const now = new Date();
+    if (newStatus === 'PREPARING') {
+      await this.db
+        .update(orders)
+        .set({
+          prepStartedAt: sql`COALESCE(${orders.prepStartedAt}, ${now})`,
+          updatedAt: now,
+        })
+        .where(eq(orders.id, orderId));
+
+      await this.db
+        .update(orderItems)
+        .set({
+          preparingAt: sql`COALESCE(${orderItems.preparingAt}, ${now})`,
+          status: 'PREPARING',
+          updatedAt: now,
+        })
+        .where(and(eq(orderItems.orderId, orderId), eq(orderItems.status, 'PENDING')));
+    } else if (newStatus === 'READY') {
+      await this.db
+        .update(orders)
+        .set({
+          readyAt: sql`COALESCE(${orders.readyAt}, ${now})`,
+          updatedAt: now,
+        })
+        .where(eq(orders.id, orderId));
+
+      await this.db
+        .update(orderItems)
+        .set({
+          readyAt: sql`COALESCE(${orderItems.readyAt}, ${now})`,
+          status: 'READY',
+          updatedAt: now,
+        })
+        .where(and(eq(orderItems.orderId, orderId), or(eq(orderItems.status, 'PENDING'), eq(orderItems.status, 'PREPARING'))));
+    } else if (newStatus === 'SERVED') {
+      await this.db
+        .update(orders)
+        .set({
+          servedAt: sql`COALESCE(${orders.servedAt}, ${now})`,
+          updatedAt: now,
+        })
+        .where(eq(orders.id, orderId));
+
+      await this.db
+        .update(orderItems)
+        .set({
+          servedAt: sql`COALESCE(${orderItems.servedAt}, ${now})`,
+          status: 'SERVED',
+          updatedAt: now,
+        })
+        .where(eq(orderItems.orderId, orderId));
+    } else if (newStatus === 'CANCELLED' || newStatus === 'REJECTED') {
+      // Idempotently restore inventory if previously deducted and not yet restored
+      if (order.inventoryDeducted && !order.inventoryRestored) {
+        await this.db.transaction(async (tx) => {
+          for (const item of order.items) {
+            const [menuItem] = await tx
+              .select({ isStockTracked: menuItems.isStockTracked })
+              .from(menuItems)
+              .where(eq(menuItems.id, item.menuItemId));
+
+            if (menuItem?.isStockTracked) {
+              await tx
+                .update(menuItems)
+                .set({
+                  stockQuantity: sql`${menuItems.stockQuantity} + ${item.quantity}`,
+                  updatedAt: now,
+                })
+                .where(eq(menuItems.id, item.menuItemId));
+            }
+          }
+
+          await tx
+            .update(orders)
+            .set({
+              inventoryRestored: true,
+              updatedAt: now,
+            })
+            .where(eq(orders.id, orderId));
+        });
+      }
+    }
+
     const updatedOrder = await this.orderRepository.updateStatus(
       orderId,
       newStatus,
@@ -399,7 +544,7 @@ export class OrderService {
         eventId: updatedOrder.tableId,
         branchId: updatedOrder.branchId,
         tableId: updatedOrder.tableId,
-        tableLabel: 'Table',
+        tableLabel: updatedOrder.tableLabel ?? 'Table',
         serviceStatus: 'PREPARING',
         operationalFlag: 'NORMAL',
         activeSessionId: updatedOrder.tableSessionId,
@@ -413,7 +558,7 @@ export class OrderService {
         branchId: updatedOrder.branchId,
         payload: {
           tableId: updatedOrder.tableId,
-          tableLabel: 'Table',
+          tableLabel: updatedOrder.tableLabel ?? 'Table',
           branchId: updatedOrder.branchId,
           serviceStatus: 'PREPARING',
           operationalFlag: 'NORMAL',
@@ -434,7 +579,7 @@ export class OrderService {
         eventId: updatedOrder.tableId,
         branchId: updatedOrder.branchId,
         tableId: updatedOrder.tableId,
-        tableLabel: 'Table',
+        tableLabel: updatedOrder.tableLabel ?? 'Table',
         serviceStatus: 'SERVING',
         operationalFlag: 'NORMAL',
         activeSessionId: updatedOrder.tableSessionId,
@@ -448,7 +593,7 @@ export class OrderService {
         branchId: updatedOrder.branchId,
         payload: {
           tableId: updatedOrder.tableId,
-          tableLabel: 'Table',
+          tableLabel: updatedOrder.tableLabel ?? 'Table',
           branchId: updatedOrder.branchId,
           serviceStatus: 'SERVING',
           operationalFlag: 'NORMAL',

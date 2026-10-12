@@ -6,6 +6,44 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 // ── Table Assignment ──────────────────────────────────────────────────
 
+export class AssignedTableDetailDto {
+  @ApiProperty({ example: '5298804e-5847-4e5a-bdba-73a8f06d9ed2', description: 'Table UUID' })
+  id!: string;
+
+  @ApiProperty({ example: 'Table 08', description: 'Table label or identifier' })
+  label!: string;
+
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label alias / number' })
+  tableNumber?: string;
+
+  @ApiProperty({ example: 4, description: 'Table seating capacity' })
+  capacity!: number;
+
+  @ApiProperty({ example: 'AVAILABLE', description: 'Current table service status' })
+  serviceStatus!: string;
+
+  @ApiPropertyOptional({ example: 'NORMAL', description: 'Table operational flag' })
+  operationalFlag?: string;
+
+  @ApiPropertyOptional({ example: 1, description: 'Floor number' })
+  floor?: number;
+
+  @ApiPropertyOptional({ example: 'SQUARE', description: 'Table layout shape' })
+  shape?: string;
+
+  @ApiPropertyOptional({ example: '778899aa-bbcc-ddee-ff00-112233445566', description: 'Table assignment UUID' })
+  assignmentId?: string;
+
+  @ApiPropertyOptional({ example: '2026-10-08T08:00:00.000Z', description: 'Shift session start' })
+  sessionStart?: Date;
+
+  @ApiPropertyOptional({ example: '2026-10-08T16:00:00.000Z', description: 'Shift session end' })
+  sessionEnd?: Date;
+
+  @ApiProperty({ example: true, description: 'Whether assignment is currently active' })
+  isActive!: boolean;
+}
+
 export class TableAssignmentDto {
   @ApiProperty({ example: '778899aa-bbcc-ddee-ff00-112233445566', description: 'Table assignment UUID' })
   id!: string;
@@ -15,6 +53,9 @@ export class TableAssignmentDto {
 
   @ApiProperty({ example: '00000001-0000-4000-8000-000000000002', description: 'Assigned Waiter User UUID' })
   waiterId!: string;
+
+  @ApiPropertyOptional({ example: 'Alex Waiter', description: 'Assigned Waiter full name' })
+  waiterName?: string;
 
   @ApiProperty({ example: '5298804e-5847-4e5a-bdba-73a8f06d9ed2', description: 'Assigned Table UUID' })
   tableId!: string;
@@ -28,6 +69,12 @@ export class TableAssignmentDto {
   @ApiPropertyOptional({ example: 'OCCUPIED', description: 'Current table service status' })
   serviceStatus?: string;
 
+  @ApiPropertyOptional({ type: [AssignedTableDetailDto], description: 'Detailed list of all tables assigned to this waiter' })
+  assignedTables?: AssignedTableDetailDto[];
+
+  @ApiPropertyOptional({ example: 1, description: 'Total count of assigned tables' })
+  assignedCount?: number;
+
   @ApiPropertyOptional({ example: '2026-10-08', description: 'Assigned shift date' })
   shiftDate?: string;
 
@@ -36,6 +83,12 @@ export class TableAssignmentDto {
 
   @ApiPropertyOptional({ example: '2026-10-08T08:00:00.000Z', description: 'Assignment creation timestamp' })
   assignedAt?: Date;
+
+  @ApiPropertyOptional({ example: '2026-10-08T08:00:00.000Z', description: 'Session start timestamp' })
+  sessionStart?: Date;
+
+  @ApiPropertyOptional({ example: '2026-10-08T16:00:00.000Z', description: 'Session end timestamp' })
+  sessionEnd?: Date;
 }
 
 // ── Order Summary (Waiter view) ───────────────────────────────────────

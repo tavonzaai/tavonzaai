@@ -146,7 +146,10 @@ export interface MenuItem {
   price: string;
   description: string;
   status: 'Available' | 'Disabled';
-  availability: 'In stock' | 'Low Stock (8 Left)' | 'Out of stock';
+  availability: 'In stock' | 'Low Stock (8 Left)' | 'Out of stock' | string;
   modifiersCount: string;
   enabled: boolean;
+  estimatedPrepTime?: number;
+  stockQuantity?: number;
+  isStockTracked?: boolean;
 }

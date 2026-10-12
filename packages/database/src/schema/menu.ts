@@ -34,6 +34,9 @@ export const menuItems = pgTable('menu_items', {
   isVegetarian: boolean('is_vegetarian').default(false),
   spiceLevel: integer('spice_level'),
   displayOrder: integer('display_order').default(0),
+  estimatedPrepTime: integer('estimated_prep_time').default(15),
+  stockQuantity: integer('stock_quantity'),
+  isStockTracked: boolean('is_stock_tracked').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({

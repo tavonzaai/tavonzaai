@@ -20,6 +20,7 @@ export interface KitchenTicketItem {
   preparingAt?: string | null;
   readyAt?: string | null;
   servedAt?: string | null;
+  estimatedPrepTime?: number | null;
   createdAt: string;
 }
 
@@ -140,6 +141,14 @@ export const kitchenService = {
   getShifts: async (branchId: string, date?: string): Promise<any[]> => {
     const qs = date ? `?date=${encodeURIComponent(date)}` : '';
     const res = await baseApiFetch<any[]>(`/shifts/branch/${encodeURIComponent(branchId)}${qs}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res || [];
+  },
+
+  getTables: async (branchId: string): Promise<any[]> => {
+    if (!branchId) return [];
+    const res = await baseApiFetch<any[]>(`/tables?branchId=${encodeURIComponent(branchId)}`, {
       method: 'GET',
     });
     return (res as any)?.data || res || [];

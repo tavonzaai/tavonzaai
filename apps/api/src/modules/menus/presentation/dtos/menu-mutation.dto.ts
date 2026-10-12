@@ -96,6 +96,23 @@ export class CreateMenuItemDto {
   @IsOptional()
   @IsBoolean()
   isVegetarian?: boolean;
+
+  @ApiPropertyOptional({ example: 15, description: 'Expected cooking/preparation duration in minutes' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  estimatedPrepTime?: number;
+
+  @ApiPropertyOptional({ example: 50, description: 'Quantity currently available for ordering' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  stockQuantity?: number;
+
+  @ApiPropertyOptional({ example: true, description: 'Whether stock tracking is enabled for the item' })
+  @IsOptional()
+  @IsBoolean()
+  isStockTracked?: boolean;
 }
 
 export class UpdateMenuItemDto {
@@ -126,4 +143,21 @@ export class UpdateMenuItemDto {
   @IsOptional()
   @IsBoolean()
   isAvailable?: boolean;
+
+  @ApiPropertyOptional({ example: 15, description: 'Expected cooking/preparation duration in minutes' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  estimatedPrepTime?: number;
+
+  @ApiPropertyOptional({ example: 50, description: 'Quantity currently available for ordering' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  stockQuantity?: number;
+
+  @ApiPropertyOptional({ example: true, description: 'Whether stock tracking is enabled for the item' })
+  @IsOptional()
+  @IsBoolean()
+  isStockTracked?: boolean;
 }
