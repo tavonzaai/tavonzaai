@@ -133,26 +133,6 @@ function ChatContent() {
         addAiMessage({
           text: 'Here are our top chef recommendations loved by our guests today! Both are prepared fresh to order:',
           timestamp,
-          dishes: [
-            {
-              id: 'potato-corn-burger-1',
-              name: 'Potato Corn Burger',
-              price: 26.0,
-              image: '/images/burger.jpg',
-              description:
-                'Crispy seasoned potato patty, sweet grilled corn relish, and smoked cheddar sauce on a brioche bun.',
-              tags: ['Chef Special', 'Top Seller'],
-            },
-            {
-              id: 'seabass-special-1',
-              name: 'Pan-Seared Sea Bass',
-              price: 34.0,
-              image: '/images/seabass.jpg',
-              description:
-                'Line-caught sea bass with braised garden carrots, fennel crisp, and citrus herb reduction.',
-              tags: ['Gluten-Free', 'High Protein'],
-            },
-          ],
         })
       );
       return;
