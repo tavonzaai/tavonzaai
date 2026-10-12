@@ -1,41 +1,4 @@
 services:
-  # ─── 1. Core Data Stores ──────────────────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: tavonzaai-dev-postgres
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-platform_dev}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_dev_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-platform_dev}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  redis:
-    image: redis:7-alpine
-    container_name: tavonzaai-dev-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_dev_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-
   # ─── 2. Backend Platform Applications ─────────────────────────────────────
   api:
     image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-api:latest
@@ -211,10 +174,6 @@ services:
       - customer
 
 volumes:
-  postgres_dev_data:
-    name: tavonzaai_postgres_dev_data
-  redis_dev_data:
-    name: tavonzaai_redis_dev_data
   caddy_dev_data:
     name: tavonzaai_caddy_dev_data
   caddy_dev_config:
