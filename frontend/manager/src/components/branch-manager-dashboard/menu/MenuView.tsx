@@ -1,7 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, ChevronDown, Plus, Sparkles, SlidersHorizontal, Info, Edit3 } from 'lucide-react';
+import {
+  Search,
+  ChevronDown,
+  Plus,
+  Sparkles,
+  SlidersHorizontal,
+  Info,
+  Edit3,
+  Clock,
+  PackageCheck,
+} from 'lucide-react';
 import { MenuItem } from '../types';
 import ManageCategoriesModal from './ManageCategoriesModal';
 import AddNewItemModal from './AddNewItemModal';
@@ -11,6 +21,7 @@ import { branchManagerService, getActiveBranchId } from '../../../redux/features
 export default function MenuView() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<string[]>(['All Categories']);
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -31,19 +42,35 @@ export default function MenuView() {
           }
 
           if (apiItems && apiItems.length > 0) {
-            const mapped: MenuItem[] = apiItems.map((item: any) => ({
-              id: item.id,
-              name: item.name,
-              category: (item.categoryName as any) || 'Mains',
-              stationBadge: 'Kitchen',
-              stationBadgeColor: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
-              price: `$${Number(item.price).toFixed(2)}`,
-              description: item.description || '',
-              status: item.isAvailable !== false ? 'Available' : 'Disabled',
-              availability: item.isAvailable !== false ? 'In stock' : 'Out of stock',
-              modifiersCount: 'Standard',
-              enabled: item.isAvailable !== false,
-            }));
+            const mapped: MenuItem[] = apiItems.map((item: any) => {
+              const isStockTracked = Boolean(item.isStockTracked);
+              const stock = item.stockQuantity;
+              let availStr: string = 'In stock';
+              if (item.isAvailable === false) {
+                availStr = 'Out of stock';
+              } else if (isStockTracked) {
+                if (stock === 0) availStr = 'Out of stock';
+                else if (stock !== undefined && stock <= 10) availStr = `Low Stock (${stock} Left)`;
+                else availStr = 'In stock';
+              }
+
+              return {
+                id: item.id,
+                name: item.name,
+                category: (item.categoryName as any) || 'Mains',
+                stationBadge: 'Kitchen',
+                stationBadgeColor: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+                price: `$${Number(item.price).toFixed(2)}`,
+                description: item.description || '',
+                status: item.isAvailable !== false ? 'Available' : 'Disabled',
+                availability: availStr,
+                modifiersCount: 'Standard',
+                enabled: item.isAvailable !== false,
+                estimatedPrepTime: item.estimatedPrepTime ?? item.prepTime ?? 15,
+                stockQuantity: stock ?? (isStockTracked ? 0 : undefined),
+                isStockTracked,
+              };
+            });
 
             setItems(mapped);
           } else {
@@ -132,10 +159,16 @@ export default function MenuView() {
   };
 
   const handleItemCreated = (newItem: MenuItem) => {
-    setItems((prev) => [newItem, ...prev]);
-    setLastCreatedItem(newItem);
-    setIsAddItemOpen(false);
-    setIsSuccessModalOpen(true);
+    if (editingItem) {
+      setItems((prev) => prev.map((i) => (i.id === newItem.id ? newItem : i)));
+      setEditingItem(null);
+      setIsAddItemOpen(false);
+    } else {
+      setItems((prev) => [newItem, ...prev]);
+      setLastCreatedItem(newItem);
+      setIsAddItemOpen(false);
+      setIsSuccessModalOpen(true);
+    }
   };
 
   return (
@@ -175,7 +208,10 @@ export default function MenuView() {
 
           <button
             type="button"
-            onClick={() => setIsAddItemOpen(true)}
+            onClick={() => {
+              setEditingItem(null);
+              setIsAddItemOpen(true);
+            }}
             className="px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-neutral-900 text-base font-medium font-['Inter'] rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 transition flex items-center gap-2 cursor-pointer shadow-md active:scale-95"
           >
             <Plus className="w-4 h-4 text-black stroke-[2.5]" />
@@ -413,6 +449,22 @@ export default function MenuView() {
               </div>
             </div>
 
+            {/* Preparation Time & Stock Info Pill Row */}
+            <div className="w-full flex items-center justify-between text-xs px-2.5 py-1.5 bg-neutral-950/80 rounded-lg border border-neutral-800/80">
+              <span className="text-neutral-400 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-yellow-400" />
+                <span>{item.estimatedPrepTime ?? 15} min prep</span>
+              </span>
+              <span className="text-neutral-400 flex items-center gap-1.5">
+                <PackageCheck className="w-3.5 h-3.5 text-yellow-400" />
+                <span className={item.isStockTracked && (item.stockQuantity ?? 0) <= 5 ? 'text-amber-400 font-medium' : ''}>
+                  {item.isStockTracked
+                    ? `Stock: ${item.stockQuantity ?? 0}`
+                    : 'Unlimited Stock'}
+                </span>
+              </span>
+            </div>
+
             <div className="w-full h-px bg-neutral-800" />
 
             {/* Modifiers Count */}
@@ -443,6 +495,10 @@ export default function MenuView() {
 
               <button
                 type="button"
+                onClick={() => {
+                  setEditingItem(item);
+                  setIsAddItemOpen(true);
+                }}
                 className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center gap-1.5 transition text-gray-200 text-sm font-medium font-['Inter'] cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" />
@@ -462,12 +518,17 @@ export default function MenuView() {
         onDeleteCategory={handleDeleteCategory}
       />
 
-      {/* Add New Item Modal */}
+      {/* Add / Edit Menu Item Modal */}
       <AddNewItemModal
         isOpen={isAddItemOpen}
-        onClose={() => setIsAddItemOpen(false)}
+        onClose={() => {
+          setIsAddItemOpen(false);
+          setEditingItem(null);
+        }}
         onItemCreated={handleItemCreated}
         categories={categories}
+        initialItem={editingItem}
+        isEdit={Boolean(editingItem)}
       />
 
       {/* Item Created Confirmation Modal */}

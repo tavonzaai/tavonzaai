@@ -24,13 +24,24 @@ export class AssignTableDto {
   @IsUUID()
   branchId!: string;
 
-  @ApiProperty({ description: 'Waiter user ID' })
+  @ApiProperty({ description: 'Waiter user or staff ID' })
   @IsUUID()
   waiterId!: string;
 
-  @ApiProperty({ description: 'Table ID to assign' })
+  @ApiPropertyOptional({ description: 'Table ID to assign (for single table assignment)' })
+  @IsOptional()
   @IsUUID()
-  tableId!: string;
+  tableId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Array of Table IDs to assign (for multi-table assignment)',
+    type: [String],
+    example: ['5298804e-5847-4e5a-bdba-73a8f06d9ed2', '8877332f-4512-40bc-8012-d881e6e58003'],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  tableIds?: string[];
 
   @ApiPropertyOptional({ description: 'Assignment session start timestamp', example: '2026-10-07T09:00:00Z' })
   @IsOptional()
@@ -46,6 +57,38 @@ export class AssignTableDto {
   @IsOptional()
   @IsString()
   shiftLabel?: string;
+}
+
+// ── Unassign Table ────────────────────────────────────────────────────
+
+export class UnassignTableDto {
+  @ApiProperty({ description: 'Branch ID' })
+  @IsUUID()
+  branchId!: string;
+
+  @ApiPropertyOptional({ description: 'Waiter user or staff ID' })
+  @IsOptional()
+  @IsUUID()
+  waiterId?: string;
+
+  @ApiPropertyOptional({ description: 'Table ID to unassign' })
+  @IsOptional()
+  @IsUUID()
+  tableId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Array of Table IDs to unassign',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  tableIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Specific table assignment UUID' })
+  @IsOptional()
+  @IsUUID()
+  assignmentId?: string;
 }
 
 // ── Reject Order ──────────────────────────────────────────────────────

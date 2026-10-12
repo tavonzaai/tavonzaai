@@ -37,6 +37,8 @@ export interface DishData {
   prepTime?: string;
   calories?: string;
   image: string;
+  stockQuantity?: number | null;
+  isStockTracked?: boolean;
   addOns?: { name: string; price: number }[];
 }
 
@@ -71,6 +73,18 @@ export default function DishDetailModal({
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isAdded, setIsAdded] = useState(false);
   const initializedDishRef = useRef<string | null>(null);
+
+  const isOutOfStock = Boolean(
+    dish.isStockTracked &&
+      (dish.stockQuantity === 0 ||
+        (dish.stockQuantity !== null && dish.stockQuantity !== undefined && dish.stockQuantity <= 0))
+  );
+  const isLowStock = Boolean(
+    dish.isStockTracked &&
+      typeof dish.stockQuantity === 'number' &&
+      dish.stockQuantity > 0 &&
+      dish.stockQuantity <= 5
+  );
 
   // Restore previous selections if the dish was already added or configured
   useEffect(() => {
@@ -273,23 +287,47 @@ export default function DishDetailModal({
 
           {/* 6. Quantity Selector Box */}
           <div className="mx-5 p-3 bg-neutral-900 rounded-xl border border-white/10 flex items-center justify-between">
-            <span className="text-base font-semibold text-white font-['Montserrat']">Quantity</span>
+            <div className="flex flex-col">
+              <span className="text-base font-semibold text-white font-['Montserrat']">Quantity</span>
+              {isOutOfStock ? (
+                <span className="text-[11px] text-red-400 font-medium">Currently Out of Stock</span>
+              ) : isLowStock ? (
+                <span className="text-[11px] text-amber-400 font-medium">
+                  Only {dish.stockQuantity} remaining in stock
+                </span>
+              ) : null}
+            </div>
 
             <div className="flex items-center gap-3">
               <button
+                disabled={isOutOfStock}
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                className="w-7 h-7 rounded-full bg-orange-400/30 border border-neutral-700 flex items-center justify-center text-black hover:bg-orange-400/50 transition"
+                className="w-7 h-7 rounded-full bg-orange-400/30 border border-neutral-700 flex items-center justify-center text-black hover:bg-orange-400/50 transition disabled:opacity-40"
               >
                 <Minus className="w-3.5 h-3.5 text-black" />
               </button>
 
               <span className="text-sm font-bold text-white font-['Inter'] w-4 text-center">
-                {quantity}
+                {isOutOfStock ? 0 : quantity}
               </span>
 
               <button
-                onClick={() => setQuantity((q) => q + 1)}
-                className="w-7 h-7 rounded-full bg-orange-400 border border-neutral-700 flex items-center justify-center text-black hover:bg-orange-300 transition"
+                disabled={
+                  isOutOfStock ||
+                  (dish.isStockTracked &&
+                    typeof dish.stockQuantity === 'number' &&
+                    quantity >= dish.stockQuantity)
+                }
+                onClick={() =>
+                  setQuantity((q) => {
+                    const max =
+                      dish.isStockTracked && typeof dish.stockQuantity === 'number'
+                        ? dish.stockQuantity
+                        : 99;
+                    return Math.min(max, q + 1);
+                  })
+                }
+                className="w-7 h-7 rounded-full bg-orange-400 border border-neutral-700 flex items-center justify-center text-black hover:bg-orange-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Plus className="w-3.5 h-3.5 text-black" />
               </button>
@@ -425,10 +463,16 @@ export default function DishDetailModal({
         <div className="px-5 pb-4">
           <button
             onClick={handleAddToCartClick}
-            disabled={isAdded}
-            className="w-full h-12 bg-orange-400 hover:bg-orange-300 text-neutral-950 text-base font-semibold font-['Montserrat'] rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-yellow-500/20 transition active:scale-[0.99]"
+            disabled={isAdded || isOutOfStock}
+            className={`w-full h-12 text-base font-semibold font-['Montserrat'] rounded-2xl flex items-center justify-center gap-2 shadow-lg transition active:scale-[0.99] ${
+              isOutOfStock
+                ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-neutral-700'
+                : 'bg-orange-400 hover:bg-orange-300 text-neutral-950 shadow-yellow-500/20'
+            }`}
           >
-            {isAdded ? (
+            {isOutOfStock ? (
+              <span>Out of Stock</span>
+            ) : isAdded ? (
               <>
                 <Check className="w-5 h-5 text-neutral-950" />
                 <span>Added to Cart!</span>

@@ -127,6 +127,16 @@ Phase 1 (Database Modeling), Phase 2 (Shared Foundation & RBAC), Phase 3 (Backen
 - [x] **5.8 Elimination of Hardcoded Demo Fallbacks & Strict Session Resolution**
   - Completely purged all hardcoded fallback UUIDs (`DEFAULT_FALLBACK_BRANCH_ID`, `DEFAULT_FALLBACK_TABLE_ID`, `TABLE_NUMBER_MAP`), demo mock users (`DEMO_WAITER_USER`, `DEMO_CASHIER_USER`, `DEMO_BRANCH_MANAGER_USER`, `DEMO_ADMIN_USER`), and offline login bypasses across all six frontend apps.
   - Implemented dynamic tenant/session resolution (via cookies, URL query parameters, and authenticated Redux state) with graceful empty states and API guards. Documented in `.agent/ADR/0001-elimination-of-hardcoded-demo-fallbacks.md`.
+- [x] **5.9 Waiter Table Assignments, Kitchen Table Access & Cooking Time & Inventory Management**
+  - **Waiter Table Assignments (Branch Manager)**: Extended API contracts to return full assigned table details (`id`, `label`, `tableNumber`, `capacity`, `serviceStatus`, `operationalFlag`, `floor`). Integrated interactive multi-table assignment and unassign panel in `@frontend/manager`.
+  - **Kitchen Table Access & Confirmation (Kitchen Panel)**: Granted `Permission.TABLES_READ` to kitchen staff scoped to their branch, blocking cross-branch access (403). Joined table details on order retrieval and status updates to return real `tableLabel` and `tableNumber`.
+  - **Cooking Time & Inventory Management**:
+    - Menu items support `estimatedPrepTime`, `stockQuantity`, and `isStockTracked` (supporting unlimited non-tracked items).
+    - Concurrency-safe atomic SQL stock deduction on order submit (`UPDATE menu_items SET stock_quantity = stock_quantity - :qty ... WHERE stock_quantity >= :qty`).
+    - Overall order prep time calculated via $\max(\text{item prep times})$ for parallel kitchen preparation.
+    - Persisted cooking lifecycle timestamps (`prepStartedAt`, `readyAt`, `servedAt`) in PostgreSQL. Real-time elapsed time and ETA calculations in `@frontend/kitchen`.
+    - Idempotent stock restoration on order cancellation/rejection with `inventoryRestored` guard flag preventing duplicate restoration.
+    - Full frontend integration in Branch Manager (Menu/Staff), Kitchen (KDS), and Customer (cart & menu).
 
 
 ---

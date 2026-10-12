@@ -157,6 +157,9 @@ export class DrizzleMenuRepository implements IMenuRepository {
     basePrice: number;
     imageUrl?: string;
     isVegetarian?: boolean;
+    estimatedPrepTime?: number;
+    stockQuantity?: number;
+    isStockTracked?: boolean;
   }): Promise<MenuItem> {
     const [record] = await this.db
       .insert(menuItems)
@@ -168,6 +171,9 @@ export class DrizzleMenuRepository implements IMenuRepository {
         basePrice: data.basePrice,
         imageUrl: data.imageUrl,
         isVegetarian: data.isVegetarian ?? false,
+        estimatedPrepTime: data.estimatedPrepTime ?? 15,
+        stockQuantity: data.stockQuantity ?? 0,
+        isStockTracked: data.isStockTracked ?? false,
         isAvailable: true,
         displayOrder: 0,
       })
@@ -186,9 +192,12 @@ export class DrizzleMenuRepository implements IMenuRepository {
       basePrice: number;
       isAvailable: boolean;
       imageUrl: string | null;
+      estimatedPrepTime: number;
+      stockQuantity: number;
+      isStockTracked: boolean;
     }>,
   ): Promise<MenuItem | null> {
-    const updateData: any = { ...data };
+    const updateData: any = { ...data, updatedAt: new Date() };
     if (data.basePrice !== undefined) {
       updateData.basePrice = data.basePrice;
     }
@@ -302,6 +311,9 @@ export class DrizzleMenuRepository implements IMenuRepository {
       isAvailable: record.isAvailable ?? true,
       isPopular: record.isPopular ?? false,
       addOns,
+      estimatedPrepTime: record.estimatedPrepTime ?? record.prepTime ?? 15,
+      stockQuantity: record.stockQuantity ?? 0,
+      isStockTracked: record.isStockTracked ?? false,
     };
     return new MenuItem(props);
   }
