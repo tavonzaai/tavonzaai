@@ -1,9 +1,14 @@
 ARG APP_NAME=customer
 ARG APP_PORT=3000
+ARG BASE_IMAGE=public.ecr.aws/docker/library/node:20-alpine
 
-FROM node:20-alpine AS base
+FROM ${BASE_IMAGE} AS base
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
+RUN pnpm config set fetch-retries 5 && \
+    pnpm config set fetch-retry-mintimeout 10000 && \
+    pnpm config set fetch-retry-maxtimeout 60000 && \
+    pnpm config set network-concurrency 16
 WORKDIR /app
 
 FROM base AS builder
@@ -18,7 +23,8 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.js
 COPY packages/ ./packages/
 COPY frontend/ ./frontend/
 
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 RUN npx turbo run build --filter=@frontend/${APP_NAME}...
 
 FROM base AS runner
