@@ -1,20 +1,4 @@
 services:
-  # ─── 1. Core Data Stores ───────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: tavonzaai-dev-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_dev_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-
   # ─── 2. Backend Platform Applications ─────────────────────────────────────
   api:
     image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-api:latest
@@ -190,10 +174,6 @@ services:
       - customer
 
 volumes:
-  postgres_dev_data:
-    name: tavonzaai_postgres_dev_data
-  redis_dev_data:
-    name: tavonzaai_redis_dev_data
   caddy_dev_data:
     name: tavonzaai_caddy_dev_data
   caddy_dev_config:

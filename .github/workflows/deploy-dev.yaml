@@ -365,7 +365,7 @@ jobs:
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
             # Ensure core infrastructure services are running
-            docker compose -f docker-compose.dev.yaml up -d postgres redis caddy
+            docker compose -f docker-compose.dev.yaml up -d caddy
 
             if [ -n "$SERVICES" ]; then
               # Stop and remove updated services
