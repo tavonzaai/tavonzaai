@@ -27,7 +27,7 @@ import { useCart, resolveDynamicBranchId, resolveDynamicTableId } from '@/contex
 
 interface OrdersViewProps {
   onReserveClick?: () => void;
-  onOpenFeedback?: () => void;
+  onOpenFeedback?: (orderId?: string) => void;
 }
 
 type OrderTabFilter = 'all' | 'active' | 'history';
@@ -553,7 +553,7 @@ export default function OrdersView({ onReserveClick, onOpenFeedback }: OrdersVie
                           </button>
                           {onOpenFeedback && (
                             <button
-                              onClick={onOpenFeedback}
+                              onClick={() => onOpenFeedback(ord.orderId || ord.id)}
                               className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium rounded-xl transition cursor-pointer"
                             >
                               Feedback

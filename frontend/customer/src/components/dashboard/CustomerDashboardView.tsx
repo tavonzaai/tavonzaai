@@ -52,6 +52,7 @@ export default function CustomerDashboardView({
   const [jarvisQuery, setJarvisQuery] = useState('');
   const [showReserveModal, setShowReserveModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackOrderId, setFeedbackOrderId] = useState<string | undefined>(undefined);
   const [showAuthModal, setShowAuthModal] = useState(showAuthSuccessModal);
   const [selectedDishDetail, setSelectedDishDetail] = useState<DishData | null>(null);
   const [cartFlowStep, setCartFlowStep] = useState<CartStep | null>(null);
@@ -173,7 +174,15 @@ export default function CustomerDashboardView({
           />
         );
       case 'orders':
-        return <OrdersView onReserveClick={() => setShowReserveModal(true)} onOpenFeedback={() => setShowFeedbackModal(true)} />;
+        return (
+          <OrdersView
+            onReserveClick={() => setShowReserveModal(true)}
+            onOpenFeedback={(targetOrderId?: string) => {
+              setFeedbackOrderId(targetOrderId);
+              setShowFeedbackModal(true);
+            }}
+          />
+        );
       case 'profile':
         return <ProfileView />;
       case 'home':
@@ -548,9 +557,14 @@ export default function CustomerDashboardView({
       {/* Feedback & Review Modal */}
       {showFeedbackModal && (
         <FeedbackModal
-          onClose={() => setShowFeedbackModal(false)}
+          orderId={feedbackOrderId}
+          onClose={() => {
+            setShowFeedbackModal(false);
+            setFeedbackOrderId(undefined);
+          }}
           onGoHome={() => {
             setShowFeedbackModal(false);
+            setFeedbackOrderId(undefined);
             handleTabChange('home');
           }}
         />

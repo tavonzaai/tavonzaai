@@ -15,6 +15,10 @@ function ConfirmationContent() {
   const holderParam = searchParams.get('holder') || 'Valued Guest';
   const refParam = searchParams.get('ref') || searchParams.get('transactionRef') || '';
   const activeTable = searchParams.get('table') || tableNumber || 'Table';
+  const orderId =
+    searchParams.get('order') ||
+    searchParams.get('orderId') ||
+    (typeof window !== 'undefined' ? localStorage.getItem('tavonza_last_submitted_order_id') || '' : '');
 
   const todayDate = new Date().toLocaleDateString('en-US', {
     month: '2-digit',
@@ -157,7 +161,10 @@ function ConfirmationContent() {
 
           <button
             type="button"
-            onClick={() => router.push(`/feedback?table=${encodeURIComponent(activeTable)}`)}
+            onClick={() => {
+              const orderQuery = orderId ? `&order=${encodeURIComponent(orderId)}` : '';
+              router.push(`/feedback?table=${encodeURIComponent(activeTable)}${orderQuery}`);
+            }}
             className="w-full py-3.5 bg-white hover:bg-neutral-100 active:scale-[0.99] text-[#0B0B0B] text-base font-semibold font-inter rounded-xl shadow-sm transition cursor-pointer flex items-center justify-center gap-2"
           >
             <ThumbsUp className="w-4 h-4 text-neutral-900" />

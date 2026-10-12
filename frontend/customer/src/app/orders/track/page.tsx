@@ -13,10 +13,12 @@ import {
   Sparkles,
   RefreshCw,
   ShoppingBag,
+  Star,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
 import { orderService, OrderTrackingResponse } from '@/redux/features/orderApi';
+import { feedbackService, FeedbackRecord } from '@/redux/features/feedbackApi';
 import { getCookie } from '@/redux/api/baseApi';
 
 function TrackContent() {
@@ -49,6 +51,14 @@ function TrackContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [callWaiterSent, setCallWaiterSent] = useState(false);
+  const [existingFeedback, setExistingFeedback] = useState<FeedbackRecord | null>(null);
+
+  useEffect(() => {
+    const trimmedId = (orderId || '').trim();
+    if (trimmedId) {
+      feedbackService.getFeedbackByOrder(trimmedId).then(setExistingFeedback).catch(() => null);
+    }
+  }, [orderId]);
 
   const fetchTrackData = async () => {
     const trimmedId = (orderId || '').trim();
@@ -487,6 +497,23 @@ function TrackContent() {
                 className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 active:scale-[0.99] text-white text-sm sm:text-base font-semibold font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>Proceed to Payment</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/feedback?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(orderId)}`
+                  )
+                }
+                className="w-full py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm font-semibold font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                <span>
+                  {existingFeedback
+                    ? `View Your Feedback (Rated ${existingFeedback.rating}★)`
+                    : 'Rate Your Experience & Leave Feedback'}
+                </span>
               </button>
 
               <button
