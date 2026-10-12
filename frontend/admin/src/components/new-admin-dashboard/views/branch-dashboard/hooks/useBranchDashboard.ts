@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { BranchItem, RestaurantItem } from '../../../types';
 import { MOCK_RESTAURANTS } from '../../../data';
+import { baseApiFetch } from '@/redux/api/baseApi';
+import { branchService } from '@/redux/features/restaurantApi';
+import { rawMenuItemApi } from '@/redux/features/menu-items/menuItemApi';
 import {
   SubTab,
   TableItem,
@@ -19,6 +22,9 @@ import {
   DEFAULT_STAFF,
 } from '../data';
 
+const isValidUUID = (val?: string) =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
 interface UseBranchDashboardProps {
   initialBranch: BranchItem;
   onUpdateBranch?: (updated: BranchItem) => void;
@@ -30,6 +36,8 @@ export function useBranchDashboard({
 }: UseBranchDashboardProps) {
   const [branch, setBranch] = useState<BranchItem>(initialBranch);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('Overview');
+  const [activeBranchId, setActiveBranchId] = useState<string>(initialBranch.id);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Branch Edit Modal State
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -45,7 +53,7 @@ export function useBranchDashboard({
     closingTime: branch.closingTime || '23:00',
   });
 
-  // Tables State
+  // Dynamic Tables State
   const [tables, setTables] = useState<TableItem[]>(DEFAULT_TABLES);
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<TableItem | null>(null);
@@ -59,7 +67,7 @@ export function useBranchDashboard({
   const [qrSeed, setQrSeed] = useState(42);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
-  // Menu State
+  // Dynamic Menu State
   const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_MENU_ITEMS);
   const [menuFilterStatus, setMenuFilterStatus] = useState<'All Items' | 'Active' | 'Disable'>('All Items');
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -72,7 +80,7 @@ export function useBranchDashboard({
     status: 'Active',
   });
 
-  // Staff State
+  // Dynamic Staff State
   const [staffList, setStaffList] = useState<StaffMember[]>(DEFAULT_STAFF);
   const [staffRoleFilter, setStaffRoleFilter] = useState<string>('All Roles');
   const [staffBranchFilter, setStaffBranchFilter] = useState<string>('All branches');
@@ -89,6 +97,96 @@ export function useBranchDashboard({
     branch: 'Georgia Flagship',
     status: 'Active',
   });
+
+  // Load Dynamic Data from NestJS API
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      let targetBranchId = branch.id;
+      let targetRestaurantId = branch.restaurantId;
+
+      // If branch.id is not a valid UUID (e.g. mock ID like br-1), resolve the first real branch
+      if (!isValidUUID(targetBranchId)) {
+        const branchesRes = await branchService.getBranches({ limit: 1 }).catch(() => null);
+        const firstBranch = branchesRes?.data?.[0];
+        if (firstBranch?.id) {
+          targetBranchId = firstBranch.id;
+          if (firstBranch.restaurantId) {
+            targetRestaurantId = firstBranch.restaurantId;
+          }
+        }
+      }
+
+      setActiveBranchId(targetBranchId);
+
+      // 1. Fetch Dynamic Tables
+      if (isValidUUID(targetBranchId)) {
+        const rawTables = await baseApiFetch<any[]>(
+          `/tables?branchId=${encodeURIComponent(targetBranchId)}`
+        ).catch(() => []);
+        if (Array.isArray(rawTables)) {
+          const mappedTables: TableItem[] = rawTables.map((t: any) => ({
+            id: t.id,
+            number: t.label || t.tableNumber || t.number || `T-${String(t.id).slice(0, 4)}`,
+            capacity: Number(t.capacity) || 4,
+            status:
+              t.serviceStatus === 'OCCUPIED' || t.status === 'OCCUPIED'
+                ? 'Occupied'
+                : t.serviceStatus === 'RESERVED' || t.status === 'RESERVED' || t.operationalFlag === 'RESERVED'
+                ? 'Reserved'
+                : 'Available',
+            qrCodeUrl: t.qrCodeToken
+              ? `https://tavonza.ai/r/${t.qrCodeToken}`
+              : `https://tavonza.ai/r/${targetBranchId}/${(t.label || t.number || t.id).toLowerCase()}`,
+          }));
+          setTables(mappedTables);
+        }
+      }
+
+      // 2. Fetch Dynamic Staff
+      if (isValidUUID(targetBranchId)) {
+        const staffRes = await branchService.getBranchStaff(targetBranchId).catch(() => []);
+        const rawStaff = Array.isArray(staffRes) ? staffRes : (staffRes as any)?.data || [];
+        if (Array.isArray(rawStaff) && rawStaff.length > 0) {
+          const mappedStaff: StaffMember[] = rawStaff.map((s: any) => ({
+            id: s.id,
+            name: s.user?.name || s.name || s.fullName || 'Staff Member',
+            role: s.role || s.assignmentRole || 'Staff',
+            branch: branch.name || 'Branch',
+            status: s.status === 'ACTIVE' || s.isActive !== false ? 'Active' : 'Inactive',
+            contact: s.user?.phone || s.phone || s.user?.email || '—',
+            shift: s.shift || 'Full-time',
+          }));
+          setStaffList(mappedStaff);
+        }
+      }
+
+      // 3. Fetch Dynamic Menu Items
+      const menuRes = await rawMenuItemApi.findAll({
+        restaurantId: isValidUUID(targetRestaurantId) ? targetRestaurantId : undefined,
+        limit: 100,
+      }).catch(() => null);
+      const rawMenu = menuRes?.data || (Array.isArray(menuRes) ? menuRes : []);
+      if (Array.isArray(rawMenu) && rawMenu.length > 0) {
+        const mappedMenu: MenuItem[] = rawMenu.map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          category: m.category?.name || 'General',
+          price: `$${Number(m.basePrice || m.price || 0).toFixed(2)}`,
+          status: m.isAvailable ? 'Active' : 'Disable',
+        }));
+        setMenuItems(mappedMenu);
+      }
+    } catch (err) {
+      console.warn('Failed to load dynamic branch dashboard data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [branch.id, branch.name, branch.restaurantId]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   // Metrics for Tables
   const totalTables = tables.length;
@@ -187,23 +285,57 @@ export function useBranchDashboard({
     setIsAddTableOpen(true);
   };
 
-  const handleSaveAddTable = (e: React.FormEvent) => {
+  const handleSaveAddTable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tableForm.number.trim()) {
       toast.error('Please enter a table number.');
       return;
     }
 
-    const newTable: TableItem = {
-      id: `tbl-${Date.now()}`,
-      number: tableForm.number.trim(),
-      capacity: Number(tableForm.capacity) || 4,
-      status: tableForm.status,
-      qrCodeUrl: `https://tavonza.ai/r/${branch.id}/${tableForm.number.trim().toLowerCase()}`,
-    };
+    const targetBranchId = activeBranchId;
+    let createdTable: TableItem | null = null;
 
-    setTables((prev) => [...prev, newTable]);
-    toast.success(`Table "${newTable.number}" added successfully!`);
+    if (isValidUUID(targetBranchId)) {
+      try {
+        const res = await baseApiFetch<any>('/tables', {
+          method: 'POST',
+          body: JSON.stringify({
+            branchId: targetBranchId,
+            label: tableForm.number.trim(),
+            capacity: Number(tableForm.capacity) || 4,
+            shape: 'SQUARE',
+            floor: 1,
+          }),
+        });
+        const raw = (res as any)?.data || res;
+        if (raw && raw.id) {
+          createdTable = {
+            id: raw.id,
+            number: raw.label || tableForm.number.trim(),
+            capacity: Number(raw.capacity) || Number(tableForm.capacity) || 4,
+            status: 'Available',
+            qrCodeUrl: raw.qrCodeToken
+              ? `https://tavonza.ai/r/${raw.qrCodeToken}`
+              : `https://tavonza.ai/r/${targetBranchId}/${tableForm.number.trim().toLowerCase()}`,
+          };
+        }
+      } catch (err) {
+        console.warn('Backend table creation failed, adding optimistically:', err);
+      }
+    }
+
+    if (!createdTable) {
+      createdTable = {
+        id: `tbl-${Date.now()}`,
+        number: tableForm.number.trim(),
+        capacity: Number(tableForm.capacity) || 4,
+        status: tableForm.status,
+        qrCodeUrl: `https://tavonza.ai/r/${targetBranchId}/${tableForm.number.trim().toLowerCase()}`,
+      };
+    }
+
+    setTables((prev) => [...prev, createdTable!]);
+    toast.success(`Table "${createdTable.number}" added successfully!`);
     setIsAddTableOpen(false);
   };
 
@@ -217,7 +349,7 @@ export function useBranchDashboard({
     setQrSeed(table.number.split('').reduce((acc, char) => acc + char.charCodeAt(0), 10));
   };
 
-  const handleSaveEditTable = (e: React.FormEvent) => {
+  const handleSaveEditTable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTable) return;
     if (!tableForm.number.trim()) {
@@ -225,9 +357,24 @@ export function useBranchDashboard({
       return;
     }
 
+    const targetId = editingTable.id;
+    if (isValidUUID(targetId)) {
+      try {
+        await baseApiFetch(`/tables/${encodeURIComponent(targetId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            label: tableForm.number.trim(),
+            capacity: Number(tableForm.capacity) || 4,
+          }),
+        });
+      } catch (err) {
+        console.warn('Backend edit table failed:', err);
+      }
+    }
+
     setTables((prev) =>
       prev.map((t) =>
-        t.id === editingTable.id
+        t.id === targetId
           ? {
               ...t,
               number: tableForm.number.trim(),
@@ -241,10 +388,22 @@ export function useBranchDashboard({
     setEditingTable(null);
   };
 
-  const handleConfirmDeleteTable = () => {
+  const handleConfirmDeleteTable = async () => {
     if (!deletingTable) return;
+    const targetId = deletingTable.id;
     const targetNum = deletingTable.number;
-    setTables((prev) => prev.filter((t) => t.id !== deletingTable.id));
+
+    if (isValidUUID(targetId)) {
+      try {
+        await baseApiFetch(`/tables/${encodeURIComponent(targetId)}`, {
+          method: 'DELETE',
+        });
+      } catch (err) {
+        console.warn('Backend delete table failed:', err);
+      }
+    }
+
+    setTables((prev) => prev.filter((t) => t.id !== targetId));
     toast.success(`Table "${targetNum}" has been removed.`);
     setDeletingTable(null);
   };

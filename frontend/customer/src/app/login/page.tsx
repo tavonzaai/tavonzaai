@@ -17,6 +17,8 @@ function LoginContent() {
   const table = searchParams.get('table');
   const { user, isAuthenticated, isInitialized } = useAppSelector((state) => state.auth);
 
+console.log( "qr,table",qr,table);
+
   const forwardParam = qr
     ? `?qr=${encodeURIComponent(qr)}`
     : table

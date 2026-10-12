@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   TablesHeader,
   TablesFilterBar,
@@ -10,6 +10,8 @@ import {
 } from './components';
 import { INITIAL_TABLES_DATA } from './tablesData';
 import { TableFloorItem, TableFloorFilter } from './types';
+import { baseApiFetch } from '@/redux/api/baseApi';
+import { branchService } from '@/redux/features/restaurantApi';
 
 export default function TablesView() {
   const [tables, setTables] = useState<TableFloorItem[]>(INITIAL_TABLES_DATA);
@@ -17,6 +19,40 @@ export default function TablesView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<TableFloorItem | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchLiveTables() {
+      try {
+        const branches = await branchService.getBranches({ limit: 1 }).catch(() => null);
+        const branchId = branches?.data?.[0]?.id || (Array.isArray(branches) ? (branches as any)[0]?.id : undefined);
+        if (!branchId) return;
+
+        const rawTables = await baseApiFetch<any[]>(`/tables?branchId=${encodeURIComponent(branchId)}`).catch(() => []);
+        if (isMounted && Array.isArray(rawTables) && rawTables.length > 0) {
+          const mapped: TableFloorItem[] = rawTables.map((t: any) => ({
+            id: t.tableNumber || t.number || `T-${t.id.slice(0, 4)}`,
+            number: String(t.tableNumber || t.number || '01').replace(/^T-?/i, ''),
+            capacity: Number(t.capacity) || 4,
+            currentPartySize: t.status === 'OCCUPIED' ? Number(t.capacity) || 2 : 0,
+            zone: 'Main Hall',
+            status: t.status === 'OCCUPIED' ? 'Occupied' : t.status === 'RESERVED' ? 'Reserved' : 'Available',
+            server: 'Assigned Server',
+            seatedTime: t.status === 'OCCUPIED' ? 'Active' : '—',
+            billAmount: 0.0,
+          }));
+          setTables(mapped);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch live admin floor tables:', err);
+      }
+    }
+
+    fetchLiveTables();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Filtered tables by status and search
   const filteredTables = useMemo(() => {

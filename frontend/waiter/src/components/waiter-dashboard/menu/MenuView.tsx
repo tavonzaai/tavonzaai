@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
 import {
   Search,
   Utensils,
@@ -28,219 +29,7 @@ export interface DishItem {
   prepTime?: string;
 }
 
-export const initialDishes: DishItem[] = [
-  // --- Appetizers ---
-  {
-    id: 'dish-1',
-    name: 'Tuna Tartare',
-    category: 'Appetizers',
-    badge: "Chef's Pick",
-    description: 'Yellowfin tuna, avocado, sesame oil, wonton crisps',
-    price: 18.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Fish', 'Sesame', 'Gluten'],
-    pairing: 'Crisp Sauvignon Blanc or Dry Prosecco',
-    prepTime: '6-8 min',
-  },
-  {
-    id: 'dish-2',
-    name: 'Lobster Bisque',
-    category: 'Appetizers',
-    description: 'Rich bisque, cognac cream, chive oil, sourdough toast',
-    price: 18.5,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Shellfish', 'Dairy', 'Gluten'],
-    pairing: 'Chardonnay or Viognier',
-    prepTime: '8-10 min',
-  },
-  {
-    id: 'dish-3',
-    name: 'Caesar Salad',
-    category: 'Appetizers',
-    description: 'Romaine, house-made dressing, anchovy, parmesan, croutons',
-    price: 16.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1550304943-4f24f54ddde9?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy', 'Eggs', 'Fish', 'Gluten'],
-    pairing: 'Pinot Grigio',
-    prepTime: '5-7 min',
-  },
-  {
-    id: 'dish-4',
-    name: 'Garlic Bread',
-    category: 'Appetizers',
-    badge: 'Popular',
-    description: 'Toasted sourdough, roasted garlic butter, herbs',
-    price: 9.0,
-    status: "86'd",
-    imageUrl: 'https://images.unsplash.com/photo-1619535860434-ba1d8fa12536?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy', 'Gluten'],
-    pairing: 'House Red or Chianti',
-    prepTime: '6 min',
-  },
-  {
-    id: 'dish-5',
-    name: 'Burrata Caprese',
-    category: 'Appetizers',
-    badge: "Chef's Pick",
-    description: 'Heirloom tomatoes, fresh burrata, basil pesto, aged balsamic',
-    price: 22.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1592417817098-8f3d6910985c?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy', 'Nuts (Pesto)'],
-    pairing: 'Vermentino or Pinot Grigio',
-    prepTime: '5 min',
-  },
-  {
-    id: 'dish-6',
-    name: 'Oysters Rockefeller',
-    category: 'Appetizers',
-    badge: 'Popular',
-    description: 'Fresh half-shell oysters, creamed spinach, herbs, parmesan',
-    price: 24.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1533745848184-3db07256e163?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Shellfish', 'Dairy'],
-    pairing: 'Champagne or Chablis',
-    prepTime: '10-12 min',
-  },
-
-  // --- Mains ---
-  {
-    id: 'dish-7',
-    name: 'Wagyu Truffle Burger',
-    category: 'Mains',
-    badge: "Chef's Pick",
-    description: 'A5 Wagyu beef patty, black truffle aioli, gruyère, brioche',
-    price: 24.5,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy', 'Gluten', 'Eggs'],
-    pairing: 'Cabernet Sauvignon or Craft IPA',
-    prepTime: '12-15 min',
-  },
-  {
-    id: 'dish-8',
-    name: 'Grilled Salmon Risotto',
-    category: 'Mains',
-    badge: 'Popular',
-    description: 'Pan-seared Atlantic salmon, lemon-dill risotto, broccolini',
-    price: 28.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Fish', 'Dairy'],
-    pairing: 'Marlborough Sauvignon Blanc',
-    prepTime: '14-16 min',
-  },
-  {
-    id: 'dish-9',
-    name: 'Artisan Margherita Pizza',
-    category: 'Mains',
-    description: 'San Marzano DOP tomatoes, buffalo mozzarella, fresh basil',
-    price: 18.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy', 'Gluten'],
-    pairing: 'Chianti Classico DOCG',
-    prepTime: '10-12 min',
-  },
-  {
-    id: 'dish-10',
-    name: 'Tomahawk Steak (32oz)',
-    category: 'Mains',
-    badge: 'Popular',
-    description: 'Prime bone-in ribeye, rosemary garlic butter, roasted marrow',
-    price: 185.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy'],
-    pairing: 'Bordeaux 2018 or Barolo',
-    prepTime: '22-26 min',
-  },
-
-  // --- Savory ---
-  {
-    id: 'dish-11',
-    name: 'Truffle Mac & Cheese',
-    category: 'Savory',
-    badge: 'Popular',
-    description: 'Aged white cheddar, fontina, black summer truffle, panko',
-    price: 18.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy', 'Gluten'],
-    pairing: 'Oaked Chardonnay',
-    prepTime: '10 min',
-  },
-  {
-    id: 'dish-12',
-    name: 'Charcuterie & Cheese Board',
-    category: 'Savory',
-    badge: "Chef's Pick",
-    description: 'Prosciutto di Parma, Spanish chorizo, truffle pecorino, figs',
-    price: 34.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy', 'Nuts', 'Gluten'],
-    pairing: 'Pinot Noir or Nebbiolo',
-    prepTime: '8 min',
-  },
-
-  // --- Desserts ---
-  {
-    id: 'dish-13',
-    name: 'Warm Chocolate Lava Cake',
-    category: 'Desserts',
-    badge: 'Popular',
-    description: 'Valrhona molten dark chocolate cake, Madagascar vanilla gelato',
-    price: 14.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy', 'Eggs', 'Gluten'],
-    pairing: 'Tawny Port 10yr or Espresso',
-    prepTime: '8 min',
-  },
-  {
-    id: 'dish-14',
-    name: 'Tiramisu Classico',
-    category: 'Desserts',
-    description: 'Espresso soaked savoiardi, zabaglione cream, cocoa dust',
-    price: 12.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=600&auto=format&fit=crop&q=80',
-    allergens: ['Dairy', 'Eggs', 'Gluten'],
-    pairing: 'Amaretto or Cappuccino',
-    prepTime: '5 min',
-  },
-
-  // --- Drinks ---
-  {
-    id: 'dish-15',
-    name: 'Chianti Classico DOCG',
-    category: 'Drinks',
-    badge: "Chef's Pick",
-    description: 'Full-bodied ruby Tuscan red, notes of wild cherry & spice',
-    price: 26.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=600&auto=format&fit=crop&q=80',
-    pairing: 'Steak, Pasta, Charcuterie',
-    prepTime: '2 min',
-  },
-  {
-    id: 'dish-16',
-    name: 'Smoked Old Fashioned',
-    category: 'Drinks',
-    badge: 'Popular',
-    description: 'Bourbon whiskey, smoked applewood, bitters, charred orange',
-    price: 16.0,
-    status: 'Available',
-    imageUrl: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=600&auto=format&fit=crop&q=80',
-    pairing: 'Prime Steaks & Truffle Fries',
-    prepTime: '4 min',
-  },
-];
+export const initialDishes: DishItem[] = [];
 
 export default function MenuView() {
   const [selectedCategory, setSelectedCategory] = useState<
@@ -248,6 +37,40 @@ export default function MenuView() {
   >('Appetizers');
   const [searchQuery, setSearchQuery] = useState('');
   const [dishes, setDishes] = useState<DishItem[]>(initialDishes);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchDishes = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const items = await waiterService.getMenuItems(branchId);
+        if (mounted && Array.isArray(items)) {
+          const mapped: DishItem[] = items.map((it: any) => ({
+            id: it.id,
+            name: it.name,
+            category: (['Appetizers', 'Mains', 'Savory', 'Desserts', 'Drinks'].includes(it.categoryName)
+              ? it.categoryName
+              : 'Mains'),
+            badge: it.isPopular ? "Chef's Pick" : undefined,
+            description: it.description || '',
+            price: Number(it.price) || 0,
+            status: it.isAvailable !== false ? 'Available' : "86'd",
+            imageUrl: it.imageUrl || it.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
+            allergens: it.dietaryTags || [],
+            pairing: it.pairing || undefined,
+            prepTime: it.prepTimeMinutes ? `${it.prepTimeMinutes} min` : undefined,
+          }));
+          setDishes(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load menu dishes:', err);
+      }
+    };
+    fetchDishes();
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const [activeModalDish, setActiveModalDish] = useState<DishItem | null>(null);
 
   const categories: Array<'Appetizers' | 'Mains' | 'Savory' | 'Desserts' | 'Drinks'> = [

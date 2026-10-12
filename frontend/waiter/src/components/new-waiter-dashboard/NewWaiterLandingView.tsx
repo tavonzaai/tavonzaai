@@ -92,89 +92,8 @@ interface TableOrderDetail {
   totalAmount: string;
 }
 
-// Master Menu Catalog matching Figma "The Burger Lab" style
-const MENU_CATALOG: MenuItem[] = [
-  {
-    id: 'm-1',
-    name: 'The Burger Lab',
-    description: 'Brioche, wagyu patty, cheddar, secret aioli',
-    price: 26.5,
-    priceFormatted: '$26.5',
-    image: '/images/burger.jpg',
-    tag: 'None Veg',
-    category: 'Mains',
-  },
-  {
-    id: 'm-2',
-    name: 'Classic Burger',
-    description: 'Double beef patty, aged cheddar, crisp lettuce',
-    price: 12.99,
-    priceFormatted: '$12.99',
-    image: '/images/burger.jpg',
-    tag: 'None Veg',
-    category: 'Mains',
-  },
-  {
-    id: 'm-3',
-    name: 'Grilled Seabass',
-    description: 'Pan-seared Mediterranean fillet, herb butter',
-    price: 34.0,
-    priceFormatted: '$34.0',
-    image: '/images/seabass.jpg',
-    tag: 'None Veg',
-    category: 'Mains',
-  },
-  {
-    id: 'm-4',
-    name: 'Truffle Caesar',
-    description: 'Crispy romaine, parmesan shavings, truffle dressing',
-    price: 14.5,
-    priceFormatted: '$14.5',
-    image: '/images/slide1.jpg',
-    tag: 'Veg',
-    category: 'Starters',
-  },
-  {
-    id: 'm-5',
-    name: 'Smoked Bruschetta',
-    description: 'Heirloom tomatoes, fresh basil, balsamic glaze',
-    price: 11.0,
-    priceFormatted: '$11.0',
-    image: '/images/slide2.jpg',
-    tag: 'Veg',
-    category: 'Starters',
-  },
-  {
-    id: 'm-6',
-    name: 'Iced Citrus Fizz',
-    description: 'Sparkling tonic, yuzu, fresh mint leaves',
-    price: 8.5,
-    priceFormatted: '$8.5',
-    image: '/images/slide3.jpg',
-    tag: 'Veg',
-    category: 'Drinks',
-  },
-  {
-    id: 'm-7',
-    name: 'Chocolate Lava',
-    description: 'Warm molten center, bourbon vanilla bean gelato',
-    price: 12.0,
-    priceFormatted: '$12.0',
-    image: '/images/slide1.jpg',
-    tag: 'Veg',
-    category: 'Desserts',
-  },
-  {
-    id: 'm-8',
-    name: 'Crispy Calamari',
-    description: 'Flash-fried squid, smoked chili dipping sauce',
-    price: 16.5,
-    priceFormatted: '$16.5',
-    image: '/images/slide2.jpg',
-    tag: 'None Veg',
-    category: 'Starters',
-  },
-];
+// Master Menu Catalog
+const MENU_CATALOG: MenuItem[] = [];
 
 export default function NewWaiterLandingView({ initialTab = 'home' }: { initialTab?: string }) {
   const router = useRouter();
@@ -419,11 +338,43 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   }, [selectedTable?.id]);
 
   // 4. Browse Menu & Search States
+  const [menuCatalog, setMenuCatalog] = useState<MenuItem[]>([]);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'All' | 'Starters' | 'Mains' | 'Drinks' | 'Desserts'>('All');
 
+  useEffect(() => {
+    let mounted = true;
+    const fetchCatalog = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const items = await waiterService.getMenuItems(branchId);
+        if (mounted && Array.isArray(items)) {
+          const mapped: MenuItem[] = items.map((it: any) => ({
+            id: it.id,
+            name: it.name,
+            description: it.description || '',
+            price: Number(it.price) || 0,
+            priceFormatted: `$${Number(it.price || 0).toFixed(2)}`,
+            image: it.imageUrl || it.image || '/images/burger.jpg',
+            tag: it.dietaryTags?.includes('Vegetarian') ? 'Veg' : 'None Veg',
+            category: (['Starters', 'Mains', 'Drinks', 'Desserts'].includes(it.categoryName)
+              ? it.categoryName
+              : 'Mains') as any,
+          }));
+          setMenuCatalog(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load menu catalog:', err);
+      }
+    };
+    fetchCatalog();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Filtered menu items
-  const filteredMenuItems = MENU_CATALOG.filter((item) => {
+  const filteredMenuItems = menuCatalog.filter((item) => {
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
     const matchesQuery =
       item.name.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
@@ -432,20 +383,10 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   });
 
   // 5. Cart / Order Ticket State
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: 'm-2',
-      name: 'Classic Burger',
-      price: 12.99,
-      priceFormatted: '$12.99',
-      image: '/images/burger.jpg',
-      tag: 'None Veg',
-      quantity: 1,
-    },
-  ]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   // 6. Create Order Form States
-  const [selectedModifications, setSelectedModifications] = useState<string[]>(['No Onions']);
+  const [selectedModifications, setSelectedModifications] = useState<string[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedTableId, setSelectedTableId] = useState('T-01');

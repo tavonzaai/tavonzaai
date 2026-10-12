@@ -141,19 +141,8 @@ function ChatContent() {
     if (q.includes('veg') || q.includes('keto') || q.includes('healthy') || q.includes('salad')) {
       dispatch(
         addAiMessage({
-          text: '🌱 Here are our organic, keto-friendly and vegetarian options made with farm-to-table ingredients:',
+          text: '🌱 Here are our organic, keto-friendly and vegetarian options made with farm-to-table ingredients. You can explore our live menu or customize toppings anytime!',
           timestamp,
-          dishes: [
-            {
-              id: 'arancini-truffle-1',
-              name: 'Arancini al Tartufo',
-              price: 30.5,
-              image: '/images/slide1.jpg',
-              description:
-                'Crisp black truffle risotto croquettes with aged parmesan and warm roasted garlic aioli.',
-              tags: ['Vegetarian', 'Organic'],
-            },
-          ],
         })
       );
       return;

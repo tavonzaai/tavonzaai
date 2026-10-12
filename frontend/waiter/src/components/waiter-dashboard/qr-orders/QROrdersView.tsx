@@ -23,58 +23,7 @@ export interface IncomingQROrder {
   tableStatus?: 'Available' | 'Occupied' | 'Food Ready' | 'Waiting for Bill';
 }
 
-export const initialQROrdersData: IncomingQROrder[] = [
-  {
-    id: 'qr-012',
-    orderNumber: '#QR-012',
-    tableNumber: 'T-05',
-    placedAgo: '2 min ago',
-    items: ['Iced Tea x2', 'Nachos'],
-    total: 24.0,
-    status: 'Pending',
-    tableStatus: 'Occupied',
-  },
-  {
-    id: 'qr-011',
-    orderNumber: '#QR-011',
-    tableNumber: 'T-08',
-    placedAgo: '8 min ago',
-    items: ['Chocolate Lava Cake x2', 'Espresso'],
-    total: 38.0,
-    status: 'Accepted',
-    tableStatus: 'Food Ready',
-  },
-  {
-    id: 'qr-010',
-    orderNumber: '#QR-010',
-    tableNumber: 'T-12',
-    placedAgo: '14 min ago',
-    items: ['Sparkling Water x2', 'Truffle Fries'],
-    total: 28.5,
-    status: 'Accepted',
-    tableStatus: 'Occupied',
-  },
-  {
-    id: 'qr-009',
-    orderNumber: '#QR-009',
-    tableNumber: 'T-15',
-    placedAgo: '26 min ago',
-    items: ['Tiramisu', 'Cappuccino x2'],
-    total: 22.0,
-    status: 'Accepted',
-    tableStatus: 'Waiting for Bill',
-  },
-  {
-    id: 'qr-008',
-    orderNumber: '#QR-008',
-    tableNumber: 'T-03',
-    placedAgo: '42 min ago',
-    items: ['Old Fashioned x2'],
-    total: 32.0,
-    status: 'Accepted',
-    tableStatus: 'Occupied',
-  },
-];
+export const initialQROrdersData: IncomingQROrder[] = [];
 
 export default function QROrdersView() {
   const [filter, setFilter] = useState<'All' | 'Available' | 'Occupied' | 'Food Ready' | 'Waiting for Bill'>('All');

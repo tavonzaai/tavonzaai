@@ -30,21 +30,21 @@ type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 const VOICE_PRESETS = [
   { label: '⚡ Overdue Tickets', prompt: 'What tickets are overdue right now?' },
-  { label: '🍔 Grill Station Load', prompt: 'How many Classic Burgers on Grill Station?' },
-  { label: '📖 Wagyu Recipe Specs', prompt: 'Check Classic Wagyu Burger recipe specs' },
-  { label: '📢 Notify Waiter Marco', prompt: 'Notify Waiter Marco for Table T-01' },
+  { label: '📊 Station Load', prompt: 'How many items are in queue on this station?' },
+  { label: '📖 Recipe Specs', prompt: 'Check recipe specs for active tickets' },
+  { label: '📢 Notify Waitstaff', prompt: 'Notify floor waitstaff for ready items' },
 ];
 
 export default function KitchenAIModal({
   isOpen,
   onClose,
-  activeStation = 'Grill Station',
+  activeStation = 'Kitchen Line',
 }: KitchenAIModalProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [liveTranscript, setLiveTranscript] = useState<string>('');
   const [lastUserVoice, setLastUserVoice] = useState<string>('');
   const [lastAiResponse, setLastAiResponse] = useState<string>(
-    'Chef Marco, I am ready on the Grill Station. Speak any command hands-free.'
+    `I am ready on ${activeStation}. Speak any command hands-free.`
   );
   const [isAiOnline, setIsAiOnline] = useState<boolean | null>(null);
   const [autoListenNext, setAutoListenNext] = useState<boolean>(true);
@@ -524,22 +524,15 @@ export default function KitchenAIModal({
       let reply = `I have analyzed the kitchen line for ${currentStation}. Everything is operating smoothly.`;
 
       if (lower === 'hi' || lower === 'hello' || lower.startsWith('hi ') || lower.startsWith('hello ')) {
-        reply = `Hello Chef Marco! I am monitoring ${currentStation} tickets and line bottlenecks. What would you like to check?`;
+        reply = `Hello! I am monitoring ${currentStation} tickets and line bottlenecks. What would you like to check?`;
       } else if (lower.includes('overdue') || lower.includes('late') || lower.includes('time')) {
-        reply =
-          'Ticket #1524 for Table T-01 is currently flagged as Overdue with 18 minutes elapsed. Recommend plating the 2 Classic Burgers immediately.';
-      } else if (lower.includes('burger') || lower.includes('grill') || lower.includes('how many')) {
-        reply =
-          'Grill Station currently has 4 Classic Wagyu Burgers queued: 3 Medium Well with No Onions, and 1 Medium Well with Extra Cheese.';
-      } else if (lower.includes('recipe') || lower.includes('spec') || lower.includes('classic') || lower.includes('wagyu')) {
-        reply =
-          'Classic Wagyu Smash Burger specs: 2 100-gram Wagyu patties smashed for 2 minutes per side, aged yellow cheddar, smoked bacon jam, house aioli, toasted brioche bun. Allergens are gluten and dairy.';
-      } else if (lower.includes('waiter') || lower.includes('marco') || lower.includes('notify') || lower.includes('ready')) {
-        reply =
-          'Notification sent to Waiter Marco: Table T-01 order is completing on the grill; please prepare for pickup in 2 minutes.';
+        reply = `No overdue tickets currently flagged for ${currentStation}. All orders are progressing within target prep times.`;
+      } else if (lower.includes('recipe') || lower.includes('spec')) {
+        reply = `Dish recipe specs and allergen information can be referenced directly in the Recipes view.`;
+      } else if (lower.includes('waiter') || lower.includes('notify') || lower.includes('ready')) {
+        reply = `Notification dispatched to floor waitstaff for ready items.`;
       } else if (lower.includes('balance') || lower.includes('bottleneck') || lower.includes('load') || lower.includes('capacity')) {
-        reply =
-          'Grill Station is at 75% capacity with 8 active items. Fryer Station has spare capacity. Shift sides to the fryer station to shave approximately 3 minutes off ticket completion.';
+        reply = `Workloads are currently balanced across stations on the kitchen line.`;
       }
 
       if (activeRequestIdRef.current === currentReqId) {
@@ -728,7 +721,7 @@ export default function KitchenAIModal({
                       : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40'
                   }`}
                 >
-                  {isAiOnline ? 'Live Engine (8000)' : 'Hands-Free Voice Mode'}
+                  {isAiOnline ? 'Live AI Engine' : 'Hands-Free Voice Mode'}
                 </span>
               </div>
               <p className="text-zinc-400 text-xs">

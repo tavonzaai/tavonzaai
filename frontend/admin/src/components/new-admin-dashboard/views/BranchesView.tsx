@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { MOCK_BRANCHES, MOCK_RESTAURANTS } from '../data';
 import { BranchItem } from '../types';
+import { branchService } from '@/redux/features/restaurantApi';
 import BranchDashboardView from './BranchDashboardView';
 import { BranchFormData } from './branches/types';
 import {
@@ -26,6 +27,43 @@ export default function BranchesView({ onBack, initialBranchId }: BranchesViewPr
   const searchParams = useSearchParams();
   const [branches, setBranches] = useState<BranchItem[]>(MOCK_BRANCHES);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Fetch live branches from backend
+  useEffect(() => {
+    let isMounted = true;
+    async function loadLiveBranches() {
+      try {
+        const res = await branchService.getBranches({ limit: 50 }).catch(() => null);
+        const data = res?.data || (Array.isArray(res) ? res : []);
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          const mapped: BranchItem[] = data.map((b: any) => ({
+            id: b.id,
+            restaurantId: b.restaurantId || 'rest-1',
+            restaurantName: b.restaurant?.name || 'Tavonza Kitchen',
+            name: b.name,
+            location: typeof b.address === 'string' ? b.address : (b.address?.line1 || b.address?.street || 'Flagship Branch'),
+            manager: b.managerName || 'Nobin Mille',
+            hours: b.operatingHours || '09:00 – 23:00',
+            openingTime: '09:00',
+            closingTime: '23:00',
+            contactNumber: b.phone || '992548756',
+            tablesCount: b.tablesCount || 0,
+            occupancy: 0,
+            status: b.status === 'ACTIVE' || b.isActive !== false ? 'Active' : 'Setup',
+            kitchenSync: 'Online',
+            monthlyRevenue: '$0',
+          }));
+          setBranches(mapped);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch live branches in BranchesView:', err);
+      }
+    }
+    loadLiveBranches();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Selected branch for viewing branch dashboard
   const [selectedBranch, setSelectedBranch] = useState<BranchItem | null>(() => {

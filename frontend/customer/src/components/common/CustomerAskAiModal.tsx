@@ -111,26 +111,8 @@ export default function CustomerAskAiModal({ isOpen, onClose }: CustomerAskAiMod
     if (q.includes('best') || q.includes('popular') || q.includes('recommend') || q.includes('burger')) {
       dispatch(
         addAiMessage({
-          text: 'Here are our top chef recommendations loved by our guests today! Both are prepared fresh to order:',
+          text: 'Here are our top chef recommendations loved by our guests today! Both are prepared fresh to order. Please explore our live menu to order!',
           timestamp,
-          dishes: [
-            {
-              id: 'potato-corn-burger-1',
-              name: 'Potato Corn Burger',
-              price: 26.0,
-              image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
-              description: 'Golden spiced potato & sweet corn patty, house herb aioli on brioche.',
-              tags: ['Chef Special', 'Popular'],
-            },
-            {
-              id: 'wagyu-truffle-delight-2',
-              name: 'Wagyu Truffle Burger',
-              price: 34.0,
-              image: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&q=80',
-              description: 'Aged Wagyu beef, melted Gruyère, black truffle aioli & crispy shallots.',
-              tags: ['Premium', 'Signature'],
-            },
-          ],
         })
       );
       return;
@@ -139,18 +121,8 @@ export default function CustomerAskAiModal({ isOpen, onClose }: CustomerAskAiMod
     if (q.includes('veg') || q.includes('keto') || q.includes('healthy') || q.includes('diet')) {
       dispatch(
         addAiMessage({
-          text: 'For a healthy, low-carb or vegetarian option, our chefs highly recommend our Mediterranean bowls and avocado salads:',
+          text: 'For healthy, low-carb or vegetarian options, our kitchen prepares fresh organic dishes daily. Please check the menu for full dietary details!',
           timestamp,
-          dishes: [
-            {
-              id: 'avocado-burrata-salad-3',
-              name: 'Avocado Burrata Salad',
-              price: 22.0,
-              image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&q=80',
-              description: 'Creamy Puglia burrata, hass avocado, heirloom cherry tomatoes & balsamic glaze.',
-              tags: ['Keto', 'Vegetarian'],
-            },
-          ],
         })
       );
       return;

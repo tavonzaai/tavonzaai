@@ -111,7 +111,14 @@ export const BranchTablesTab: React.FC<BranchTablesTabProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
-            {tables.map((table) => {
+            {tables.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-5 py-12 text-center text-neutral-400 font-medium">
+                  No tables found for this branch. Click &quot;Add Table&quot; to create a new table.
+                </td>
+              </tr>
+            ) : (
+              tables.map((table) => {
               return (
                 <tr key={table.id} className="hover:bg-zinc-900/40 transition-colors">
                   {/* Table Number */}
@@ -173,7 +180,7 @@ export const BranchTablesTab: React.FC<BranchTablesTabProps> = ({
                   </td>
                 </tr>
               );
-            })}
+            }))}
           </tbody>
         </table>
       </div>
