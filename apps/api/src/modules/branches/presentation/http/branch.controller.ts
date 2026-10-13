@@ -215,7 +215,12 @@ export class BranchController {
   // ── Staff ─────────────────────────────────────────────────────────────
 
   @Get(':id/staff')
-  @ApiOperation({ summary: 'Get all staff assigned to this branch with optional role and search filters' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permission.STAFF_READ)
+  @ApiOperation({
+    summary: 'Get all staff assigned to this branch with optional role and search filters',
+    description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:read]. Lists branch staff members.',
+  })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiQuery({ name: 'role', required: false, type: String, description: 'Role filter (e.g. WAITER, KITCHEN, MANAGER, ALL)', example: 'WAITER' })
   @ApiQuery({ name: 'search', required: false, type: String, description: 'Search staff by name, email or phone', example: 'Jane' })
@@ -232,7 +237,12 @@ export class BranchController {
   }
 
   @Get(':id/staff/:staffId')
-  @ApiOperation({ summary: 'Get a single staff member assigned to this branch by ID' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permission.STAFF_READ)
+  @ApiOperation({
+    summary: 'Get a single staff member assigned to this branch by ID',
+    description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:read]. Returns branch staff details.',
+  })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiParam({ name: 'staffId', description: 'Staff member UUID or assignment UUID', example: '11223344-5566-7788-9900-aabbccddeeff' })
   @ApiOkResponse({ description: 'Staff member assignment details', type: BranchStaffMemberResponseDto })
@@ -248,7 +258,12 @@ export class BranchController {
 
   @Post(':id/staff')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new staff member and assign to this branch' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permission.STAFF_WRITE)
+  @ApiOperation({
+    summary: 'Create a new staff member and assign to this branch',
+    description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:write]. Creates user credentials and assigns branch role.',
+  })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiCreatedResponse({ description: 'Staff member created and assigned', type: BranchStaffMemberResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 409, 500)
@@ -263,7 +278,12 @@ export class BranchController {
 
   @Post(':id/staff/assign')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Assign an existing staff member to this branch' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permission.STAFF_WRITE)
+  @ApiOperation({
+    summary: 'Assign an existing staff member to this branch',
+    description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:write]. Assigns staff member to branch.',
+  })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiCreatedResponse({ description: 'Staff assigned successfully', type: BranchStaffMemberResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 409, 500)
@@ -277,7 +297,12 @@ export class BranchController {
   }
 
   @Patch(':id/staff/:staffId')
-  @ApiOperation({ summary: 'Update staff assignment details in this branch' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permission.STAFF_UPDATE)
+  @ApiOperation({
+    summary: 'Update staff assignment details in this branch',
+    description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:update]. Updates assigned role and capabilities.',
+  })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiParam({ name: 'staffId', description: 'Staff member UUID or assignment UUID', example: '11223344-5566-7788-9900-aabbccddeeff' })
   @ApiOkResponse({ description: 'Staff assignment updated', type: BranchStaffMemberResponseDto })
@@ -293,7 +318,12 @@ export class BranchController {
   }
 
   @Delete(':id/staff/:staffId')
-  @ApiOperation({ summary: 'Deactivate / soft delete staff assignment in this branch' })
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permission.STAFF_DELETE)
+  @ApiOperation({
+    summary: 'Deactivate / soft delete staff assignment in this branch',
+    description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:delete]. Deactivates assignment.',
+  })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiParam({ name: 'staffId', description: 'Staff member UUID or assignment UUID', example: '11223344-5566-7788-9900-aabbccddeeff' })
   @ApiOkResponse({

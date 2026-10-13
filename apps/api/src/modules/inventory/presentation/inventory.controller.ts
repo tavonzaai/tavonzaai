@@ -19,6 +19,7 @@ import {
   ApiParam,
   ApiQuery,
   ApiSecurity,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { InventoryService } from '../application/inventory.service';
 import {
@@ -36,11 +37,15 @@ import {
 } from './http/dto/inventory.dto';
 import { ApiStandardErrors } from '../../../common/swagger';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
+import { Permission } from '@tavonza/authorization';
 
 @ApiTags('Operations | Inventory & Suppliers')
 @ApiSecurity('access-token')
+@ApiBearerAuth('access-token')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('inventory')
-@UseGuards(JwtAuthGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
@@ -48,7 +53,11 @@ export class InventoryController {
 
   @Post('suppliers')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register a new supplier for a branch' })
+  @RequirePermissions(Permission.SUPPLIERS_WRITE)
+  @ApiOperation({
+    summary: 'Register a new supplier for a branch',
+    description: 'Requires suppliers:write permission. Enrolls vendor contact info and payment terms.',
+  })
   @ApiCreatedResponse({ description: 'Supplier registered', type: SupplierResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
   async createSupplier(@Body() dto: CreateSupplierDto) {
@@ -56,7 +65,11 @@ export class InventoryController {
   }
 
   @Get('suppliers/branch/:branchId')
-  @ApiOperation({ summary: 'List all suppliers for a branch' })
+  @RequirePermissions(Permission.SUPPLIERS_READ)
+  @ApiOperation({
+    summary: 'List all suppliers for a branch',
+    description: 'Requires suppliers:read permission. Lists all registered branch vendors.',
+  })
   @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'List of suppliers', type: [SupplierResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
@@ -65,7 +78,11 @@ export class InventoryController {
   }
 
   @Get('suppliers/:id')
-  @ApiOperation({ summary: 'Get supplier details by ID' })
+  @RequirePermissions(Permission.SUPPLIERS_READ)
+  @ApiOperation({
+    summary: 'Get supplier details by ID',
+    description: 'Requires suppliers:read permission. Retrieves detailed vendor information.',
+  })
   @ApiParam({ name: 'id', description: 'Supplier UUID', example: '33445566-7788-99aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Supplier details', type: SupplierResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
@@ -74,7 +91,11 @@ export class InventoryController {
   }
 
   @Patch('suppliers/:id')
-  @ApiOperation({ summary: 'Update supplier details' })
+  @RequirePermissions(Permission.SUPPLIERS_WRITE)
+  @ApiOperation({
+    summary: 'Update supplier details',
+    description: 'Requires suppliers:write permission. Modifies supplier contact or terms.',
+  })
   @ApiParam({ name: 'id', description: 'Supplier UUID', example: '33445566-7788-99aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Supplier updated', type: SupplierResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
@@ -86,7 +107,11 @@ export class InventoryController {
   }
 
   @Delete('suppliers/:id')
-  @ApiOperation({ summary: 'Soft delete a supplier' })
+  @RequirePermissions(Permission.SUPPLIERS_WRITE)
+  @ApiOperation({
+    summary: 'Soft delete a supplier',
+    description: 'Requires suppliers:write permission. Deactivates supplier record.',
+  })
   @ApiParam({ name: 'id', description: 'Supplier UUID', example: '33445566-7788-99aa-bbcc-ddeeff001122' })
   @ApiOkResponse({
     description: 'Supplier soft-deleted',
@@ -107,7 +132,11 @@ export class InventoryController {
 
   @Post('categories')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create an inventory category' })
+  @RequirePermissions(Permission.INVENTORY_WRITE)
+  @ApiOperation({
+    summary: 'Create an inventory category',
+    description: 'Requires inventory:write permission. Creates category (e.g. Dairy, Produce).',
+  })
   @ApiCreatedResponse({ description: 'Category created', type: InventoryCategoryResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
   async createCategory(@Body() dto: CreateInventoryCategoryDto) {
@@ -115,7 +144,11 @@ export class InventoryController {
   }
 
   @Get('categories/branch/:branchId')
-  @ApiOperation({ summary: 'List all inventory categories for a branch' })
+  @RequirePermissions(Permission.INVENTORY_READ)
+  @ApiOperation({
+    summary: 'List all inventory categories for a branch',
+    description: 'Requires inventory:read permission. Returns categories configured for the branch.',
+  })
   @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'List of categories', type: [InventoryCategoryResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
@@ -124,7 +157,11 @@ export class InventoryController {
   }
 
   @Get('categories/:id')
-  @ApiOperation({ summary: 'Get category details by ID' })
+  @RequirePermissions(Permission.INVENTORY_READ)
+  @ApiOperation({
+    summary: 'Get category details by ID',
+    description: 'Requires inventory:read permission. Returns category detail.',
+  })
   @ApiParam({ name: 'id', description: 'Category UUID', example: '44556677-8899-00aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Category details', type: InventoryCategoryResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
@@ -133,7 +170,11 @@ export class InventoryController {
   }
 
   @Patch('categories/:id')
-  @ApiOperation({ summary: 'Update an inventory category' })
+  @RequirePermissions(Permission.INVENTORY_UPDATE)
+  @ApiOperation({
+    summary: 'Update an inventory category',
+    description: 'Requires inventory:update permission. Updates inventory category name or description.',
+  })
   @ApiParam({ name: 'id', description: 'Category UUID', example: '44556677-8899-00aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Category updated', type: InventoryCategoryResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
@@ -145,7 +186,11 @@ export class InventoryController {
   }
 
   @Delete('categories/:id')
-  @ApiOperation({ summary: 'Delete an inventory category' })
+  @RequirePermissions(Permission.INVENTORY_DELETE)
+  @ApiOperation({
+    summary: 'Delete an inventory category',
+    description: 'Requires inventory:delete permission. Deletes category.',
+  })
   @ApiParam({ name: 'id', description: 'Category UUID', example: '44556677-8899-00aa-bbcc-ddeeff001122' })
   @ApiOkResponse({
     description: 'Category deleted',
@@ -166,7 +211,11 @@ export class InventoryController {
 
   @Post('items')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create an inventory item' })
+  @RequirePermissions(Permission.INVENTORY_WRITE)
+  @ApiOperation({
+    summary: 'Create an inventory item',
+    description: 'Requires inventory:write permission. Registers ingredient/stock item with reorder thresholds.',
+  })
   @ApiCreatedResponse({ description: 'Item created', type: InventoryItemResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
   async createItem(@Body() dto: CreateInventoryItemDto) {
@@ -174,7 +223,11 @@ export class InventoryController {
   }
 
   @Get('items/branch/:branchId')
-  @ApiOperation({ summary: 'List inventory items for a branch, optionally filtering by low stock' })
+  @RequirePermissions(Permission.INVENTORY_READ)
+  @ApiOperation({
+    summary: 'List inventory items for a branch, optionally filtering by low stock',
+    description: 'Requires inventory:read permission. Lists stock items with current quantities.',
+  })
   @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiQuery({ name: 'lowStockOnly', required: false, type: Boolean, description: 'Filter only items below or at low-stock threshold', example: false })
   @ApiOkResponse({ description: 'List of inventory items', type: [InventoryItemResponseDto] })
@@ -187,7 +240,11 @@ export class InventoryController {
   }
 
   @Get('items/:id')
-  @ApiOperation({ summary: 'Get inventory item details by ID' })
+  @RequirePermissions(Permission.INVENTORY_READ)
+  @ApiOperation({
+    summary: 'Get inventory item details by ID',
+    description: 'Requires inventory:read permission. Retrieves detailed stock specifications.',
+  })
   @ApiParam({ name: 'id', description: 'Item UUID', example: '55667788-8899-00aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Item details', type: InventoryItemResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
@@ -196,7 +253,11 @@ export class InventoryController {
   }
 
   @Patch('items/:id')
-  @ApiOperation({ summary: 'Update an inventory item' })
+  @RequirePermissions(Permission.INVENTORY_UPDATE)
+  @ApiOperation({
+    summary: 'Update an inventory item',
+    description: 'Requires inventory:update permission. Updates item metadata and thresholds.',
+  })
   @ApiParam({ name: 'id', description: 'Item UUID', example: '55667788-8899-00aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Item updated', type: InventoryItemResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
@@ -208,7 +269,11 @@ export class InventoryController {
   }
 
   @Delete('items/:id')
-  @ApiOperation({ summary: 'Soft delete an inventory item' })
+  @RequirePermissions(Permission.INVENTORY_DELETE)
+  @ApiOperation({
+    summary: 'Soft delete an inventory item',
+    description: 'Requires inventory:delete permission. Soft-deletes inventory item.',
+  })
   @ApiParam({ name: 'id', description: 'Item UUID', example: '55667788-8899-00aa-bbcc-ddeeff001122' })
   @ApiOkResponse({
     description: 'Item soft-deleted',
@@ -226,7 +291,11 @@ export class InventoryController {
   }
 
   @Patch('items/:id/adjust')
-  @ApiOperation({ summary: 'Adjust stock level for an inventory item' })
+  @RequirePermissions(Permission.INVENTORY_UPDATE)
+  @ApiOperation({
+    summary: 'Adjust stock level for an inventory item',
+    description: 'Requires inventory:update permission. Logs stock count adjustment with audit reason.',
+  })
   @ApiParam({ name: 'id', description: 'Item UUID', example: '55667788-8899-00aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Item updated with new stock level', type: InventoryItemResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
@@ -238,7 +307,11 @@ export class InventoryController {
   }
 
   @Get('summary/branch/:branchId')
-  @ApiOperation({ summary: 'Get branch inventory stock summary (used by dashboard and AI tools)' })
+  @RequirePermissions(Permission.INVENTORY_READ)
+  @ApiOperation({
+    summary: 'Get branch inventory stock summary (used by dashboard and AI tools)',
+    description: 'Requires inventory:read permission. Computes stock count stats and critical alerts.',
+  })
   @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiQuery({ name: 'lowStockOnly', required: false, type: Boolean, description: 'Only count low stock items', example: false })
   @ApiOkResponse({ description: 'Inventory summary with low-stock counts', type: InventorySummaryResponseDto })

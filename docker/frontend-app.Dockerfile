@@ -1,6 +1,6 @@
 ARG APP_NAME=customer
 ARG APP_PORT=3000
-ARG BASE_IMAGE=public.ecr.aws/docker/library/node:20-alpine
+ARG BASE_IMAGE=node:20-alpine
 
 FROM ${BASE_IMAGE} AS base
 RUN apk add --no-cache libc6-compat
