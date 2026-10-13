@@ -1,6 +1,6 @@
 [project]
 name = "platform-ai"
-version = "0.1.0"
+version = "0.1.1"
 description = "AI agent runtime, tool execution, and policy enforcement"
 requires-python = ">=3.11"
 dependencies = []
