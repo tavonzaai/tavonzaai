@@ -25,7 +25,9 @@ import {
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
+import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import { Permission } from '@tavonza/authorization';
+import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 import { BranchService } from '../../application/services/branch.service';
 import {
   CreateBranchDto,
@@ -59,8 +61,11 @@ export class BranchController {
   @ApiOperation({ summary: 'Create a new branch under a restaurant' })
   @ApiCreatedResponse({ description: 'Branch created successfully', type: BranchResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
-  async create(@Body() dto: CreateBranchDto): Promise<BranchResponseDto> {
-    return this.branchService.create(dto);
+  async create(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateBranchDto,
+  ): Promise<BranchResponseDto> {
+    return this.branchService.create(user, dto);
   }
 
   @Get()
@@ -68,15 +73,16 @@ export class BranchController {
   @ApiOkResponse({ description: 'List of branches or paginated branch response', type: [BranchResponseDto] })
   @ApiStandardErrors(401, 403, 500)
   async listByRestaurant(
+    @CurrentUser() user: JwtPayload,
     @Query() query: QueryBranchDto,
   ): Promise<any> {
     if (query.page !== undefined || query.search !== undefined) {
-      return this.branchService.findAll(query);
+      return this.branchService.findAll(user, query);
     }
     if (query.restaurantId) {
-      return this.branchService.findByRestaurantId(query.restaurantId, query.includeDeleted);
+      return this.branchService.findByRestaurantId(user, query.restaurantId, query.includeDeleted);
     }
-    return this.branchService.findAll(query);
+    return this.branchService.findAll(user, query);
   }
 
   @Get(':id')
@@ -85,9 +91,10 @@ export class BranchController {
   @ApiOkResponse({ description: 'Branch details', type: BranchResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async getById(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<BranchResponseDto> {
-    return this.branchService.findById(id);
+    return this.branchService.findById(user, id);
   }
 
   @Patch(':id')
@@ -96,10 +103,11 @@ export class BranchController {
   @ApiOkResponse({ description: 'Branch updated successfully', type: BranchResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async update(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateBranchDto,
   ): Promise<BranchResponseDto> {
-    return this.branchService.update(id, dto);
+    return this.branchService.update(user, id, dto);
   }
 
   @Delete(':id')
@@ -108,9 +116,10 @@ export class BranchController {
   @ApiOkResponse({ description: 'Branch soft-deleted', type: BranchResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async delete(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<BranchResponseDto> {
-    return this.branchService.softDelete(id);
+    return this.branchService.softDelete(user, id);
   }
 
   // ── Settings ──────────────────────────────────────────────────────────
@@ -120,7 +129,11 @@ export class BranchController {
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'Branch operational settings', type: BranchSettingsResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
-  async getSettings(@Param('id', new ParseUUIDPipe()) id: string) {
+  async getSettings(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.getSettings(id);
   }
 
@@ -132,9 +145,11 @@ export class BranchController {
   @ApiOkResponse({ description: 'Updated branch settings', type: BranchSettingsResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async updateSettings(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateBranchSettingsDto,
   ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.updateSettings(id, dto);
   }
 
@@ -145,7 +160,11 @@ export class BranchController {
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'Weekly operating hours', type: [BranchOperatingHoursResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
-  async getOperatingHours(@Param('id', new ParseUUIDPipe()) id: string) {
+  async getOperatingHours(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.getOperatingHours(id);
   }
 
@@ -155,9 +174,11 @@ export class BranchController {
   @ApiOkResponse({ description: 'Updated operating hours', type: [BranchOperatingHoursResponseDto] })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async setOperatingHours(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: SetOperatingHoursDto,
   ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.setOperatingHours(id, dto);
   }
 
@@ -168,7 +189,11 @@ export class BranchController {
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'Branch holiday calendar', type: [BranchHolidayResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
-  async getHolidays(@Param('id', new ParseUUIDPipe()) id: string) {
+  async getHolidays(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.getHolidays(id);
   }
 
@@ -179,9 +204,11 @@ export class BranchController {
   @ApiCreatedResponse({ description: 'Holiday scheduled', type: BranchHolidayResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async addHoliday(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: CreateHolidayDto,
   ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.addHoliday(id, dto);
   }
 
@@ -200,10 +227,12 @@ export class BranchController {
   @ApiOkResponse({ description: 'List of staff members assigned to branch', type: [BranchStaffMemberResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
   async getStaff(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Query('role') role?: string,
     @Query('search') search?: string,
   ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.getStaffByBranch(id, { role, search });
   }
 
@@ -219,9 +248,11 @@ export class BranchController {
   @ApiOkResponse({ description: 'Staff member assignment details', type: BranchStaffMemberResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async getStaffMember(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('staffId') staffId: string,
   ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.getStaffMember(id, staffId);
   }
 
@@ -237,9 +268,11 @@ export class BranchController {
   @ApiCreatedResponse({ description: 'Staff member created and assigned', type: BranchStaffMemberResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 409, 500)
   async createStaff(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: CreateBranchStaffDto,
   ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.createStaffForBranch(id, dto);
   }
 
@@ -255,9 +288,11 @@ export class BranchController {
   @ApiCreatedResponse({ description: 'Staff assigned successfully', type: BranchStaffMemberResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 409, 500)
   async assignStaff(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: AssignBranchStaffDto,
   ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.assignStaffToBranch(id, dto);
   }
 
@@ -273,10 +308,12 @@ export class BranchController {
   @ApiOkResponse({ description: 'Staff assignment updated', type: BranchStaffMemberResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async updateStaff(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('staffId') staffId: string,
     @Body() dto: UpdateBranchStaffDto,
   ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.updateStaff(id, staffId, dto);
   }
 
@@ -301,9 +338,11 @@ export class BranchController {
   })
   @ApiStandardErrors(401, 403, 404, 500)
   async deleteStaff(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('staffId') staffId: string,
   ) {
+    await this.branchService.assertBranchAccess(user, id);
     return this.branchService.softDeleteStaff(id, staffId);
   }
 }

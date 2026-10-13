@@ -6,6 +6,8 @@ export interface TableItem {
   capacity: number;
   status: 'Available' | 'Occupied' | 'Reserved';
   qrCodeUrl: string;
+  qrCodeToken?: string | null;
+  qrJoinUrl?: string | null;
 }
 
 export interface MenuItem {
@@ -53,6 +55,8 @@ export interface MenuFormData {
 
 export interface StaffInviteFormData {
   name: string;
+  email: string;
+  password: string;
   role: string;
   branch: string;
 }

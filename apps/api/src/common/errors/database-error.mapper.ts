@@ -47,6 +47,8 @@ const CONSTRAINT_MESSAGES: Record<string, { message: string; field?: string }> =
   },
   orders_order_number_unique: { message: 'An order with this number already exists.', field: 'orderNumber' },
   tables_qr_code_token_unique: { message: 'This QR code is already linked to another table.', field: 'qrCodeToken' },
+  organizations_slug_unique: { message: 'An organization with this slug already exists.', field: 'slug' },
+  restaurants_slug_unique: { message: 'A restaurant with this slug already exists.', field: 'slug' },
 };
 
 /** Node / pg driver error codes that mean "we can't reach the database". */

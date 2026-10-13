@@ -169,7 +169,7 @@ export class MailService {
     return {
       environment: process.env.NODE_ENV || 'development',
       awsRegion: process.env.AWS_REGION || 'eu-west-2',
-      redisConfigured: !!process.env.REDIS_URL,
+      redisConfigured: !!(process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL),
       queueStatus,
       jobCounts,
       defaultFrom: process.env.SMTP_FROM || process.env.MAIL_FROM_ADDRESS || 'noreply@tavonza.com',
