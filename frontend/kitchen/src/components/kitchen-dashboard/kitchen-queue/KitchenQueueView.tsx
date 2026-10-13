@@ -20,7 +20,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { kitchenService } from '@/redux/features/kitchenApi';
+import { kitchenService, getActiveBranchId } from '@/redux/features/kitchenApi';
 import { getCookie } from '@/redux/api/baseApi';
 
 export interface QueueOrder {
@@ -191,11 +191,8 @@ export default function KitchenQueueView() {
   const readyCount = orders.filter((o) => o.status === 'Ready').length;
 
   React.useEffect(() => {
-    const rawBranchId = getCookie('branch_id');
-    const branchId =
-      rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
-        ? rawBranchId
-        : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+    const branchId = getActiveBranchId();
+    if (!branchId) return;
     kitchenService
       .getActiveTickets(branchId)
       .then((tickets) => {

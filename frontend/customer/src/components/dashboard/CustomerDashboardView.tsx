@@ -21,6 +21,7 @@ import DishDetailModal, { DishData } from './DishDetailModal';
 import CartFlowModal, { CartStep } from './CartFlowModal';
 import FeedbackModal from './FeedbackModal';
 import AuthSuccessModal from './AuthSuccessModal';
+import DraggableAskAi from '@/components/common/DraggableAskAi';
 import BottomNav, { DashboardTab } from './BottomNav';
 import SearchView from './SearchView';
 import JarvisChatView from './JarvisChatView';
@@ -113,27 +114,25 @@ export default function CustomerDashboardView({
     setSelectedDishDetail({
       id: dish.id,
       title: dish.name,
-      restaurant: 'Maison Verde - Tuscan Trattoria',
+      restaurant: ' ',
       price: Number(dish.basePrice || 0),
-      rating: '4.8',
+      rating: ' ',
       reviewsCount: 142,
-      description: dish.description || 'Prepared fresh with black truffle, premium cheese, and chef special garden reduction.',
+      description: dish.description || ' ',
       isVegetarian: Boolean(dish.isVegetarian),
       containsAllergens: dish.isVegetarian ? 'Dairy' : 'Gluten, Dairy',
       winePairing: {
-        wine: 'Chardonnay',
-        description: "Oaked Chardonnay echoes the dish's earthy richness.",
+        wine: ' ',
+        description: " ' '",
       },
-      prepTime: '12 min',
-      calories: '480 kcal',
+      prepTime: dish.prepTime ? `${dish.prepTime} min` : (dish as any).estimatedPrepTime ? `${(dish as any).estimatedPrepTime} min` : '15 min',
+      calories: ' ',
       image: dish.imageUrl || getItemImage(dish.name),
-      addOns: dish.modifierGroups?.flatMap((mg) =>
-        mg.modifiers.map((m) => ({ name: m.name, price: Number(m.priceDelta || 0) }))
-      ) || [
-        { name: 'Extra Parmigiano', price: 1.5 },
-        { name: 'Truffle Butter', price: 1.5 },
-        { name: 'Rosemary Fries', price: 1.5 },
-      ],
+      stockQuantity: (dish as any).stockQuantity,
+      isStockTracked: (dish as any).isStockTracked,
+      addOns: dish.modifierGroups?.flatMap((mg: any) =>
+        mg.modifiers.map((m: any) => ({ name: m.name, price: Number(m.priceDelta || 0) }))
+      )
     });
   };
 
@@ -542,12 +541,8 @@ export default function CustomerDashboardView({
         />
       )}
 
-      {/* Sticky Bottom Nav Bar */}
-      <BottomNav
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        isVisible={isNavVisible}
-      />
+      {/* Floating Draggable Ask AI Concierge Button & Popup Modal */}
+      <DraggableAskAi defaultBottom={24} defaultRight={24} />
     </div>
   );
 }

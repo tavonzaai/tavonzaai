@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
 import { RestaurantBranch, RestaurantType, RestaurantStatus } from '../types';
+import { restaurantService } from '@/redux/features/restaurantApi';
 
 interface EditRestaurantModalProps {
   restaurant: RestaurantBranch | null;
@@ -41,8 +42,20 @@ export default function EditRestaurantModal({
 
   if (!isOpen || !restaurant) return null;
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      if (restaurant.id && !restaurant.id.startsWith('rest-')) {
+        await restaurantService
+          .updateRestaurant(restaurant.id, {
+            name: name.trim() || restaurant.name,
+          })
+          .catch(() => null);
+      }
+    } catch (err) {
+      console.warn('Update restaurant API error:', err);
+    }
+
     onSave({
       ...restaurant,
       name: name.trim() || restaurant.name,

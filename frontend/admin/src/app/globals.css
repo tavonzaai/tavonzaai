@@ -72,3 +72,18 @@
     left: 18rem !important;
   }
 }
+
+/* Toast Close Button - Always visible immediately upon open */
+[data-sonner-toaster] [data-close-button] {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+[data-sonner-toaster] [data-close-button]:hover {
+  transform: scale(1.1) !important;
+  opacity: 1 !important;
+}

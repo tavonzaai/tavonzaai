@@ -60,8 +60,8 @@ health_check_unhealthy_threshold = 3
 # EC2 Compute Settings (Rightsized for Cost & Performance)
 backend_instance_type     = "t3.small"
 frontend_instance_type    = "t3.small"
-backend_ami_id            = ""
-frontend_ami_id           = ""
+backend_ami_id            = "ami-05a81b93a249716f9"
+frontend_ami_id           = "ami-05a81b93a249716f9"
 ssh_key_name              = ""
 backend_root_volume_size  = 30
 frontend_root_volume_size = 40
@@ -81,8 +81,8 @@ rds_db_name                    = "tavonzaai_db"
 rds_db_username                = "tavonzaai_user"
 rds_db_password                = "tavonzaaiPass2026Live"
 rds_publicly_accessible        = true
-rds_skip_final_snapshot        = false
-rds_deletion_protection        = true
+rds_skip_final_snapshot        = true
+rds_deletion_protection        = false
 rds_backup_retention_period    = 1
 rds_auto_minor_version_upgrade = true
 rds_apply_immediately          = false
@@ -97,19 +97,6 @@ elasticache_max_storage_gb           = 1
 elasticache_max_ecpu_per_second      = 1000
 elasticache_snapshot_retention_limit = 7
 
-# Elastic Container Registry (ECR) Repositories
-ecr_repository_names = [
-  "backend",
-  "frontend",
-  "ai",
-  "kitchen",
-  "cashier",
-  "admin-dashboard",
-  "manager",
-  "branch-manager",
-  "waiter",
-  "worker"
-]
 
 manager_subdomain = "manager"
 manager_port      = 3103

@@ -42,9 +42,29 @@ export class RestaurantService {
     return this.toResponseDto(restaurant);
   }
 
-  async findByOrganizationId(organizationId: string): Promise<RestaurantResponseDto[]> {
-    const restaurants = await this.restaurantRepo.findByOrganizationId(organizationId);
+  async findByOrganizationId(organizationId: string, includeDeleted = false): Promise<RestaurantResponseDto[]> {
+    const restaurants = await this.restaurantRepo.findByOrganizationId(organizationId, includeDeleted);
     return restaurants.map((r) => this.toResponseDto(r));
+  }
+
+  async findAll(options?: any): Promise<{ data: RestaurantResponseDto[]; meta: any }> {
+    const res = await this.restaurantRepo.findAll(options);
+    return {
+      data: res.data.map((r) => this.toResponseDto(r)),
+      meta: res.meta,
+    };
+  }
+
+  async softDelete(id: string): Promise<RestaurantResponseDto> {
+    const restaurant = await this.restaurantRepo.findById(id);
+    if (!restaurant) {
+      throw new NotFoundException(`Restaurant with ID "${id}" not found`);
+    }
+    const updated = await this.restaurantRepo.softDelete(id);
+    if (!updated) {
+      throw new NotFoundException(`Failed to soft-delete restaurant "${id}"`);
+    }
+    return this.toResponseDto(updated);
   }
 
   async update(id: string, dto: UpdateRestaurantDto): Promise<RestaurantResponseDto> {

@@ -732,6 +732,24 @@ export interface Address {
 - `createdAt` (TIMESTAMPTZ, default now())
 - *Indexes*: `(contact, tableId)`, `(tableSessionId)`
 
+#### `notifications`
+- `id` (UUID, PK, default gen_random_uuid())
+- `userId` (UUID, FK -> users.id, ON DELETE CASCADE)
+- `organizationId` (UUID, FK -> organizations.id, ON DELETE CASCADE)
+- `branchId` (UUID, FK -> branches.id, ON DELETE CASCADE)
+- `targetRole` (staff_role, default NULL)
+- `title` (VARCHAR(255), NOT NULL)
+- `message` (TEXT, NOT NULL)
+- `type` (VARCHAR(64), NOT NULL)
+- `isRead` (BOOLEAN, NOT NULL, default false)
+- `readAt` (TIMESTAMPTZ)
+- `metadata` (JSONB)
+- `orderId` (UUID, FK -> orders.id, ON DELETE SET NULL)
+- `tableId` (UUID, FK -> tables.id, ON DELETE SET NULL)
+- `createdAt` (TIMESTAMPTZ, default now())
+- `updatedAt` (TIMESTAMPTZ, default now())
+- *Indexes*: `(userId, isRead)`, `(branchId, targetRole, isRead)`, `(createdAt)`
+
 ---
 
 ## 6. Critical Business Rules & Invariants
@@ -751,3 +769,6 @@ export interface Address {
    - `OrderItem.stationType` (`KITCHEN` or `BAR`) allows kitchen screens to filter and update line items independently without modifying the entire order.
 6. **Outbox Pattern for Events**:
    - Database transactions publishing events must commit an `outbox` record in the same transaction to guarantee reliable delivery.
+7. **Persistent Notifications & Multi-Cast Targeting**:
+   - Notifications are persisted to the database and can be targeted either directly to a `userId` or multi-cast to an operational staff role (`targetRole`) within a branch (`branchId`). Unread notifications are queryable via REST and updated in real time via Socket.IO.
+

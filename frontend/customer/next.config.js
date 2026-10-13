@@ -16,6 +16,14 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'cdn.tavonza.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.tavonza.com',
+      },
+      {
+        protocol: 'https',
         hostname: '**.amazonaws.com',
       },
       {

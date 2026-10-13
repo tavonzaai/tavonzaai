@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
 
-const BASE_URL = process.env.API_URL || 'http://localhost:3000';
+const BASE_URL = process.env.API_URL || 'https://api.tavonza.com';
 
 async function fetchJson(endpoint: string, options: any = {}) {
   const url = `${BASE_URL}${endpoint}`;

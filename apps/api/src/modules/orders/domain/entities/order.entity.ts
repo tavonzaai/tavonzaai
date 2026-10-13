@@ -29,6 +29,7 @@ export interface OrderItemProps {
   addOns: OrderItemAddOn[];
   addOnsTotal: number;
   lineTotal: number;
+  estimatedPrepTime?: number | null;
 }
 
 // ─── Order Entity ─────────────────────────────────────────────────────
@@ -38,6 +39,8 @@ export interface OrderProps {
   orderNumber: string;
   branchId: string;
   tableId: string;
+  tableLabel?: string | null;
+  tableNumber?: string | null;
   tableSessionId: string | null;
   customerSessionId: string | null;
   status: OrderStatus;
@@ -53,8 +56,11 @@ export interface OrderProps {
   updatedAt: Date;
   submittedAt: Date | null;
   acceptedAt: Date | null;
+  prepStartedAt?: Date | null;
   readyAt: Date | null;
   servedAt: Date | null;
+  inventoryDeducted?: boolean;
+  inventoryRestored?: boolean;
 }
 
 export class Order {
@@ -62,6 +68,8 @@ export class Order {
   readonly orderNumber: string;
   readonly branchId: string;
   readonly tableId: string;
+  readonly tableLabel: string | null;
+  readonly tableNumber: string | null;
   readonly tableSessionId: string | null;
   readonly customerSessionId: string | null;
   readonly status: OrderStatus;
@@ -77,14 +85,19 @@ export class Order {
   readonly updatedAt: Date;
   readonly submittedAt: Date | null;
   readonly acceptedAt: Date | null;
+  readonly prepStartedAt: Date | null;
   readonly readyAt: Date | null;
   readonly servedAt: Date | null;
+  readonly inventoryDeducted: boolean;
+  readonly inventoryRestored: boolean;
 
   constructor(props: OrderProps) {
     this.id = props.id;
     this.orderNumber = props.orderNumber;
     this.branchId = props.branchId;
     this.tableId = props.tableId;
+    this.tableLabel = props.tableLabel ?? props.tableNumber ?? null;
+    this.tableNumber = props.tableNumber ?? props.tableLabel ?? null;
     this.tableSessionId = props.tableSessionId;
     this.customerSessionId = props.customerSessionId;
     this.status = props.status;
@@ -100,8 +113,11 @@ export class Order {
     this.updatedAt = props.updatedAt;
     this.submittedAt = props.submittedAt;
     this.acceptedAt = props.acceptedAt;
+    this.prepStartedAt = props.prepStartedAt ?? null;
     this.readyAt = props.readyAt;
     this.servedAt = props.servedAt;
+    this.inventoryDeducted = props.inventoryDeducted ?? false;
+    this.inventoryRestored = props.inventoryRestored ?? false;
   }
 
   // ── Domain Logic ──────────────────────────────────────────────────

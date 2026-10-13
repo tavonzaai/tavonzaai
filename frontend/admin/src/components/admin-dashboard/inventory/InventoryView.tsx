@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   InventoryHeader,
   InventoryAttentionBanner,
@@ -16,6 +16,24 @@ import {
   StockStatusFilter,
 } from './types';
 import { toast } from 'sonner';
+import { inventoryService } from '@/redux/features/inventoryApi';
+import { branchService } from '@/redux/features/restaurantApi';
+import { getCookie } from '@/redux/api/baseApi';
+
+async function resolveActiveBranch(): Promise<string | null> {
+  const branchId =
+    getCookie('tavonza_branch_id') ||
+    getCookie('branch_id') ||
+    getCookie('active_branch_id');
+
+  if (branchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(branchId)) {
+    return branchId;
+  }
+
+  const branchesRes = await branchService.getBranches({ limit: 1 }).catch(() => null);
+  const firstBranch = branchesRes?.data?.[0];
+  return firstBranch?.id || null;
+}
 
 export default function InventoryView() {
   const [items, setItems] = useState<InventoryItem[]>(INITIAL_INVENTORY_ITEMS);
@@ -26,6 +44,51 @@ export default function InventoryView() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 10;
+
+  // Load backend inventory items
+  useEffect(() => {
+    let mounted = true;
+    async function loadBackendInventory() {
+      try {
+        const branchId = await resolveActiveBranch();
+        if (!branchId) return;
+        const data = await inventoryService.getBranchItems(branchId);
+        if (mounted && data && data.length > 0) {
+          const mapped: InventoryItem[] = data.map((item) => {
+            const currentStock = Number(item.currentStock) || 0;
+            const minimumStock = Number(item.minimumStock) || 10;
+            const maxStock = minimumStock * 3;
+            const levelPercent = Math.min(100, Math.round((currentStock / (maxStock || 1)) * 100));
+            let status: 'Critical' | 'Low Stock' | 'Out of Stock' | 'In Stock' = 'In Stock';
+            if (currentStock <= 0) status = 'Out of Stock';
+            else if (currentStock < minimumStock * 0.5) status = 'Critical';
+            else if (currentStock <= minimumStock) status = 'Low Stock';
+
+            return {
+              id: item.id,
+              name: item.name,
+              category: 'Produce' as const,
+              currentStock,
+              unit: item.unit || 'kg',
+              levelPercent,
+              status,
+              supplier: 'Direct Farm Supplies',
+              minStock: minimumStock,
+              maxStock,
+              lastUpdated: item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'Yesterday',
+            };
+          });
+          setItems(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not load backend inventory items, using local fallback:', err);
+      }
+    }
+    loadBackendInventory();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Filter items by category, stock status, and search query
   const filteredItems = useMemo(() => {
@@ -81,7 +144,25 @@ export default function InventoryView() {
   };
 
   // Add Item handler
-  const handleAddItem = (newItem: InventoryItem) => {
+  const handleAddItem = async (newItem: InventoryItem) => {
+    try {
+      const branchId = await resolveActiveBranch();
+      if (!branchId) {
+        toast.error('No active branch selected to register inventory items.');
+        return;
+      }
+      const created = await inventoryService.createItem({
+        branchId,
+        name: newItem.name,
+        unit: newItem.unit,
+        currentStock: newItem.currentStock,
+        minimumStock: newItem.minStock,
+        costPerUnit: 5.0,
+      }).catch(() => null);
+      if (created?.id) {
+        newItem = { ...newItem, id: created.id };
+      }
+    } catch {}
     setItems((prev) => [newItem, ...prev]);
   };
 

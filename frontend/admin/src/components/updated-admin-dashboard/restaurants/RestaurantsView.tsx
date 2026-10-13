@@ -10,6 +10,7 @@ import CreateRestaurantModal from './components/CreateRestaurantModal';
 import EditRestaurantModal from './components/EditRestaurantModal';
 import RestaurantSettingsView from './components/RestaurantSettingsView';
 import BranchesView from './components/BranchesView';
+import { restaurantService } from '@/redux/features/restaurantApi';
 
 interface RestaurantsViewProps {
   initialBranchRestaurantId?: string;
@@ -23,8 +24,67 @@ export default function RestaurantsView({
   selectedBranch,
 }: RestaurantsViewProps) {
   const [restaurants, setRestaurants] = useState<RestaurantBranch[]>(INITIAL_RESTAURANTS);
+  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Open' | 'Closed'>('All');
+
+  useEffect(() => {
+    let mounted = true;
+    async function loadBackendRestaurants() {
+      try {
+        setIsLoading(true);
+        const res = await restaurantService.getRestaurants();
+        if (mounted && res.data && res.data.length > 0) {
+          const mapped: RestaurantBranch[] = await Promise.all(
+            res.data.map(async (r) => {
+              const branchesRes = await restaurantService
+                .getBranches({ restaurantId: r.id })
+                .catch(() => ({ data: [] }));
+              const branchesCount = branchesRes?.data?.length || 1;
+              return {
+                id: r.id,
+                name: r.name,
+                type: 'Restaurant',
+                address: 'Corporate Headquarters',
+                city: 'Dhaka',
+                country: 'Bangladesh',
+                postalCode: '1200',
+                phone: '+880 1711-000000',
+                email: 'operations@tavonza.com',
+                status: r.isActive ? 'Open' : 'Closed',
+                manager: {
+                  id: 'mgr-default',
+                  name: 'General Manager',
+                  role: 'General Manager',
+                  email: 'gm@tavonza.com',
+                  avatar: 'GM',
+                },
+                staffCount: 12,
+                assignedStaff: [],
+                operatingHours: [],
+                services: ['Dine In', 'Takeaway', 'QR Ordering'],
+                branchesCount,
+                revenue: '$45,000/mo',
+                rating: 4.9,
+                tablesCount: 20,
+              };
+            })
+          );
+          if (mounted && mapped.length > 0) {
+            setRestaurants(mapped);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load backend restaurants, using local baseline:', err);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+    loadBackendRestaurants();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Modals & Active Views state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);

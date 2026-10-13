@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ai_service_port: int = 8000
 
     # --- Internal platform boundary (backend / Tool Gateway) ---
-    internal_api_base_url: str = "http://localhost:3000/internal"
+    internal_api_base_url: str = "https://api.tavonza.com/internal"
     internal_api_service_token: str = ""
 
     # --- Model provider: Groq ---

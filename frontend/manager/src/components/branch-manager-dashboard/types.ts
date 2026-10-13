@@ -28,6 +28,15 @@ export interface TableItem {
   capacity?: number;
   subtotal?: number;
   activeSessionId?: string | null;
+  qrCodeUrl?: string | null;
+  qrCodeToken?: string | null;
+  waiterId?: string;
+  assignedWaiter?: {
+    waiterId: string;
+    waiterName?: string;
+    sessionStart?: string;
+    sessionEnd?: string;
+  } | null;
 }
 
 export interface OrderDish {
@@ -133,7 +142,10 @@ export interface MenuItem {
   price: string;
   description: string;
   status: 'Available' | 'Disabled';
-  availability: 'In stock' | 'Low Stock (8 Left)' | 'Out of stock';
+  availability: 'In stock' | 'Low Stock (8 Left)' | 'Out of stock' | string;
   modifiersCount: string;
   enabled: boolean;
+  estimatedPrepTime?: number;
+  stockQuantity?: number;
+  isStockTracked?: boolean;
 }

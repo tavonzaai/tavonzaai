@@ -1,23 +1,26 @@
 {
   "name": "@frontend/customer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3100",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3000 -H 0.0.0.0",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.13.0",
+    "@stripe/stripe-js": "^10.0.0",
     "@tavonza/contracts": "workspace:*",
     "@tavonza/shared": "workspace:*",
     "lucide-react": "^1.49.0",
     "next": "^14.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-redux": "^9.3.0"
+    "react-redux": "^9.3.0",
+    "socket.io-client": "^4.7.5",
+    "sonner": "^2.0.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

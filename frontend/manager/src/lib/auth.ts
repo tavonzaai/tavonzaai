@@ -20,25 +20,6 @@ export interface BranchManagerUser {
   }>;
 }
 
-export const DEMO_BRANCH_MANAGER_USER: BranchManagerUser = {
-  id: '45e65de4-65e0-4eef-89e9-4e256fec3870',
-  name: 'Marcus Vance',
-  email: 'manager@tavonza.ai',
-  role: 'BRANCH_MANAGER',
-  branchName: 'Downtown HQ',
-  branchId: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27',
-  assignments: [
-    {
-      id: '6c7dacf8-8dca-4fda-b532-5bd21d81ee7c',
-      role: 'BRANCH_MANAGER',
-      branch: { id: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', name: 'Downtown HQ' },
-    },
-  ],
-};
-
-/**
- * Check if branch manager session is currently active (STRICTLY COOKIES ONLY)
- */
 export function isManagerAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
 
@@ -76,11 +57,16 @@ export function loginManagerSession(customUser: BranchManagerUser, token?: strin
     throw new Error('Authentication token is required to establish a manager session.');
   }
 
+  const isUUID = (val?: string | null): boolean =>
+    Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
+  const assignmentBranchId = customUser.assignments?.[0]?.branch?.id;
   const validBranchId =
-    customUser.branchId &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(customUser.branchId)
-      ? customUser.branchId
-      : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+    isUUID(customUser.branchId)
+      ? customUser.branchId!
+      : isUUID(assignmentBranchId)
+      ? assignmentBranchId!
+      : (getCookie('tavonza_branch_id') || getCookie('branch_id') || '');
 
   const user: BranchManagerUser = {
     ...customUser,

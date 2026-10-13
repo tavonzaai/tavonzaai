@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_email_verified" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "password_reset_otps" ADD COLUMN IF NOT EXISTS "type" varchar(32) DEFAULT 'password_reset' NOT NULL;

@@ -60,7 +60,21 @@ const FOOTER_STYLES = `
   line-height: 1.5;
 `;
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return entities[character] ?? character;
+  });
+}
+
 export function renderVerificationEmail(firstName: string, otpCode: string): { html: string; text: string } {
+  const safeFirstName = escapeHtml(firstName || 'Valued Customer');
   const html = `
     <!DOCTYPE html>
     <html>
@@ -74,7 +88,7 @@ export function renderVerificationEmail(firstName: string, otpCode: string): { h
           <div style="${LOGO_BADGE}">Tavonza AI</div>
           <h1 style="font-size: 22px; color: #f0f6fc; margin: 0 0 16px 0;">Verify your email address</h1>
           <p style="font-size: 15px; line-height: 1.6; color: #8b949e; margin: 0 0 20px 0;">
-            Hello ${firstName || 'Valued Customer'},<br/>
+            Hello ${safeFirstName},<br/>
             Thank you for registering with Tavonza AI. Please use the 5-digit verification code below to confirm your account:
           </p>
           
@@ -110,6 +124,7 @@ If you did not request this, please ignore this message.
 }
 
 export function renderPasswordResetEmail(firstName: string, otpCode: string): { html: string; text: string } {
+  const safeFirstName = escapeHtml(firstName || 'there');
   const html = `
     <!DOCTYPE html>
     <html>
@@ -123,7 +138,7 @@ export function renderPasswordResetEmail(firstName: string, otpCode: string): { 
           <div style="${LOGO_BADGE}">Tavonza AI Security</div>
           <h1 style="font-size: 22px; color: #f0f6fc; margin: 0 0 16px 0;">Password Reset Request</h1>
           <p style="font-size: 15px; line-height: 1.6; color: #8b949e; margin: 0 0 20px 0;">
-            Hello ${firstName || 'there'},<br/>
+            Hello ${safeFirstName},<br/>
             We received a request to reset your password for your Tavonza AI account. Use the authorization code below:
           </p>
           

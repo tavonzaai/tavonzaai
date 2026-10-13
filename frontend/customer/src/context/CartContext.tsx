@@ -2,9 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getCookie, setCookie } from '@/redux/api/baseApi';
+import { orderService } from '@/redux/features/orderApi';
 
 export interface CartItem {
   id: string;
+  orderItemId?: string;
   dishId?: string;
   name: string;
   subtitle?: string;
@@ -35,6 +37,140 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const isUUID = (val?: string | null): boolean =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
+export const resolveDynamicBranchId = (apiBranchId?: string | null): string | null => {
+  if (apiBranchId && isUUID(apiBranchId)) return apiBranchId;
+  const cookieBranch = getCookie('tavonza_branch_id') || getCookie('branch_id');
+  if (cookieBranch && isUUID(cookieBranch)) return cookieBranch;
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const queryBranch = params.get('branchId');
+    if (queryBranch && isUUID(queryBranch)) return queryBranch;
+  }
+  return null;
+};
+
+export const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string | null => {
+  if (apiTableId && isUUID(apiTableId)) return apiTableId;
+  const cookieTable = getCookie('tavonza_table_id');
+  if (cookieTable && isUUID(cookieTable)) return cookieTable;
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const queryTableId = params.get('tableId');
+    if (queryTableId && isUUID(queryTableId)) return queryTableId;
+    const queryTable = params.get('table');
+    if (queryTable && isUUID(queryTable)) return queryTable;
+  }
+  if (activeTableNumber && isUUID(activeTableNumber)) return activeTableNumber;
+  return null;
+};
+
+const syncAddItemToBackend = async (item: CartItem): Promise<string | undefined> => {
+  try {
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+    if (!branchId || !tableId) {
+      // Local cart only until session/table is connected
+      return;
+    }
+
+    let draft: any = null;
+    try {
+      draft = await orderService.getCartFromSession(branchId, tableId);
+    } catch {
+      draft = await orderService.getCart(branchId, tableId);
+    }
+
+    if (draft?.id) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tavonza_active_cart_id', draft.id);
+      }
+      const validMenuItemId = isUUID(item.dishId)
+        ? item.dishId!
+        : isUUID(item.id)
+        ? item.id
+        : null;
+
+      if (!validMenuItemId) return;
+
+      const res = await orderService.addItem({
+        orderId: draft.id,
+        menuItemId: validMenuItemId,
+        quantity: item.quantity || 1,
+        specialInstructions: item.specialInstructions,
+        addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
+      });
+
+      const added = res?.items?.find((i) => i.menuItemId === validMenuItemId);
+      return added?.id;
+    }
+  } catch (err) {
+    console.warn('Sync add to cart API warning:', err);
+  }
+  return undefined;
+};
+
+const syncUpdateItemBackend = async (item: CartItem, newQty: number) => {
+  try {
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+
+    let draft: any = null;
+    try {
+      draft = await orderService.getCartFromSession(branchId!, tableId!);
+    } catch {
+      draft = await orderService.getCart(branchId!, tableId!);
+    }
+
+    if (!draft?.id) return;
+
+    const backendItem = draft.items?.find(
+      (bi: any) => bi.id === item.orderItemId || bi.menuItemId === item.dishId || bi.menuItemId === item.id
+    );
+
+    if (backendItem?.id) {
+      await orderService.updateItem({
+        orderId: draft.id,
+        itemId: backendItem.id,
+        quantity: newQty,
+      });
+    }
+  } catch (err) {
+    console.warn('Sync update cart item API warning:', err);
+  }
+};
+
+const syncRemoveItemBackend = async (item: CartItem) => {
+  try {
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+
+    let draft: any = null;
+    try {
+      draft = await orderService.getCartFromSession(branchId!, tableId!);
+    } catch {
+      draft = await orderService.getCart(branchId!, tableId!);
+    }
+
+    if (!draft?.id) return;
+
+    const backendItem = draft.items?.find(
+      (bi: any) => bi.id === item.orderItemId || bi.menuItemId === item.dishId || bi.menuItemId === item.id
+    );
+
+    if (backendItem?.id) {
+      await orderService.removeItem({
+        orderId: draft.id,
+        itemId: backendItem.id,
+      });
+    }
+  } catch (err) {
+    console.warn('Sync remove cart item API warning:', err);
+  }
+};
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumberState] = useState('');
@@ -52,17 +188,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         try {
           const parsed = JSON.parse(savedCart);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const isUUID = (val?: string | null) =>
-              Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
-            const sanitized = parsed.map((item: CartItem) => {
-              if (item.dishId === 'item' || !isUUID(item.dishId)) {
-                return {
-                  ...item,
-                  dishId: '4455110d-db04-4cef-92c6-46bcd6a4c7e2',
-                };
-              }
-              return item;
-            });
+            const sanitized = parsed.filter((item: CartItem) => item && (item.dishId || item.id || item.name));
             setCart(sanitized);
           }
         } catch {
@@ -86,23 +212,44 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [cart]);
 
   const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
+    const fullItem: CartItem = { ...item, quantity: item.quantity || 1 };
     setCart((prev) => {
       const existingIndex = prev.findIndex((i) => i.id === item.id);
       const qtyToAdd = item.quantity || 1;
       if (existingIndex > -1) {
         const next = [...prev];
+        const updatedQty = next[existingIndex].quantity + qtyToAdd;
         next[existingIndex] = {
           ...next[existingIndex],
-          quantity: next[existingIndex].quantity + qtyToAdd,
+          quantity: updatedQty,
         };
+        syncUpdateItemBackend(next[existingIndex], updatedQty);
         return next;
       }
-      return [...prev, { ...item, quantity: qtyToAdd }];
+      return [...prev, fullItem];
+    });
+
+    // Trigger API call when adding product to cart
+    syncAddItemToBackend(fullItem).then((backendItemId) => {
+      if (backendItemId) {
+        setCart((prev) =>
+          prev.map((i) => (i.id === fullItem.id ? { ...i, orderItemId: backendItemId } : i))
+        );
+      }
     });
   };
 
   const updateQuantity = (id: string, delta: number) => {
     setCart((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (target) {
+        const nextQty = target.quantity + delta;
+        if (nextQty > 0) {
+          syncUpdateItemBackend(target, nextQty);
+        } else {
+          syncRemoveItemBackend(target);
+        }
+      }
       return prev
         .map((item) => {
           if (item.id === id) {
@@ -116,7 +263,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeFromCart = (id: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== id));
+    setCart((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (target) {
+        syncRemoveItemBackend(target);
+      }
+      return prev.filter((item) => item.id !== id);
+    });
   };
 
   const clearCart = () => {
@@ -153,6 +306,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
       return [...prev, item];
     });
+
+    // Trigger API call when adding/updating product in cart
+    syncAddItemToBackend(item);
   };
 
   const getCartItemByDishId = (dishId: string) => {

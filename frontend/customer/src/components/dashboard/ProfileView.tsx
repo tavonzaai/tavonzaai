@@ -1,70 +1,63 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  User,
-  Bell,
-  Lock,
-  CreditCard,
-  Check,
-  Eye,
-  EyeOff,
   Sparkles,
-  MapPin,
   Shield,
-  SlidersHorizontal,
   LogOut,
   Loader2,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { logoutUser, changePassword } from '@/redux/features/authApi';
+import { logoutUser, changePassword, getMe } from '@/redux/features/authApi';
 import { updateMe } from '@/redux/features/userApi';
 import { clearAuthError } from '@/redux/slices/authSlice';
 
 export default function ProfileView() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, isAuthenticated, loading, error, successMessage } = useAppSelector(
-    (state) => state.auth
-  );
+  const { user, loading, error } = useAppSelector((state) => state.auth);
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'password' | 'delivery'>('profile');
-  
-  // Form State
-  const [fullName, setFullName] = useState(user?.name || 'Avery Morgan');
-  const [email, setEmail] = useState(user?.email || 'alex.mercer@vip.tavonza.com');
-  const [phone, setPhone] = useState(user?.contactNo || '+01 2345 56789');
-  const [city, setCity] = useState('London');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Toggle Switches
-  const [orderStatusNotif, setOrderStatusNotif] = useState(true);
-  const [promosNotif, setPromosNotif] = useState(true);
+  // Dynamic Profile state from API
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
-  // Passwords
+  // Password state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Delivery & Card
-  const [streetAddress, setStreetAddress] = useState('18 Rue du Faubourg');
-  const [zipCode, setZipCode] = useState('75008');
-  const [cardHolder, setCardHolder] = useState('Avery Morgan');
-  const [cardNumber, setCardNumber] = useState('•••• •••• •••• 8841');
-  const [expDate, setExpDate] = useState('12/28');
-  const [cvv, setCvv] = useState('•••');
-
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null);
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+
+  useEffect(() => {
+    dispatch(getMe());
+  }, [dispatch]);
 
   useEffect(() => {
     if (user) {
-      if (user.name) setFullName(user.name);
-      if (user.email) setEmail(user.email);
-      if (user.contactNo) setPhone(user.contactNo);
+      setFullName(user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim());
+      setEmail(user.email || '');
+      setPhone(user.contactNo || user.phone || '');
+      const u = user as any;
+      setAvatarPreview(u.avatarUrl || u.avatar || null);
     }
   }, [user]);
 
@@ -73,61 +66,128 @@ export default function ProfileView() {
     router.push('/login');
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        return;
+      }
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingProfile(true);
+    try {
+      const res = await dispatch(
+        updateMe({
+          name: fullName.trim(),
+          contactNo: phone.trim(),
+          avatar: avatarFile || avatarPreview || undefined,
+        })
+      );
+      setIsUpdatingProfile(false);
+      if (updateMe.fulfilled.match(res)) {
+        dispatch(getMe());
+        setSavedSuccessMsg(
+          avatarFile
+            ? 'Profile picture & account details updated successfully!'
+            : 'Profile details updated successfully!'
+        );
+        setAvatarFile(null);
+        setTimeout(() => setSavedSuccessMsg(null), 3500);
+      } else {
+        alert((res.payload as string) || 'Failed to update profile');
+      }
+    } catch (err: any) {
+      setIsUpdatingProfile(false);
+      alert(err.message || 'Failed to update profile');
+    }
+  };
+
+  const handleSendResetOtp = async () => {
+    const targetEmail = user?.email || email;
+    if (!targetEmail) {
+      alert('User email address not found');
+      return;
+    }
+    setIsSendingOtp(true);
+    try {
+      const res = await dispatch(changePassword({ email: targetEmail }));
+      setIsSendingOtp(false);
+      if (changePassword.fulfilled.match(res)) {
+        setOtpSent(true);
+        alert(`Reset OTP code sent to your email (${targetEmail})! Please check your inbox.`);
+      } else {
+        alert((res.payload as string) || 'Failed to send OTP code');
+      }
+    } catch (err: any) {
+      setIsSendingOtp(false);
+      alert(err?.message || 'Failed to send OTP code');
+    }
+  };
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPassword || !newPassword) return;
+    if (!otpCode.trim()) {
+      alert('Please enter the 5-digit OTP code sent to your email');
+      return;
+    }
+    if (!newPassword.trim()) {
+      alert('Please enter your new password');
+      return;
+    }
+    if (newPassword.trim().length < 8) {
+      alert('New password must be at least 8 characters long');
+      return;
+    }
     if (newPassword !== confirmPassword) {
       alert('New passwords do not match');
       return;
     }
+
+    setIsChangingPassword(true);
     dispatch(clearAuthError());
     const res = await dispatch(
-      changePassword({ oldPassword: currentPassword, newPassword })
+      changePassword({ email: user?.email || email, code: otpCode.trim(), newPassword: newPassword.trim() })
     );
+    setIsChangingPassword(false);
     if (changePassword.fulfilled.match(res)) {
-      setSavedSuccessMsg('Password updated successfully!');
+      setSavedSuccessMsg('Password changed successfully!');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setOtpCode('');
+      setOtpSent(false);
       setTimeout(() => setSavedSuccessMsg(null), 3000);
+    } else {
+      alert((res.payload as string) || 'Failed to change password');
     }
-  };
-
-  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
-
-  const handleSaveChanges = async (sectionName: string) => {
-    if (sectionName === 'Profile') {
-      setIsUpdatingProfile(true);
-      try {
-        const res = await dispatch(updateMe({ name: fullName, contactNo: phone }));
-        setIsUpdatingProfile(false);
-        if (updateMe.fulfilled.match(res)) {
-          setSavedSuccessMsg('Profile updated successfully!');
-          setTimeout(() => setSavedSuccessMsg(null), 3000);
-        } else {
-          alert((res.payload as string) || 'Failed to update profile');
-        }
-      } catch (e: any) {
-        setIsUpdatingProfile(false);
-        alert(e.message || 'Failed to update profile');
-      }
-      return;
-    }
-    setSavedSuccessMsg(`${sectionName} updated successfully!`);
-    setTimeout(() => setSavedSuccessMsg(null), 3000);
   };
 
   return (
     <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-black text-white flex flex-col justify-between relative overflow-x-hidden font-sans pb-24 pt-2">
-
       <div className="flex flex-col gap-5 px-5 pt-3">
-        {/* 1. Account Settings Header Banner */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-xl font-semibold text-white font-['Inter']">Account Settings</h2>
-            <p className="text-xs text-zinc-400 leading-relaxed font-['Inter']">
-              Manage your personal details, notification alerts, password, and delivery/card information.
-            </p>
+        {/* Header Banner with Back Button */}
+        <div className="flex items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-white hover:text-yellow-400 hover:border-yellow-400/50 transition cursor-pointer shrink-0 active:scale-95"
+              title="Go Back"
+            >
+              <ArrowLeft className="w-4 h-4 text-white hover:text-yellow-400 transition" />
+            </button>
+            <div className="flex flex-col gap-0.5">
+              <h2 className="text-xl font-semibold text-white font-['Inter']">User Profile</h2>
+              <p className="text-xs text-zinc-400 leading-relaxed font-['Inter']">
+                Live Profile Information
+              </p>
+            </div>
           </div>
 
           <button
@@ -152,311 +212,276 @@ export default function ProfileView() {
           </div>
         )}
 
-        {/* 2. Top Segmented Sub-Nav Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] whitespace-nowrap transition border ${
-              activeTab === 'profile'
-                ? 'bg-amber-50 text-amber-500 border-amber-400 font-semibold shadow-md'
-                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'
-            }`}
-          >
-            Profile Info
-          </button>
-          <button
-            onClick={() => setActiveTab('notifications')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] whitespace-nowrap transition border ${
-              activeTab === 'notifications'
-                ? 'bg-amber-50 text-amber-500 border-amber-400 font-semibold shadow-md'
-                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'
-            }`}
-          >
-            Notifications
-          </button>
-          <button
-            onClick={() => setActiveTab('password')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] whitespace-nowrap transition border ${
-              activeTab === 'password'
-                ? 'bg-amber-50 text-amber-500 border-amber-400 font-semibold shadow-md'
-                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'
-            }`}
-          >
-            Password
-          </button>
-          <button
-            onClick={() => setActiveTab('delivery')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] whitespace-nowrap transition border ${
-              activeTab === 'delivery'
-                ? 'bg-amber-50 text-amber-500 border-amber-400 font-semibold shadow-md'
-                : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-white'
-            }`}
-          >
-            Delivery & Card
-          </button>
-        </div>
+        {/* Dynamic API User Profile Card */}
+        <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
+          <div className="flex items-center justify-between gap-3 flex-wrap border-b border-neutral-800 pb-4">
+            <div className="flex items-center gap-3.5">
+              {/* Profile Avatar Image / Initials + Camera Upload Trigger */}
+              <div className="relative group shrink-0">
+                <div className="w-16 h-16 rounded-full bg-neutral-800 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-lg font-bold overflow-hidden shadow-md">
+                  {avatarPreview || user?.avatar || user?.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={avatarPreview || user?.avatar || user?.avatarUrl || ''}
+                      alt="Profile Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{user?.name ? user.name.slice(0, 2).toUpperCase() : (fullName.slice(0, 2).toUpperCase() || 'CU')}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 p-1.5 bg-yellow-400 hover:bg-yellow-300 text-black rounded-full shadow-lg transition cursor-pointer active:scale-95"
+                  title="Change profile picture"
+                >
+                  <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageChange}
+                />
+              </div>
 
-        {/* 3. Personal Information Card */}
-        <div className="w-full bg-slate-900 border border-blue-950 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-full bg-yellow-400/20 border-2 border-yellow-400 flex items-center justify-center text-yellow-400 text-lg font-bold shrink-0">
-              AM
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-base font-semibold text-white font-['Inter']">Personal Information</h3>
-              <p className="text-xs text-zinc-400 font-['Inter']">
-                Update your name, contact details, and default location
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {/* Full Name */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Full Name</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full h-10 px-3 bg-neutral-800 border border-stone-700 rounded-lg text-sm text-amber-50 font-['Inter'] focus:outline-none focus:border-yellow-400"
-              />
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-lg font-semibold text-white font-['Inter']">
+                    {user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'John Doe'}
+                  </h3>
+                  {user?.role && (
+                    <span className="px-2.5 py-0.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-[10px] font-bold rounded-md uppercase tracking-wider">
+                      {user.role}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-400 font-['Inter']">
+                  Email: <span className="text-zinc-200">{user?.email || 'N/A'}</span>
+                </p>
+                {avatarFile && (
+                  <span className="text-[11px] text-yellow-400 font-medium animate-pulse">
+                    New photo selected ({avatarFile.name})
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Email Address */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-10 px-3 bg-neutral-800 border border-stone-700 rounded-lg text-sm text-amber-50 font-['Inter'] focus:outline-none focus:border-yellow-400"
-              />
-            </div>
-
-            {/* Phone Number */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Phone Number</label>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full h-10 px-3 bg-neutral-800 border border-stone-700 rounded-lg text-sm text-amber-50 font-['Inter'] focus:outline-none focus:border-yellow-400"
-              />
-            </div>
-
-            {/* City / Region */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">City / Region</label>
-              <input
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full h-10 px-3 bg-neutral-800 border border-stone-700 rounded-lg text-sm text-amber-50 font-['Inter'] focus:outline-none focus:border-yellow-400"
-              />
+            {/* Verification Badges */}
+            <div className="flex items-center gap-2 flex-wrap text-[11px]">
+              <div className={`px-2.5 py-1 rounded-full border flex items-center gap-1.5 font-medium ${
+                user?.isEmailVerified ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+              }`}>
+                <Shield className="w-3 h-3" />
+                <span>Email {user?.isEmailVerified ? 'Verified ✓' : 'Unverified'}</span>
+              </div>
+              {user?.customer?.loyaltyPoints !== undefined && (
+                <div className="px-2.5 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 flex items-center gap-1.5 font-semibold">
+                  <span>🏆 {user.customer.loyaltyPoints} Loyalty Points</span>
+                </div>
+              )}
             </div>
           </div>
 
-          <button
-            onClick={() => handleSaveChanges('Personal Information')}
-            className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 text-sm font-semibold rounded-xl flex items-center justify-center transition shadow-md shadow-yellow-500/10 mt-1"
-          >
-            Save Changes
-          </button>
-        </div>
-
-        {/* 4. Notification Preferences Card */}
-        <div className="w-full bg-slate-900 border border-blue-950 rounded-2xl p-4 flex flex-col gap-3.5 shadow-xl">
-          <div className="flex flex-col gap-0.5">
-            <h3 className="text-base font-semibold text-white font-['Inter']">Notification Preferences</h3>
-            <p className="text-xs text-zinc-400 font-['Inter']">
-              Choose which updates you want to receive about your reservations and meals
-            </p>
+          {/* Backend API Metadata Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3.5 bg-black/60 rounded-xl border border-neutral-800 text-xs">
+            <div>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Global Role</span>
+              <span className="text-amber-300 font-medium">{user?.globalRole || user?.role || 'CUSTOMER'}</span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Loyalty Points</span>
+              <span className="text-yellow-400 font-bold">{user?.customer?.loyaltyPoints ?? 120} Points</span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Joined Date</span>
+              <span className="text-zinc-300 font-medium">
+                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Active'}
+              </span>
+            </div>
+            <div>
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Default Address</span>
+              <span className="text-zinc-300 font-medium truncate block">
+                {user?.customer?.defaultAddress
+                  ? `${user.customer.defaultAddress.street || ''}, ${user.customer.defaultAddress.city || ''}`
+                  : '123 Main St, London'}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between py-1">
-            <span className="text-xs font-medium text-white font-['Inter']">
-              Order & Reservation Status Updates
-            </span>
+          {/* Dynamic Profile Edit Form */}
+          <form onSubmit={handleSaveProfile} className="flex flex-col gap-4 pt-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-zinc-400 font-['Inter']">Full Name</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white font-['Inter'] focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-zinc-400 font-['Inter']">Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  disabled
+                  className="w-full h-10 px-3 bg-neutral-950/60 border border-neutral-800 rounded-xl text-sm text-zinc-400 font-['Inter'] cursor-not-allowed"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1 md:col-span-2">
+                <label className="text-xs text-zinc-400 font-['Inter']">Phone / Contact Number</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Enter contact number"
+                  className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white font-['Inter'] focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+            </div>
+
             <button
-              onClick={() => setOrderStatusNotif(!orderStatusNotif)}
-              className={`w-11 h-6 rounded-full transition-colors p-1 flex items-center ${
-                orderStatusNotif ? 'bg-yellow-400 justify-end' : 'bg-neutral-700 justify-start'
-              }`}
+              type="submit"
+              disabled={isUpdatingProfile}
+              className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition shadow-md shadow-yellow-500/10 cursor-pointer disabled:opacity-50"
             >
-              <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+              {isUpdatingProfile ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Saving Profile & Picture...</span>
+                </>
+              ) : (
+                <span>Save Profile Changes</span>
+              )}
             </button>
-          </div>
+          </form>
         </div>
 
-        {/* 5. Change Password Card */}
-        <form onSubmit={handleChangePassword} className="w-full bg-slate-900 border border-blue-950 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
-          <div className="flex flex-col gap-0.5">
+        {/* Change Password Card */}
+        <div className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
+          <div className="flex flex-col gap-0.5 border-b border-neutral-800 pb-3">
             <h3 className="text-base font-semibold text-white font-['Inter']">Change Password</h3>
             <p className="text-xs text-zinc-400 font-['Inter']">
-              Ensure your account is using a strong and secure password
+              To update your password, request a 5-digit reset OTP code sent to your registered email ({user?.email || email || 'your account'})
             </p>
           </div>
 
-          <div className="flex flex-col gap-3">
-            {/* Current Password */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Current Password *</label>
-              <div className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-between">
-                <input
-                  type={showCurrentPassword ? 'text' : 'password'}
-                  required
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="bg-transparent text-sm text-white font-['Hanken_Grotesk'] focus:outline-none w-full pr-2"
-                />
+          {!otpSent ? (
+            <button
+              type="button"
+              disabled={isSendingOtp}
+              onClick={handleSendResetOtp}
+              className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition shadow-md shadow-yellow-500/10 cursor-pointer disabled:opacity-50"
+            >
+              {isSendingOtp ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Sending Reset OTP to Email...</span>
+                </>
+              ) : (
+                <span>Send Reset OTP to Gmail</span>
+              )}
+            </button>
+          ) : (
+            <form onSubmit={handleChangePassword} className="flex flex-col gap-3.5">
+              <div className="p-3 bg-yellow-400/10 border border-yellow-400/20 rounded-xl text-xs text-yellow-300 flex items-center justify-between">
+                <span>✓ OTP verification code sent to {user?.email || email}!</span>
                 <button
                   type="button"
-                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="text-amber-100 hover:text-white"
+                  disabled={isSendingOtp}
+                  onClick={handleSendResetOtp}
+                  className="text-xs text-yellow-400 hover:underline font-semibold cursor-pointer disabled:opacity-50"
                 >
-                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {isSendingOtp ? 'Sending...' : 'Resend OTP'}
                 </button>
-              </div>
-            </div>
-
-            {/* New Password */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">New Password *</label>
-              <div className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-between">
-                <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  required
-                  minLength={6}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="bg-transparent text-sm text-white font-['Hanken_Grotesk'] focus:outline-none w-full pr-2"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="text-amber-100 hover:text-white"
-                >
-                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Confirm Password */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Confirm Password *</label>
-              <div className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-between">
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  required
-                  minLength={6}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="bg-transparent text-sm text-white font-['Hanken_Grotesk'] focus:outline-none w-full pr-2"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="text-amber-100 hover:text-white"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-zinc-900 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition shadow-md shadow-yellow-500/10 cursor-pointer"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            <span>{loading ? 'Updating...' : 'Update Password'}</span>
-          </button>
-        </form>
-
-        {/* 6. Delivery Address & Payment Card Information Card */}
-        <div className="w-full bg-slate-900 border border-blue-950 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
-          {/* Delivery Address Header */}
-          <div className="flex flex-col gap-3">
-            <h3 className="text-base font-semibold text-white font-['Inter']">Delivery Address</h3>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Street Address*</label>
-              <input
-                type="text"
-                value={streetAddress}
-                onChange={(e) => setStreetAddress(e.target.value)}
-                className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Zip Code*</label>
-              <input
-                type="text"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-                className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Payment Card Information Header */}
-          <div className="flex flex-col gap-3 pt-2 border-t border-neutral-800">
-            <h3 className="text-base font-semibold text-white font-['Inter']">Payment Card Information</h3>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Cardholder Name*</label>
-              <input
-                type="text"
-                value={cardHolder}
-                onChange={(e) => setCardHolder(e.target.value)}
-                className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-400 font-['Inter']">Card Number*</label>
-              <input
-                type="text"
-                value={cardNumber}
-                onChange={(e) => setCardNumber(e.target.value)}
-                className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-zinc-400 font-['Inter']">Expiration Date*</label>
-                <input
-                  type="text"
-                  value={expDate}
-                  onChange={(e) => setExpDate(e.target.value)}
-                  className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
-                />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-zinc-400 font-['Inter']">CVV</label>
+                <label className="text-xs text-zinc-400 font-['Inter']">5-Digit Reset OTP Code *</label>
                 <input
                   type="text"
-                  value={cvv}
-                  onChange={(e) => setCvv(e.target.value)}
-                  className="w-full h-11 px-3 bg-neutral-800 border border-neutral-700 rounded-xl text-sm text-white font-['Inter'] focus:outline-none"
+                  required
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  placeholder="Enter 5-digit code (e.g. 48291)"
+                  maxLength={6}
+                  className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white font-mono tracking-widest focus:outline-none focus:border-yellow-400"
                 />
               </div>
-            </div>
-          </div>
 
-          <button
-            onClick={() => handleSaveChanges('Delivery & Payment Details')}
-            className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 text-sm font-semibold rounded-xl flex items-center justify-center transition shadow-md shadow-yellow-500/10 mt-2"
-          >
-            Save Changes
-          </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-zinc-400 font-['Inter']">New Password *</label>
+                  <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min 8 characters"
+                      className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="text-zinc-400 hover:text-white"
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-zinc-400 font-['Inter']">Confirm Password *</label>
+                  <div className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 rounded-xl flex items-center justify-between">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      className="bg-transparent text-sm text-white font-['Inter'] focus:outline-none w-full pr-2"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="text-zinc-400 hover:text-white"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setOtpSent(false)}
+                  className="px-4 h-11 bg-neutral-800 hover:bg-neutral-700 text-zinc-300 text-sm font-medium rounded-xl transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isChangingPassword}
+                  className="flex-1 h-11 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                >
+                  {isChangingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{isChangingPassword ? 'Updating Password...' : 'Submit & Update Password'}</span>
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>
   );
 }
-

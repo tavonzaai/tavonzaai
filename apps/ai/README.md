@@ -54,6 +54,7 @@ AI Client / Frontend
 ```
 
 ### 🚫 Non-Negotiable Hard Rules
+
 1. **No direct database access**: AI never connects to PostgreSQL, Redis, or any data store owned by the backend (`AI -> SQL -> Database` is forbidden).
 2. **No AWS SDK calls in business logic**: All resource storage/access routes through authorized application endpoints.
 3. **Always carry user context**: Every request carries an `ActorContext` (`actor_type`, `acting_user_id`, `organization_id`, `branch_id`, `permissions`, `resource_scope`).
@@ -111,24 +112,25 @@ apps/ai/
 
 ## 📡 Exposed Endpoints
 
-| Method | Path | Description | Authorization |
-|--------|------|-------------|---------------|
-| `GET` | `/health` | Service health check | None |
-| `POST` | `/ai/chat` | Conversational text chat | Bearer JWT |
-| `POST` | `/ai/chat/stream` | Server-Sent Events (SSE) streaming chat | Bearer JWT |
-| `POST` | `/ai/voice/transcribe` | Audio file to text (Whisper Cloud) | Bearer JWT |
-| `POST` | `/ai/voice/synthesize` | Text to MP3 audio stream (Edge Neural TTS) | Bearer JWT |
-| `GET` | `/ai/voice/synthesize` | Direct audio source playback endpoint | Bearer JWT |
+| Method | Path                   | Description                                | Authorization |
+| ------ | ---------------------- | ------------------------------------------ | ------------- |
+| `GET`  | `/health`              | Service health check                       | None          |
+| `POST` | `/ai/chat`             | Conversational text chat                   | Bearer JWT    |
+| `POST` | `/ai/chat/stream`      | Server-Sent Events (SSE) streaming chat    | Bearer JWT    |
+| `POST` | `/ai/voice/transcribe` | Audio file to text (Whisper Cloud)         | Bearer JWT    |
+| `POST` | `/ai/voice/synthesize` | Text to MP3 audio stream (Edge Neural TTS) | Bearer JWT    |
+| `GET`  | `/ai/voice/synthesize` | Direct audio source playback endpoint      | Bearer JWT    |
 
 ---
 
 ## 🔌 Connecting to the Backend (`apps/api`)
 
 To switch from dev mock mode to the live backend:
+
 1. In `apps/ai/.env`:
    ```bash
    DEV_MODE_MOCK_BACKEND=false
-   INTERNAL_API_BASE_URL=http://localhost:3000/internal
+   INTERNAL_API_BASE_URL=https://api.tavonza.com/internal
    INTERNAL_API_SERVICE_TOKEN=<shared-secret>
    ```
 2. See [`BACKEND_INTEGRATION.md`](./BACKEND_INTEGRATION.md) for the 5 HTTP routes expected from `apps/api`.

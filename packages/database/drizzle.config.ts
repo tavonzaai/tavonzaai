@@ -24,13 +24,15 @@ function getDbCredentials() {
       isRds;
 
     if (isSsl) {
+      parsed.searchParams.delete("ssl");
+      parsed.searchParams.delete("sslmode");
       return {
         host: parsed.hostname,
         port: Number(parsed.port || 5432),
         user: decodeURIComponent(parsed.username),
         password: decodeURIComponent(parsed.password),
         database: parsed.pathname.replace(/^\//, ""),
-        ssl: "require" as const,
+        ssl: { rejectUnauthorized: false },
       };
     }
   } catch {

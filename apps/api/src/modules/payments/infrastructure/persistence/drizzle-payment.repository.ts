@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -7,6 +7,7 @@ import {
   paymentAllocations,
   discounts,
 } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import type { IPaymentRepository } from '../../domain/repositories/payment-repository.interface';
 import type {
   PaymentEntity,
@@ -59,21 +60,46 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
   }
 
   async findByOrderId(orderId: string): Promise<PaymentEntity[]> {
-    const rows = await this.db
-      .select()
-      .from(payments)
-      .where(eq(payments.orderId, orderId));
-
+    const qb = new DrizzleQueryBuilder<typeof payments>(this.db, payments)
+      .filterExact({ orderId });
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapPayment(r));
   }
 
   async findByTableSessionId(tableSessionId: string): Promise<PaymentEntity[]> {
-    const rows = await this.db
+    const qb = new DrizzleQueryBuilder<typeof payments>(this.db, payments)
+      .filterExact({ tableSessionId });
+    const rows = await qb.executePlain();
+    return rows.map((r) => this.mapPayment(r));
+  }
+
+  async findByTransactionRef(transactionRef: string): Promise<PaymentEntity | null> {
+    const [row] = await this.db
       .select()
       .from(payments)
-      .where(eq(payments.tableSessionId, tableSessionId));
+      .where(eq(payments.transactionRef, transactionRef))
+      .limit(1);
 
-    return rows.map((r) => this.mapPayment(r));
+    return row ? this.mapPayment(row) : null;
+  }
+
+  async findPendingByOrderOrSession(params: {
+    orderId?: string;
+    tableSessionId?: string;
+  }): Promise<PaymentEntity | null> {
+    if (!params.orderId && !params.tableSessionId) return null;
+
+    const condition = params.orderId
+      ? and(eq(payments.orderId, params.orderId), eq(payments.status, 'UNPAID'))
+      : and(eq(payments.tableSessionId, params.tableSessionId!), eq(payments.status, 'UNPAID'));
+
+    const [row] = await this.db
+      .select()
+      .from(payments)
+      .where(condition)
+      .limit(1);
+
+    return row ? this.mapPayment(row) : null;
   }
 
   async updateStatus(
@@ -83,6 +109,7 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
       transactionRef?: string;
       paidAt?: Date;
       settledById?: string;
+      collectedById?: string;
       refundRef?: string;
       refundAmount?: number;
     }
@@ -94,6 +121,7 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
         ...(extras?.transactionRef ? { transactionRef: extras.transactionRef } : {}),
         ...(extras?.paidAt ? { paidAt: extras.paidAt } : {}),
         ...(extras?.settledById ? { settledById: extras.settledById } : {}),
+        ...(extras?.collectedById ? { collectedById: extras.collectedById } : {}),
         ...(extras?.refundRef ? { refundRef: extras.refundRef, refundedAt: new Date() } : {}),
         ...(extras?.refundAmount !== undefined ? { refundAmount: extras.refundAmount } : {}),
       })
@@ -125,11 +153,9 @@ export class DrizzlePaymentRepository implements IPaymentRepository {
   }
 
   async findAllocationsByPaymentId(paymentId: string): Promise<PaymentAllocationEntity[]> {
-    const rows = await this.db
-      .select()
-      .from(paymentAllocations)
-      .where(eq(paymentAllocations.paymentId, paymentId));
-
+    const qb = new DrizzleQueryBuilder<typeof paymentAllocations>(this.db, paymentAllocations)
+      .filterExact({ paymentId });
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapAllocation(r));
   }
 

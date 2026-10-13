@@ -13,6 +13,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     // Disable NestJS's default logger — we use our own structured one
     logger: false,
+    rawBody: true,
   });
 
   // Enable graceful shutdown hooks (SIGTERM/SIGINT)
@@ -45,7 +46,7 @@ async function bootstrap() {
   const port = process.env.API_PORT || process.env.PORT || 3000;
   const env  = process.env.NODE_ENV || 'development';
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   logger.info(`API server started`, {
     port,
@@ -55,6 +56,7 @@ async function bootstrap() {
   });
 }
 
+// test file
 // Global safety net for unhandled asynchronous errors
 process.on('unhandledRejection', (reason: any) => {
   const logger = new AppLogger('Process');

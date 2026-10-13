@@ -100,8 +100,15 @@ export default function KitchenKdsView({ onTicketPlated }: KitchenKdsViewProps) 
 
   useEffect(() => {
     fetchTickets();
-    const interval = setInterval(fetchTickets, 8000);
-    return () => clearInterval(interval);
+    const handleUpdate = () => fetchTickets();
+    window.addEventListener('tavonza:order_item_changed', handleUpdate);
+    window.addEventListener('tavonza:order_status_changed', handleUpdate);
+    window.addEventListener('tavonza:order_created', handleUpdate);
+    return () => {
+      window.removeEventListener('tavonza:order_item_changed', handleUpdate);
+      window.removeEventListener('tavonza:order_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:order_created', handleUpdate);
+    };
   }, [selectedStation]);
 
   const togglePlated = async (ticketId: string) => {

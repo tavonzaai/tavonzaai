@@ -11,6 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "node ../../node_modules/.pnpm/node_modules/tsx/dist/cli.mjs src/seed.ts",
+    "db:reset": "node ../../node_modules/.pnpm/node_modules/tsx/dist/cli.mjs src/reset.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
@@ -18,6 +19,7 @@
     "@nestjs/common": "^10.3.8",
     "@tavonza/authorization": "workspace:*",
     "drizzle-orm": "^0.31.0",
+    "drizzle-seed": "^0.3.1",
     "pg": "^8.12.0"
   },
   "devDependencies": {

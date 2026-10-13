@@ -20,6 +20,7 @@ import { ShiftsModule } from "./modules/shifts/shifts.module";
 import { InventoryModule } from "./modules/inventory/inventory.module";
 import { AiModule } from "./modules/ai/ai.module";
 import { ApiStorageModule } from "./modules/storage/storage.module";
+import { RealtimeModule } from "./modules/realtime/realtime.module";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 
 import { AppController } from "./app.controller";
@@ -29,6 +30,7 @@ import { AppController } from "./app.controller";
     // Infrastructure — must be first (provides Drizzle DB globally)
     DatabaseModule,
     ApiStorageModule,
+    RealtimeModule,
 
     IdentityModule,
     AuthorizationModule,

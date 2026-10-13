@@ -12,7 +12,21 @@ function ConfirmedContent() {
   const { tableNumber } = useCart();
 
   const activeTable = searchParams.get('table') || tableNumber || 'Table 08';
-  const orderId = searchParams.get('order') || 'LT-2847';
+  const [orderId, setOrderId] = React.useState<string>(() => {
+    const fromParam = (searchParams.get('order') || searchParams.get('id') || '').trim();
+    if (fromParam) return fromParam;
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('tavonza_last_submitted_order_id') || '').trim();
+    }
+    return '';
+  });
+
+  React.useEffect(() => {
+    const fromParam = (searchParams.get('order') || searchParams.get('id') || '').trim();
+    if (fromParam) {
+      setOrderId(fromParam);
+    }
+  }, [searchParams]);
 
   return (
     <DesktopSplitLayout

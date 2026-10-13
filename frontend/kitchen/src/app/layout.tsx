@@ -1,4 +1,4 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { Toaster } from 'sonner';
@@ -27,7 +27,7 @@ export default function RootLayout({
         <ReduxProvider>
           {children}
         </ReduxProvider>
-        <Toaster richColors position="top-right" theme="dark" />
+        <Toaster richColors position="top-right" theme="dark" closeButton />
       </body>
     </html>
   );

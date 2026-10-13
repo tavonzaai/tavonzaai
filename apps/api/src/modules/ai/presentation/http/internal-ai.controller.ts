@@ -13,6 +13,7 @@ import {
   ApiOperation,
   ApiOkResponse,
   ApiSecurity,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { InternalServiceGuard } from '../../../../common/guards/internal-service.guard';
 import { InternalAiService } from '../../application/internal-ai.service';
@@ -21,7 +22,13 @@ import {
   ToolExecutionRequestDto,
   ToolConfirmationRequestDto,
   InternalAuditRequestDto,
+  ActorContextResponseDto,
+  BootstrapContextResponseDto,
+  ToolExecutionResponseDto,
+  ToolConfirmationResponseDto,
+  InternalAuditResponseDto,
 } from './dto/internal-ai.dto';
+import { ApiStandardErrors } from '../../../../common/swagger';
 
 @ApiTags('Internal | AI Agent Tool Gateway')
 @ApiSecurity('InternalServiceToken')
@@ -37,7 +44,8 @@ export class InternalAiController {
   @Post('auth/resolve-actor')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resolve client JWT token to ActorContext' })
-  @ApiOkResponse({ description: 'Validated actor context' })
+  @ApiOkResponse({ description: 'Validated actor context', type: ActorContextResponseDto })
+  @ApiStandardErrors(400, 401, 403, 500)
   async resolveActor(@Body() dto: ResolveActorRequestDto) {
     return this.aiService.resolveActor(dto.token);
   }
@@ -48,7 +56,10 @@ export class InternalAiController {
    */
   @Get('context/bootstrap')
   @ApiOperation({ summary: 'Bootstrap context for active tables and sessions' })
-  @ApiOkResponse({ description: 'Bootstrap context snapshot' })
+  @ApiQuery({ name: 'actor_id', required: true, description: 'Acting user or agent UUID', example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef' })
+  @ApiQuery({ name: 'branch_id', required: true, description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
+  @ApiOkResponse({ description: 'Bootstrap context snapshot', type: BootstrapContextResponseDto })
+  @ApiStandardErrors(401, 403, 404, 500)
   async bootstrapContext(
     @Query('actor_id') actorId: string,
     @Query('branch_id') branchId: string
@@ -63,7 +74,8 @@ export class InternalAiController {
   @Post('tools/execute')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Execute approved domain tool with actor authorization' })
-  @ApiOkResponse({ description: 'Tool execution result' })
+  @ApiOkResponse({ description: 'Tool execution result', type: ToolExecutionResponseDto })
+  @ApiStandardErrors(400, 401, 403, 500)
   async executeTool(@Body() dto: ToolExecutionRequestDto) {
     return this.aiService.executeTool(dto);
   }
@@ -75,7 +87,8 @@ export class InternalAiController {
   @Post('tools/execute/confirm')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirm sensitive tool mutation' })
-  @ApiOkResponse({ description: 'Confirmation result' })
+  @ApiOkResponse({ description: 'Confirmation result', type: ToolConfirmationResponseDto })
+  @ApiStandardErrors(400, 401, 403, 500)
   async confirmTool(@Body() dto: ToolConfirmationRequestDto) {
     return this.aiService.confirmToolExecution(dto);
   }
@@ -87,7 +100,8 @@ export class InternalAiController {
   @Post('audit')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Ingest AI action into platform audit trail' })
-  @ApiOkResponse({ description: 'Audit event accepted' })
+  @ApiOkResponse({ description: 'Audit event accepted', type: InternalAuditResponseDto })
+  @ApiStandardErrors(400, 401, 403, 500)
   async recordAudit(@Body() dto: InternalAuditRequestDto) {
     return this.aiService.recordAudit(dto);
   }

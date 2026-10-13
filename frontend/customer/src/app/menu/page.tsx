@@ -12,6 +12,9 @@ import {
   ShoppingBag,
   Loader2,
   UtensilsCrossed,
+  User,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
@@ -19,7 +22,8 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { fetchMenuCategories } from '@/redux/features/menu-category/menuCategoryApi';
 import { fetchMenuItems } from '@/redux/features/menu-items/menuItemApi';
 import { getCategoryIcon, getItemImage } from '@/lib/menuUtils';
-import { getAuthToken } from '@/redux/api/baseApi';
+import { getAuthToken, setCookie } from '@/redux/api/baseApi';
+import { TavonzaLogoIcon } from '@/components/TavonzaLogo';
 
 interface DisplayMenuItem {
   id: string;
@@ -53,16 +57,18 @@ function MenuContent() {
   const { categories: backendCategories, loading: categoriesLoading } = useAppSelector(
     (state) => state.menuCategories
   );
-  const { items: backendItems, loading: itemsLoading } = useAppSelector(
+  const { items: backendItems, loading: itemsLoading, meta: itemsMeta } = useAppSelector(
     (state) => state.menuItems
   );
 
+  const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showAllItemsView, setShowAllItemsView] = useState(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
 
-  const activeTable = searchParams.get('table') || tableNumber || 'T-02';
+  const activeTable = searchParams.get('table') || tableNumber || '';
   const isConnected = searchParams.get('connected') === 'true' || Boolean(searchParams.get('connect'));
 
   const tableParam = searchParams.get('table');
@@ -70,43 +76,57 @@ function MenuContent() {
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    const tableVal = searchParams.get('table') || searchParams.get('tableNumber');
+    const tableIdVal = searchParams.get('tableId');
+    const branchIdVal = searchParams.get('branchId');
 
-  /*
-  // Optional: Redirect to login if user is not authenticated
-  useEffect(() => {
-    if (!mounted) return;
-    const token = getAuthToken();
-    if (!token) {
-      router.replace(`/login${forwardParam}`);
-      return;
-    }
-    if (isInitialized && (!isAuthenticated || !user)) {
-      router.replace(`/login${forwardParam}`);
-    }
-  }, [mounted, isInitialized, isAuthenticated, user, forwardParam, router]);
-  */
+    const isUUID = (val?: string | null) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
-  // Fetch dynamic categories on mount
+    if (branchIdVal && isUUID(branchIdVal)) {
+      setCookie('tavonza_branch_id', branchIdVal);
+    }
+    if (tableIdVal && isUUID(tableIdVal)) {
+      setCookie('tavonza_table_id', tableIdVal);
+    } else if (tableVal && isUUID(tableVal)) {
+      setCookie('tavonza_table_id', tableVal);
+    }
+    if (tableVal) {
+      setCookie('tavonza_table_number', tableVal);
+    }
+  }, [searchParams]);
+
+  // Fetch dynamic categories via Backend API on mount & on category search
   useEffect(() => {
     if (mounted) {
-      dispatch(fetchMenuCategories({ page: 1, limit: 100 }));
+      dispatch(
+        fetchMenuCategories({
+          page: 1,
+          limit: 10,
+          searchTerm: categorySearchQuery.trim() || undefined,
+        })
+      );
     }
-  }, [dispatch, mounted]);
+  }, [dispatch, mounted, categorySearchQuery]);
 
-  // Fetch items via Backend Search and Filter API
+  // Reset pagination to page 1 whenever search query or selected category changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory]);
+
+  // Fetch items via Backend Search, Category Filter, and 10 items per page limit
   useEffect(() => {
     if (mounted) {
       dispatch(
         fetchMenuItems({
-          page: 1,
-          limit: 100,
+          page: currentPage,
+          limit: 10,
           searchTerm: searchQuery.trim() || undefined,
           categoryId: selectedCategory !== 'all' ? selectedCategory : undefined,
         })
       );
     }
-  }, [dispatch, mounted, searchQuery, selectedCategory]);
+  }, [dispatch, mounted, currentPage, searchQuery, selectedCategory]);
 
   // Transform dynamic categories with "ALL" chip
   const categories: DisplayCategory[] = useMemo(() => {
@@ -115,8 +135,12 @@ function MenuContent() {
       name: c.name,
       icon: getCategoryIcon(c.name),
     }));
-    return [{ id: 'all', name: 'ALL', icon: '🍽️' }, ...dynamicCats];
-  }, [backendCategories]);
+    const allCats = [{ id: 'all', name: 'ALL', icon: '🍽️' }, ...dynamicCats];
+    if (!categorySearchQuery.trim()) return allCats;
+    return allCats.filter((cat) =>
+      cat.name.toLowerCase().includes(categorySearchQuery.trim().toLowerCase())
+    );
+  }, [backendCategories, categorySearchQuery]);
 
   // Transform backend items to standard display items (zero mock fallback)
   const allItems: DisplayMenuItem[] = useMemo(() => {
@@ -141,6 +165,9 @@ function MenuContent() {
 
   // Filtered items are directly supplied by backend API queries
   const filteredItems = allItems;
+
+  const totalItems = itemsMeta?.total ?? itemsMeta?.totalCount ?? (itemsMeta?.limit ? (itemsMeta?.totalPages || 1) * itemsMeta.limit : backendItems.length);
+  const totalPages = itemsMeta?.totalPages || Math.max(1, Math.ceil(totalItems / 10));
 
   const popularItems = useMemo(() => {
     const pops = allItems.filter((item) => item.popular);
@@ -192,7 +219,7 @@ function MenuContent() {
       {/* Top Main Container - Centered and fully responsive across mobile, tablet & desktop */}
       <div className="w-full max-w-md sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-32 flex flex-col gap-6">
         
-        {/* HEADER: Greeting / Back Button + Table Badge + Cart Icon */}
+        {/* HEADER: Brand Logo / Back Button + Table Badge + Cart Icon + Profile Avatar */}
         <header className="w-full flex items-center justify-between pt-1">
           {showAllItemsView ? (
             <button
@@ -208,14 +235,14 @@ function MenuContent() {
             </button>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="text-xl">👋</span>
-              <span className="text-white text-base font-semibold font-montserrat">
-                Welcome to Tavonza
+              <TavonzaLogoIcon className="w-6 h-6 sm:w-7 sm:h-7" />
+              <span className="text-white text-base font-bold tracking-tight font-montserrat">
+                Tavonza<span className="text-yellow-400">.</span>
               </span>
             </div>
           )}
 
-          {/* Right Header: Table Number Pill + Cart Icon */}
+          {/* Right Header: Table Number Pill + Cart Icon + Profile Avatar Button */}
           <div className="flex items-center gap-2.5">
             {/* Table Number Pill */}
             <div className="px-2.5 py-1.5 bg-neutral-900 rounded-md border border-neutral-800 flex items-center gap-1.5 shadow-sm">
@@ -235,6 +262,28 @@ function MenuContent() {
                 <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-yellow-400 text-black text-[10px] font-bold rounded-full flex items-center justify-center shadow-md">
                   {totalCount}
                 </span>
+              )}
+            </button>
+
+            {/* Profile Avatar Button (Clicking redirects to Profile Page) */}
+            <button
+              onClick={() => router.push(`/profile${forwardParam}`)}
+              className="relative w-8 h-8 rounded-full bg-neutral-900 border border-yellow-400/60 hover:border-yellow-400 flex items-center justify-center text-yellow-400 transition cursor-pointer overflow-hidden shadow-sm hover:scale-105 active:scale-95 shrink-0"
+              title="View Profile"
+            >
+              {(user as any)?.profileImage || (user as any)?.avatar || (user as any)?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={(user as any).profileImage || (user as any).avatar || (user as any).avatarUrl}
+                  alt="Profile"
+                  className="w-full h-full object-cover rounded-full"
+                />
+              ) : user?.name || user?.firstName ? (
+                <span className="text-xs font-bold text-yellow-400 font-montserrat">
+                  {(user.name || user.firstName).slice(0, 2).toUpperCase()}
+                </span>
+              ) : (
+                <User className="w-4 h-4 text-yellow-400" />
               )}
             </button>
           </div>
@@ -265,7 +314,13 @@ function MenuContent() {
 
         {/* HERO TITLE (shown on main view) */}
         {!showAllItemsView && (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5 pt-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xl sm:text-2xl">👋</span>
+              <span className="text-white text-base sm:text-lg font-semibold font-montserrat">
+                Welcome to Tavonza
+              </span>
+            </div>
             <h1 className="text-white text-3xl sm:text-4xl font-semibold font-poppins leading-tight tracking-tight">
               What is your <br />
               favorite item?
@@ -274,7 +329,7 @@ function MenuContent() {
         )}
 
         {/* SEARCH BAR */}
-        <div className="w-full py-3 px-3.5 bg-neutral-900 rounded-[10px] border border-neutral-800 flex items-center gap-2.5 shadow-inner focus-within:border-yellow-400/50 transition">
+        {/* <div className="w-full py-3 px-3.5 bg-neutral-900 rounded-[10px] border border-neutral-800 flex items-center gap-2.5 shadow-inner focus-within:border-yellow-400/50 transition">
           <Search className="w-5 h-5 text-zinc-400 shrink-0" />
           <input
             type="text"
@@ -291,12 +346,12 @@ function MenuContent() {
               Clear
             </button>
           )}
-        </div>
+        </div> */}
 
         {/* DYNAMIC CATEGORIES SECTION */}
         <div className="w-full flex flex-col gap-3">
-          <div className="w-full flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="w-full flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 shrink-0">
               <h2 className="text-white text-base font-semibold font-poppins">
                 Categories
               </h2>
@@ -306,10 +361,31 @@ function MenuContent() {
                 </span>
               )}
             </div>
+
+            {/* Section Input Field beside Categories Title */}
+            <div className="flex-1 max-w-xs px-2.5 py-1 bg-neutral-900 border border-neutral-800 rounded-lg flex items-center gap-1.5 focus-within:border-yellow-400/50 transition">
+              <Search className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+              <input
+                type="text"
+                value={categorySearchQuery}
+                onChange={(e) => setCategorySearchQuery(e.target.value)}
+                placeholder="Filter categories..."
+                className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-poppins focus:outline-none"
+              />
+              {categorySearchQuery && (
+                <button
+                  onClick={() => setCategorySearchQuery('')}
+                  className="text-[10px] text-zinc-500 hover:text-white"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
             {!showAllItemsView && (
               <button
                 onClick={() => setShowAllItemsView(true)}
-                className="text-yellow-400 hover:text-yellow-300 text-xs font-medium font-poppins cursor-pointer transition"
+                className="text-yellow-400 hover:text-yellow-300 text-xs font-medium font-poppins cursor-pointer transition shrink-0"
               >
                 See All
               </button>
@@ -381,8 +457,8 @@ function MenuContent() {
         {/* ALL ITEMS SECTION */}
         <div className="w-full flex flex-col gap-3.5">
           {!showAllItemsView && (
-            <div className="w-full flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="w-full flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 shrink-0">
                 <h2 className="text-white text-base font-semibold font-poppins">
                   All Items
                 </h2>
@@ -390,9 +466,30 @@ function MenuContent() {
                   ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
                 </span>
               </div>
+
+              {/* Section Input Field beside All Items Title */}
+              <div className="flex-1 max-w-xs px-2.5 py-1 bg-neutral-900 border border-neutral-800 rounded-lg flex items-center gap-1.5 focus-within:border-yellow-400/50 transition">
+                <Search className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Filter items..."
+                  className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-poppins focus:outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-[10px] text-zinc-500 hover:text-white"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
               <button
                 onClick={() => setShowAllItemsView(true)}
-                className="text-yellow-400 hover:text-yellow-300 text-xs font-medium font-poppins cursor-pointer transition"
+                className="text-yellow-400 hover:text-yellow-300 text-xs font-medium font-poppins cursor-pointer transition shrink-0"
               >
                 See All
               </button>
@@ -471,6 +568,39 @@ function MenuContent() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* PAGINATION CONTROLS (10 items per page limit) */}
+          {allItems.length > 0 && (
+            <div className="w-full flex items-center justify-between pt-3 pb-1 border-t border-neutral-800/80 mt-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1 || itemsLoading}
+                className="px-3.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-medium text-white hover:bg-neutral-800 hover:border-yellow-400/40 disabled:opacity-40 disabled:hover:bg-neutral-900 disabled:hover:border-neutral-800 transition flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4 text-yellow-400" />
+                <span>Previous</span>
+              </button>
+
+              <div className="flex items-center gap-1.5 text-xs font-poppins">
+                <span className="text-zinc-400 font-medium">Page</span>
+                <span className="text-yellow-400 font-bold bg-yellow-400/10 px-2 py-0.5 rounded border border-yellow-400/30">
+                  {currentPage}
+                </span>
+                <span className="text-zinc-400 font-medium">of {totalPages}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages || itemsLoading}
+                className="px-3.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-medium text-white hover:bg-neutral-800 hover:border-yellow-400/40 disabled:opacity-40 disabled:hover:bg-neutral-900 disabled:hover:border-neutral-800 transition flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4 text-yellow-400" />
+              </button>
             </div>
           )}
         </div>

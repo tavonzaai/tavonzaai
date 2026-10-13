@@ -11,7 +11,7 @@ import {
   CheckCircle2,
   X,
 } from 'lucide-react';
-import { mockWaiterProfile } from '../data';
+import { NotificationCenter } from '../../common/NotificationCenter';
 import SmartRemindersPopover from './SmartRemindersPopover';
 import { useAppSelector } from '@/redux/hooks';
 import { useLogout } from '@/hooks/useLogout';
@@ -42,7 +42,7 @@ export default function WaiterHeader({
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [remindersCount, setRemindersCount] = useState(4);
 
-  const displayName = user?.name || user?.email?.split('@')[0] || mockWaiterProfile.name;
+  const displayName = user?.name || user?.email?.split('@')[0] || 'Staff Waiter';
   const displayRole = user?.assignments?.[0]?.role?.replace(/_/g, ' ') || 'Waiter';
   const initials = displayName
     .split(' ')
@@ -168,39 +168,8 @@ export default function WaiterHeader({
           />
         </div>
 
-        {/* Notifications Icon with Red Badge (2) */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setNotificationsOpen(!notificationsOpen)}
-            className="relative p-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            title="Notifications (2)"
-          >
-            <Bell className="w-4 h-4 text-slate-300" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs font-bold font-['Inter'] flex items-center justify-center">
-              2
-            </span>
-          </button>
-
-          {notificationsOpen && (
-            <div className="absolute right-0 top-12 w-72 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                <span className="text-sm font-bold text-white">Shift Notifications</span>
-                <span className="text-xs text-amber-400 font-semibold">2 New</span>
-              </div>
-              <div className="space-y-2 mt-2 text-sm">
-                <div className="p-2 rounded-lg bg-zinc-800/80 text-zinc-200">
-                  <div className="font-semibold text-white">VIP Table Seated</div>
-                  <div className="text-zinc-400 text-xs">Mr. Henderson seated at Table 03.</div>
-                </div>
-                <div className="p-2 rounded-lg bg-zinc-800/80 text-zinc-200">
-                  <div className="font-semibold text-white">Shift Notice</div>
-                  <div className="text-zinc-400 text-xs">Break rotation starts in 45 minutes.</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Realtime Notification Center */}
+        <NotificationCenter />
 
         {/* Waiter Profile Pill */}
         <div className="relative shrink-0">

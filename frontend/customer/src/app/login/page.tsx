@@ -11,10 +11,15 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
+  const qr = searchParams.get('qr');
   const table = searchParams.get('table');
   const { user, isAuthenticated, isInitialized } = useAppSelector((state) => state.auth);
 
-  const forwardParam = table ? `?table=${encodeURIComponent(table)}` : '';
+  const forwardParam = qr
+    ? `?qr=${encodeURIComponent(qr)}`
+    : table
+    ? `?table=${encodeURIComponent(table)}`
+    : '';
 
   useEffect(() => {
     setMounted(true);
@@ -47,8 +52,8 @@ function LoginContent() {
   }
 
   const handleNavigateToVerify = (email: string) => {
-    const tableParam = table ? `&table=${encodeURIComponent(table)}` : '';
-    router.push(`/verify-otp?email=${encodeURIComponent(email)}&type=email_verification${tableParam}`);
+    const qrParam = qr ? `&qr=${encodeURIComponent(qr)}` : (table ? `&table=${encodeURIComponent(table)}` : '');
+    router.push(`/verify-otp?email=${encodeURIComponent(email)}&type=email_verification${qrParam}`);
   };
 
   return (

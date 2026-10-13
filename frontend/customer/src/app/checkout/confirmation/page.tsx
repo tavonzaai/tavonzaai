@@ -11,9 +11,10 @@ function ConfirmationContent() {
   const searchParams = useSearchParams();
   const { tableNumber } = useCart();
 
-  const amountParam = searchParams.get('amount') || '50.97';
-  const holderParam = searchParams.get('holder') || 'Amanda';
-  const activeTable = searchParams.get('table') || tableNumber || 'Table 08';
+  const amountParam = searchParams.get('amount') || '0.00';
+  const holderParam = searchParams.get('holder') || 'Valued Guest';
+  const refParam = searchParams.get('ref') || searchParams.get('transactionRef') || '';
+  const activeTable = searchParams.get('table') || tableNumber || 'Table';
 
   const todayDate = new Date().toLocaleDateString('en-US', {
     month: '2-digit',
@@ -92,9 +93,11 @@ function ConfirmationContent() {
             <p className="text-[#ECE4D1] text-sm font-['SF_Pro'] leading-relaxed">
               Your transaction was successful
             </p>
-            <span className="text-zinc-500 text-xs font-mono tracking-tight">
-              #ID-22465476578390-3789
-            </span>
+            {refParam && (
+              <span className="text-zinc-400 text-xs font-mono tracking-tight break-all">
+                #{refParam}
+              </span>
+            )}
           </div>
         </div>
 
@@ -132,7 +135,7 @@ function ConfirmationContent() {
               </div>
               <div className="flex flex-col">
                 <span className="text-white text-sm font-semibold font-['SF_Pro']">Tavonza Dining</span>
-                <span className="text-zinc-400 text-xs font-['SF_Pro']">amanda@okaxis</span>
+                <span className="text-zinc-400 text-xs font-['SF_Pro']">Official Receipt</span>
               </div>
             </div>
 

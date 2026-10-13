@@ -49,29 +49,69 @@ export interface CashierPaymentRecord {
   paidAt: string;
 }
 
+export interface OfflinePaymentRequestItem {
+  id: string;
+  paymentId?: string;
+  orderId?: string | null;
+  orderNumber?: string;
+  tableId?: string | null;
+  tableLabel?: string;
+  customerName?: string;
+  tableSessionId?: string | null;
+  payerGuestSessionId?: string | null;
+  amount: number;
+  tipAmount: number;
+  method: string;
+  status: string;
+  transactionRef: string;
+  createdAt: string | Date;
+}
+
+const isUUID = (val?: string | null): boolean =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
 export function getActiveBranchId(): string {
   if (typeof window !== 'undefined') {
     try {
-      const match = document.cookie.match(/(?:^|;\s*)active_branch_id=([^;]+)/);
+      // 1. Direct branch cookies
+      const match = document.cookie.match(/(?:^|;\s*)(?:active_branch_id|tavonza_branch_id|cashier_branch_id|branch_id)=([^;]+)/);
       if (match && match[1]) {
         const val = decodeURIComponent(match[1]);
-        if (val.length === 36 && val.includes('-')) return val;
+        if (isUUID(val)) return val;
       }
-      const rawUser = localStorage.getItem('tavonza_user');
-      if (rawUser) {
-        const parsed = JSON.parse(rawUser);
-        if (parsed?.branchId && parsed.branchId.length === 36) return parsed.branchId;
-        if (parsed?.assignments?.[0]?.branchId && parsed.assignments[0].branchId.length === 36) {
-          return parsed.assignments[0].branchId;
+
+      // 2. User cookies (cashier_user, tavonza_user, user)
+      const userCookieMatch = document.cookie.match(/(?:^|;\s*)(?:cashier_user|tavonza_user|user)=([^;]+)/);
+      if (userCookieMatch && userCookieMatch[1]) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(userCookieMatch[1]));
+          if (isUUID(parsed?.branchId)) return parsed.branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
+        } catch {}
+      }
+
+      // 3. localStorage keys
+      for (const key of ['cashier_user', 'tavonza_user', 'user']) {
+        const rawUser = localStorage.getItem(key);
+        if (rawUser) {
+          try {
+            const parsed = JSON.parse(rawUser);
+            if (isUUID(parsed?.branchId)) return parsed.branchId;
+            if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
+            if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
+          } catch {}
         }
       }
     } catch {}
   }
-  return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+  return '';
 }
+
 
 export const cashierService = {
   getOrders: async (branchId: string): Promise<any[]> => {
+    if (!branchId) return [];
     const res = await baseApiFetch<any[]>(`/orders/branch/${encodeURIComponent(branchId)}`, {
       method: 'GET',
     });
@@ -79,6 +119,7 @@ export const cashierService = {
   },
 
   getTables: async (branchId: string): Promise<any[]> => {
+    if (!branchId) return [];
     const res = await baseApiFetch<any[]>(`/tables?branchId=${encodeURIComponent(branchId)}`, {
       method: 'GET',
     });
@@ -86,6 +127,7 @@ export const cashierService = {
   },
 
   getMenuItems: async (branchId: string): Promise<any[]> => {
+    if (!branchId) return [];
     const res = await baseApiFetch<any[]>(`/menus/${encodeURIComponent(branchId)}/items`, {
       method: 'GET',
     });
@@ -133,6 +175,31 @@ export const cashierService = {
     const res = await baseApiFetch<CashierPaymentRecord>(`/payments/${encodeURIComponent(paymentId)}/refund`, {
       method: 'POST',
       body: JSON.stringify({ refundAmount, reason }),
+    });
+    return (res as any)?.data || res;
+  },
+
+  getOfflinePaymentRequests: async (branchId?: string): Promise<OfflinePaymentRequestItem[]> => {
+    const url = branchId ? `/payments/offline/requests?branchId=${encodeURIComponent(branchId)}` : '/payments/offline/requests';
+    const res = await baseApiFetch<OfflinePaymentRequestItem[]>(url, { method: 'GET' });
+    return (res as any)?.data || res;
+  },
+
+  confirmOfflinePayment: async (
+    paymentId: string,
+    payload?: { receivedAmount?: number; tipAmount?: number }
+  ): Promise<CashierPaymentRecord> => {
+    const res = await baseApiFetch<CashierPaymentRecord>(`/payments/offline/${encodeURIComponent(paymentId)}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    });
+    return (res as any)?.data || res;
+  },
+
+  rejectOfflinePayment: async (paymentId: string, reason: string): Promise<CashierPaymentRecord> => {
+    const res = await baseApiFetch<CashierPaymentRecord>(`/payments/offline/${encodeURIComponent(paymentId)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
     });
     return (res as any)?.data || res;
   },

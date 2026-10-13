@@ -2,8 +2,8 @@
 // Order Infrastructure — Drizzle Order Repository
 // ============================================================================
 
-import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, or, ilike, sql } from 'drizzle-orm';
+import { Inject, Injectable, BadRequestException } from '@nestjs/common';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -12,6 +12,7 @@ import {
   menuItems,
   menuCategories,
   branchSettings,
+  tables,
 } from '@tavonza/database';
 import {
   IOrderRepository,
@@ -51,16 +52,31 @@ export class DrizzleOrderRepository implements IOrderRepository {
       })
       .returning();
 
-    return this.toDomain({ ...record!, items: [] });
+    let tableLabel: string | null = null;
+    if (input.tableId) {
+      const [t] = await this.db
+        .select({ label: tables.label })
+        .from(tables)
+        .where(eq(tables.id, input.tableId))
+        .limit(1);
+      tableLabel = t?.label ?? null;
+    }
+
+    return this.toDomain({ ...record!, tableLabel, items: [] });
   }
 
   // ── Find ────────────────────────────────────────────────────────────
 
   async findById(id: string): Promise<Order | null> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
     const [record] = await this.db
-      .select()
+      .select({
+        order: orders,
+        tableLabel: tables.label,
+      })
       .from(orders)
-      .where(eq(orders.id, id))
+      .leftJoin(tables, eq(orders.tableId, tables.id))
+      .where(isUuid ? or(eq(orders.id, id), eq(orders.orderNumber, id)) : eq(orders.orderNumber, id))
       .limit(1);
 
     if (!record) return null;
@@ -68,9 +84,9 @@ export class DrizzleOrderRepository implements IOrderRepository {
     const items = await this.db
       .select()
       .from(orderItems)
-      .where(eq(orderItems.orderId, id));
+      .where(eq(orderItems.orderId, record.order.id));
 
-    return this.toDomain({ ...record, items });
+    return this.toDomain({ ...record.order, tableLabel: record.tableLabel, items });
   }
 
   async findDraftByTable(
@@ -81,8 +97,12 @@ export class DrizzleOrderRepository implements IOrderRepository {
     // If guestSessionId is provided, first try to find the guest's own draft
     if (guestSessionId) {
       const [guestRecord] = await this.db
-        .select()
+        .select({
+          order: orders,
+          tableLabel: tables.label,
+        })
         .from(orders)
+        .leftJoin(tables, eq(orders.tableId, tables.id))
         .where(
           and(
             eq(orders.branchId, branchId),
@@ -97,14 +117,18 @@ export class DrizzleOrderRepository implements IOrderRepository {
         const items = await this.db
           .select()
           .from(orderItems)
-          .where(eq(orderItems.orderId, guestRecord.id));
-        return this.toDomain({ ...guestRecord, items });
+          .where(eq(orderItems.orderId, guestRecord.order.id));
+        return this.toDomain({ ...guestRecord.order, tableLabel: guestRecord.tableLabel, items });
       }
     }
 
     const [record] = await this.db
-      .select()
+      .select({
+        order: orders,
+        tableLabel: tables.label,
+      })
       .from(orders)
+      .leftJoin(tables, eq(orders.tableId, tables.id))
       .where(
         and(
           eq(orders.branchId, branchId),
@@ -119,9 +143,9 @@ export class DrizzleOrderRepository implements IOrderRepository {
     const items = await this.db
       .select()
       .from(orderItems)
-      .where(eq(orderItems.orderId, record.id));
+      .where(eq(orderItems.orderId, record.order.id));
 
-    return this.toDomain({ ...record, items });
+    return this.toDomain({ ...record.order, tableLabel: record.tableLabel, items });
   }
 
   async findByBranch(
@@ -148,51 +172,79 @@ export class DrizzleOrderRepository implements IOrderRepository {
     if (filters?.tableSessionId) {
       conditions.push(eq(orders.tableSessionId, filters.tableSessionId));
     }
-    if (filters?.search && filters.search.trim()) {
-      const term = `%${filters.search.trim()}%`;
-      conditions.push(or(ilike(orders.orderNumber, term), ilike(orders.guestName, term))!);
+    if (filters?.search) {
+      conditions.push(
+        or(
+          sql`${orders.orderNumber} ILIKE ${'%' + filters.search + '%'}`,
+          sql`${orders.guestName} ILIKE ${'%' + filters.search + '%'}`,
+        )!,
+      );
     }
 
-    const orderRecords = await this.db
-      .select()
+    const orderRows = await this.db
+      .select({
+        order: orders,
+        tableLabel: tables.label,
+      })
       .from(orders)
+      .leftJoin(tables, eq(orders.tableId, tables.id))
       .where(and(...conditions))
-      .orderBy(desc(orders.createdAt));
+      .orderBy(sql`${orders.createdAt} DESC`);
 
-    const result: Order[] = [];
-    for (const record of orderRecords) {
-      const items = await this.db
-        .select()
-        .from(orderItems)
-        .where(eq(orderItems.orderId, record.id));
-      result.push(this.toDomain({ ...record, items }));
+    if (orderRows.length === 0) return [];
+
+    const orderIds = orderRows.map((r) => r.order.id);
+    const allItems = await this.db
+      .select()
+      .from(orderItems)
+      .where(inArray(orderItems.orderId, orderIds));
+
+    const itemsByOrder = new Map<string, typeof allItems>();
+    for (const item of allItems) {
+      const list = itemsByOrder.get(item.orderId) ?? [];
+      list.push(item);
+      itemsByOrder.set(item.orderId, list);
     }
 
-    return result;
+    return orderRows.map((row) =>
+      this.toDomain({
+        ...row.order,
+        tableLabel: row.tableLabel,
+        items: itemsByOrder.get(row.order.id) ?? [],
+      }),
+    );
   }
 
   // ── Item Operations ─────────────────────────────────────────────────
 
   async addItem(input: AddOrderItemInput): Promise<Order> {
-    let name = input.name;
-    let unitPrice = input.unitPrice;
-    let stationType: 'KITCHEN' | 'BAR' = 'KITCHEN';
-
     const [menuItem] = await this.db
       .select()
       .from(menuItems)
       .where(eq(menuItems.id, input.menuItemId));
-    if (menuItem) {
-      name = menuItem.name;
-      unitPrice = Number(menuItem.basePrice);
 
-      const [category] = await this.db
-        .select()
-        .from(menuCategories)
-        .where(eq(menuCategories.id, menuItem.categoryId));
-      if (category && /drink|beverage|bar|cocktail|wine|beer|water|juice/i.test(category.name)) {
-        stationType = 'BAR';
-      }
+    if (!menuItem) {
+      throw new ResourceNotFoundException('MenuItem', input.menuItemId);
+    }
+    if (!menuItem.isAvailable) {
+      throw new BadRequestException(`Item "${menuItem.name}" is currently unavailable`);
+    }
+    if (menuItem.isStockTracked && (menuItem.stockQuantity ?? 0) < input.quantity) {
+      throw new BadRequestException(
+        `Item "${menuItem.name}" is out of stock (only ${menuItem.stockQuantity ?? 0} available)`,
+      );
+    }
+
+    let name = menuItem.name;
+    let unitPrice = Number(menuItem.basePrice);
+    let stationType: 'KITCHEN' | 'BAR' = 'KITCHEN';
+
+    const [category] = await this.db
+      .select()
+      .from(menuCategories)
+      .where(eq(menuCategories.id, menuItem.categoryId));
+    if (category && /drink|beverage|bar|cocktail|wine|beer|water|juice/i.test(category.name)) {
+      stationType = 'BAR';
     }
 
     const addOns = input.addOns ?? [];
@@ -208,6 +260,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
       subtotal: lineTotal,
       stationType,
       status: 'PENDING',
+      estimatedPrepTime: menuItem.estimatedPrepTime ?? 15,
     });
 
     return this.recalculateTotals(input.orderId);
@@ -224,6 +277,18 @@ export class DrizzleOrderRepository implements IOrderRepository {
 
     if (!currentItem) {
       throw new ResourceNotFoundException('OrderItem', itemId);
+    }
+
+    if (input.quantity !== undefined && input.quantity > currentItem.quantity) {
+      const [menuItem] = await this.db
+        .select()
+        .from(menuItems)
+        .where(eq(menuItems.id, currentItem.productId));
+      if (menuItem?.isStockTracked && (menuItem.stockQuantity ?? 0) < input.quantity) {
+        throw new BadRequestException(
+          `Insufficient stock for "${menuItem.name}". Only ${menuItem.stockQuantity ?? 0} available.`,
+        );
+      }
     }
 
     const newQuantity = input.quantity ?? currentItem.quantity;
@@ -274,8 +339,12 @@ export class DrizzleOrderRepository implements IOrderRepository {
       .where(eq(orders.id, orderId));
 
     const [record] = await this.db
-      .select()
+      .select({
+        order: orders,
+        tableLabel: tables.label,
+      })
       .from(orders)
+      .leftJoin(tables, eq(orders.tableId, tables.id))
       .where(eq(orders.id, orderId));
 
     const items = await this.db
@@ -283,7 +352,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
       .from(orderItems)
       .where(eq(orderItems.orderId, orderId));
 
-    return this.toDomain({ ...record!, items });
+    return this.toDomain({ ...record!.order, tableLabel: record?.tableLabel, items });
   }
 
   // ── Private Helpers ─────────────────────────────────────────────────
@@ -340,11 +409,15 @@ export class DrizzleOrderRepository implements IOrderRepository {
       .where(eq(orders.id, orderId));
 
     const [result] = await this.db
-      .select()
+      .select({
+        order: orders,
+        tableLabel: tables.label,
+      })
       .from(orders)
+      .leftJoin(tables, eq(orders.tableId, tables.id))
       .where(eq(orders.id, orderId));
 
-    return this.toDomain({ ...result!, items });
+    return this.toDomain({ ...result!.order, tableLabel: result?.tableLabel, items });
   }
 
   private async generateOrderNumber(_branchId: string): Promise<string> {
@@ -414,10 +487,11 @@ export class DrizzleOrderRepository implements IOrderRepository {
       name: item.productNameSnapshot,
       unitPrice: Number(item.unitPrice),
       quantity: item.quantity,
-      specialInstructions: null,
+      specialInstructions: item.specialInstructions ?? null,
       addOns: [] as OrderItemAddOn[],
       addOnsTotal: 0,
       lineTotal: Number(item.subtotal),
+      estimatedPrepTime: item.estimatedPrepTime ?? 15,
     }));
 
     const props: OrderProps = {
@@ -425,6 +499,8 @@ export class DrizzleOrderRepository implements IOrderRepository {
       orderNumber: record.orderNumber,
       branchId: record.branchId,
       tableId: record.tableId ?? '',
+      tableLabel: record.tableLabel ?? null,
+      tableNumber: record.tableLabel ?? null,
       tableSessionId: record.tableSessionId,
       customerSessionId: record.guestSessionId,
       status: this.fromDbStatus(record.status),
@@ -434,14 +510,17 @@ export class DrizzleOrderRepository implements IOrderRepository {
       taxRate: 0.08,
       tax: Number(record.taxAmount ?? 0),
       total: Number(record.totalAmount ?? 0),
-      estimatedPrepTime: 15,
+      estimatedPrepTime: record.estimatedPrepTime ?? 15,
       items,
       createdAt: record.createdAt ?? new Date(),
       updatedAt: record.updatedAt ?? new Date(),
       submittedAt: record.createdAt,
       acceptedAt: record.acceptedAt,
-      readyAt: null,
-      servedAt: null,
+      prepStartedAt: record.prepStartedAt ?? null,
+      readyAt: record.readyAt ?? null,
+      servedAt: record.servedAt ?? null,
+      inventoryDeducted: record.inventoryDeducted ?? false,
+      inventoryRestored: record.inventoryRestored ?? false,
     };
 
     return new Order(props);

@@ -4,11 +4,11 @@ import React from 'react';
 import {
   Search,
   Mic,
-  Bell,
   Sparkles,
   ChevronDown,
   Menu,
 } from 'lucide-react';
+import { NotificationCenter } from '../../common/NotificationCenter';
 
 interface HeaderProps {
   searchQuery: string;
@@ -90,13 +90,8 @@ export default function Header({
 
         {/* Waiter Profile Card & Notification Bell (From Figma) */}
         <div className="h-11 sm:h-12 bg-zinc-900 border border-zinc-800/80 rounded-lg pl-2 pr-3 py-1 flex items-center gap-2 sm:gap-3">
-          {/* Bell with red badge '2' */}
-          <div className="relative p-1.5 text-slate-400 hover:text-white cursor-pointer">
-            <Bell className="w-4 h-4 text-slate-200" />
-            <span className="absolute 0 top-0.5 right-0.5 w-3.5 h-3.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-              2
-            </span>
-          </div>
+          {/* Realtime Notification Center */}
+          <NotificationCenter />
 
           {/* Divider */}
           <div className="h-6 w-px bg-zinc-800 hidden sm:block" />

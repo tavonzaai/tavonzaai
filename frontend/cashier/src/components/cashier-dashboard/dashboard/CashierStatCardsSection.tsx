@@ -163,10 +163,15 @@ export default function CashierStatCardsSection() {
       }
     };
     loadStats();
-    const interval = setInterval(loadStats, 8000);
+    const handleUpdate = () => loadStats();
+    window.addEventListener('tavonza:payment_status_changed', handleUpdate);
+    window.addEventListener('tavonza:order_created', handleUpdate);
+    window.addEventListener('tavonza:order_status_changed', handleUpdate);
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:payment_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:order_created', handleUpdate);
+      window.removeEventListener('tavonza:order_status_changed', handleUpdate);
     };
   }, []);
 

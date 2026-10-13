@@ -5,9 +5,9 @@ import {
   Menu as MenuIcon,
   ChevronDown,
   Search,
-  Bell,
   User,
 } from 'lucide-react';
+import { NotificationCenter } from '../../common/NotificationCenter';
 import { useAppSelector } from '@/redux/store';
 
 export interface DashboardHeaderProps {
@@ -153,17 +153,8 @@ export default function DashboardHeader({
       {/* Right Header Controls: Integrated Profile & Notifications Card */}
       <div ref={notificationsRef} className="relative shrink-0">
         <div className="h-10 sm:h-12 bg-zinc-900 border border-zinc-800/90 rounded-lg flex items-center px-2 sm:px-3 gap-1.5 sm:gap-3 shadow-sm shrink-0">
-          {/* Notification Bell Button */}
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-1.5 text-zinc-300 hover:text-white transition-colors cursor-pointer flex-shrink-0"
-            aria-label="Notifications"
-          >
-            <Bell className="w-4 h-4" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-[10px] font-bold text-white rounded-full flex items-center justify-center shadow-sm">
-              2
-            </span>
-          </button>
+          {/* Realtime Notification Center */}
+          <NotificationCenter />
 
           {/* Vertical Divider */}
           <div className="h-5 sm:h-7 w-px bg-zinc-700/60 flex-shrink-0" />
@@ -184,36 +175,6 @@ export default function DashboardHeader({
             <ChevronDown className="w-3.5 h-3.5 text-white/80 ml-0.5 hidden md:block" />
           </div>
         </div>
-
-        {/* Notifications Dropdown Modal */}
-        {showNotifications && (
-          <div className="absolute right-0 mt-2 w-80 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-3 z-50 space-y-2 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-              <span className="text-sm font-semibold text-white">Notifications</span>
-              <span className="text-xs text-amber-400 font-medium cursor-pointer">
-                Mark all read
-              </span>
-            </div>
-            <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-rose-400">Inventory Alert</span>
-                <span className="text-xs text-zinc-500">5m ago</span>
-              </div>
-              <p className="text-xs text-zinc-300">
-                Mozzarella cheese is below 20% minimum threshold.
-              </p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-emerald-400">Revenue Peak</span>
-                <span className="text-xs text-zinc-500">18m ago</span>
-              </div>
-              <p className="text-xs text-zinc-300">
-                Lunch revenue exceeded target by +18.4%.
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </header>
   );

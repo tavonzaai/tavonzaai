@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   User,
@@ -17,11 +17,15 @@ import {
   Sparkles,
   Pencil,
   X,
+  Camera,
+  Loader2,
 } from 'lucide-react';
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
 import { useLogout } from '@/hooks/useLogout';
-import { useAppSelector } from '@/redux/store';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { getMe, changePassword } from '@/redux/features/authApi';
+import { updateMe } from '@/redux/features/userApi';
 import { toast } from 'sonner';
 
 interface ProfileViewProps {
@@ -34,24 +38,76 @@ export default function ProfileView({
   isStandaloneRoute = false,
 }: ProfileViewProps) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { handleLogout } = useLogout();
   const { user } = useAppSelector((state) => state.auth);
+
+  useEffect(() => {
+    dispatch(getMe());
+  }, [dispatch]);
 
   const [isClockedOut, setIsClockedOut] = useState(false);
 
   // Dynamic Work Information state
   const [workInfo, setWorkInfo] = useState({
-    role: 'Waiter',
-    assignedTables: '01, 02, 03, 04, 05',
-    branch: 'Main Branch',
+    role: user?.role ? user.role.replace(/_/g, ' ') : 'Waiter',
+    assignedTables: user?.assignments?.map((a: any) => a.tableNumber).join(', ') || '01, 02, 03, 04, 05',
+    branch: user?.assignments?.[0]?.branch?.name || 'Main Branch',
   });
 
   // Modal State
   const [isEditWorkModalOpen, setIsEditWorkModalOpen] = useState(false);
+  const [isEditPersonalInfoModalOpen, setIsEditPersonalInfoModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+
   const [editForm, setEditForm] = useState(workInfo);
 
-  const waiterName = user?.name || user?.firstName || 'John Doe';
-  const waiterEmail = user?.email || 'm.chen@tavonza-waiter.com';
+  // Personal Info & Avatar Form State
+  const [nameInput, setNameInput] = useState(user?.name || user?.firstName || '');
+  const [contactInput, setContactInput] = useState(user?.contactNo || user?.phone || '');
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [isSavingPersonalInfo, setIsSavingPersonalInfo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Password Form State
+  const [oldPass, setOldPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [isChangingPass, setIsChangingPass] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setNameInput(user.name || user.firstName || '');
+      setContactInput(user.contactNo || user.phone || '');
+      const u = user as any;
+      setAvatarPreview(u.avatarUrl || u.avatar || null);
+      setWorkInfo((prev) => ({
+        ...prev,
+        role: user.role ? user.role.replace(/_/g, ' ') : prev.role,
+        branch: user.assignments?.[0]?.branch?.name || prev.branch,
+      }));
+    }
+  }, [user]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must be less than 5MB');
+        return;
+      }
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const waiterName = user?.name || user?.firstName || 'Waiter';
+  const waiterEmail = user?.email || '';
+  const waiterPhone = user?.contactNo || user?.phone || 'Not set';
 
   const handleClockOut = () => {
     if (isClockedOut) {
@@ -69,13 +125,35 @@ export default function ProfileView({
     <div className="flex flex-col pb-6 animate-fadeIn">
       {/* Profile Hero Header matching Figma */}
       <div className="w-full px-5 pt-3 pb-6 bg-gradient-to-b from-neutral-900 to-neutral-900/30 border-b border-white/5 flex flex-col items-center gap-3">
-            <div className="w-20 h-20 bg-white/20 rounded-full outline outline-1 outline-neutral-200 flex items-center justify-center shadow-lg shadow-black/50">
-              <span className="text-white text-3xl font-normal font-sans select-none">
-                {waiterName[0] || 'M'}
-              </span>
+            <div className="relative group">
+              <div className="w-20 h-20 bg-neutral-800 rounded-full outline outline-1 outline-neutral-200 flex items-center justify-center shadow-lg shadow-black/50 overflow-hidden relative">
+                {avatarPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-white text-3xl font-normal font-sans select-none">
+                    {waiterName[0] || 'M'}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute bottom-0 right-0 p-1.5 bg-yellow-400 hover:bg-yellow-300 text-black rounded-full shadow-lg transition cursor-pointer"
+                title="Change profile picture"
+              >
+                <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageChange}
+              />
             </div>
 
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-1.5">
               <h1 className="text-white text-base font-medium font-['Inter'] leading-6 text-center">
                 {waiterName}
               </h1>
@@ -84,25 +162,36 @@ export default function ProfileView({
               </span>
 
               {/* Station Tag & Active Indicator */}
-              <div className="h-6 px-3 py-1 bg-neutral-950 rounded-[10px] inline-flex items-center gap-2 border border-white/10 mt-1">
-                <span className="text-white text-xs font-normal font-['Inter']">
-                  Waiter · Main Branch
+              <div className="flex items-center gap-1.5 flex-wrap justify-center mt-1">
+                <span className="px-2.5 py-0.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-xs font-semibold rounded-full uppercase">
+                  {user?.role || 'WAITER'}
                 </span>
-                <div className="flex items-center gap-1">
-                  <div
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isClockedOut ? 'bg-zinc-500' : 'bg-green-500 animate-pulse'
-                    }`}
-                  />
-                  <span
-                    className={`text-xs font-normal font-['Inter'] ${
-                      isClockedOut ? 'text-zinc-500' : 'text-green-500'
-                    }`}
-                  >
-                    {isClockedOut ? 'Off Shift' : 'Active'}
+                <span className="px-2.5 py-0.5 bg-blue-400/10 border border-blue-400/20 text-blue-400 text-xs font-semibold rounded-full uppercase">
+                  {user?.globalRole || 'STAFF'}
+                </span>
+                <div className="h-6 px-3 py-1 bg-neutral-950 rounded-[10px] inline-flex items-center gap-2 border border-white/10">
+                  <span className="text-white text-xs font-normal font-['Inter']">
+                    {user?.branchName || user?.assignments?.[0]?.branchName || 'Main Branch'}
                   </span>
+                  <div className="flex items-center gap-1">
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isClockedOut ? 'bg-zinc-500' : 'bg-green-500 animate-pulse'
+                      }`}
+                    />
+                    <span
+                      className={`text-xs font-normal font-['Inter'] ${
+                        isClockedOut ? 'text-zinc-500' : 'text-green-500'
+                      }`}
+                    >
+                      {isClockedOut ? 'Off Shift' : 'Active'}
+                    </span>
+                  </div>
                 </div>
               </div>
+              <span className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                ID: {user?.id || '—'}
+              </span>
             </div>
           </div>
 
@@ -128,13 +217,38 @@ export default function ProfileView({
             {/* Personal Information Card matching Figma */}
             <div className="w-full bg-stone-950 rounded-[8px] outline outline-1 outline-offset-[-1px] outline-zinc-900 overflow-hidden shadow-sm">
               <div className="w-full px-3 py-2 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center">
-                <span className="text-white text-sm font-medium font-['Inter']">
-                  Personal Information
-                </span>
-                <User className="w-4 h-4 text-white/80" />
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-white/80" />
+                  <span className="text-white text-sm font-medium font-['Inter']">
+                    Personal Information
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditPersonalInfoModalOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 hover:border-yellow-400/50 rounded-[6px] text-xs font-medium transition cursor-pointer active:scale-95 group shadow-xs"
+                >
+                  <Pencil className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  <span>Edit</span>
+                </button>
               </div>
 
               <div className="p-3 flex flex-col gap-2.5">
+                {/* Account Badges from getMe */}
+                <div className="flex items-center justify-between gap-2 p-2 bg-neutral-900/90 rounded-[5px] border border-white/5 text-xs">
+                  <span className="text-zinc-400 font-mono text-[11px]">ID: {user?.id || '—'}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                      user?.isEmailVerified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    }`}>
+                      Email {user?.isEmailVerified ? 'Verified ✓' : 'Unverified'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-yellow-400/10 text-yellow-400 border border-yellow-400/30 uppercase">
+                      {user?.role || 'WAITER'}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-1">
                   <span className="text-stone-300 text-xs font-normal">Full Name</span>
                   <div className="w-full h-10 px-3 bg-neutral-900 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-neutral-500/10 flex items-center">
@@ -157,16 +271,7 @@ export default function ProfileView({
                   <span className="text-stone-300 text-xs font-normal">Phone Number</span>
                   <div className="w-full h-10 px-3 bg-neutral-900 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-neutral-500/10 flex items-center">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
-                      +1 (555) 012-3456
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <span className="text-stone-300 text-xs font-normal">Employee ID</span>
-                  <div className="w-full h-10 px-3 bg-neutral-900 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-neutral-500/10 flex items-center">
-                    <span className="text-indigo-100 text-sm font-normal font-['Inter']">
-                      EMP-00247
+                      {waiterPhone}
                     </span>
                   </div>
                 </div>
@@ -179,7 +284,7 @@ export default function ProfileView({
                 <div className="flex items-center gap-2">
                   <Briefcase className="w-4 h-4 text-orange-200" />
                   <span className="text-white text-sm font-medium font-['Inter']">
-                    Work Information
+                    Work Information & Capabilities
                   </span>
                 </div>
                 <button
@@ -197,12 +302,26 @@ export default function ProfileView({
               </div>
 
               <div className="p-3 flex flex-col gap-2.5">
+                <div className="grid grid-cols-2 gap-2 text-xs p-2 bg-neutral-900/90 rounded-[5px] border border-white/5">
+                  <div>
+                    <span className="text-stone-400 text-[10px] uppercase block">Global Role</span>
+                    <span className="text-blue-400 font-semibold">{user?.globalRole || 'STAFF'}</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 text-[10px] uppercase block">Account Created</span>
+                    <span className="text-indigo-100 font-medium text-[11px]">
+                      {user?.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Oct 5, 2026'}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-1">
                   <span className="text-stone-300 text-xs font-normal">Role</span>
-                  <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center">
+                  <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center justify-between">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
                       {workInfo.role}
                     </span>
+                    <span className="text-amber-400 text-xs font-mono">STAFF ROLE</span>
                   </div>
                 </div>
 
@@ -217,23 +336,41 @@ export default function ProfileView({
 
                 <div className="flex flex-col gap-1">
                   <span className="text-stone-300 text-xs font-normal">Branch</span>
-                  <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center">
+                  <div className="w-full h-10 px-3 rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-800 bg-neutral-900 flex items-center justify-between">
                     <span className="text-indigo-100 text-sm font-normal font-['Inter']">
-                      {workInfo.branch}
+                      {user?.branchName || user?.assignments?.[0]?.branchName || workInfo.branch}
                     </span>
+                    <span className="text-zinc-500 text-[10px] font-mono">
+                      ID: {user?.branchId || user?.assignments?.[0]?.branchId || 'ce7b4318...'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Granted Permissions List */}
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <span className="text-stone-300 text-xs font-normal">Granted Permissions</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(user?.assignments?.[0]?.permissions || user?.permissions || ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS', 'MANAGE_TABLES', 'SERVE_ORDERS']).map((perm: string) => (
+                      <span
+                        key={perm}
+                        className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono font-medium rounded-[5px] flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span>{perm}</span>
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Performance Overview matching Figma */}
-            <div className="flex flex-col gap-3">
+            {/* <div className="flex flex-col gap-3">
               <span className="text-white text-sm font-medium font-['Inter']">
                 Performance Overview
               </span>
 
-              {/* 3 Metric Cards */}
-              <div className="grid grid-cols-3 gap-2">
+               <div className="grid grid-cols-3 gap-2">
                 <div className="p-3 bg-stone-950 rounded-[8px] outline outline-1 outline-offset-[-1px] outline-white/10 flex flex-col items-center justify-center gap-0.5">
                   <span className="text-indigo-100 text-base font-semibold font-['Inter']">
                     124
@@ -262,10 +399,8 @@ export default function ProfileView({
                 </div>
               </div>
 
-              {/* Progress Bars */}
-              <div className="flex flex-col gap-3 pt-1">
-                {/* 1. Completion Rate */}
-                <div className="flex flex-col gap-1.5">
+               <div className="flex flex-col gap-3 pt-1">
+                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-stone-300 font-normal">Completion Rate</span>
                     <span className="text-stone-300 font-semibold">96%</span>
@@ -275,8 +410,7 @@ export default function ProfileView({
                   </div>
                 </div>
 
-                {/* 2. Customer Satisfaction */}
-                <div className="flex flex-col gap-1.5">
+                 <div className="flex flex-col gap-1.5">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-stone-300 font-normal">Customer Satisfaction</span>
                     <span className="text-stone-300 font-semibold">4.8 / 5</span>
@@ -286,7 +420,7 @@ export default function ProfileView({
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Account Settings List matching Figma */}
             <div className="flex flex-col gap-3 pt-1">
@@ -318,7 +452,7 @@ export default function ProfileView({
 
                 {/* 2. Change Password */}
                 <div
-                  onClick={() => toast.info('Password change link sent to email')}
+                  onClick={() => setIsChangePasswordModalOpen(true)}
                   className="p-3 bg-neutral-900 hover:bg-neutral-850 rounded-xl border border-white/5 flex items-center justify-between cursor-pointer transition"
                 >
                   <div className="flex items-center gap-3">
@@ -541,11 +675,335 @@ export default function ProfileView({
     </div>
   );
 
+  // Edit Personal Info Modal
+  const editPersonalInfoModalContent = isEditPersonalInfoModalOpen && (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={() => setIsEditPersonalInfoModalOpen(false)}
+    >
+      <div
+        className="w-full max-w-[390px] bg-neutral-900 border border-white/10 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-white relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center text-yellow-400">
+              <User className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-white text-sm font-semibold">Edit Personal Info</h3>
+              <p className="text-neutral-400 text-[11px]">Update your name and phone number</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsEditPersonalInfoModalOpen(false)}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3.5">
+          {/* Avatar Photo Picker */}
+          <div className="flex flex-col items-center gap-2 pb-1">
+            <div className="w-16 h-16 rounded-full bg-neutral-800 border border-white/20 overflow-hidden relative flex items-center justify-center">
+              {avatarPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white text-xl font-bold font-sans select-none">
+                  {waiterName[0] || 'W'}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>{avatarFile ? 'Photo Selected' : 'Change Photo'}</span>
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-300">Full Name</label>
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-300">Phone Number</label>
+            <input
+              type="text"
+              value={contactInput}
+              onChange={(e) => setContactInput(e.target.value)}
+              className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={() => setIsEditPersonalInfoModalOpen(false)}
+            className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={isSavingPersonalInfo}
+            onClick={async () => {
+              if (!nameInput.trim()) {
+                toast.error('Full Name cannot be empty');
+                return;
+              }
+              setIsSavingPersonalInfo(true);
+              try {
+                const res = await dispatch(
+                  updateMe({
+                    name: nameInput.trim(),
+                    contactNo: contactInput.trim(),
+                    avatar: avatarFile || avatarPreview || undefined,
+                  })
+                );
+                setIsSavingPersonalInfo(false);
+                if (updateMe.fulfilled.match(res)) {
+                  setIsEditPersonalInfoModalOpen(false);
+                  toast.success('Profile updated successfully!', {
+                    description: avatarFile ? 'Profile picture uploaded and updated!' : undefined,
+                  });
+                } else {
+                  toast.error((res.payload as string) || 'Failed to update profile');
+                }
+              } catch (err: any) {
+                setIsSavingPersonalInfo(false);
+                toast.error(err?.message || 'Failed to update profile');
+              }
+            }}
+            className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSavingPersonalInfo ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <span>Save Profile</span>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Change Password Modal
+  const changePasswordModalContent = isChangePasswordModalOpen && (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={() => setIsChangePasswordModalOpen(false)}
+    >
+      <div
+        className="w-full max-w-[390px] bg-neutral-900 border border-white/10 rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-white relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center text-yellow-400">
+              <Lock className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-white text-sm font-semibold">Change Password</h3>
+              <p className="text-neutral-400 text-[11px]">Request reset code & update security credentials</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsChangePasswordModalOpen(false)}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {!otpSent ? (
+          <div className="flex flex-col gap-4">
+            <p className="text-xs text-zinc-400">
+              Send a 5-digit reset OTP verification code to your registered email (<span className="text-white font-medium">{waiterEmail || 'your account'}</span>) to update password.
+            </p>
+            <button
+              type="button"
+              disabled={isSendingOtp}
+              onClick={async () => {
+                if (!waiterEmail) {
+                  toast.error('User email not found');
+                  return;
+                }
+                setIsSendingOtp(true);
+                try {
+                  const res = await dispatch(changePassword({ email: waiterEmail }));
+                  setIsSendingOtp(false);
+                  if (changePassword.fulfilled.match(res)) {
+                    setOtpSent(true);
+                    toast.success('Reset OTP code sent to your email!', {
+                      description: typeof res.payload === 'string' ? res.payload : undefined,
+                    });
+                  } else {
+                    toast.error((res.payload as string) || 'Failed to send OTP code');
+                  }
+                } catch (err: any) {
+                  setIsSendingOtp(false);
+                  toast.error(err?.message || 'Failed to send OTP code');
+                }
+              }}
+              className="w-full h-11 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold rounded-xl transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isSendingOtp ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Sending Reset OTP...</span>
+                </>
+              ) : (
+                <span>Send Reset OTP to Gmail</span>
+              )}
+            </button>
+          </div>
+        ) : (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!otpCode.trim()) {
+                toast.error('Please enter the 5-digit OTP code sent to your email');
+                return;
+              }
+              if (!newPass.trim()) {
+                toast.error('Please enter your new password');
+                return;
+              }
+              if (newPass.trim().length < 8) {
+                toast.error('New password must be at least 8 characters');
+                return;
+              }
+              if (confirmPass && newPass !== confirmPass) {
+                toast.error('Passwords do not match');
+                return;
+              }
+              setIsChangingPass(true);
+              try {
+                const res = await dispatch(
+                  changePassword({ email: waiterEmail, code: otpCode.trim(), newPassword: newPass.trim() })
+                );
+                setIsChangingPass(false);
+                if (changePassword.fulfilled.match(res)) {
+                  setIsChangePasswordModalOpen(false);
+                  setNewPass('');
+                  setConfirmPass('');
+                  setOtpCode('');
+                  setOtpSent(false);
+                  toast.success('Password updated successfully!');
+                } else {
+                  toast.error((res.payload as string) || 'Failed to update password');
+                }
+              } catch (err: any) {
+                setIsChangingPass(false);
+                toast.error(err?.message || 'Failed to update password');
+              }
+            }}
+            className="flex flex-col gap-3.5"
+          >
+            <div className="p-2.5 bg-yellow-400/10 border border-yellow-400/20 rounded-lg text-xs text-yellow-300 flex items-center justify-between">
+              <span>✓ OTP code sent to {waiterEmail}!</span>
+              <button
+                type="button"
+                disabled={isSendingOtp}
+                onClick={async () => {
+                  setIsSendingOtp(true);
+                  const res = await dispatch(changePassword({ email: waiterEmail }));
+                  setIsSendingOtp(false);
+                  if (changePassword.fulfilled.match(res)) {
+                    toast.success('New OTP code sent!');
+                  }
+                }}
+                className="text-[11px] text-yellow-400 hover:underline font-semibold cursor-pointer disabled:opacity-50"
+              >
+                {isSendingOtp ? 'Sending...' : 'Resend'}
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">5-Digit Reset OTP Code *</label>
+              <input
+                type="text"
+                required
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value)}
+                placeholder="e.g. 48291"
+                maxLength={6}
+                className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition font-mono tracking-widest"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">New Password *</label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={newPass}
+                onChange={(e) => setNewPass(e.target.value)}
+                placeholder="At least 8 characters"
+                className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">Confirm Password *</label>
+              <input
+                type="password"
+                required
+                minLength={8}
+                value={confirmPass}
+                onChange={(e) => setConfirmPass(e.target.value)}
+                placeholder="Confirm new password"
+                className="w-full h-10 px-3 bg-neutral-950 border border-white/10 focus:border-yellow-400 rounded-lg text-white text-sm focus:outline-none transition"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setOtpSent(false)}
+                className="px-3.5 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={isChangingPass}
+                className="flex-1 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer shadow-md shadow-yellow-400/20 active:scale-95 disabled:opacity-50"
+              >
+                {isChangingPass ? 'Updating...' : 'Submit & Update Password'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+
   if (inShell) {
     return (
       <>
         {profileContent}
         {editModalContent}
+        {editPersonalInfoModalContent}
+        {changePasswordModalContent}
       </>
     );
   }
@@ -563,6 +1021,8 @@ export default function ProfileView({
         />
       </div>
       {editModalContent}
+      {editPersonalInfoModalContent}
+      {changePasswordModalContent}
     </div>
   );
 }

@@ -1,13 +1,17 @@
 import { Controller, Get } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import { ApiTags, ApiOperation, ApiOkResponse } from "@nestjs/swagger";
+import { HealthCheckResponseDto, RootInfoResponseDto } from "./common/swagger/api-error-response.dto";
 
 @ApiTags("Health")
 @Controller()
 export class AppController {
   @Get("health")
   @ApiOperation({ summary: "Application health check" })
-  @ApiResponse({ status: 200, description: "Application is healthy" })
-  health() {
+  @ApiOkResponse({
+    type: HealthCheckResponseDto,
+    description: "Application is healthy and database connection pool is active",
+  })
+  health(): HealthCheckResponseDto {
     return {
       status: "ok",
       timestamp: new Date().toISOString(),
@@ -16,7 +20,11 @@ export class AppController {
 
   @Get()
   @ApiOperation({ summary: "API root check" })
-  root() {
+  @ApiOkResponse({
+    type: RootInfoResponseDto,
+    description: "Root service information and Swagger documentation URL",
+  })
+  root(): RootInfoResponseDto {
     return {
       service: "Tavonza AI API",
       status: "online",
@@ -24,3 +32,4 @@ export class AppController {
     };
   }
 }
+

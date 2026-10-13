@@ -18,6 +18,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   UseGuards,
   HttpCode,
@@ -34,6 +35,7 @@ import {
   ApiConflictResponse,
 } from '@nestjs/swagger';
 import { AuthService } from '../../application/services/auth.service';
+import { UserService } from '../../application/services/user.service';
 import {
   RegisterDto,
   LoginDto,
@@ -42,16 +44,24 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   ResendOtpDto,
+  ChangePasswordDto,
 } from './dto/auth-request.dto';
+import { UpdateUserProfileDto } from './dto/user-request.dto';
 import { AuthTokensDto, UserProfileDto, MessageResponseDto, RegisterResponseDto } from './dto/auth-response.dto';
+import { UserDetailResponseDto } from './dto/user-response.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../infrastructure/adapters/jwt.strategy';
+import { ApiStandardErrors } from '../../../../common/swagger';
 
-@ApiTags('Customer | Auth')
+@ApiTags('Identity | Authentication')
+@ApiStandardErrors(400, 401, 500)
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly userService: UserService,
+  ) {}
 
   /**
    * POST /auth/register
@@ -88,16 +98,33 @@ export class AuthController {
    */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: '[Customer] Refresh access token' })
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiOkResponse({ type: AuthTokensDto })
-  @ApiUnauthorizedResponse()
+  @ApiUnauthorizedResponse({ description: 'Invalid or expired refresh token' })
   async refresh(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: JwtPayload | undefined,
     @Body() dto: RefreshTokenDto,
   ): Promise<AuthTokensDto> {
-    return this.authService.refreshTokens(user.sub, dto.refreshToken);
+    return this.authService.refreshTokens(user?.sub, dto.refreshToken);
+  }
+
+  /**
+   * POST /auth/change-password
+   * Authenticated endpoint to change current password
+   */
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Change password for currently authenticated user' })
+  @ApiOkResponse({ type: MessageResponseDto })
+  @ApiBadRequestResponse({ description: 'Current password incorrect or weak new password' })
+  async changePassword(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<MessageResponseDto> {
+    await this.authService.changePassword(user.sub, dto);
+    return { message: 'Password changed successfully' };
   }
 
   /**
@@ -126,6 +153,23 @@ export class AuthController {
   @ApiUnauthorizedResponse()
   async getMe(@CurrentUser() user: JwtPayload): Promise<UserProfileDto> {
     return this.authService.getMe(user.sub);
+  }
+
+  /**
+   * PATCH /auth/me
+   * Update current user profile
+   */
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: '[Customer] Update current user profile' })
+  @ApiOkResponse({ type: UserDetailResponseDto })
+  @ApiUnauthorizedResponse()
+  async updateMe(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateUserProfileDto,
+  ): Promise<UserDetailResponseDto> {
+    return this.userService.updateMe(user.sub, dto);
   }
 
   /**

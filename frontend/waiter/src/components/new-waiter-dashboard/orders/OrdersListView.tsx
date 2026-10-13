@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Loader2, UtensilsCrossed, ChevronLeft } from 'lucide-react';
+import { Search, Loader2, UtensilsCrossed, ChevronLeft, ChevronRight } from 'lucide-react';
 import { YellowSparkleIcon, FuchsiaCookingPanIcon, GreenClockIcon } from './orderIcons';
 import { OrderItemData, OrderStatus } from './orderData';
 import BottomDock from '../navigation/BottomDock';
@@ -34,8 +34,11 @@ export default function OrdersListView({
   const router = useRouter();
   const [filter, setFilter] = useState<'ALL' | 'Pending' | 'Active' | 'Completed'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [orders, setOrders] = useState<OrderItemData[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const ITEMS_PER_PAGE = 10;
 
   const mapBackendStatus = (backendStatus: string): OrderStatus => {
     switch (backendStatus?.toUpperCase()) {
@@ -57,6 +60,11 @@ export default function OrdersListView({
   const prevPendingIdsRef = React.useRef<Set<string>>(new Set());
   const isInitialLoadRef = React.useRef(true);
 
+  // Reset to page 1 whenever filter tab or search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchQuery]);
+
   const fetchOrders = useCallback(async () => {
     try {
       const branchId = getActiveBranchId();
@@ -69,6 +77,8 @@ export default function OrdersListView({
         branchId,
         status: statusParam,
         search: searchQuery.trim() || undefined,
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
       });
 
       // Detect newly arrived customer orders
@@ -144,18 +154,26 @@ export default function OrdersListView({
     } finally {
       setLoading(false);
     }
-  }, [filter, searchQuery]);
+  }, [filter, searchQuery, currentPage]);
 
   useEffect(() => {
     setLoading(true);
     fetchOrders();
 
-    // Auto-refresh every 3 seconds for real-time live customer order updates
-    const interval = setInterval(() => {
+    const handleRealtime = () => {
       fetchOrders();
-    }, 3000);
+    };
+    window.addEventListener('tavonza:order_created', handleRealtime);
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+    window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    window.addEventListener('tavonza:payment_status_changed', handleRealtime);
 
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('tavonza:order_created', handleRealtime);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+      window.removeEventListener('tavonza:payment_status_changed', handleRealtime);
+    };
   }, [fetchOrders]);
 
   const actionNeededCount = orders.filter(
@@ -443,6 +461,38 @@ export default function OrdersListView({
           );
         })}
       </div>
+
+      {/* Pagination Controls (10 Items per Page) */}
+      {orders.length > 0 && (
+        <div className="px-5 pt-3 pb-1 flex items-center justify-between border-t border-neutral-800/80 mt-2">
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage <= 1 || loading}
+            className="px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-medium text-white hover:bg-neutral-800 hover:border-yellow-400/40 disabled:opacity-40 transition flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-3.5 h-3.5 text-yellow-400" />
+            <span>Prev</span>
+          </button>
+
+          <div className="flex items-center gap-1 text-xs font-['Poppins']">
+            <span className="text-zinc-400">Page</span>
+            <span className="text-yellow-400 font-bold bg-yellow-400/10 px-2 py-0.5 rounded border border-yellow-400/30">
+              {currentPage}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => prev + 1)}
+            disabled={orders.length < ITEMS_PER_PAGE || loading}
+            className="px-3 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-medium text-white hover:bg-neutral-800 hover:border-yellow-400/40 disabled:opacity-40 transition flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <span>Next</span>
+            <ChevronRight className="w-3.5 h-3.5 text-yellow-400" />
+          </button>
+        </div>
+      )}
     </div>
   );
 

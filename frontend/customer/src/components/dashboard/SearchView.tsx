@@ -1,9 +1,26 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Search, MapPin, Star, Clock, Compass, Tag, Sparkles } from 'lucide-react';
+import {
+  Search,
+  MapPin,
+  Star,
+  Clock,
+  Compass,
+  UtensilsCrossed,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  ArrowLeft,
+} from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { fetchMenuItems } from '@/redux/features/menu-items/menuItemApi';
+import { fetchMenuCategories } from '@/redux/features/menu-category/menuCategoryApi';
+import { getItemImage, getCategoryIcon } from '@/lib/menuUtils';
+import { useCart } from '@/context/CartContext';
 
 interface SearchViewProps {
   onReserveClick?: () => void;
@@ -12,318 +29,292 @@ interface SearchViewProps {
 
 export default function SearchView({ onReserveClick, onDishClick }: SearchViewProps) {
   const router = useRouter();
-  const [activeSegment, setActiveSegment] = useState<'restaurants' | 'dishes'>('restaurants');
+  const dispatch = useAppDispatch();
+  const { addToCart } = useCart();
+
+  const { items: backendItems, loading: itemsLoading, meta: itemsMeta } = useAppSelector(
+    (state) => state.menuItems
+  );
+  const { categories: backendCategories } = useAppSelector((state) => state.menuCategories);
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCuisine, setSelectedCuisine] = useState('Date Night');
-  const [selectedDietary, setSelectedDietary] = useState('Keto & Low Carb');
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const cuisines = ['Date Night', 'Post Workout', 'Business Lunch', 'Late Night Drinks'];
-  const dietaries = ['Keto & Low Carb', 'Post Workout', 'Business Lunch', 'Late Night Drinks'];
+  // Fetch Categories from Backend API on mount & whenever categorySearchQuery changes
+  useEffect(() => {
+    dispatch(
+      fetchMenuCategories({
+        page: 1,
+        limit: 10,
+        searchTerm: categorySearchQuery.trim() || undefined,
+      })
+    );
+  }, [dispatch, categorySearchQuery]);
 
-  const handleReserve = () => {
-    if (onReserveClick) {
-      onReserveClick();
-    } else {
-      router.push('/reserve');
-    }
-  };
+  // Reset pagination to page 1 on query or category change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory]);
 
-  const handleDishDetail = () => {
-    if (onDishClick) {
-      onDishClick();
-    } else {
-      router.push('/dish-detail');
-    }
-  };
+  // Fetch Items from Backend GET API with searchTerm and 10 items limit per page
+  useEffect(() => {
+    dispatch(
+      fetchMenuItems({
+        page: currentPage,
+        limit: 10,
+        searchTerm: searchQuery.trim() || undefined,
+        categoryId: selectedCategory !== 'all' ? selectedCategory : undefined,
+      })
+    );
+  }, [dispatch, currentPage, searchQuery, selectedCategory]);
 
-  const restaurantResults = [
-    {
-      id: 1,
-      name: 'Maison Verde - Tuscan Trattoria',
-      rating: '4.9',
-      status: 'Open until 11:00 PM',
-      distance: '1.2 km away • Champs-Élysées',
-      waitTime: 'Approx. 15-minute wait',
-      image: '/images/slide2.jpg',
-      slots: ['8:00 PM', '8:30 PM', '9:00 PM'],
-    },
-    {
-      id: 2,
-      name: 'The Burger Lab',
-      rating: '4.5',
-      offer: 'OFFER',
-      status: 'Open until 12:00 AM',
-      cuisine: 'American · Burgers',
-      prepTime: '20–30 min',
-      price: '$26.50',
-      image: '/images/burger.jpg',
-      slots: ['7:30 PM', '8:00 PM', '8:30 PM'],
-    },
-  ];
+  const categories = useMemo(() => {
+    const list = (backendCategories || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      icon: getCategoryIcon(c.name),
+    }));
+    const allList = [{ id: 'all', name: 'ALL', icon: '🍽️' }, ...list];
+    if (!categorySearchQuery.trim()) return allList;
+    return allList.filter((cat) =>
+      cat.name.toLowerCase().includes(categorySearchQuery.trim().toLowerCase())
+    );
+  }, [backendCategories, categorySearchQuery]);
 
-  const dishResults = [
-    {
-      id: 101,
-      title: 'Pan-Seared Line-Caught Seabass',
-      restaurant: 'Le Gabriel . Contemporary French',
-      price: '€88',
-      match: '99% Health Match',
-      image: '/images/seabass.jpg',
-      tags: ['Keto & Low Carb', 'High Protein'],
-    },
-    {
-      id: 102,
-      title: 'Double Truffle Wagyu Burger',
-      restaurant: 'The Burger Lab',
-      price: '$26.50',
-      match: '95% Preference Match',
-      image: '/images/burger.jpg',
-      tags: ['Organic Beef', 'Keto Bun Available'],
-    },
-  ];
+  const totalItems = itemsMeta?.total ?? itemsMeta?.totalCount ?? backendItems.length;
+  const totalPages = itemsMeta?.totalPages || Math.max(1, Math.ceil(totalItems / 10));
 
-  const handleOpenReserve = (restoName: string) => {
-    handleReserve();
+  const handleOpenDish = (id: string) => {
+    router.push(`/dish-detail?dish=${encodeURIComponent(id)}`);
   };
 
   return (
     <div className="w-full max-w-md md:max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto min-h-screen bg-black text-white flex flex-col justify-between relative overflow-x-hidden font-sans">
-      <div className="w-full flex-1 flex flex-col gap-5 pb-24 pt-2">
+      <div className="w-full flex-1 flex flex-col gap-5 pb-12 pt-2">
 
-        {/* 1. Curated Discovery Header Hero Banner */}
-        <div className="w-full p-5 bg-gradient-to-br from-neutral-900 to-neutral-800/20 border-b border-white/10 flex flex-col gap-2.5">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/10 border border-neutral-700 w-fit">
-            <Compass className="w-3.5 h-3.5 text-yellow-400" />
-            <span className="text-yellow-400 text-[10px] font-semibold font-['Inter']">
-              Curated Discovery
-            </span>
+        {/* 1. Header Hero Banner with Back Button */}
+        <div className="w-full p-5 bg-gradient-to-br from-neutral-900 to-neutral-800/20 border-b border-white/10 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex items-center gap-2 text-white hover:text-yellow-400 transition cursor-pointer group"
+            >
+              <div className="w-7 h-7 bg-neutral-900 border border-neutral-800 rounded-full flex items-center justify-center group-hover:border-yellow-400/50 transition">
+                <ArrowLeft className="w-3.5 h-3.5 text-white group-hover:text-yellow-400 transition" />
+              </div>
+              <span className="text-white text-xs font-semibold font-montserrat">
+                Back
+              </span>
+            </button>
+
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/10 border border-neutral-700 w-fit">
+              <Compass className="w-3.5 h-3.5 text-yellow-400" />
+              <span className="text-yellow-400 text-[10px] font-semibold font-['Inter']">
+                Backend Live Search
+              </span>
+            </div>
           </div>
 
           <h2 className="text-base font-semibold text-white font-['Inter']">
-            Explore Restaurants & Fine Dining
+            Explore Menu & Culinary Dishes
           </h2>
 
           <p className="text-xs text-neutral-400 leading-relaxed font-['Poppins']">
-            Search by cuisine, dietary profile, acoustics, or specific dishes around Paris, 8th Arr. • Triangle d'Or.
+            Search items in real-time with dynamic backend pagination (10 items per page limit).
           </p>
         </div>
 
-        {/* 2. Filter & Search Panel Box */}
+        {/* 2. Filter & Category Section with Section Input Field */}
         <div className="mx-5 bg-neutral-900 border border-white/10 rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
-          {/* Segmented Switcher (Restaurants vs Dishes) */}
-          <div className="w-full flex items-center bg-black/60 p-1 rounded-xl border border-white/10">
-            <button
-              onClick={() => setActiveSegment('restaurants')}
-              className={`flex-1 py-2 rounded-lg text-xs font-medium font-['Inter'] transition flex items-center justify-center gap-1 ${
-                activeSegment === 'restaurants'
-                  ? 'bg-yellow-500 text-black shadow-md font-semibold'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <span>Restaurants (5)</span>
-            </button>
-            <button
-              onClick={() => setActiveSegment('dishes')}
-              className={`flex-1 py-2 rounded-lg text-xs font-medium font-['Inter'] transition flex items-center justify-center gap-1 ${
-                activeSegment === 'dishes'
-                  ? 'bg-yellow-500 text-black shadow-md font-semibold'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <span>Dishes (4)</span>
-            </button>
-          </div>
+          {/* Category Header with Search Input Field beside Title */}
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-xs font-semibold text-yellow-400 font-['Inter'] shrink-0">
+              Categories ({backendCategories.length} live)
+            </h4>
 
-          {/* Search Bar Input */}
-          <div className="w-full px-3.5 py-2.5 bg-white/10 rounded-xl border border-zinc-800 backdrop-blur-sm flex items-center gap-2.5">
-            <Search className="w-4 h-4 text-neutral-300 shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Italian,Vegetarian..."
-              className="w-full bg-transparent text-xs text-gray-200 placeholder:text-gray-400 font-['Montserrat'] focus:outline-none"
-            />
-          </div>
-
-          {/* Cuisine Filter Pills */}
-          <div className="flex flex-col gap-2">
-            <h4 className="text-xs font-semibold text-yellow-400 font-['Inter']">Cuisine</h4>
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-              {cuisines.map((item) => (
+            {/* Input field beside Category Title */}
+            <div className="flex-1 max-w-xs px-2.5 py-1 bg-black/60 rounded-xl border border-zinc-800 flex items-center gap-1.5 focus-within:border-yellow-400/50 transition">
+              <Search className="w-3 h-3 text-neutral-400 shrink-0" />
+              <input
+                type="text"
+                value={categorySearchQuery}
+                onChange={(e) => setCategorySearchQuery(e.target.value)}
+                placeholder="Filter categories..."
+                className="w-full bg-transparent text-xs text-gray-200 placeholder:text-gray-500 font-['Montserrat'] focus:outline-none"
+              />
+              {categorySearchQuery && (
                 <button
-                  key={item}
-                  onClick={() => setSelectedCuisine(item)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium font-['Montserrat'] whitespace-nowrap transition ${
-                    selectedCuisine === item
-                      ? 'bg-yellow-400 text-black font-semibold shadow-md shadow-yellow-500/20'
-                      : 'bg-zinc-800 text-white hover:bg-zinc-700'
-                  }`}
+                  onClick={() => setCategorySearchQuery('')}
+                  className="text-[10px] text-zinc-500 hover:text-white"
                 >
-                  {item}
+                  Clear
                 </button>
-              ))}
+              )}
             </div>
           </div>
 
-          {/* Dietary Filter Pills */}
-          <div className="flex flex-col gap-2">
-            <h4 className="text-xs font-semibold text-yellow-400 font-['Inter']">Dietary</h4>
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-              {dietaries.map((item) => (
-                <button
-                  key={item}
-                  onClick={() => setSelectedDietary(item)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium font-['Montserrat'] whitespace-nowrap transition ${
-                    selectedDietary === item
-                      ? 'bg-yellow-400 text-black font-semibold shadow-md shadow-yellow-500/20'
-                      : 'bg-zinc-800 text-white hover:bg-zinc-700'
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
+          {/* Category Filter Chips */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium font-['Montserrat'] whitespace-nowrap transition cursor-pointer ${
+                  selectedCategory === cat.id
+                    ? 'bg-yellow-400 text-black font-semibold shadow-md shadow-yellow-500/20'
+                    : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                }`}
+              >
+                <span className="mr-1.5">{cat.icon}</span>
+                <span>{cat.name}</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* 3. Search Results List */}
-        <div className="flex flex-col gap-3 px-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white font-['Inter']">
-              {activeSegment === 'restaurants' ? 'Matching Restaurants' : 'Matching Dishes'}
-            </h3>
-            <span className="text-xs text-neutral-400 font-mono">
-              {activeSegment === 'restaurants' ? `${restaurantResults.length} found` : `${dishResults.length} found`}
-            </span>
+        {/* 3. Items Section with Search Input Field beside Section Title */}
+        <div className="flex flex-col gap-3.5 px-5">
+          {/* Items Section Header with Search Input Field beside Title */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 shrink-0">
+              <h3 className="text-sm font-semibold text-white font-['Inter']">
+                Backend Items
+              </h3>
+              <span className="text-xs text-neutral-400 font-mono">
+                ({totalItems} found)
+              </span>
+            </div>
+
+            {/* Search Input Field beside Item Section Title */}
+            <div className="flex-1 max-w-xs px-3 py-1.5 bg-neutral-900 border border-neutral-800 rounded-xl flex items-center gap-2 focus-within:border-yellow-400/50 transition shadow-inner">
+              <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search items by name..."
+                className="w-full bg-transparent text-xs text-gray-200 placeholder:text-gray-400 font-['Montserrat'] focus:outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-[10px] text-zinc-500 hover:text-white"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
-          {activeSegment === 'restaurants' ? (
-            <div className="flex flex-col md:grid md:grid-cols-2 gap-4">
-              {restaurantResults.map((resto) => (
-                <div
-                  key={resto.id}
-                  className="w-full bg-neutral-900 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between gap-3 shadow-lg hover:border-yellow-400/30 transition"
-                >
-                  {/* Card Image Banner */}
-                  <div className="w-full h-36 relative rounded-xl overflow-hidden">
-                    <Image src={resto.image} alt={resto.name} fill className="object-cover" />
-
-                    {/* Top Ratings & Offer Badges */}
-                    <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
-                      <div className="px-2 py-1 bg-zinc-900/90 backdrop-blur-md rounded-full flex items-center gap-1.5 border border-white/10">
-                        <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                        <span className="text-[11px] font-semibold text-red-50">{resto.rating}</span>
-                      </div>
-
-                      {resto.offer && (
-                        <div className="px-2.5 py-1 bg-amber-500 text-red-50 text-[10px] font-bold rounded-full shadow-md">
-                          {resto.offer}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Info Details */}
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-white font-['Inter']">{resto.name}</h4>
-                      {resto.price && (
-                        <span className="text-sm font-bold text-amber-500 font-['DM_Sans']">{resto.price}</span>
-                      )}
-                    </div>
-
-                    {resto.status && (
-                      <div className="flex items-center gap-1 text-xs text-yellow-400 font-medium">
-                        <Clock className="w-3 h-3 text-yellow-400" />
-                        <span>{resto.status}</span>
-                      </div>
-                    )}
-
-                    {resto.cuisine && (
-                      <p className="text-xs text-slate-400 font-['Inter']">{resto.cuisine}</p>
-                    )}
-
-                    {resto.distance && (
-                      <p className="text-xs text-neutral-400 flex items-center gap-1 font-['Inter']">
-                        <MapPin className="w-3 h-3 text-neutral-500" />
-                        <span>{resto.distance}</span>
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Wait Time & Prep Info */}
-                  <div className="flex items-center gap-2">
-                    {resto.waitTime && (
-                      <div className="px-2.5 py-1 bg-zinc-800 rounded-md text-[11px] text-zinc-100 font-medium">
-                        {resto.waitTime}
-                      </div>
-                    )}
-                    {resto.prepTime && (
-                      <div className="px-2.5 py-1 bg-zinc-800 rounded-md text-[11px] text-slate-300 font-medium flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-white/60" />
-                        <span>{resto.prepTime}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Booking Slot Buttons */}
-                  <div className="flex flex-col gap-1.5 pt-1 border-t border-neutral-800">
-                    <span className="text-[10px] text-neutral-400 font-['Inter']">Available Reservation Times Tonight:</span>
-                    <div className="flex items-center gap-2">
-                      {resto.slots.map((slot, sIdx) => (
-                        <button
-                          key={sIdx}
-                          onClick={() => handleOpenReserve(resto.name)}
-                          className="flex-1 py-1.5 bg-zinc-800 hover:bg-yellow-400 hover:text-black rounded-lg text-xs font-medium text-zinc-100 transition shadow-sm text-center"
-                        >
-                          {slot}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
+          {itemsLoading ? (
+            <div className="w-full py-12 flex flex-col items-center justify-center gap-2">
+              <Loader2 className="w-7 h-7 text-yellow-400 animate-spin" />
+              <p className="text-xs text-zinc-400">Searching menu items...</p>
+            </div>
+          ) : backendItems.length === 0 ? (
+            <div className="w-full py-12 flex flex-col items-center justify-center gap-2 bg-neutral-900/50 rounded-2xl border border-neutral-800">
+              <UtensilsCrossed className="w-8 h-8 text-zinc-500 mb-1" />
+              <p className="text-sm font-medium text-zinc-300 font-poppins">No items found</p>
+              <p className="text-xs text-zinc-500 font-poppins">Try adjusting your search query or category filter</p>
             </div>
           ) : (
-            <div className="flex flex-col md:grid md:grid-cols-2 gap-4">
-              {dishResults.map((dish) => (
-                <div
-                  key={dish.id}
-                  className="w-full bg-neutral-900 border border-white/10 rounded-2xl p-3.5 flex flex-col gap-3 shadow-lg"
-                >
-                  <div className="w-full h-36 relative rounded-xl overflow-hidden">
-                    <Image src={dish.image} alt={dish.title} fill className="object-cover" />
-                    <div className="absolute top-2.5 left-2.5 px-2.5 py-1 bg-zinc-900/90 text-white text-[10px] font-medium rounded-md border border-white/10">
-                      {dish.match}
-                    </div>
-                    <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 bg-black text-yellow-400 text-xs font-bold rounded-md">
-                      {dish.price}
-                    </div>
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {backendItems.map((item) => {
+                const imageUrl = getItemImage(item.name, item.category?.name, item.imageUrl);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleOpenDish(item.id)}
+                    className="w-full bg-neutral-900 rounded-2xl border border-neutral-800/80 p-3.5 pr-4 flex items-center justify-between gap-3 hover:border-yellow-400/40 transition-all cursor-pointer group shadow-sm"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-neutral-950">
+                        <Image
+                          src={imageUrl}
+                          alt={item.name}
+                          fill
+                          sizes="80px"
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
 
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] text-neutral-400 font-['Inter']">{dish.restaurant}</span>
-                    <h4 className="text-sm font-semibold text-white font-['Inter']">{dish.title}</h4>
-                  </div>
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <h4 className="text-white text-sm font-medium font-inter truncate group-hover:text-yellow-300 transition-colors">
+                          {item.name}
+                        </h4>
+                        <p className="text-zinc-400 text-xs font-normal font-poppins truncate">
+                          {item.description || item.category?.name || 'Fresh Item'}
+                        </p>
+                        <div className="flex items-center gap-1 text-orange-400 text-sm font-medium font-poppins">
+                          <span>$</span>
+                          <span className="text-white">{(item.basePrice || 0).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
 
-                  <div className="flex items-center gap-1.5">
-                    {dish.tags.map((tag, tIdx) => (
-                      <span
-                        key={tIdx}
-                        className="px-2.5 py-1 bg-zinc-800 text-[10px] font-medium text-yellow-400 rounded-md"
-                      >
-                        {tag}
-                      </span>
-                    ))}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addToCart({
+                          id: item.id,
+                          dishId: item.id,
+                          name: item.name,
+                          subtitle: item.description || '',
+                          price: item.basePrice || 0,
+                          image: imageUrl,
+                          quantity: 1,
+                        });
+                      }}
+                      className="w-8 h-8 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black flex items-center justify-center font-bold shrink-0 transition"
+                      title="Add to Cart"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+          )}
+
+          {/* 10 per page limit Pagination controls */}
+          {backendItems.length > 0 && (
+            <div className="w-full flex items-center justify-between pt-4 pb-2 border-t border-neutral-800 mt-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1 || itemsLoading}
+                className="px-3.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-medium text-white hover:bg-neutral-800 hover:border-yellow-400/40 disabled:opacity-40 disabled:hover:bg-neutral-900 transition flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4 text-yellow-400" />
+                <span>Previous</span>
+              </button>
+
+              <div className="flex items-center gap-1.5 text-xs font-poppins">
+                <span className="text-zinc-400 font-medium">Page</span>
+                <span className="text-yellow-400 font-bold bg-yellow-400/10 px-2 py-0.5 rounded border border-yellow-400/30">
+                  {currentPage}
+                </span>
+                <span className="text-zinc-400 font-medium">of {totalPages}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages || itemsLoading}
+                className="px-3.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-medium text-white hover:bg-neutral-800 hover:border-yellow-400/40 disabled:opacity-40 disabled:hover:bg-neutral-900 transition flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4 text-yellow-400" />
+              </button>
             </div>
           )}
         </div>
+
       </div>
     </div>
   );
 }
-

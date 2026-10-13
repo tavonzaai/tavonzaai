@@ -10,6 +10,7 @@ import {
   logoutUser,
   UserProfile,
 } from '../features/authApi';
+import { updateMe } from '../features/userApi';
 import { removeAuthToken } from '../api/baseApi';
 
 export interface AuthState {
@@ -203,6 +204,19 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.loading = false;
       });
+
+    // 9. Update Profile (updateMe)
+    builder.addCase(updateMe.fulfilled, (state, action: any) => {
+      if (action.payload) {
+        state.user = {
+          ...state.user,
+          ...action.payload,
+          name: action.payload.name || state.user?.name,
+          contactNo: action.payload.contactNo || state.user?.contactNo,
+          phone: action.payload.contactNo || state.user?.phone,
+        };
+      }
+    });
   },
 });
 

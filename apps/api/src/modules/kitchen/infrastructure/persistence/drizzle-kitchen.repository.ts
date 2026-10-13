@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -8,6 +8,7 @@ import {
   tables,
   menuItems,
 } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import type {
   KitchenTicketItemEntity,
   KitchenStationType,
@@ -22,46 +23,63 @@ export class DrizzleKitchenRepository {
     branchId: string,
     station?: KitchenStationType
   ): Promise<KitchenTicketItemEntity[]> {
-    const conditions = [
-      eq(orders.branchId, branchId),
-      inArray(orders.status, ['CONFIRMED', 'PREPARING', 'READY']),
-    ];
-
-    if (station) {
-      conditions.push(eq(orderItems.stationType, station));
-    }
-
-    const rows = await this.db
+    const qb = new DrizzleQueryBuilder<any>(this.db, orderItems)
       .select({
         id: orderItems.id,
         orderId: orders.id,
         orderNumber: orders.orderNumber,
+        branchId: orders.branchId,
+        tableId: orders.tableId,
+        tableSessionId: orders.tableSessionId,
         tableLabel: tables.label,
         productName: orderItems.productNameSnapshot,
         quantity: orderItems.quantity,
         stationType: orderItems.stationType,
         status: orderItems.status,
         specialInstructions: orders.specialInstructions,
+        estimatedPrepTime: orderItems.estimatedPrepTime,
         preparingAt: orderItems.preparingAt,
         readyAt: orderItems.readyAt,
         servedAt: orderItems.servedAt,
         createdAt: orderItems.createdAt,
       })
-      .from(orderItems)
       .innerJoin(orders, eq(orders.id, orderItems.orderId))
       .leftJoin(tables, eq(tables.id, orders.tableId))
-      .where(and(...conditions));
+      .filterExact(
+        {
+          branchId,
+          stationType: station,
+        },
+        {
+          branchId: orders.branchId,
+          stationType: orderItems.stationType,
+        },
+      )
+      .filterIn(
+        {
+          status: ['CONFIRMED', 'PREPARING', 'READY'],
+        },
+        {
+          status: orders.status,
+        },
+      );
+
+    const rows = await qb.executePlain();
 
     return rows.map((r: {
       id: string;
       orderId: string;
       orderNumber: string;
+      branchId?: string;
+      tableId?: string | null;
+      tableSessionId?: string | null;
       tableLabel: string | null;
       productName: string;
       quantity: number;
       stationType: string;
       status: string | null;
       specialInstructions: string | null;
+      estimatedPrepTime?: number | null;
       preparingAt: Date | null;
       readyAt: Date | null;
       servedAt: Date | null;
@@ -70,12 +88,16 @@ export class DrizzleKitchenRepository {
       id: r.id,
       orderId: r.orderId,
       orderNumber: r.orderNumber,
+      branchId: r.branchId,
+      tableId: r.tableId,
+      tableSessionId: r.tableSessionId,
       tableLabel: r.tableLabel,
       productName: r.productName,
       quantity: r.quantity,
       stationType: r.stationType as KitchenStationType,
       status: (r.status ?? 'PENDING') as KitchenItemStatus,
       specialInstructions: r.specialInstructions,
+      estimatedPrepTime: r.estimatedPrepTime ?? 15,
       preparingAt: r.preparingAt,
       readyAt: r.readyAt,
       servedAt: r.servedAt,
@@ -118,6 +140,7 @@ export class DrizzleKitchenRepository {
         stationType: orderItems.stationType,
         status: orderItems.status,
         specialInstructions: orders.specialInstructions,
+        estimatedPrepTime: orderItems.estimatedPrepTime,
         preparingAt: orderItems.preparingAt,
         readyAt: orderItems.readyAt,
         servedAt: orderItems.servedAt,
@@ -143,6 +166,7 @@ export class DrizzleKitchenRepository {
       stationType: row.stationType as KitchenStationType,
       status: (row.status ?? 'PENDING') as KitchenItemStatus,
       specialInstructions: row.specialInstructions,
+      estimatedPrepTime: row.estimatedPrepTime ?? 15,
       preparingAt: row.preparingAt,
       readyAt: row.readyAt,
       servedAt: row.servedAt,
@@ -193,9 +217,15 @@ export class DrizzleKitchenRepository {
   }
 
   async updateOrderStatus(orderId: string, status: any): Promise<void> {
+    const now = new Date();
+    const updateData: Record<string, any> = { status, updatedAt: now };
+    if (status === 'PREPARING') updateData.prepStartedAt = sql`COALESCE(${orders.prepStartedAt}, ${now})`;
+    if (status === 'READY') updateData.readyAt = sql`COALESCE(${orders.readyAt}, ${now})`;
+    if (status === 'SERVED') updateData.servedAt = sql`COALESCE(${orders.servedAt}, ${now})`;
+
     await this.db
       .update(orders)
-      .set({ status, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(orders.id, orderId));
   }
 

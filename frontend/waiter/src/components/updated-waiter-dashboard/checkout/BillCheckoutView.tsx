@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Receipt,
   ArrowLeft,
@@ -17,6 +17,7 @@ import {
   Split,
   Percent,
 } from 'lucide-react';
+import { waiterService } from '@/redux/features/waiterApi';
 
 export interface BillItem {
   id: string;
@@ -81,24 +82,85 @@ export default function BillCheckoutView({
   const grandTotal = Number((subtotal + tax + tip).toFixed(2));
   const perPersonAmount = Number((grandTotal / splitCount).toFixed(2));
 
-  const handleSendToCashier = () => {
+  useEffect(() => {
+    let mounted = true;
+    const cleanId = (orderId || '').replace(/^#/, '').trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanId);
+    if (!isUuid) return;
+
+    waiterService
+      .getOrderDetail(cleanId)
+      .then((detail) => {
+        if (!mounted || !detail) return;
+        if (Array.isArray(detail.items) && detail.items.length > 0) {
+          setItems(
+            detail.items.map((it) => ({
+              id: it.id,
+              name: it.productName,
+              quantity: it.quantity,
+              price: it.unitPrice,
+            }))
+          );
+        }
+        if (detail.paymentStatus === 'PAID') {
+          setIsSettled(true);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load order detail for bill checkout:', err);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [orderId]);
+
+  useEffect(() => {
+    const handlePaymentChanged = (e: any) => {
+      const payload = e?.detail;
+      const cleanId = (orderId || '').replace(/^#/, '').trim();
+      if (payload && (payload.orderId === cleanId || payload.orderId === orderId) && payload.status === 'PAID') {
+        setIsSettled(true);
+        onShowToast?.(`Payment for Table ${tableNumber} has been authoritatively confirmed PAID by Cashier!`);
+        onCompletePayment?.(tableNumber, orderId, grandTotal);
+      }
+    };
+    window.addEventListener('tavonza:payment_status_changed', handlePaymentChanged);
+    return () => {
+      window.removeEventListener('tavonza:payment_status_changed', handlePaymentChanged);
+    };
+  }, [orderId, tableNumber, grandTotal, onShowToast, onCompletePayment]);
+
+  const handleSendToCashier = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
+    try {
+      const cleanId = (orderId || '').replace(/^#/, '').trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanId);
+      
+      if (isUuid) {
+        await waiterService.requestOfflinePayment({
+          orderId: cleanId,
+          method: paymentMethod === 'terminal' ? 'CARD' : 'CASH',
+          notes: `Requested by Waiter for Table ${tableNumber}`,
+        });
+        onShowToast?.(
+          `Offline payment request for Table ${tableNumber} sent to Cashier Queue! Awaiting cashier receipt confirmation.`
+        );
+      } else {
+        onShowToast?.(
+          `Offline payment request for Table ${tableNumber} sent to Cashier Queue! Waiting for settlement authorization.`
+        );
+      }
+    } catch (err: any) {
+      onShowToast?.(err?.message || 'Failed to submit payment request to cashier');
+    } finally {
       setIsProcessing(false);
-      onShowToast?.(
-        `Order ${orderId} sent to Cashier Station Handoff! Waiting for settlement authorization.`
-      );
-    }, 700);
+    }
   };
 
-  const handleProcessPayment = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      setIsSettled(true);
-      onShowToast?.(`Payment of $${grandTotal.toFixed(2)} completed for Table ${tableNumber}!`);
-      onCompletePayment?.(tableNumber, orderId, grandTotal);
-    }, 900);
+  const handleProcessPayment = async () => {
+    // Forward directly to authoritative cashier settlement request
+    await handleSendToCashier();
   };
 
   const handlePrintReceipt = () => {

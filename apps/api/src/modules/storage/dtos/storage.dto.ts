@@ -407,3 +407,21 @@ export class BatchDeleteResponseDto {
   @ApiProperty({ description: 'Array of errors if any failed' })
   errors!: Array<{ key: string; code?: string; message?: string }>;
 }
+
+export class ListFilesResponseDto {
+  @ApiProperty({ type: [FileMetadataResponseDto], description: 'List of matching S3 objects' })
+  files!: FileMetadataResponseDto[];
+
+  @ApiProperty({ type: [String], description: 'List of subfolder common prefixes', example: ['menus/breakfast/', 'menus/dinner/'] })
+  folders!: string[];
+
+  @ApiPropertyOptional({ example: 'next-tok-12345', description: 'Pagination continuation token for next page' })
+  nextContinuationToken?: string;
+
+  @ApiProperty({ example: false, description: 'Whether there are more files to paginate' })
+  isTruncated!: boolean;
+
+  @ApiProperty({ example: 12, description: 'Number of keys returned in current batch' })
+  keyCount!: number;
+}
+

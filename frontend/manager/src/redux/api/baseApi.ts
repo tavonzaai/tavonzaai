@@ -68,10 +68,10 @@ export function getApiBaseUrl(): string {
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) ||
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
     (typeof process !== 'undefined' && process.env?.API_BASE_URL) ||
-    'http://localhost:3000';
+    'https://api.tavonza.com';
 
   url = String(url).trim().replace(/\/docs(-json)?\/?$/, '').replace(/\/$/, '');
-  return url || 'http://localhost:3000';
+  return url || 'https://api.tavonza.com';
 }
 
 export const API_BASE_URL = getApiBaseUrl();
@@ -171,6 +171,9 @@ export async function baseApiFetch<T = any>(
     }
 
     removeAuthToken();
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+    }
     throw new ApiError('Session expired. Please log in again.', 401);
   }
 
@@ -193,3 +196,67 @@ export async function baseApiFetch<T = any>(
 
   return data as ApiResponse<T>;
 }
+
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+
+export const rtkBaseApi = createApi({
+  reducerPath: 'api',
+  baseQuery: fetchBaseQuery({
+    baseUrl: getApiBaseUrl(),
+    prepareHeaders: (headers) => {
+      const token = getAuthToken();
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      return headers;
+    },
+  }),
+  tagTypes: [
+    'TABLE',
+    'ORDER',
+    'ORDER_ITEM',
+    'PAYMENT',
+    'NOTIFICATION',
+    'DASHBOARD',
+    'MENU',
+    'USER',
+  ],
+  endpoints: () => ({}),
+});
+
+export const notificationsApi = rtkBaseApi.injectEndpoints({
+  endpoints: (builder) => ({
+    getNotifications: builder.query<any, { page?: number; limit?: number; isRead?: boolean } | void>({
+      query: (params) => ({
+        url: '/notifications',
+        params: params || undefined,
+      }),
+      providesTags: ['NOTIFICATION'],
+    }),
+    getUnreadCount: builder.query<{ unreadCount: number }, void>({
+      query: () => '/notifications/unread-count',
+      providesTags: ['NOTIFICATION'],
+    }),
+    markAsRead: builder.mutation<any, string>({
+      query: (id) => ({
+        url: `/notifications/${id}/read`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
+    markAllAsRead: builder.mutation<any, void>({
+      query: () => ({
+        url: '/notifications/mark-all-read',
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
+  }),
+});
+
+export const {
+  useGetNotificationsQuery,
+  useGetUnreadCountQuery,
+  useMarkAsReadMutation,
+  useMarkAllAsReadMutation,
+} = notificationsApi;

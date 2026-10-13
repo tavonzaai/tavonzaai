@@ -1,5 +1,5 @@
-import type { WebSocket } from 'ws';
-import type { AuthenticatedClientContext } from '../authorization/ws-auth';
+import type { WebSocket } from "ws";
+import type { AuthenticatedClientContext } from "../authorization/ws-auth";
 
 export interface ConnectedClient {
   ws: WebSocket;
@@ -15,9 +15,12 @@ export class ChannelManager {
   /**
    * Authorize and subscribe client to a channel
    */
-  subscribe(client: ConnectedClient, channel: string): { success: boolean; reason?: string } {
+  subscribe(
+    client: ConnectedClient,
+    channel: string,
+  ): { success: boolean; reason?: string } {
     if (!this.canSubscribe(client.context, channel)) {
-      return { success: false, reason: 'Unauthorized channel subscription' };
+      return { success: false, reason: "Unauthorized channel subscription" };
     }
 
     if (!this.channels.has(channel)) {
@@ -90,33 +93,36 @@ export class ChannelManager {
   /**
    * Validate subscription permissions based on client context
    */
-  private canSubscribe(context: AuthenticatedClientContext, channel: string): boolean {
+  private canSubscribe(
+    context: AuthenticatedClientContext,
+    channel: string,
+  ): boolean {
     if (!context || !context.role) {
       return false;
     }
 
     // Super Admin & Admin can subscribe to any room
-    if (context.role === 'SUPER_ADMIN' || context.role === 'ADMIN') {
+    if (context.role === "SUPER_ADMIN" || context.role === "ADMIN") {
       return true;
     }
 
     // 1. Customer dining table session: session:{tableSessionId}
-    if (channel.startsWith('session:')) {
-      const sessionId = channel.slice('session:'.length);
+    if (channel.startsWith("session:")) {
+      const sessionId = channel.slice("session:".length);
       // Customer can subscribe to their own table session
       if (context.tableSessionId && context.tableSessionId === sessionId) {
         return true;
       }
       // Staff (Waiters, Branch Managers, Cashiers) can inspect dining sessions
-      if (context.actorType === 'USER') {
+      if (context.actorType === "USER") {
         return true;
       }
       return false;
     }
 
     // 2. Staff channels: branch:{branchId}:...
-    if (channel.startsWith('branch:')) {
-      const parts = channel.split(':');
+    if (channel.startsWith("branch:")) {
+      const parts = channel.split(":");
       if (parts.length < 3) return false;
       const targetBranchId = parts[1];
       const targetScope = parts[2];
@@ -127,23 +133,25 @@ export class ChannelManager {
       }
 
       // Waiter channel
-      if (targetScope === 'waiter') {
-        return ['WAITER', 'BRANCH_MANAGER', 'HOST'].includes(context.role);
+      if (targetScope === "waiter") {
+        return ["WAITER", "BRANCH_MANAGER", "HOST"].includes(context.role);
       }
 
       // Kitchen / Bar station channel: branch:{branchId}:station:{KITCHEN|BAR}
-      if (targetScope === 'station') {
-        return ['KITCHEN_STAFF', 'BARTENDER', 'BRANCH_MANAGER'].includes(context.role);
+      if (targetScope === "station") {
+        return ["KITCHEN_STAFF", "BARTENDER", "BRANCH_MANAGER"].includes(
+          context.role,
+        );
       }
 
       // Cashier channel
-      if (targetScope === 'cashier') {
-        return ['CASHIER', 'BRANCH_MANAGER'].includes(context.role);
+      if (targetScope === "cashier") {
+        return ["CASHIER", "BRANCH_MANAGER"].includes(context.role);
       }
 
       // Manager channel
-      if (targetScope === 'manager') {
-        return ['BRANCH_MANAGER'].includes(context.role);
+      if (targetScope === "manager") {
+        return ["BRANCH_MANAGER"].includes(context.role);
       }
     }
 

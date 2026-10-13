@@ -27,14 +27,20 @@ export const ADMIN_USER_KEY = 'admin_user';
  * 🍪 Cookie Management for Authentication Tokens (STRICTLY COOKIES ONLY - NO LOCALSTORAGE)
  */
 export function getAuthToken(): string | null {
-  // Strictly check admin_token cookie
   const adminToken = getCookie(ADMIN_TOKEN_KEY);
   if (adminToken && adminToken.trim().length > 0) return adminToken;
+  const tavonzaToken = getCookie('tavonza_token') || getCookie('token');
+  if (tavonzaToken && tavonzaToken.trim().length > 0) return tavonzaToken;
   return null;
 }
 
 export function getRefreshToken(): string | null {
-  return getCookie(ADMIN_REFRESH_TOKEN_KEY);
+  return (
+    getCookie(ADMIN_REFRESH_TOKEN_KEY) ||
+    getCookie('admin_refresh_token') ||
+    getCookie('tavonza_refresh_token') ||
+    getCookie('refresh_token')
+  );
 }
 
 export function setAuthToken(token: string) {
@@ -52,6 +58,57 @@ export function removeAuthToken() {
   removeCookie(ADMIN_TOKEN_KEY);
   removeCookie(ADMIN_REFRESH_TOKEN_KEY);
   removeCookie(ADMIN_USER_KEY);
+  removeCookie('tavonza_token');
+  removeCookie('tavonza_refresh_token');
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+export async function refreshAuthSession(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        removeAuthToken();
+        return false;
+      }
+
+      const json = await res.json().catch(() => null);
+      const data = json?.data || json;
+      const newAccessToken = data?.accessToken || data?.access_token;
+      const newRefreshToken = data?.refreshToken || data?.refresh_token || refreshToken;
+
+      if (newAccessToken) {
+        setAuthTokens({
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
+        });
+        return true;
+      }
+
+      removeAuthToken();
+      return false;
+    } catch {
+      removeAuthToken();
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export function getApiBaseUrl(): string {
@@ -68,14 +125,14 @@ export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
-      return 'http://localhost:5000';
+      return 'https://api.tavonza.com';
     }
     return 'https://api.tavonza.com';
   }
 
   // Server-side / Build-time default
   if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
-    return 'http://localhost:5000';
+    return 'https://api.tavonza.com';
   }
 
   return 'https://api.tavonza.com';
@@ -172,6 +229,29 @@ export async function baseApiFetch<T = any>(
   const rawJson: any = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (
+      response.status === 401 &&
+      !cleanEndpoint.includes('/auth/login') &&
+      !cleanEndpoint.includes('/auth/refresh') &&
+      !(options as any)?._isRetry
+    ) {
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        return baseApiFetch<T>(endpoint, {
+          ...options,
+          _isRetry: true,
+        } as any);
+      }
+      removeAuthToken();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    } else if (response.status === 401) {
+      removeAuthToken();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    }
     let errorMsg = 'Request failed';
     if (rawJson?.message) {
       errorMsg = Array.isArray(rawJson.message) ? rawJson.message.join('. ') : rawJson.message;
@@ -207,3 +287,101 @@ export async function baseApiFetch<T = any>(
 
   return resData;
 }
+
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
+
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: getApiBaseUrl(),
+  credentials: 'include',
+  prepareHeaders: (headers) => {
+    const token = getAuthToken();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return headers;
+  },
+});
+
+const baseQueryWithReauth: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError
+> = async (args, api, extraOptions) => {
+  let result = await rawBaseQuery(args, api, extraOptions);
+
+  if (result.error && result.error.status === 401) {
+    const url = typeof args === 'string' ? args : args.url;
+    if (!url.includes('/auth/login') && !url.includes('/auth/refresh')) {
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        result = await rawBaseQuery(args, api, extraOptions);
+      } else {
+        removeAuthToken();
+        api.dispatch(rtkBaseApi.util.resetApiState());
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
+      }
+    }
+  }
+
+  return result;
+};
+
+export const rtkBaseApi = createApi({
+  reducerPath: 'api',
+  baseQuery: baseQueryWithReauth,
+  tagTypes: [
+    'TABLE',
+    'ORDER',
+    'ORDER_ITEM',
+    'PAYMENT',
+    'NOTIFICATION',
+    'DASHBOARD',
+    'MENU',
+    'USER',
+    'ORGANIZATION',
+    'BRANCH',
+    'AUTH',
+  ],
+  endpoints: () => ({}),
+});
+
+export const notificationsApi = rtkBaseApi.injectEndpoints({
+  endpoints: (builder) => ({
+    getNotifications: builder.query<any, { page?: number; limit?: number; isRead?: boolean } | void>({
+      query: (params) => ({
+        url: '/notifications',
+        params: params || undefined,
+      }),
+      providesTags: ['NOTIFICATION'],
+    }),
+    getUnreadCount: builder.query<{ unreadCount: number }, void>({
+      query: () => '/notifications/unread-count',
+      providesTags: ['NOTIFICATION'],
+    }),
+    markAsRead: builder.mutation<any, string>({
+      query: (id) => ({
+        url: `/notifications/${id}/read`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
+    markAllAsRead: builder.mutation<any, void>({
+      query: () => ({
+        url: '/notifications/mark-all-read',
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
+  }),
+});
+
+export const {
+  useGetNotificationsQuery,
+  useGetUnreadCountQuery,
+  useMarkAsReadMutation,
+  useMarkAllAsReadMutation,
+} = notificationsApi;
+

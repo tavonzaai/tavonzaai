@@ -28,6 +28,7 @@ import {
   TableDetailsModal,
   TavonzaAIModal,
 } from './dashboard';
+import DraggableAiButton from '../common/DraggableAiButton';
 import { AdHocRequestsView, LiveAlertsView } from './alerts';
 import TakingOrderView from './orders';
 import OrderStatusView from './order-status';
@@ -141,10 +142,26 @@ export default function WaiterDashboard({ initialTab = 'floor-view' }: WaiterDas
     };
 
     loadWaiterData();
-    const interval = setInterval(loadWaiterData, 8000);
+    const handleRealtime = () => {
+      loadWaiterData();
+    };
+    window.addEventListener('tavonza:table_status_changed', handleRealtime);
+    window.addEventListener('tavonza:table_session_changed', handleRealtime);
+    window.addEventListener('tavonza:order_created', handleRealtime);
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+    window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    window.addEventListener('tavonza:waiter_called', handleRealtime);
+    window.addEventListener('tavonza:payment_status_changed', handleRealtime);
+
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:table_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:table_session_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_created', handleRealtime);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+      window.removeEventListener('tavonza:waiter_called', handleRealtime);
+      window.removeEventListener('tavonza:payment_status_changed', handleRealtime);
     };
   }, []);
 
@@ -971,6 +988,16 @@ export default function WaiterDashboard({ initialTab = 'floor-view' }: WaiterDas
         table={selectedTable}
         isOpen={isDetailsModalOpen}
         onClose={() => setIsDetailsModalOpen(false)}
+      />
+
+      {/* Draggable Floating Ask AI Assistant Button */}
+      <DraggableAiButton
+        isOpen={isAIModalOpen}
+        onToggle={() => {
+          setAiMode('chat');
+          setIsAIModalOpen((prev) => !prev);
+        }}
+        storageKey="updated_waiter_ask_ai_pos"
       />
 
       <TavonzaAIModal

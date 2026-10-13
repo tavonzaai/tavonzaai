@@ -8,17 +8,22 @@ import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 function VerifyOtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const qr = searchParams.get('qr');
   const table = searchParams.get('table');
   const email = searchParams.get('email') || '';
   const type = (searchParams.get('type') as any) || 'email_verification';
 
-  const forwardParam = table ? `?table=${encodeURIComponent(table)}` : '';
+  const forwardParam = qr
+    ? `?qr=${encodeURIComponent(qr)}`
+    : table
+    ? `?table=${encodeURIComponent(table)}`
+    : '';
 
   const handleVerifySuccess = (code: string) => {
     if (type === 'password_reset') {
       const emailParam = email ? `email=${encodeURIComponent(email)}&` : '';
-      const tableParam = table ? `&table=${encodeURIComponent(table)}` : '';
-      router.push(`/reset-password?${emailParam}code=${encodeURIComponent(code)}${tableParam}`);
+      const destParam = qr ? `&qr=${encodeURIComponent(qr)}` : (table ? `&table=${encodeURIComponent(table)}` : '');
+      router.push(`/reset-password?${emailParam}code=${encodeURIComponent(code)}${destParam}`);
     } else {
       // Email verification successful, redirect to login with email pre-filled
       const emailQuery = email ? `email=${encodeURIComponent(email)}` : '';

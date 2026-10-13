@@ -61,8 +61,13 @@ export default function PaymentsView({ onSelectPayment }: PaymentsViewProps) {
 
   useEffect(() => {
     fetchPayments();
-    const interval = setInterval(fetchPayments, 10000);
-    return () => clearInterval(interval);
+    const handleUpdate = () => fetchPayments();
+    window.addEventListener('tavonza:payment_status_changed', handleUpdate);
+    window.addEventListener('tavonza:payment_requested', handleUpdate);
+    return () => {
+      window.removeEventListener('tavonza:payment_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:payment_requested', handleUpdate);
+    };
   }, []);
 
   // Compute live KPI summaries from real payment records

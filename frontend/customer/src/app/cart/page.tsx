@@ -13,7 +13,7 @@ import {
 import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
 import { orderService } from '@/redux/features/orderApi';
-import { getCookie, getApiBaseUrl } from '@/redux/api/baseApi';
+import { getCookie, setCookie, getApiBaseUrl } from '@/redux/api/baseApi';
 
 function CartContent() {
   const router = useRouter();
@@ -36,7 +36,47 @@ function CartContent() {
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const activeTable = searchParams.get('table') || tableNumber || 'T-02';
+  const activeTable = searchParams.get('table') || tableNumber || '';
+
+  const isUUID = (val?: string | null): boolean =>
+    Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+
+  const resolveDynamicBranchId = (): string | null => {
+    const rawBranchId = getCookie('tavonza_branch_id') || getCookie('branch_id');
+    if (rawBranchId && isUUID(rawBranchId)) return rawBranchId;
+    const branchParam = searchParams.get('branchId');
+    if (branchParam && isUUID(branchParam)) return branchParam;
+    return null;
+  };
+
+  const resolveDynamicTableId = (): string | null => {
+    const rawTableCookie = getCookie('tavonza_table_id');
+    if (rawTableCookie && isUUID(rawTableCookie)) return rawTableCookie;
+    if (isUUID(activeTable)) return activeTable;
+    const tableIdParam = searchParams.get('tableId');
+    if (tableIdParam && isUUID(tableIdParam)) return tableIdParam;
+    return null;
+  };
+
+  // Automatically fetch & sync backend cart on page load
+  React.useEffect(() => {
+    async function loadBackendCart() {
+      try {
+        const branchId = resolveDynamicBranchId();
+        const tableId = resolveDynamicTableId();
+        if (!branchId || !tableId) return;
+
+        try {
+          await orderService.getCartFromSession(branchId, tableId);
+        } catch {
+          await orderService.getCart(branchId, tableId);
+        }
+      } catch (err) {
+        console.warn('Initial cart fetch on mount warning:', err);
+      }
+    }
+    loadBackendCart();
+  }, [activeTable]);
 
   const handleOrderPreferenceClick = () => {
     setShowPreferenceModal(true);
@@ -46,37 +86,11 @@ function CartContent() {
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
-      const rawBranchId = getCookie('tavonza_branch_id');
-      const branchId =
-        rawBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBranchId)
-          ? rawBranchId
-          : 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-
-      const isUUID = (val?: string | null) =>
-        Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
-
-      const TABLE_MAP: Record<string, string> = {
-        't-01': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-        't-02': '34489e98-b165-4f29-bc3e-38be762dedb3',
-        't-03': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-        't-04': '41fe73cd-e275-459b-9533-0b2d5098d927',
-        't-05': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-        'table 1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-        'table 2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-        'table 3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-        'table 4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-        'table 5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-        '1': '5298804e-5847-4e5a-bdba-73a8f06d9ed2',
-        '2': '34489e98-b165-4f29-bc3e-38be762dedb3',
-        '3': '646823a9-c9b4-490b-9c24-1fdb7176d8ea',
-        '4': '41fe73cd-e275-459b-9533-0b2d5098d927',
-        '5': '426eae49-6fc2-4d19-9bf9-ba2258250f36',
-      };
-
-      const rawTableCookie = getCookie('tavonza_table_id');
-      const tableId = isUUID(rawTableCookie)
-        ? rawTableCookie!
-        : TABLE_MAP[activeTable.trim().toLowerCase()] || '34489e98-b165-4f29-bc3e-38be762dedb3';
+      const branchId = resolveDynamicBranchId();
+      const tableId = resolveDynamicTableId();
+      if (!branchId || !tableId) {
+        throw new Error('Please scan your table QR code or select a valid table before placing an order.');
+      }
 
       const draft = await orderService.getCart(branchId, tableId);
       if (!draft?.id) {
@@ -92,7 +106,6 @@ function CartContent() {
       } catch (err) {
         console.warn('Could not prefetch catalog:', err);
       }
-      const fallbackUuid = catalogItems[0]?.id || '4455110d-db04-4cef-92c6-46bcd6a4c7e2';
 
       for (const item of cart) {
         let validMenuItemId = item.dishId || item.id;
@@ -100,22 +113,42 @@ function CartContent() {
           const matched = catalogItems.find(
             (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
           );
-          validMenuItemId = matched?.id || fallbackUuid;
+          validMenuItemId = matched?.id;
         }
 
-        await orderService.addItem({
-          orderId: draft.id,
-          menuItemId: validMenuItemId,
-          quantity: item.quantity || 1,
-          specialInstructions: item.specialInstructions,
-          addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
-        });
+        if (!validMenuItemId || !isUUID(validMenuItemId)) {
+          throw new Error(`Item "${item.name}" could not be verified in the restaurant menu catalog.`);
+        }
+        const fallbackUuid = catalogItems[0]?.id || '0000000b-0000-4000-8000-000000000004';
+
+        for (const item of cart) {
+          let validMenuItemId = item.dishId || item.id;
+          if (!isUUID(validMenuItemId)) {
+            const matched = catalogItems.find(
+              (c: any) => c.name?.toLowerCase() === item.name?.toLowerCase()
+            );
+            validMenuItemId = matched?.id || fallbackUuid;
+          }
+
+          await orderService.addItem({
+            orderId: draft.id,
+            menuItemId: validMenuItemId,
+            quantity: item.quantity || 1,
+            specialInstructions: item.specialInstructions,
+            addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
+          });
+        }
       }
 
       const submitted = await orderService.submitOrder(draft.id);
-      const submittedId = submitted?.orderNumber || submitted?.id;
+      const submittedId = submitted?.id || submitted?.orderId || submitted?.orderNumber;
       if (!submittedId) {
         throw new Error('Order submission returned empty response.');
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
+        setCookie('tavonza_last_submitted_order_id', submittedId);
       }
 
       clearCart();

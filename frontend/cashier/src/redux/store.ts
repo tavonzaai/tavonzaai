@@ -5,15 +5,23 @@ import userReducer from './slices/userSlice';
 import menuCategoryReducer from './slices/menuCategorySlice';
 import menuItemReducer from './slices/menuItemSlice';
 
+import { setupListeners } from '@reduxjs/toolkit/query';
+import { rtkBaseApi } from './api/baseApi';
+
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     user: userReducer,
     menuCategories: menuCategoryReducer,
     menuItems: menuItemReducer,
+    [rtkBaseApi.reducerPath]: rtkBaseApi.reducer,
   },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(rtkBaseApi.middleware),
   devTools: process.env.NODE_ENV !== 'production',
 });
+
+setupListeners(store.dispatch);
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

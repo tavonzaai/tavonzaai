@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAppSelector } from '@/redux/store';
 import { isKitchenAuthenticated } from '@/lib/auth';
 import { isRoleAllowedForKitchen } from '@/redux/ReduxProvider';
@@ -14,19 +14,30 @@ interface AuthGuardProps {
 
 export default function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, isInitialized, user } = useAppSelector((state) => state.auth);
 
+  const isLoginPage =
+    pathname === '/login' ||
+    Boolean(pathname?.startsWith('/login')) ||
+    Boolean(pathname?.startsWith('/verify-otp')) ||
+    Boolean(pathname?.startsWith('/forgot-password')) ||
+    Boolean(pathname?.startsWith('/reset-password'));
+
   const hasKitchenRole = user ? isRoleAllowedForKitchen(user) : false;
-  const isAuth = isAuthenticated && hasKitchenRole && isKitchenAuthenticated();
+  const isAuth = isKitchenAuthenticated() && (isAuthenticated || hasKitchenRole || Boolean(user));
 
   useEffect(() => {
-    if (isInitialized && !isAuth) {
+    if (isInitialized && !isAuth && !isLoginPage) {
       router.replace('/login');
     }
-  }, [isInitialized, isAuth, router]);
+  }, [isInitialized, isAuth, isLoginPage, router]);
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
   // Loading state: ALWAYS show loading spinner until session initialization is complete
-  // Prevents flashing of dashboard content before authentication is verified
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center space-y-4">
@@ -48,3 +59,4 @@ export default function AuthGuard({ children }: AuthGuardProps) {
 
   return <>{children}</>;
 }
+

@@ -8,11 +8,16 @@ import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const qr = searchParams.get('qr');
   const table = searchParams.get('table');
   const email = searchParams.get('email') || '';
   const code = searchParams.get('code') || searchParams.get('otp') || '';
 
-  const forwardParam = table ? `?table=${encodeURIComponent(table)}` : '';
+  const forwardParam = qr
+    ? `?qr=${encodeURIComponent(qr)}`
+    : table
+    ? `?table=${encodeURIComponent(table)}`
+    : '';
 
   return (
     <AuthDesktopLayout>
@@ -22,8 +27,8 @@ function ResetPasswordContent() {
         onComplete={() => router.push(`/login${forwardParam}`)}
         onBack={() => {
           const emailParam = email ? `email=${encodeURIComponent(email)}&` : '';
-          const tableParam = table ? `&table=${encodeURIComponent(table)}` : '';
-          router.push(`/verify-otp?${emailParam}type=password_reset${tableParam}`);
+          const destParam = qr ? `&qr=${encodeURIComponent(qr)}` : (table ? `&table=${encodeURIComponent(table)}` : '');
+          router.push(`/verify-otp?${emailParam}type=password_reset${destParam}`);
         }}
       />
     </AuthDesktopLayout>

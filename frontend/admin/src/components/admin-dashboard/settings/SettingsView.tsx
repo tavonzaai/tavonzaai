@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Building2,
   Store,
@@ -29,6 +29,9 @@ import {
   Camera,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { getMe } from '@/redux/features/authApi';
+import { updateMe } from '@/redux/features/userApi';
 
 export type SettingsTab =
   | 'Profile'
@@ -39,21 +42,39 @@ export type SettingsTab =
   | 'Notifications';
 
 export default function SettingsView() {
+  const dispatch = useAppDispatch();
+  const user = useAppSelector((state) => state.auth.user);
   const [activeTab, setActiveTab] = useState<SettingsTab>('Profile');
 
   // 1. Organization & Owner Profile State
   const [profile, setProfile] = useState({
     groupName: 'Tavonza Hospitality Group',
-    founderName: 'Marcus Sterling',
-    role: 'Founder & Principal Owner',
-    email: 'marcus.sterling@tavonza.com',
-    phone: '+1 (555) 234-5678',
-    headquarters: '742 Evergreen Terrace, Suite 500, New York, NY 10001',
-    taxId: 'US-EIN 84-2918402',
-    currency: 'USD ($)',
-    timezone: 'Eastern Time (US & Canada) - UTC-05:00',
-    fiscalYearStart: 'January',
+    founderName: user?.name || user?.firstName || ' ',
+    role: user?.role ? user.role.replace(/_/g, ' ') : ' ',
+    email: user?.email || ' ',
+    phone: user?.contactNo || user?.phone || ' ',
+    headquarters: ' ',
+    taxId: ' ',
+    currency: ' ',
+    timezone: ' ',
+    fiscalYearStart: ' ',
   });
+
+  useEffect(() => {
+    dispatch(getMe());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (user) {
+      setProfile((prev) => ({
+        ...prev,
+        founderName: user.name || user.firstName || prev.founderName,
+        email: user.email || prev.email,
+        phone: user.contactNo || user.phone || prev.phone,
+        role: user.role ? user.role.replace(/_/g, ' ') : prev.role,
+      }));
+    }
+  }, [user]);
 
   // 2. Multi-Branch Network Toggles
   const [branchToggles, setBranchToggles] = useState({
@@ -89,9 +110,18 @@ export default function SettingsView() {
   // 5. Security state
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Organization profile updated successfully.');
+    try {
+      const res = await dispatch(updateMe({ name: profile.founderName.trim(), contactNo: profile.phone.trim() }));
+      if (updateMe.fulfilled.match(res)) {
+        toast.success('Organization profile updated successfully.');
+      } else {
+        toast.error((res.payload as string) || 'Failed to update profile');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update profile');
+    }
   };
 
   const handleToggleBranch = (key: keyof typeof branchToggles) => {

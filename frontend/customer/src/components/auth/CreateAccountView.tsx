@@ -262,7 +262,7 @@ export default function CreateAccountView({
 
         {/* First & Last Name Grid */}
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 min-w-0">
             <label className="text-xs text-white/90 font-['Inter'] font-medium">First Name</label>
             <div className="w-full h-11 px-3.5 bg-neutral-950 rounded-xl outline outline-1 outline-offset-[-1px] outline-white/10 focus-within:outline-yellow-400 flex items-center transition">
               <input
@@ -271,12 +271,13 @@ export default function CreateAccountView({
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="John"
+                style={{ WebkitBoxShadow: '0 0 0px 1000px #0a0a0a inset', WebkitTextFillColor: '#ffffff' }}
                 className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-['Inter'] focus:outline-none"
               />
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 min-w-0">
             <label className="text-xs text-white/90 font-['Inter'] font-medium">Last Name</label>
             <div className="w-full h-11 px-3.5 bg-neutral-950 rounded-xl outline outline-1 outline-offset-[-1px] outline-white/10 focus-within:outline-yellow-400 flex items-center transition">
               <input
@@ -285,6 +286,7 @@ export default function CreateAccountView({
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Doe"
+                style={{ WebkitBoxShadow: '0 0 0px 1000px #0a0a0a inset', WebkitTextFillColor: '#ffffff' }}
                 className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-['Inter'] focus:outline-none"
               />
             </div>
@@ -312,6 +314,7 @@ export default function CreateAccountView({
                 }
               }}
               placeholder="customer@example.com"
+              style={{ WebkitBoxShadow: '0 0 0px 1000px #0a0a0a inset', WebkitTextFillColor: '#ffffff' }}
               className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-['Inter'] focus:outline-none"
             />
           </div>
@@ -340,7 +343,7 @@ export default function CreateAccountView({
             <span className="text-[10px] text-white/40">Optional</span>
           </div>
           <div className="w-full flex items-center gap-2">
-            <div className="w-24 h-11 px-2.5 bg-neutral-950 rounded-xl outline outline-1 outline-offset-[-1px] outline-white/10 flex items-center justify-between">
+            <div className="shrink-0 w-28 h-11 px-2.5 bg-neutral-950 rounded-xl outline outline-1 outline-offset-[-1px] outline-white/10 flex items-center justify-between">
               <select
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
@@ -353,12 +356,29 @@ export default function CreateAccountView({
                 <option value="+61" className="bg-neutral-900 text-white">+61 (AU)</option>
               </select>
             </div>
-            <div className="flex-1 h-11 px-3.5 bg-neutral-950 rounded-xl outline outline-1 outline-offset-[-1px] outline-white/10 focus-within:outline-yellow-400 flex items-center transition">
+            <div className="flex-1 min-w-0 h-11 px-3.5 bg-neutral-950 rounded-xl outline outline-1 outline-offset-[-1px] outline-white/10 focus-within:outline-yellow-400 flex items-center transition">
               <input
-                type="tel"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={15}
+                name="phone"
+                id="phone-number-input"
+                autoComplete="off"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="12 345 678"
+                onKeyDown={(e) => {
+                  if (
+                    !/[0-9]/.test(e.key) &&
+                    !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key) &&
+                    !e.ctrlKey &&
+                    !e.metaKey
+                  ) {
+                    e.preventDefault();
+                  }
+                }}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                placeholder="phone number"
+                style={{ WebkitBoxShadow: '0 0 0px 1000px #0a0a0a inset', WebkitTextFillColor: '#ffffff' }}
                 className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-['Inter'] focus:outline-none"
               />
             </div>
@@ -376,6 +396,7 @@ export default function CreateAccountView({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="At least 8 characters"
+              style={{ WebkitBoxShadow: '0 0 0px 1000px #0a0a0a inset', WebkitTextFillColor: '#ffffff' }}
               className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-['Inter'] focus:outline-none"
             />
             <button
@@ -417,6 +438,7 @@ export default function CreateAccountView({
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Repeat your password"
+              style={{ WebkitBoxShadow: '0 0 0px 1000px #0a0a0a inset', WebkitTextFillColor: '#ffffff' }}
               className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 font-['Inter'] focus:outline-none"
             />
             <button

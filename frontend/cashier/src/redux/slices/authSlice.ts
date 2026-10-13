@@ -10,6 +10,7 @@ import {
   logoutUser,
   UserProfile,
 } from '../features/authApi';
+import { updateMe } from '../features/userApi';
 
 export interface AuthState {
   user: UserProfile | null;
@@ -18,6 +19,7 @@ export interface AuthState {
   isInitialized: boolean;
   error: string | null;
   successMessage: string | null;
+  pendingEmail: string | null;
   forgotEmail: string | null;
   otpCode: string | null;
 }
@@ -29,6 +31,7 @@ const initialState: AuthState = {
   isInitialized: false,
   error: null,
   successMessage: null,
+  pendingEmail: null,
   forgotEmail: null,
   otpCode: null,
 };
@@ -54,6 +57,9 @@ const authSlice = createSlice({
     },
     clearSuccessMessage: (state) => {
       state.successMessage = null;
+    },
+    setPendingEmail: (state, action: PayloadAction<string | null>) => {
+      state.pendingEmail = action.payload;
     },
     setForgotEmail: (state, action: PayloadAction<string | null>) => {
       state.forgotEmail = action.payload;
@@ -189,6 +195,19 @@ const authSlice = createSlice({
       state.error = null;
       state.successMessage = null;
     });
+
+    // 9. Update Profile (updateMe)
+    builder.addCase(updateMe.fulfilled, (state, action: any) => {
+      if (action.payload) {
+        state.user = {
+          ...state.user,
+          ...action.payload,
+          name: action.payload.name || state.user?.name,
+          contactNo: action.payload.contactNo || state.user?.contactNo,
+          phone: action.payload.contactNo || state.user?.phone,
+        };
+      }
+    });
   },
 });
 
@@ -198,6 +217,7 @@ export const {
   setInitialized,
   clearAuthError,
   clearSuccessMessage,
+  setPendingEmail,
   setForgotEmail,
   setOtpCode,
 } = authSlice.actions;

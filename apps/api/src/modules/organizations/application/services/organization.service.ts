@@ -46,6 +46,26 @@ export class OrganizationService {
     return orgs.map((org) => this.toResponseDto(org));
   }
 
+  async findAll(options?: any): Promise<{ data: OrganizationResponseDto[]; meta: any }> {
+    const res = await this.orgRepo.findAll(options);
+    return {
+      data: res.data.map((org) => this.toResponseDto(org)),
+      meta: res.meta,
+    };
+  }
+
+  async delete(id: string, actingUserId: string): Promise<{ success: boolean }> {
+    const org = await this.orgRepo.findById(id);
+    if (!org) {
+      throw new NotFoundException(`Organization with ID "${id}" not found`);
+    }
+    if (org.ownerId !== actingUserId) {
+      throw new ForbiddenException('Only the organization owner can delete the organization');
+    }
+    const deleted = await this.orgRepo.delete(id);
+    return { success: deleted };
+  }
+
   async update(
     id: string,
     actingUserId: string,

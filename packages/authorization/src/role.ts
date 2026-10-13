@@ -58,6 +58,7 @@ export const STAFF_ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
     Permission.ORDERS_UPDATE,
     Permission.MENU_READ,
     Permission.MENU_UPDATE,
+    Permission.TABLES_READ,
   ],
   [StaffRole.BARTENDER]: [
     Permission.VIEW_ORDERS,
@@ -66,6 +67,7 @@ export const STAFF_ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
     Permission.ORDERS_UPDATE,
     Permission.MENU_READ,
     Permission.MENU_UPDATE,
+    Permission.TABLES_READ,
   ],
   [StaffRole.CASHIER]: [
     Permission.VIEW_ORDERS,

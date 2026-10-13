@@ -42,8 +42,11 @@ export const metadata: Metadata = {
   },
 };
 
+import { Suspense } from "react";
 import ReduxProvider from "@/redux/ReduxProvider";
 import { CartProvider } from "@/context/CartContext";
+import QrSessionSync from "@/components/common/QrSessionSync";
+import { Toaster } from "sonner";
 
 export default function RootLayout({
   children,
@@ -66,7 +69,11 @@ export default function RootLayout({
         className="min-h-full bg-neutral-950 text-white font-sans flex flex-col selection:bg-yellow-400 selection:text-black"
       >
         <ReduxProvider>
+          <Suspense fallback={null}>
+            <QrSessionSync />
+          </Suspense>
           <CartProvider>{children}</CartProvider>
+          <Toaster richColors position="top-right" theme="dark" closeButton />
         </ReduxProvider>
       </body>
     </html>

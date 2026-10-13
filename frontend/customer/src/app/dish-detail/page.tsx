@@ -67,7 +67,15 @@ function DishDetailContent() {
   const dish: MenuItem = useMemo(() => {
     if (selectedItem && (selectedItem.id === dishParam || !dishParam)) {
       const addOns: { id: string; name: string; price: number }[] = [];
-      if (selectedItem.modifierGroups) {
+      if (selectedItem.addOns && selectedItem.addOns.length > 0) {
+        selectedItem.addOns.forEach((a) => {
+          addOns.push({
+            id: a.id,
+            name: a.name,
+            price: Number(a.price) || 0,
+          });
+        });
+      } else if (selectedItem.modifierGroups) {
         for (const grp of selectedItem.modifierGroups) {
           for (const mod of grp.modifiers) {
             addOns.push({
@@ -78,53 +86,117 @@ function DishDetailContent() {
           }
         }
       }
+
+      const contains =
+        selectedItem.allergenDisplay ||
+        (selectedItem.allergens && selectedItem.allergens.length > 0
+          ? selectedItem.allergens.join(', ')
+          : null);
+
+      const winePairingObj = selectedItem.winePairing
+        ? {
+            wine: selectedItem.winePairing,
+            description:
+              selectedItem.winePairingNote ||
+              'Recommended by sommelier for optimal flavor enhancement.',
+          }
+        : null;
+
       return {
         id: selectedItem.id,
         name: selectedItem.name,
-        subtitle: selectedItem.description || selectedItem.category?.name || 'Chef Specialty',
-        price: selectedItem.basePrice || (selectedItem as any).price || 0,
+        subtitle:
+          selectedItem.description ||
+          selectedItem.categoryName ||
+          selectedItem.category?.name ||
+          'Chef Specialty',
+        price: selectedItem.price ?? selectedItem.basePrice ?? 0,
         category: selectedItem.categoryId,
-        image: getItemImage(selectedItem.name, selectedItem.category?.name, selectedItem.imageUrl),
-        popular: selectedItem.isAvailable,
-        description: selectedItem.description || 'Prepared fresh with the finest seasonal ingredients by Tavonza chefs.',
-        addOns: addOns.length > 0 ? addOns : [
-          { id: 'addon-extra-cheese', name: 'Extra Cheddar', price: 1.5 },
-          { id: 'addon-truffle-oil', name: 'Truffle Oil Drizzle', price: 2.0 },
-        ],
+        image: getItemImage(
+          selectedItem.name,
+          selectedItem.categoryName || selectedItem.category?.name,
+          selectedItem.imageUrl
+        ),
+        popular: selectedItem.isPopular ?? selectedItem.isAvailable,
+        description:
+          selectedItem.description ||
+          'Prepared fresh with the finest seasonal ingredients by Tavonza chefs.',
+        addOns,
+        rating: selectedItem.rating ?? 4.8,
+        reviewsCount: selectedItem.ratingCount ?? 142,
+        dietary: selectedItem.dietBadge,
+        contains,
+        winePairing: winePairingObj,
+        prepTime: selectedItem.prepTime ? `${selectedItem.prepTime} min` : null,
+        calories: selectedItem.calories ? `${selectedItem.calories} kcal` : null,
       };
     }
 
-    const foundBackend = backendItems?.find((i) => i.id === dishParam) || (backendItems && backendItems.length > 0 ? backendItems[0] : null);
+    const foundBackend =
+      backendItems?.find((i) => i.id === dishParam) ||
+      (backendItems && backendItems.length > 0 ? backendItems[0] : null);
     if (foundBackend) {
+      const addOns: { id: string; name: string; price: number }[] = [];
+      if (foundBackend.addOns && foundBackend.addOns.length > 0) {
+        foundBackend.addOns.forEach((a) => {
+          addOns.push({ id: a.id, name: a.name, price: Number(a.price) || 0 });
+        });
+      }
+
+      const contains =
+        foundBackend.allergenDisplay ||
+        (foundBackend.allergens && foundBackend.allergens.length > 0
+          ? foundBackend.allergens.join(', ')
+          : null);
+
+      const winePairingObj = foundBackend.winePairing
+        ? {
+            wine: foundBackend.winePairing,
+            description:
+              foundBackend.winePairingNote || 'Sommelier recommended pairing.',
+          }
+        : null;
+
       return {
         id: foundBackend.id,
         name: foundBackend.name,
-        subtitle: foundBackend.description || foundBackend.category?.name || 'Chef Specialty',
-        price: foundBackend.basePrice || (foundBackend as any).price || 0,
+        subtitle:
+          foundBackend.description ||
+          foundBackend.categoryName ||
+          foundBackend.category?.name ||
+          'Chef Specialty',
+        price: foundBackend.price ?? foundBackend.basePrice ?? 0,
         category: foundBackend.categoryId,
-        image: getItemImage(foundBackend.name, foundBackend.category?.name, foundBackend.imageUrl),
-        popular: foundBackend.isAvailable,
-        description: foundBackend.description || 'Prepared fresh with the finest seasonal ingredients by Tavonza chefs.',
-        addOns: [
-          { id: 'addon-extra-cheese', name: 'Extra Cheddar', price: 1.5 },
-          { id: 'addon-truffle-oil', name: 'Truffle Oil Drizzle', price: 2.0 },
-        ],
+        image: getItemImage(
+          foundBackend.name,
+          foundBackend.categoryName || foundBackend.category?.name,
+          foundBackend.imageUrl
+        ),
+        popular: foundBackend.isPopular ?? foundBackend.isAvailable,
+        description:
+          foundBackend.description ||
+          'Prepared fresh with the finest seasonal ingredients by Tavonza chefs.',
+        addOns,
+        rating: foundBackend.rating ?? 4.5,
+        reviewsCount: foundBackend.ratingCount ?? 98,
+        dietary: foundBackend.dietBadge,
+        contains,
+        winePairing: winePairingObj,
+        prepTime: foundBackend.prepTime ? `${foundBackend.prepTime} min` : null,
+        calories: foundBackend.calories ? `${foundBackend.calories} kcal` : null,
       };
     }
 
     return {
-      id: '4455110d-db04-4cef-92c6-46bcd6a4c7e2',
-      name: 'Potato Corn Burger',
+      id: dishParam || '',
+      name: dishParam ? 'Dish Details' : 'Menu Item',
       subtitle: 'Chef Specialty',
-      price: 26,
-      category: 'ba394e24-642c-4608-8e42-61424fc78448',
+      price: 0,
+      category: '',
       image: '/images/burger.jpg',
-      popular: true,
+      popular: false,
       description: 'Prepared fresh with the finest seasonal ingredients by Tavonza chefs.',
-      addOns: [
-        { id: 'addon-extra-cheese', name: 'Extra Cheddar', price: 1.5 },
-        { id: 'addon-truffle-oil', name: 'Truffle Oil Drizzle', price: 2.0 },
-      ],
+      addOns: [],
     };
   }, [dishParam, selectedItem, backendItems]);
 

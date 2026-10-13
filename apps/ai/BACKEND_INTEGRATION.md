@@ -9,6 +9,7 @@
 The Tavonza AI service (`apps/ai`) is structured according to the architecture defined in `.agent/AI.md` and `.agent/AUTHORIZATION.md`.
 
 In compliance with the platform rules:
+
 - **No direct database access**: AI never connects to PostgreSQL, Redis, or any database directly (`AI -> SQL -> Database` is forbidden).
 - **Tool Gateway**: All domain queries and mutations pass through the platform backend via the Tool Gateway:
   ```text
@@ -30,16 +31,16 @@ Authorization: Bearer <INTERNAL_API_SERVICE_TOKEN>
 
 Both services configure this in their `.env`:
 
-| Service | Variable Name | Value |
-|---------|--------------|-------|
-| `apps/ai` (.env) | `INTERNAL_API_SERVICE_TOKEN` | `<shared_secret>` |
+| Service           | Variable Name                | Value                  |
+| ----------------- | ---------------------------- | ---------------------- |
+| `apps/ai` (.env)  | `INTERNAL_API_SERVICE_TOKEN` | `<shared_secret>`      |
 | `apps/api` (.env) | `INTERNAL_API_SERVICE_TOKEN` | `<same shared_secret>` |
 
 ---
 
 ## 🛣️ The 5 Backend Endpoints
 
-All endpoints are hosted by `apps/api` under `INTERNAL_API_BASE_URL` (default: `http://localhost:3000/internal`):
+All endpoints are hosted by `apps/api` under `INTERNAL_API_BASE_URL` (default: `https://api.tavonza.com/internal`):
 
 ---
 
@@ -49,11 +50,13 @@ All endpoints are hosted by `apps/api` under `INTERNAL_API_BASE_URL` (default: `
 The AI service does not decode or sign tokens; it delegates authorization resolution to the backend.
 
 **Request body:**
+
 ```json
 { "token": "<raw bearer token from the client>" }
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "actor_type": "USER",
@@ -79,11 +82,13 @@ The AI service does not decode or sign tokens; it delegates authorization resolu
 **Purpose**: Provides operational state snapshot (cached in Redis) to populate the role-aware context builder.
 
 **Query parameters:**
+
 ```
 ?actor_id=<acting_user_id>&branch_id=<branch_id>
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "assigned_tables": ["T1", "T2", "T5"],
@@ -101,6 +106,7 @@ The AI service does not decode or sign tokens; it delegates authorization resolu
 **Purpose**: Executes an authorized tool invoked by the agent. The backend enforces permission check and returns data.
 
 **Request body:**
+
 ```json
 {
   "tool": "get_menu",
@@ -121,16 +127,16 @@ The AI service does not decode or sign tokens; it delegates authorization resolu
 
 **Initial Tool Inventory:**
 
-| Tool Name | Required Permission | Risk Tier | Description |
-|-----------|---------------------|-----------|-------------|
-| `get_menu` | `menu.read` | Read-only | Branch menu items, prices, and categories |
-| `get_table_status` | `tables.read` | Read-only | Table status by `table_id` |
-| `get_order_status` | `orders.read` | Read-only | Status of order or current table order |
-| `get_kitchen_queue` | `orders.read` | Read-only | Kitchen preparation queue by station |
-| `get_branch_summary` | `reports.read` | Read-only | Branch KPI summary (tables, orders, audit) |
-| `get_audit_events` | `reports.read` | Read-only | Recent audit event logs |
-| `get_table_bill` | `payments.read` | Read-only | Bill breakdown (subtotal, tax, balance) |
-| `get_inventory` | `inventory.read` | Read-only | Stock levels and par thresholds |
+| Tool Name            | Required Permission | Risk Tier | Description                                |
+| -------------------- | ------------------- | --------- | ------------------------------------------ |
+| `get_menu`           | `menu.read`         | Read-only | Branch menu items, prices, and categories  |
+| `get_table_status`   | `tables.read`       | Read-only | Table status by `table_id`                 |
+| `get_order_status`   | `orders.read`       | Read-only | Status of order or current table order     |
+| `get_kitchen_queue`  | `orders.read`       | Read-only | Kitchen preparation queue by station       |
+| `get_branch_summary` | `reports.read`      | Read-only | Branch KPI summary (tables, orders, audit) |
+| `get_audit_events`   | `reports.read`      | Read-only | Recent audit event logs                    |
+| `get_table_bill`     | `payments.read`     | Read-only | Bill breakdown (subtotal, tax, balance)    |
+| `get_inventory`      | `inventory.read`    | Read-only | Stock levels and par thresholds            |
 
 ---
 
@@ -139,6 +145,7 @@ The AI service does not decode or sign tokens; it delegates authorization resolu
 **Purpose**: Confirmation handshake for high-risk mutations (e.g. refunds, cancellations).
 
 **Request body:**
+
 ```json
 {
   "pending_confirmation_id": "conf_abc123",
@@ -153,6 +160,7 @@ The AI service does not decode or sign tokens; it delegates authorization resolu
 **Purpose**: Receives structured audit events from AI actions. Uses the platform audit schema.
 
 **Request body:**
+
 ```json
 {
   "actorType": "USER",
@@ -170,6 +178,7 @@ The AI service does not decode or sign tokens; it delegates authorization resolu
   "source": "tavonza-ai"
 }
 ```
+
 **Response**: `202 Accepted`.
 
 ---
@@ -178,11 +187,11 @@ The AI service does not decode or sign tokens; it delegates authorization resolu
 
 The frontend clients (customer QR, waiter, cashier, manager) communicate with `apps/ai` at `http://localhost:8000`:
 
-| Method | Path | Description | Authorization |
-|--------|------|-------------|---------------|
-| `GET` | `/health` | Service health check | None |
-| `POST` | `/ai/chat` | Multi-turn conversational chat | `Bearer <JWT>` |
-| `POST` | `/ai/chat/stream` | Server-Sent Events (SSE) token stream | `Bearer <JWT>` |
-| `POST` | `/ai/voice/transcribe` | Audio file to text (Whisper Cloud) | `Bearer <JWT>` |
+| Method | Path                   | Description                                | Authorization  |
+| ------ | ---------------------- | ------------------------------------------ | -------------- |
+| `GET`  | `/health`              | Service health check                       | None           |
+| `POST` | `/ai/chat`             | Multi-turn conversational chat             | `Bearer <JWT>` |
+| `POST` | `/ai/chat/stream`      | Server-Sent Events (SSE) token stream      | `Bearer <JWT>` |
+| `POST` | `/ai/voice/transcribe` | Audio file to text (Whisper Cloud)         | `Bearer <JWT>` |
 | `POST` | `/ai/voice/synthesize` | Text to MP3 audio stream (Edge Neural TTS) | `Bearer <JWT>` |
-| `GET` | `/ai/voice/synthesize` | Direct audio source playback endpoint | `Bearer <JWT>` |
+| `GET`  | `/ai/voice/synthesize` | Direct audio source playback endpoint      | `Bearer <JWT>` |

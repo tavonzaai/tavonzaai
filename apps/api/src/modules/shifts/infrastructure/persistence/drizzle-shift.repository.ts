@@ -1,10 +1,11 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
   workShifts,
 } from '@tavonza/database';
+import { DrizzleQueryBuilder } from '../../../../common/database';
 import type { WorkShiftEntity } from '../../domain/entities/shift.entity';
 import {
   InternalOperationException,
@@ -57,26 +58,22 @@ export class DrizzleShiftRepository {
   }
 
   async findByBranch(branchId: string, date?: string): Promise<WorkShiftEntity[]> {
-    const conditions = [eq(workShifts.branchId, branchId)];
-    if (date) conditions.push(eq(workShifts.date, date));
+    const qb = new DrizzleQueryBuilder<typeof workShifts>(this.db, workShifts)
+      .filterExact({ branchId, date })
+      .softDelete({ column: workShifts.status, activeValue: 'ACTIVE' })
+      .sort('startTime', 'asc');
 
-    const rows = await this.db
-      .select()
-      .from(workShifts)
-      .where(and(...conditions));
-
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapShift(r));
   }
 
   async findByStaffAssignment(staffAssignmentId: string, date?: string): Promise<WorkShiftEntity[]> {
-    const conditions = [eq(workShifts.staffAssignmentId, staffAssignmentId)];
-    if (date) conditions.push(eq(workShifts.date, date));
+    const qb = new DrizzleQueryBuilder<typeof workShifts>(this.db, workShifts)
+      .filterExact({ staffAssignmentId, date })
+      .softDelete({ column: workShifts.status, activeValue: 'ACTIVE' })
+      .sort('startTime', 'asc');
 
-    const rows = await this.db
-      .select()
-      .from(workShifts)
-      .where(and(...conditions));
-
+    const rows = await qb.executePlain();
     return rows.map((r) => this.mapShift(r));
   }
 

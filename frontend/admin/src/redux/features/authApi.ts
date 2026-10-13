@@ -5,6 +5,7 @@ import {
   removeAuthToken,
   getAuthToken,
   getRefreshToken,
+  rtkBaseApi,
 } from '../api/baseApi';
 
 // ─── Types & Payloads ──────────────────────────────────────────────────────────
@@ -18,6 +19,8 @@ export interface UserProfile {
   phone?: string | null;
   contactNo?: string | null;
   role: string;
+  avatar?: string | null;
+  avatarUrl?: string | null;
   permissions?: string[];
   scopes?: any[];
   organizationId?: string | null;
@@ -60,8 +63,15 @@ export interface ResetPasswordPayload {
   newPassword: string;
 }
 
+export interface ChangePasswordPayload {
+  currentPassword?: string;
+  oldPassword?: string;
+  newPassword: string;
+}
+
 export interface MessageResponse {
   message: string;
+  devOtp?: string;
 }
 
 // ─── 📡 Raw API Handlers (Exact Backend Endpoints) ───────────────────────────
@@ -145,28 +155,52 @@ export const rawAuthApi = {
     return res.data || res;
   },
 
-  /** GET /auth/me — Retrieve current profile */
+  /** POST /auth/change-password — Direct authenticated change password */
+  changePassword: async (payload: ChangePasswordPayload): Promise<MessageResponse> => {
+    const res = await baseApiFetch<MessageResponse>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        currentPassword: payload.currentPassword || payload.oldPassword,
+        oldPassword: payload.oldPassword || payload.currentPassword,
+        newPassword: payload.newPassword,
+      }),
+    });
+    return res.data || res;
+  },
+
+  /** GET /users/me — Retrieve current profile */
   getMe: async (): Promise<UserProfile> => {
     let res: any;
     try {
-      res = await baseApiFetch<UserProfile>('/auth/me', {
+      res = await baseApiFetch<UserProfile>('/users/me', {
         method: 'GET',
       });
     } catch (err: any) {
-      if (err?.message && (err.message.includes('404') || err.message.includes('Cannot GET'))) {
+      if (err?.status === 401 || err?.statusCode === 401) {
+        throw err;
+      }
+      try {
+        res = await baseApiFetch<UserProfile>('/auth/me', {
+          method: 'GET',
+        });
+      } catch (err2: any) {
+        if (err2?.status === 401 || err2?.statusCode === 401) {
+          throw err2;
+        }
         res = await baseApiFetch<UserProfile>('/auth/get-me', {
           method: 'GET',
         });
-      } else {
-        throw err;
       }
     }
-    const user: UserProfile = (res.data && res.data.id ? res.data : res) as any;
+    const user: UserProfile = (res?.data && res?.data?.id ? res.data : res) as any;
     if (user) {
       user.name =
         user.name ||
         `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
         user.email;
+      if (user.avatar && !user.avatarUrl) {
+        user.avatarUrl = user.avatar;
+      }
     }
     return user;
   },
@@ -174,10 +208,17 @@ export const rawAuthApi = {
   /** GET /me/assignments — Retrieve staff assignments */
   getMyAssignments: async () => {
     try {
-      const response = await baseApiFetch('/me/assignments', {
-        method: 'GET',
-      });
-      return response.data || response;
+      let response: any;
+      try {
+        response = await baseApiFetch('/me/assignments', {
+          method: 'GET',
+        });
+      } catch {
+        response = await baseApiFetch('/users/me/assignments', {
+          method: 'GET',
+        });
+      }
+      return response?.data || response;
     } catch {
       return { staffId: null, assignments: [] };
     }
@@ -233,10 +274,15 @@ export const loginUser = createAsyncThunk(
         }
         try {
           const assignmentsRes = await rawAuthApi.getMyAssignments();
+          const mergedAssignments =
+            Array.isArray(assignmentsRes?.assignments) && assignmentsRes.assignments.length > 0
+              ? assignmentsRes.assignments
+              : (userProfile?.assignments || []);
+
           userProfile = {
             ...userProfile,
-            staffId: assignmentsRes?.staffId,
-            assignments: assignmentsRes?.assignments || [],
+            staffId: assignmentsRes?.staffId || userProfile?.staffId || null,
+            assignments: mergedAssignments,
           };
         } catch {}
       } catch {
@@ -310,13 +356,19 @@ export const getMe = createAsyncThunk(
       let userProfile = await rawAuthApi.getMe();
       try {
         const assignmentsRes = await rawAuthApi.getMyAssignments();
+        const mergedAssignments =
+          Array.isArray(assignmentsRes?.assignments) && assignmentsRes.assignments.length > 0
+            ? assignmentsRes.assignments
+            : (userProfile?.assignments || []);
+
         userProfile = {
           ...userProfile,
-          staffId: assignmentsRes?.staffId,
-          assignments: assignmentsRes?.assignments || [],
+          staffId: assignmentsRes?.staffId || userProfile?.staffId || null,
+          assignments: mergedAssignments,
         };
       } catch {}
       return userProfile;
+
     } catch (err: any) {
       removeAuthToken();
       return rejectWithValue(err.message || 'Session expired.');
@@ -333,23 +385,175 @@ export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   }
 });
 
-/** 8. Change Password */
+/** 8. Change / Reset Password (Using Backend Auth Endpoints) */
 export const changePassword = createAsyncThunk(
   'auth/changePassword',
-  async (payload: { oldPassword?: string; prevPass?: string; newPassword?: string; newPass?: string }, { rejectWithValue }) => {
+  async (
+    payload: {
+      currentPassword?: string;
+      oldPassword?: string;
+      newPassword?: string;
+      newPass?: string;
+      email?: string;
+      code?: string;
+      otp?: string;
+    },
+    { rejectWithValue, getState }
+  ) => {
     try {
-      const res = await baseApiFetch('/auth/change-password', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      return res.message || 'Password changed successfully';
+      const state: any = getState();
+      const userEmail = payload.email || state?.auth?.user?.email;
+
+      const currentPass = payload.currentPassword || payload.oldPassword;
+      const newPass = payload.newPassword || payload.newPass;
+      const otpCode = payload.code || payload.otp;
+
+      // 1. Authenticated Direct Password Change: POST /auth/change-password
+      if (currentPass && newPass) {
+        const res = await rawAuthApi.changePassword({
+          currentPassword: currentPass,
+          newPassword: newPass,
+        });
+        return res.message || 'Password changed successfully!';
+      }
+
+      // 2. OTP Reset Password: POST /auth/reset-password
+      if (otpCode && newPass && userEmail) {
+        const res = await rawAuthApi.resetPassword({
+          email: userEmail.trim().toLowerCase(),
+          code: otpCode.trim(),
+          newPassword: newPass.trim(),
+        });
+        return res.message || 'Password updated successfully!';
+      }
+
+      // 3. Trigger OTP if only email is provided: POST /auth/forgot-password
+      if (userEmail) {
+        const res = await rawAuthApi.forgotPassword({ email: userEmail.trim().toLowerCase() });
+        return (
+          res.message ||
+          'A 5-digit verification code has been sent to your email. Please enter the OTP code to complete.'
+        );
+      }
+
+      throw new Error('Please provide your current password and new password.');
     } catch (err: any) {
-      return rejectWithValue(err.message || 'Failed to change password.');
+      return rejectWithValue(err.message || 'Failed to update password.');
     }
   }
 );
 
+// ─── 🔄 RTK Query Endpoints ──────────────────────────────────────────────────
+
+export const authApi = rtkBaseApi.injectEndpoints({
+  endpoints: (builder) => ({
+    loginMutation: builder.mutation<AuthTokensResponse, LoginPayload>({
+      query: (credentials) => ({
+        url: '/auth/login',
+        method: 'POST',
+        body: {
+          email: credentials.email.trim().toLowerCase(),
+          password: credentials.password,
+        },
+      }),
+      invalidatesTags: ['AUTH', 'USER'],
+      async onQueryStarted(_arg, { queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          const token = data.accessToken || (data as any).access_token;
+          if (token) {
+            setAuthTokens({
+              accessToken: token,
+              refreshToken: data.refreshToken,
+            });
+          }
+        } catch {}
+      },
+    }),
+    logoutMutation: builder.mutation<MessageResponse, void>({
+      query: () => ({
+        url: '/auth/logout',
+        method: 'POST',
+      }),
+      invalidatesTags: ['AUTH', 'USER'],
+      async onQueryStarted(_arg, { queryFulfilled }) {
+        try {
+          await queryFulfilled;
+        } finally {
+          removeAuthToken();
+        }
+      },
+    }),
+    getMeQuery: builder.query<UserProfile, void>({
+      query: () => '/auth/me',
+      providesTags: ['USER', 'AUTH'],
+    }),
+    changePasswordMutation: builder.mutation<MessageResponse, ChangePasswordPayload>({
+      query: (body) => ({
+        url: '/auth/change-password',
+        method: 'POST',
+        body: {
+          currentPassword: body.currentPassword || body.oldPassword,
+          oldPassword: body.oldPassword || body.currentPassword,
+          newPassword: body.newPassword,
+        },
+      }),
+    }),
+    forgotPasswordMutation: builder.mutation<MessageResponse, ForgotPasswordPayload>({
+      query: (body) => ({
+        url: '/auth/forgot-password',
+        method: 'POST',
+        body: { email: body.email.trim().toLowerCase() },
+      }),
+    }),
+    verifyOtpMutation: builder.mutation<MessageResponse, VerifyOtpPayload>({
+      query: (body) => ({
+        url: '/auth/verify-otp',
+        method: 'POST',
+        body: {
+          email: body.email.trim().toLowerCase(),
+          code: body.code.trim(),
+          type: body.type || 'password_reset',
+        },
+      }),
+    }),
+    resetPasswordMutation: builder.mutation<MessageResponse, ResetPasswordPayload>({
+      query: (body) => ({
+        url: '/auth/reset-password',
+        method: 'POST',
+        body: {
+          email: body.email.trim().toLowerCase(),
+          code: body.code.trim(),
+          newPassword: body.newPassword,
+        },
+      }),
+    }),
+    resendOtpMutation: builder.mutation<MessageResponse, ResendOtpPayload>({
+      query: (body) => ({
+        url: '/auth/resend-otp',
+        method: 'POST',
+        body: {
+          email: body.email.trim().toLowerCase(),
+          type: body.type || 'password_reset',
+        },
+      }),
+    }),
+  }),
+});
+
+export const {
+  useLoginMutationMutation: useLoginMutation,
+  useLogoutMutationMutation: useLogoutMutation,
+  useGetMeQueryQuery: useGetMeQuery,
+  useChangePasswordMutationMutation: useChangePasswordMutation,
+  useForgotPasswordMutationMutation: useForgotPasswordMutation,
+  useVerifyOtpMutationMutation: useVerifyOtpMutation,
+  useResetPasswordMutationMutation: useResetPasswordMutation,
+  useResendOtpMutationMutation: useResendOtpMutation,
+} = authApi;
+
 // Backward-compatibility aliases
+export const changePasswordThunk = changePassword;
 export const verifyOtp = verifyOtpThunk;
 export const resendOtp = resendOtpThunk;
 export const forgotPassword = forgotPasswordThunk;

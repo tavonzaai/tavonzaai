@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Tavonza AI Service — Autonomous Restaurant Agent",
-    version="1.0.0",
+    version="1.0.1",
     lifespan=lifespan,
     docs_url="/docs" if settings.environment == "dev" else None,
     redoc_url=None,
@@ -69,7 +69,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty
 
 
 dev_origins = [
-    "http://localhost:3000",
+    "https://api.tavonza.com",
     "http://localhost:3100",
     "http://localhost:3101",
     "http://localhost:3102",

@@ -14,8 +14,10 @@ import {
   LogOut,
   X,
   Clock,
+  User,
 } from "lucide-react";
 import { useLogout } from "@/hooks/useLogout";
+import { useAppSelector } from "@/redux/store";
 
 export function TavonzaLogoIcon({ className = "w-10 h-10" }: { className?: string }) {
   return (
@@ -45,6 +47,7 @@ export const updatedKitchenNavItems = [
   { name: "Inventory", icon: Package, badge: "1 Low", badgeColor: "text-rose-400 bg-rose-500/10" },
   { name: "Shift Report", icon: FileSpreadsheet },
   { name: "AI Insights", icon: Sparkles, isPro: true },
+  { name: "Profile", icon: User },
   { name: "Settings", icon: Settings },
 ];
 
@@ -55,7 +58,11 @@ export default function Sidebar({
   setSidebarOpen,
 }: KitchenSidebarProps) {
   const { handleLogout } = useLogout();
+  const { user } = useAppSelector((state) => state.auth);
   const isDashboardView = activeNav === "Dashboard";
+
+  const chefName = user?.name || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Marco Vance');
+  const chefInitials = chefName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'MV';
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -166,20 +173,28 @@ export default function Sidebar({
 
         {/* User Profile & Logout Footer */}
         <div className="p-4 border-t border-white/15 bg-black shrink-0">
-          <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
-            <div className="flex items-center gap-2.5 overflow-hidden">
+          <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800/80 transition">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveNav("Profile");
+                setSidebarOpen(false);
+              }}
+              className="flex items-center gap-2.5 overflow-hidden flex-1 cursor-pointer text-left"
+              title="View Profile"
+            >
               <div className="w-8 h-8 rounded-lg bg-amber-400 text-black font-bold text-xs flex items-center justify-center shrink-0">
-                MV
+                {chefInitials}
               </div>
               <div className="flex flex-col truncate">
                 <span className="text-xs font-semibold text-white truncate font-['Inter']">
-                  Marco Vance
+                  {chefName}
                 </span>
                 <span className="text-[10px] text-zinc-400 truncate font-['Inter']">
-                  Head Chef (Downtown)
+                  Kitchen Staff
                 </span>
               </div>
-            </div>
+            </button>
             <button
               type="button"
               onClick={handleLogout}

@@ -9,3 +9,4 @@ export * from './billing';
 export * from './operations';
 export * from './audit';
 export * from './events';
+export * from './notifications';

@@ -17,7 +17,7 @@ export default function OrdersPageClient() {
         onBack={() => setSelectedOrder(null)}
         isStandaloneRoute={true}
         onNavigateTab={(tab) => {
-          if (tab === 'home' || tab === 'floor') router.push('/new-waiter-dashboard/floor');
+          if (tab === 'home' || tab === 'floor') router.push('/new-waiter-dashboard/home');
           if (tab === 'order') setSelectedOrder(null);
           if (tab === 'jarvis') router.push('/new-waiter-dashboard/jarvis');
           if (tab === 'alert' || tab === 'alerts') router.push('/new-waiter-dashboard/alerts');
@@ -33,7 +33,7 @@ export default function OrdersPageClient() {
       isStandaloneRoute={true}
       activeBottomTab="order"
       onNavigateTab={(tab) => {
-        if (tab === 'home' || tab === 'floor') router.push('/new-waiter-dashboard/floor');
+        if (tab === 'home' || tab === 'floor') router.push('/new-waiter-dashboard/home');
         if (tab === 'jarvis') router.push('/new-waiter-dashboard/jarvis');
         if (tab === 'alert' || tab === 'alerts') router.push('/new-waiter-dashboard/alerts');
         if (tab === 'profile') router.push('/new-waiter-dashboard/profile');

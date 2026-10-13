@@ -31,10 +31,13 @@ export default function LiveTransactionsSection() {
       }
     };
     loadData();
-    const interval = setInterval(loadData, 8000);
+    const handleUpdate = () => loadData();
+    window.addEventListener('tavonza:payment_status_changed', handleUpdate);
+    window.addEventListener('tavonza:payment_requested', handleUpdate);
     return () => {
       mounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:payment_status_changed', handleUpdate);
+      window.removeEventListener('tavonza:payment_requested', handleUpdate);
     };
   }, []);
 

@@ -7,9 +7,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthService } from './application/services/auth.service';
+import { UserService } from './application/services/user.service';
 import { DrizzleUserRepository } from './infrastructure/persistence/drizzle-user.repository';
 import { JwtStrategy } from './infrastructure/adapters/jwt.strategy';
 import { AuthController } from './presentation/http/auth.controller';
+import { UserController } from './presentation/http/user.controller';
+import { MeController } from './presentation/http/me.controller';
 
 @Module({
   imports: [
@@ -20,8 +23,8 @@ import { AuthController } from './presentation/http/auth.controller';
       signOptions: { expiresIn: '15m' as unknown as number },
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, DrizzleUserRepository, JwtStrategy],
-  exports: [AuthService, JwtModule, PassportModule],
+  controllers: [AuthController, UserController, MeController],
+  providers: [AuthService, UserService, DrizzleUserRepository, JwtStrategy],
+  exports: [AuthService, UserService, DrizzleUserRepository, JwtModule, PassportModule],
 })
 export class IdentityModule {}

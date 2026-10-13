@@ -41,26 +41,17 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Demo session token
-    if (token.startsWith('adm_tok_')) {
-      const raw = getCookie('admin_user');
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (isRoleAllowedForAdmin(parsed)) {
-            dispatch(setUser(parsed));
-            dispatch(setInitialized(true));
-            return;
-          }
-        } catch {}
-      }
-      removeAuthToken();
-      dispatch(setUser(null));
-      dispatch(setInitialized(true));
-      return;
+    // Real API session: verify via getMe()
+    const stored = getCookie('admin_user');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (isRoleAllowedForAdmin(parsed)) {
+          dispatch(setUser(parsed));
+        }
+      } catch {}
     }
 
-    // Real API session: verify via getMe()
     dispatch(getMe())
       .unwrap()
       .then((userProfile: any) => {
@@ -84,10 +75,15 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+import { RealtimeBridge } from './RealtimeBridge';
+
 export default function ReduxProvider({ children }: { children: React.ReactNode }) {
   return (
     <Provider store={store}>
-      <AuthInitializer>{children}</AuthInitializer>
+      <AuthInitializer>
+        <RealtimeBridge>{children}</RealtimeBridge>
+      </AuthInitializer>
     </Provider>
   );
 }
+

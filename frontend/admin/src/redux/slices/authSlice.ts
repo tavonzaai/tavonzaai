@@ -10,6 +10,7 @@ import {
   logoutUser,
   UserProfile,
 } from '../features/authApi';
+import { updateMe } from '../features/userApi';
 
 export interface AuthState {
   user: UserProfile | null;
@@ -60,6 +61,15 @@ const authSlice = createSlice({
     },
     setOtpCode: (state, action: PayloadAction<string | null>) => {
       state.otpCode = action.payload;
+    },
+    logout: (state) => {
+      state.user = null;
+      state.isAuthenticated = false;
+      state.loading = false;
+      state.error = null;
+      state.successMessage = null;
+      state.forgotEmail = null;
+      state.otpCode = null;
     },
   },
   extraReducers: (builder) => {
@@ -198,6 +208,19 @@ const authSlice = createSlice({
         state.error = null;
         state.successMessage = null;
       });
+
+    // 9. Update Profile (updateMe)
+    builder.addCase(updateMe.fulfilled, (state, action: any) => {
+      if (action.payload) {
+        state.user = {
+          ...state.user,
+          ...action.payload,
+          name: action.payload.name || state.user?.name,
+          contactNo: action.payload.contactNo || state.user?.contactNo,
+          phone: action.payload.contactNo || state.user?.phone,
+        };
+      }
+    });
   },
 });
 
@@ -209,6 +232,7 @@ export const {
   clearSuccessMessage,
   setForgotEmail,
   setOtpCode,
+  logout,
 } = authSlice.actions;
 
 export default authSlice.reducer;

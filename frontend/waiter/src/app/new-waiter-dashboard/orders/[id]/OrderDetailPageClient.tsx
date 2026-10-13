@@ -32,7 +32,7 @@ function OrderDetailInner({ orderId }: { orderId: string }) {
       onBack={() => router.push('/new-waiter-dashboard/orders')}
       isStandaloneRoute={true}
       onNavigateTab={(tab) => {
-        if (tab === 'home' || tab === 'floor') router.push('/new-waiter-dashboard/floor');
+        if (tab === 'home' || tab === 'floor') router.push('/new-waiter-dashboard/home');
         if (tab === 'order') router.push('/new-waiter-dashboard/orders');
         if (tab === 'jarvis') router.push('/new-waiter-dashboard/jarvis');
         if (tab === 'alert' || tab === 'alerts') router.push('/new-waiter-dashboard/alerts');

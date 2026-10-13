@@ -4,19 +4,21 @@ import {
   UnauthorizedException,
   ConflictException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { randomInt } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { GlobalRole, resolvePermissions } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
-// Assuming MailService is mocked or works.
-// import { MailService } from '../../../notifications/application/mail.service';
+import { MailService } from '../../../notifications/application/mail.service';
 import type {
   RegisterDto,
   LoginDto,
   VerifyOtpDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  ChangePasswordDto,
 } from '../../presentation/http/dto/auth-request.dto';
 import type {
   AuthTokensDto,
@@ -31,7 +33,7 @@ export class AuthService {
   constructor(
     private readonly userRepo: DrizzleUserRepository,
     private readonly jwtService: JwtService,
-    // private readonly mailService: MailService,
+    private readonly mailService: MailService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
@@ -51,7 +53,11 @@ export class AuthService {
       role: GlobalRole.CUSTOMER,
     });
 
-    const devOtp = await this.generateAndSendOtp(user.email, 'email_verification');
+    const devOtp = await this.generateAndSendOtp(
+      user.email,
+      'email_verification',
+      dto.firstName.trim(),
+    );
 
     return {
       message: 'Account created successfully. Please verify your email with the OTP code sent to your email.',
@@ -74,14 +80,50 @@ export class AuthService {
     return this.issueTokens(user);
   }
 
-  async refreshTokens(userId: string, _refreshToken: string): Promise<AuthTokensDto> {
-    const user = await this.userRepo.findById(userId);
+  async refreshTokens(userId?: string, refreshToken?: string): Promise<AuthTokensDto> {
+    let resolvedUserId = userId;
+    if (!resolvedUserId && refreshToken) {
+      try {
+        const payload: any = this.jwtService.verify(refreshToken, {
+          secret: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET,
+        });
+        resolvedUserId = payload?.sub;
+      } catch {
+        throw new UnauthorizedException('Invalid or expired refresh token');
+      }
+    }
+
+    if (!resolvedUserId) {
+      throw new UnauthorizedException('Access denied');
+    }
+
+    const user = await this.userRepo.findById(resolvedUserId);
     if (!user || user.status !== 'ACTIVE') {
       throw new UnauthorizedException('Access denied');
     }
 
-    // Refresh token validation skipped for stateless JWT
     return this.issueTokens(user);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.userRepo.findById(userId);
+    if (!user || !user.password) {
+      throw new BadRequestException('User account not found or has no local password');
+    }
+
+    const currentPass = dto.currentPassword || dto.oldPassword;
+    if (!currentPass) {
+      throw new BadRequestException('Current password is required');
+    }
+
+    const match = await argon2.verify(user.password, currentPass);
+    if (!match) {
+      throw new BadRequestException('Current password does not match');
+    }
+
+    this.validatePassword(dto.newPassword);
+    const newHash = await argon2.hash(dto.newPassword);
+    await this.userRepo.updatePassword(user.id, newHash);
   }
 
   async logout(_userId: string): Promise<void> {
@@ -114,12 +156,19 @@ export class AuthService {
   }
 
   async verifyOtp(dto: VerifyOtpDto): Promise<void> {
-    if (dto.type === 'password_reset') {
-      const otp = await this.userRepo.findValidPasswordResetOtp(dto.email);
-      if (!otp) throw new BadRequestException('OTP code is invalid or has expired');
-      if (otp.otp !== dto.code) throw new BadRequestException('Incorrect verification code');
-    } else {
-      // Stub for email/phone verifications if needed
+    if (dto.type === 'phone_verification') {
+      throw new BadRequestException('Phone verification is not supported');
+    }
+
+    const email = dto.email.trim().toLowerCase();
+    const otp = await this.userRepo.findValidAuthOtp(email, dto.type);
+    if (!otp) throw new BadRequestException('OTP code is invalid or has expired');
+    if (otp.otp !== dto.code) throw new BadRequestException('Incorrect verification code');
+
+    if (dto.type === 'email_verification') {
+      const consumed = await this.userRepo.consumeAuthOtp(email, dto.type, dto.code);
+      if (!consumed) throw new BadRequestException('OTP code is invalid or has expired');
+      await this.userRepo.markEmailVerified(email);
     }
   }
 
@@ -127,7 +176,11 @@ export class AuthService {
     const user = await this.userRepo.findByEmailOrPhone(dto.email);
     if (!user) return undefined;
 
-    const devOtp = await this.generateAndSendOtp(user.email, 'password_reset');
+    const devOtp = await this.generateAndSendOtp(
+      user.email,
+      'password_reset',
+      user.name.split(' ')[0],
+    );
     return process.env.NODE_ENV !== 'production' ? devOtp : undefined;
   }
 
@@ -135,12 +188,18 @@ export class AuthService {
     const user = await this.userRepo.findByEmailOrPhone(dto.email);
     if (!user) throw new NotFoundException('User not found');
 
-    const otp = await this.userRepo.findValidPasswordResetOtp(dto.email);
+    const otp = await this.userRepo.findValidAuthOtp(user.email, 'password_reset');
     if (!otp) throw new BadRequestException('OTP code is invalid or has expired');
     if (otp.otp !== dto.code) throw new BadRequestException('Incorrect verification code');
 
     this.validatePassword(dto.newPassword);
     const newHash = await argon2.hash(dto.newPassword);
+    const consumed = await this.userRepo.consumeAuthOtp(
+      user.email,
+      'password_reset',
+      dto.code,
+    );
+    if (!consumed) throw new BadRequestException('OTP code is invalid or has expired');
     await this.userRepo.updatePassword(user.id, newHash);
   }
 
@@ -148,10 +207,17 @@ export class AuthService {
     identifier: string,
     type: 'email_verification' | 'phone_verification' | 'password_reset',
   ): Promise<string | undefined> {
+    if (type === 'phone_verification') {
+      throw new BadRequestException('Phone verification is not supported');
+    }
     const user = await this.userRepo.findByEmailOrPhone(identifier);
-    if (!user) return undefined; 
+    if (!user) return undefined;
 
-    const devOtp = await this.generateAndSendOtp(user.email, type);
+    const devOtp = await this.generateAndSendOtp(
+      user.email,
+      type,
+      user.name.split(' ')[0],
+    );
     return process.env.NODE_ENV !== 'production' ? devOtp : undefined;
   }
 
@@ -202,13 +268,26 @@ export class AuthService {
   private async generateAndSendOtp(
     email: string,
     type: 'email_verification' | 'phone_verification' | 'password_reset',
+    firstName: string,
   ): Promise<string> {
-    const code = Math.floor(10000 + Math.random() * 90000).toString();
+    if (type === 'phone_verification') {
+      throw new BadRequestException('Phone verification is not supported');
+    }
+
+    const code = randomInt(10000, 100000).toString();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    if (type === 'password_reset') {
-      await this.userRepo.createPasswordResetOtp(email, code, expiresAt);
+    await this.userRepo.createAuthOtp(email, code, type, expiresAt);
+
+    const mailResult = type === 'password_reset'
+      ? await this.mailService.sendPasswordResetCode(email, firstName, code)
+      : await this.mailService.sendVerificationCode(email, firstName, code);
+
+    if (!mailResult.success) {
+      await this.userRepo.deleteAuthOtp(email, type, code);
+      throw new ServiceUnavailableException('Unable to send the OTP email. Please try again.');
     }
+
     return code;
   }
 

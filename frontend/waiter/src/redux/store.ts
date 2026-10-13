@@ -6,6 +6,9 @@ import menuCategoryReducer from './slices/menuCategorySlice';
 import menuItemReducer from './slices/menuItemSlice';
 import chatReducer from './slices/chatSlice';
 
+import { setupListeners } from '@reduxjs/toolkit/query';
+import { rtkBaseApi } from './api/baseApi';
+
 export const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -13,12 +16,18 @@ export const store = configureStore({
     menuCategories: menuCategoryReducer,
     menuItems: menuItemReducer,
     chat: chatReducer,
+    [rtkBaseApi.reducerPath]: rtkBaseApi.reducer,
   },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(rtkBaseApi.middleware),
   devTools: process.env.NODE_ENV !== 'production',
 });
+
+setupListeners(store.dispatch);
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
 export const useAppDispatch = () => useDispatch<AppDispatch>();
 export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
+

@@ -28,11 +28,16 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+import { RealtimeBridge } from './RealtimeBridge';
+
 export default function ReduxProvider({ children }: { children: React.ReactNode }) {
   return (
     <Provider store={store}>
-      <AuthInitializer>{children}</AuthInitializer>
+      <AuthInitializer>
+        <RealtimeBridge>{children}</RealtimeBridge>
+      </AuthInitializer>
     </Provider>
   );
 }
+
 

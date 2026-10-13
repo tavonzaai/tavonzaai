@@ -13,6 +13,7 @@ const tabMap: Record<string, string> = {
   'inventory': 'Inventory',
   'shift-report': 'Shift Report',
   'ai-insights': 'AI Insights',
+  'profile': 'Profile',
   'settings': 'Settings',
 };
 
