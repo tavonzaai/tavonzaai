@@ -44,6 +44,8 @@ export default function OrdersListView({
   const mapBackendStatus = (backendStatus: string): OrderStatus => {
     switch (backendStatus?.toUpperCase()) {
       case 'PENDING':
+      case 'SUBMITTED':
+      case 'DRAFT':
         return 'Pending';
       case 'CONFIRMED':
       case 'PREPARING':
@@ -70,7 +72,7 @@ export default function OrdersListView({
     try {
       const branchId = getActiveBranchId();
       let statusParam: string | undefined = undefined;
-      if (filter === 'Pending') statusParam = 'PENDING';
+      if (filter === 'Pending') statusParam = 'PENDING,DRAFT,SUBMITTED';
       if (filter === 'Active') statusParam = 'CONFIRMED,PREPARING,READY';
       if (filter === 'Completed') statusParam = 'SERVED,COMPLETED';
 
@@ -83,7 +85,15 @@ export default function OrdersListView({
       });
 
       // Detect newly arrived customer orders
-      const currentPending = backendOrders.filter((bo: any) => bo.status?.toUpperCase() === 'PENDING');
+      const currentPending = backendOrders.filter((bo: any) => {
+        const st = bo.status?.toUpperCase();
+        return (
+          st === 'PENDING' ||
+          st === 'SUBMITTED' ||
+          st === 'DRAFT' ||
+          (Array.isArray(bo.items) && bo.items.some((it: any) => it.status?.toUpperCase() === 'PENDING'))
+        );
+      });
       const currentPendingIds = new Set(currentPending.map((bo: any) => bo.id || bo.orderId));
 
       if (!isInitialLoadRef.current) {

@@ -200,20 +200,31 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
       const branchId = getActiveBranchId();
       const [backendTables, liveOrders] = await Promise.all([
         waiterService.getMyTables(branchId).catch(() => []),
-        waiterService.queryOrders({ branchId, status: 'PENDING' }).catch(() => []),
+        waiterService.queryOrders({ branchId }).catch(() => []),
       ]);
 
       if (Array.isArray(backendTables) && backendTables.length > 0) {
         const mappedTables = backendTables.map((bt: any) => {
           const tableLabel = bt.tableNumber || bt.label || `Table-${bt.id?.slice(0, 2)}`;
           const tableOrdersCount = Array.isArray(liveOrders)
-            ? liveOrders.filter(
-                (o: any) =>
+            ? liveOrders.filter((o: any) => {
+                const matchTable =
                   o.tableId === bt.tableId ||
                   o.tableId === bt.id ||
                   o.tableNumber === tableLabel ||
-                  o.tableLabel === tableLabel
-              ).length
+                  o.tableLabel === tableLabel ||
+                  `Table-${o.tableNumber}` === tableLabel ||
+                  `Table-${o.tableLabel}` === tableLabel ||
+                  o.tableNumber === bt.tableNumber ||
+                  o.tableLabel === bt.tableNumber;
+                const st = String(o.status || '').toUpperCase();
+                const isActionable =
+                  st !== 'CANCELLED' &&
+                  st !== 'REJECTED' &&
+                  st !== 'SERVED' &&
+                  st !== 'COMPLETED';
+                return matchTable && isActionable;
+              }).length
             : 0;
 
           let statusDisplay: 'Available' | 'New Order' | 'Ready To Serve' | 'Occupied' = 'Available';
@@ -238,11 +249,28 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
         setSelectedTable((prev) => prev || mappedTables[0] || null);
       }
 
-
-
       if (Array.isArray(liveOrders)) {
+        const pendingLiveOrders = liveOrders.filter((lo: any) => {
+          const st = String(lo.status || '').toUpperCase();
+          const hasPendingItems =
+            Array.isArray(lo.items) &&
+            lo.items.some((it: any) => String(it.status || '').toUpperCase() === 'PENDING');
+          const isPending =
+            st === 'PENDING' ||
+            st === 'SUBMITTED' ||
+            (st === 'DRAFT' && ((lo.itemsCount || lo.items?.length || 0) > 0 || hasPendingItems)) ||
+            hasPendingItems;
+          return (
+            isPending &&
+            st !== 'CANCELLED' &&
+            st !== 'REJECTED' &&
+            st !== 'SERVED' &&
+            st !== 'COMPLETED'
+          );
+        });
+
         setPendingOrders(
-          liveOrders.map((lo: any) => {
+          pendingLiveOrders.map((lo: any) => {
             const itemsSummary =
               Array.isArray(lo.items) && lo.items.length > 0
                 ? lo.items.map((i: any) => `${i.quantity || 1}x ${i.productName || i.name || 'Dish'}`).join(', ')
@@ -254,7 +282,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                   ? lo.orderNumber
                   : `#${lo.orderNumber}`
                 : `#${(lo.id || '').slice(0, 5)}`,
-              table: lo.tableLabel || lo.tableNumber || 'Table',
+              table: lo.tableLabel || lo.tableNumber || (lo.tableId ? `Table-${lo.tableId.slice(0, 4)}` : 'Table'),
               items: itemsSummary,
               price: `$${Number(lo.totalAmount || lo.total || 0).toFixed(2)}`,
               status: 'Pending',
@@ -727,43 +755,47 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
 
                 {/* Pending Orders Cards List */}
                 <div className="flex flex-col gap-2.5">
-                  {pendingOrders.map((order, i) => (
-                    <div
-                      key={i}
-                      className="p-3 bg-neutral-900 rounded-[10px] border border-white/5 flex items-center justify-between hover:border-white/10 transition"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-slate-200 text-xs font-semibold font-['Inter']">
-                              {order.id}
-                            </span>
-                            <span className="text-amber-400 text-xs font-medium font-['Inter']">
-                              {order.table}
+                  {pendingOrders.length === 0 ? (
+                    <div className="p-4 bg-neutral-900/60 rounded-[10px] border border-white/5 text-center text-zinc-500 text-xs font-['Inter']">
+                      No pending orders waiting right now. All caught up!
+                    </div>
+                  ) : (
+                    pendingOrders.map((order, i) => (
+                      <div
+                        key={i}
+                        onClick={() => {
+                          setCameFromFloor(true);
+                          setActiveTab('order');
+                        }}
+                        className="p-3 bg-neutral-900 rounded-[10px] border border-white/5 flex items-center justify-between hover:border-amber-400/30 transition cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-200 text-xs font-semibold font-['Inter'] group-hover:text-amber-400 transition">
+                                {order.id}
+                              </span>
+                              <span className="text-amber-400 text-xs font-medium font-['Inter'] px-1.5 py-0.5 rounded bg-amber-400/10">
+                                {order.table}
+                              </span>
+                            </div>
+                            <span className="text-zinc-400 text-xs font-normal font-['Inter'] line-clamp-1 mt-0.5">
+                              {order.items}
                             </span>
                           </div>
-                          <span className="text-zinc-400 text-xs font-normal font-['Inter'] line-clamp-1 mt-0.5">
-                            {order.items}
+                        </div>
+
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-white text-xs font-semibold font-['Inter']">
+                            {order.price}
+                          </span>
+                          <span className="px-2.5 py-1 text-xs font-medium font-['Inter'] rounded-[5px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 group-hover:bg-yellow-400 group-hover:text-black transition">
+                            Review
                           </span>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-3">
-                        <span className="text-white text-xs font-semibold font-['Inter']">
-                          {order.price}
-                        </span>
-                        <span
-                          className={`px-2.5 py-1 text-xs font-medium font-['Inter'] rounded-[5px] ${
-                            order.status === 'Active'
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-neutral-800 text-stone-300'
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>

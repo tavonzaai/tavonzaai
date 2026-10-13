@@ -784,12 +784,12 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
 
                     {/* Cooking Time Tracker Bar */}
                     <div className="mb-3 px-3 py-2 bg-[#121214] border border-zinc-800/80 rounded-xl flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5 text-zinc-300">
-                        <Clock className="w-3.5 h-3.5 text-amber-400" />
-                        <span>ETA: <strong className="text-white">{order.estimatedPrepTime || 15} min</strong></span>
-                      </div>
+                       <span className="flex items-center gap-2"> <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>ETA:</span></span>
+                        <span> <strong className="text-white">{order.estimatedPrepTime} min</strong></span>
+                      
 
-                      <div className="flex items-center gap-1.5">
+                      {/* <div className="flex items-center gap-1.5">
                         <span className="text-zinc-500">Elapsed:</span>
                         <span
                           className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
@@ -804,7 +804,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                         >
                           {order.timeElapsedMinutes} min
                         </span>
-                      </div>
+                      </div> */}
                     </div>
 
                     {/* Food Items List */}
