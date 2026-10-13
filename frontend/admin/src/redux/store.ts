@@ -1,16 +1,19 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
 import authReducer from './slices/authSlice';
+import tenantReducer from './slices/tenantSlice';
 import userReducer from './slices/userSlice';
 import menuCategoryReducer from './slices/menuCategorySlice';
 import menuItemReducer from './slices/menuItemSlice';
 
 import { setupListeners } from '@reduxjs/toolkit/query';
 import { rtkBaseApi } from './api/baseApi';
+import './features/adminApi';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
+    tenant: tenantReducer,
     user: userReducer,
     menuCategories: menuCategoryReducer,
     menuItems: menuItemReducer,

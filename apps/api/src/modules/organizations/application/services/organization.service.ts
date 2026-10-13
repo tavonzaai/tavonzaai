@@ -2,7 +2,6 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { DrizzleOrganizationRepository } from '../../infrastructure/persistence/drizzle-organization.repository';
 import type {
@@ -11,12 +10,20 @@ import type {
   OrganizationResponseDto,
 } from '../../presentation/http/dto/organization.dto';
 import type { Organization } from '../../domain/entities/organization.entity';
+import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
+import {
+  assertCanAccessOrganization,
+  assertCanManageOrganizations,
+  isSuperAdmin,
+} from '../../../../common/auth/actor.util';
 
 @Injectable()
 export class OrganizationService {
   constructor(private readonly orgRepo: DrizzleOrganizationRepository) {}
 
-  async create(ownerId: string, dto: CreateOrganizationDto): Promise<OrganizationResponseDto> {
+  async create(user: JwtPayload, dto: CreateOrganizationDto): Promise<OrganizationResponseDto> {
+    assertCanManageOrganizations(user);
+    const ownerId = isSuperAdmin(user) && dto.ownerId ? dto.ownerId : user.sub;
     const slug = dto.slug || this.generateSlug(dto.name);
 
     const existing = await this.orgRepo.findBySlug(slug);
@@ -33,11 +40,13 @@ export class OrganizationService {
     return this.toResponseDto(org);
   }
 
-  async findById(id: string): Promise<OrganizationResponseDto> {
+  async findById(user: JwtPayload, id: string): Promise<OrganizationResponseDto> {
+    assertCanManageOrganizations(user);
     const org = await this.orgRepo.findById(id);
     if (!org) {
       throw new NotFoundException(`Organization with ID "${id}" not found`);
     }
+    assertCanAccessOrganization(user, org);
     return this.toResponseDto(org);
   }
 
@@ -46,39 +55,38 @@ export class OrganizationService {
     return orgs.map((org) => this.toResponseDto(org));
   }
 
-  async findAll(options?: any): Promise<{ data: OrganizationResponseDto[]; meta: any }> {
-    const res = await this.orgRepo.findAll(options);
+  async findAll(user: JwtPayload, options?: any): Promise<{ data: OrganizationResponseDto[]; meta: any }> {
+    assertCanManageOrganizations(user);
+    const query = isSuperAdmin(user) ? options : { ...options, ownerId: user.sub };
+    const res = await this.orgRepo.findAll(query);
     return {
       data: res.data.map((org) => this.toResponseDto(org)),
       meta: res.meta,
     };
   }
 
-  async delete(id: string, actingUserId: string): Promise<{ success: boolean }> {
+  async delete(id: string, user: JwtPayload): Promise<{ success: boolean }> {
+    assertCanManageOrganizations(user);
     const org = await this.orgRepo.findById(id);
     if (!org) {
       throw new NotFoundException(`Organization with ID "${id}" not found`);
     }
-    if (org.ownerId !== actingUserId) {
-      throw new ForbiddenException('Only the organization owner can delete the organization');
-    }
+    assertCanAccessOrganization(user, org);
     const deleted = await this.orgRepo.delete(id);
     return { success: deleted };
   }
 
   async update(
     id: string,
-    actingUserId: string,
+    user: JwtPayload,
     dto: UpdateOrganizationDto,
   ): Promise<OrganizationResponseDto> {
+    assertCanManageOrganizations(user);
     const org = await this.orgRepo.findById(id);
     if (!org) {
       throw new NotFoundException(`Organization with ID "${id}" not found`);
     }
-
-    if (org.ownerId !== actingUserId) {
-      throw new ForbiddenException('Only the organization owner can update details');
-    }
+    assertCanAccessOrganization(user, org);
 
     if (dto.slug && dto.slug !== org.slug) {
       const existing = await this.orgRepo.findBySlug(dto.slug);

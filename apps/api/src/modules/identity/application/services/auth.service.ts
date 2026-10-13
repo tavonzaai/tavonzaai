@@ -12,6 +12,7 @@ import { randomInt } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { GlobalRole, resolvePermissions } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
+import { DrizzleOrganizationRepository } from '../../../organizations/infrastructure/persistence/drizzle-organization.repository';
 import { MailService } from '../../../notifications/application/mail.service';
 import type {
   RegisterDto,
@@ -35,6 +36,7 @@ export class AuthService {
 
   constructor(
     private readonly userRepo: DrizzleUserRepository,
+    private readonly orgRepo: DrizzleOrganizationRepository,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
   ) {}
@@ -148,6 +150,8 @@ export class AuthService {
     const effectiveRole = primaryAssignment?.role || user.role;
     const branchId = primaryAssignment?.branchId ?? null;
     const branchName = primaryAssignment?.branchName ?? null;
+    const ownedOrgs = await this.orgRepo.findByOwnerId(user.id);
+    const organizationId = ownedOrgs[0]?.id ?? null;
 
     return {
       id: user.id,
@@ -155,6 +159,7 @@ export class AuthService {
       name: user.name,
       role: effectiveRole,
       globalRole: user.role,
+      organizationId,
       branchId,
       branchName,
       assignments,
@@ -234,12 +239,15 @@ export class AuthService {
     const effectiveRole = primaryAssignment?.role || user.role;
     const branchId = primaryAssignment?.branchId ?? null;
     const branchName = primaryAssignment?.branchName ?? null;
+    const ownedOrgs = await this.orgRepo.findByOwnerId(user.id);
+    const organizationId = ownedOrgs[0]?.id ?? null;
 
     const payload = {
       sub: user.id,
       email: user.email,
       role: effectiveRole,
       globalRole: user.role,
+      organizationId,
       branchId,
       permissions: resolvePermissions(
         effectiveRole,
@@ -265,6 +273,7 @@ export class AuthService {
         name: user.name,
         role: effectiveRole,
         globalRole: user.role,
+        organizationId,
         branchId,
         branchName,
         assignments,

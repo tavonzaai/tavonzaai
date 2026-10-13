@@ -112,7 +112,7 @@ export async function refreshAuthSession(): Promise<boolean> {
 }
 
 export function getApiBaseUrl(): string {
-  let url =
+  const url =
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) ||
     (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
     (typeof process !== 'undefined' && process.env?.API_BASE_URL);
@@ -121,21 +121,31 @@ export function getApiBaseUrl(): string {
     return String(url).trim().replace(/\/docs(-json)?\/?$/, '').replace(/\/$/, '');
   }
 
-  // Browser client
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return 'https://api.tavonza.com';
-    }
-    return 'https://api.tavonza.com';
-  }
+  const isLocalHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
 
-  // Server-side / Build-time default
-  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') {
-    return 'https://api.tavonza.com';
+  if (isLocalHost || isDev) {
+    return 'http://localhost:3000';
   }
 
   return 'https://api.tavonza.com';
+}
+
+export function getCustomerAppUrl(): string {
+  const env =
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_CUSTOMER_APP_URL) ||
+    (typeof process !== 'undefined' && process.env?.CUSTOMER_APP_URL);
+  if (env) return String(env).trim().replace(/\/$/, '');
+
+  const isLocalHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (isLocalHost || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development')) {
+    return 'http://localhost:3100';
+  }
+  return 'http://localhost:3100';
 }
 
 export const API_BASE_URL = getApiBaseUrl();
@@ -154,6 +164,8 @@ export class ApiError extends Error {
   status: number;
   statusCode: number;
   data?: any;
+  errorCode?: string;
+  errorMessages: { path?: string; message: string }[];
   isConflict: boolean;
   isTimeout: boolean;
   isNetworkError: boolean;
@@ -164,6 +176,8 @@ export class ApiError extends Error {
     this.status = status;
     this.statusCode = status;
     this.data = data;
+    this.errorCode = data?.errorCode;
+    this.errorMessages = Array.isArray(data?.errorMessages) ? data.errorMessages : [];
     this.isConflict = status === 409 || String(message).toLowerCase().includes('already exists');
     this.isTimeout = status === 504 || status === 408 || String(message).toLowerCase().includes('timeout');
     this.isNetworkError = status === 0;
@@ -344,6 +358,9 @@ export const rtkBaseApi = createApi({
     'ORGANIZATION',
     'BRANCH',
     'AUTH',
+    'RESTAURANT',
+    'STAFF',
+    'ANALYTICS',
   ],
   endpoints: () => ({}),
 });

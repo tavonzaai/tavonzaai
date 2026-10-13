@@ -11,10 +11,8 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { useAppSelector } from '@/redux/store';
-import {
-  INITIAL_METRICS,
-  BUSINESS_HEALTH_METRICS,
-} from '../data';
+import { useGetAnalyticsOverviewQuery } from '@/redux/features/adminApi';
+import { BUSINESS_HEALTH_METRICS } from '../data';
 import { AdminNavTab } from '../types';
 
 interface DashboardViewProps {
@@ -66,6 +64,11 @@ const REVENUE_TIMEFRAME_DATASETS = {
 
 export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
   const { user } = useAppSelector((state) => state.auth);
+  const organizationId = useAppSelector((state) => state.tenant.organizationId);
+  const { data: overview } = useGetAnalyticsOverviewQuery(
+    { organizationId: organizationId || undefined },
+    { skip: !organizationId },
+  );
   const [selectedPeriod, setSelectedPeriod] = useState<'All' | 'Week' | 'Month' | 'Year'>('Week');
 
   const rawName = user?.name || 'Robert';
@@ -114,11 +117,11 @@ export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
 
           <div className="flex flex-col gap-2">
             <div className="text-white text-3xl font-medium font-sans leading-8 tracking-tight">
-              3
+              {overview?.restaurantsCount ?? '—'}
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-green-500 text-sm font-normal font-sans leading-4">
-                +1 this month
+              <span className="text-zinc-400 text-sm font-normal font-sans leading-4">
+                Live organization total
               </span>
             </div>
           </div>
@@ -142,11 +145,11 @@ export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
 
           <div className="flex flex-col gap-2">
             <div className="text-white text-3xl font-medium font-sans leading-8 tracking-tight">
-              4
+              {overview?.branchesCount ?? '—'}
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-green-500 text-sm font-normal font-sans leading-4">
-                Across 3 restaurants
+              <span className="text-zinc-400 text-sm font-normal font-sans leading-4">
+                Across {overview?.restaurantsCount ?? 0} restaurants
               </span>
             </div>
           </div>
@@ -170,11 +173,11 @@ export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
 
           <div className="flex flex-col gap-2">
             <div className="text-white text-3xl font-medium font-sans leading-8 tracking-tight">
-              48
+              {overview?.staffCount ?? '—'}
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-green-500 text-sm font-normal font-sans leading-4">
-                +6 this month
+              <span className="text-zinc-400 text-sm font-normal font-sans leading-4">
+                Active branch assignments
               </span>
             </div>
           </div>
@@ -198,11 +201,13 @@ export default function DashboardView({ onNavigateTab }: DashboardViewProps) {
 
           <div className="flex flex-col gap-2">
             <div className="text-white text-3xl font-medium font-sans leading-8 tracking-tight">
-              $2M
+              {typeof overview?.paidRevenue === 'number'
+                ? `$${overview.paidRevenue.toLocaleString()}`
+                : '—'}
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-green-500 text-sm font-normal font-sans leading-4">
-                +12.4% vs last month
+              <span className="text-zinc-400 text-sm font-normal font-sans leading-4">
+                Paid customer orders
               </span>
             </div>
           </div>

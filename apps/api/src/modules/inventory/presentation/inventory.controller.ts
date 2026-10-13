@@ -9,6 +9,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -34,10 +35,12 @@ import {
   InventorySummaryResponseDto,
 } from './http/dto/inventory.dto';
 import { ApiStandardErrors } from '../../../common/swagger';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 
 @ApiTags('Operations | Inventory & Suppliers')
 @ApiSecurity('access-token')
 @Controller('inventory')
+@UseGuards(JwtAuthGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 

@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { MOCK_RESTAURANTS } from '../data';
 import { RestaurantItem } from '../types';
 import RestaurantBranchesDetailView from './RestaurantBranchesDetailView';
 import { RestaurantFormData } from './restaurants/types';
@@ -14,6 +13,17 @@ import {
   EditRestaurantModal,
   DeleteRestaurantModal,
 } from './restaurants/components';
+import { useAppSelector } from '@/redux/store';
+import {
+  useCreateRestaurantMutation,
+  useDeleteRestaurantMutation,
+  useGetBranchesQuery,
+  useGetRestaurantsQuery,
+  useUpdateRestaurantMutation,
+} from '@/redux/features/adminApi';
+import { mapRestaurant } from '@/lib/admin-mappers';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common';
+import { ApiError } from '@/redux/api/baseApi';
 
 interface RestaurantsViewProps {
   initialRestaurantId?: string;
@@ -22,116 +32,112 @@ interface RestaurantsViewProps {
 export default function RestaurantsView({ initialRestaurantId }: RestaurantsViewProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [restaurants, setRestaurants] = useState<RestaurantItem[]>(MOCK_RESTAURANTS);
+  const organizationId = useAppSelector((state) => state.tenant.organizationId);
 
-  // Modals state
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGetRestaurantsQuery(
+    { organizationId: organizationId || undefined, page: 1, limit: 50 },
+    { skip: !organizationId },
+  );
+  const { data: branchesData } = useGetBranchesQuery(
+    { page: 1, limit: 200 },
+    { skip: !organizationId },
+  );
+
+  const [createRestaurant, { isLoading: creating }] = useCreateRestaurantMutation();
+  const [updateRestaurant, { isLoading: updating }] = useUpdateRestaurantMutation();
+  const [deleteRestaurant, { isLoading: deleting }] = useDeleteRestaurantMutation();
+
+  const restaurants: RestaurantItem[] = useMemo(() => {
+    const counts = new Map<string, number>();
+    (branchesData?.data || []).forEach((branch) => {
+      counts.set(branch.restaurantId, (counts.get(branch.restaurantId) || 0) + 1);
+    });
+    return (data?.data || []).map((restaurant) =>
+      mapRestaurant(restaurant, counts.get(restaurant.id) || 0),
+    );
+  }, [data, branchesData]);
+
+  const selectedId =
+    initialRestaurantId || searchParams.get('id') || searchParams.get('restaurant') || null;
+  const detailRestaurant = selectedId
+    ? restaurants.find((restaurant) => restaurant.id === selectedId) || null
+    : null;
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingRestaurant, setEditingRestaurant] = useState<RestaurantItem | null>(null);
   const [deletingRestaurant, setDeletingRestaurant] = useState<RestaurantItem | null>(null);
-  const [detailRestaurant, setDetailRestaurant] = useState<RestaurantItem | null>(() => {
-    if (initialRestaurantId) {
-      return (
-        MOCK_RESTAURANTS.find(
-          (r) =>
-            r.id.toLowerCase() === initialRestaurantId.toLowerCase() ||
-            r.name.toLowerCase().includes(initialRestaurantId.toLowerCase().slice(0, 7))
-        ) || null
-      );
-    }
-    return null;
-  });
-
-  // Sync with searchParams if ?id=rest-1 or ?restaurant=...
-  useEffect(() => {
-    const idParam = searchParams.get('id') || searchParams.get('restaurant');
-    if (idParam) {
-      const found = restaurants.find(
-        (r) =>
-          r.id.toLowerCase() === idParam.toLowerCase() ||
-          r.name.toLowerCase().includes(idParam.toLowerCase().slice(0, 7))
-      );
-      if (found) {
-        setDetailRestaurant(found);
-      }
-    }
-  }, [searchParams, restaurants]);
 
   const handleSelectRestaurant = (rest: RestaurantItem) => {
-    setDetailRestaurant(rest);
     router.push(`/new-admin-dashboard/restaurants?id=${rest.id}`, { scroll: false });
   };
 
   const handleBackToList = () => {
-    setDetailRestaurant(null);
     router.push('/new-admin-dashboard/restaurants', { scroll: false });
   };
 
-  // Submit Create Restaurant
-  const handleCreateSubmit = (form: RestaurantFormData) => {
+  const handleCreateSubmit = async (form: RestaurantFormData) => {
     if (!form.name.trim()) {
       toast.error('Please enter a restaurant name.');
       return;
     }
-
-    const newRest: RestaurantItem = {
-      id: `rest-${Date.now()}`,
-      name: form.name.trim(),
-      description: form.description.trim(),
-      tagline: form.description.trim(),
-      cuisine: 'Contemporary Hospitality',
-      manager: form.manager,
-      contactNumber: form.contactNumber,
-      email: form.email,
-      address: form.address,
-      city: form.address.split(',')[0] || 'Metro',
-      branchesCount: 1,
-      staffCount: 12,
-      monthlyRevenue: '$35,000',
-      rating: 5.0,
-      status: form.status,
-    };
-
-    setRestaurants([newRest, ...restaurants]);
-    setIsCreateOpen(false);
-    toast.success(`Restaurant "${newRest.name}" created successfully!`);
+    if (!organizationId) {
+      toast.error('No organization is available for this account.');
+      return;
+    }
+    try {
+      await createRestaurant({
+        organizationId,
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+      }).unwrap();
+      setIsCreateOpen(false);
+      toast.success(`Restaurant "${form.name.trim()}" created successfully!`);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to create restaurant.');
+    }
   };
 
-  // Submit Edit Restaurant
-  const handleEditSubmit = (form: RestaurantFormData) => {
+  const handleEditSubmit = async (form: RestaurantFormData) => {
     if (!editingRestaurant) return;
     if (!form.name.trim()) {
       toast.error('Restaurant name cannot be empty.');
       return;
     }
-
-    setRestaurants((prev) =>
-      prev.map((r) =>
-        r.id === editingRestaurant.id
-          ? {
-              ...r,
-              name: form.name.trim(),
-              manager: form.manager,
-              contactNumber: form.contactNumber,
-              email: form.email,
-              address: form.address,
-              status: form.status,
-              description: form.description,
-              tagline: form.description,
-            }
-          : r
-      )
-    );
-    toast.success(`Restaurant "${form.name}" updated successfully!`);
-    setEditingRestaurant(null);
+    try {
+      await updateRestaurant({
+        id: editingRestaurant.id,
+        body: {
+          name: form.name.trim(),
+          description: form.description.trim() || undefined,
+          isActive: form.status !== 'Closed',
+        },
+      }).unwrap();
+      toast.success(`Restaurant "${form.name}" updated successfully!`);
+      setEditingRestaurant(null);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to update restaurant.');
+    }
   };
 
-  // Confirm Delete Restaurant
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deletingRestaurant) return;
-    const deletedName = deletingRestaurant.name;
-    setRestaurants((prev) => prev.filter((r) => r.id !== deletingRestaurant.id));
-    toast.success(`"${deletedName}" has been permanently deleted.`);
-    setDeletingRestaurant(null);
+    try {
+      await deleteRestaurant(deletingRestaurant.id).unwrap();
+      toast.success(`"${deletingRestaurant.name}" has been deleted.`);
+      setDeletingRestaurant(null);
+      if (detailRestaurant?.id === deletingRestaurant.id) {
+        handleBackToList();
+      }
+    } catch (err: any) {
+      const apiErr = err as ApiError;
+      toast.error(apiErr?.data?.message || apiErr?.message || 'Unable to delete restaurant.');
+    }
   };
 
   if (detailRestaurant) {
@@ -148,40 +154,63 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Header */}
       <RestaurantsHeader onCreateClick={() => setIsCreateOpen(true)} />
 
-      {/* Restaurants Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {restaurants.map((rest) => (
-          <RestaurantCard
-            key={rest.id}
-            restaurant={rest}
-            onSelect={handleSelectRestaurant}
-            onEdit={(r) => setEditingRestaurant(r)}
-            onDelete={(r) => setDeletingRestaurant(r)}
-          />
-        ))}
-      </div>
+      {!organizationId && (
+        <ErrorState
+          title="Organization required"
+          message="This admin account has no organization yet. Super Admin can create one, then refresh."
+        />
+      )}
 
-      {/* Create Modal */}
+      {organizationId && isLoading && <LoadingState message="Loading restaurants..." />}
+
+      {organizationId && isError && (
+        <ErrorState
+          message={(error as any)?.data?.message || 'Unable to load restaurants.'}
+          onRetry={() => refetch()}
+        />
+      )}
+
+      {organizationId && !isLoading && !isError && restaurants.length === 0 && (
+        <EmptyState
+          title="No restaurants yet"
+          description="Create the first restaurant under this organization."
+          action={{ label: 'Create restaurant', onClick: () => setIsCreateOpen(true) }}
+        />
+      )}
+
+      {organizationId && !isLoading && restaurants.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {restaurants.map((rest) => (
+            <RestaurantCard
+              key={rest.id}
+              restaurant={rest}
+              onSelect={handleSelectRestaurant}
+              onEdit={(r) => setEditingRestaurant(r)}
+              onDelete={(r) => setDeletingRestaurant(r)}
+            />
+          ))}
+        </div>
+      )}
+
       {isCreateOpen && (
         <CreateRestaurantModal
           onClose={() => setIsCreateOpen(false)}
           onSubmit={handleCreateSubmit}
+          submitting={creating}
         />
       )}
 
-      {/* Edit Modal */}
       {editingRestaurant && (
         <EditRestaurantModal
           restaurant={editingRestaurant}
           onClose={() => setEditingRestaurant(null)}
           onSubmit={handleEditSubmit}
+          submitting={updating}
         />
       )}
 
-      {/* Delete Modal */}
       {deletingRestaurant && (
         <DeleteRestaurantModal
           restaurant={deletingRestaurant}

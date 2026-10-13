@@ -218,6 +218,9 @@ export class TableService {
       serviceStatus: table.serviceStatus,
       operationalFlag: table.operationalFlag,
       qrCodeToken: table.qrCodeToken,
+      qrJoinUrl: table.qrCodeToken
+        ? `${(process.env.CUSTOMER_APP_URL || process.env.NEXT_PUBLIC_CUSTOMER_APP_URL || 'http://localhost:3100').replace(/\/$/, '')}/t/${table.qrCodeToken}`
+        : null,
       shape: table.shape,
       floor: table.floor,
       createdAt: table.createdAt,

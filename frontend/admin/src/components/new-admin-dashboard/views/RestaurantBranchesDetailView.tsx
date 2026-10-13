@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { RestaurantItem, BranchItem } from '../types';
-import { MOCK_BRANCHES } from '../data';
 import { BranchFormData } from './restaurant-branches-detail/types';
 import {
   RestaurantBranchesHeader,
@@ -14,11 +13,28 @@ import {
   EditBranchModal,
   DeleteBranchModal,
 } from './restaurant-branches-detail/components';
+import {
+  useCreateBranchMutation,
+  useDeleteBranchMutation,
+  useGetBranchesQuery,
+  useSetOperatingHoursMutation,
+  useUpdateBranchMutation,
+} from '@/redux/features/adminApi';
+import { mapBranch, parseBranchAddress } from '@/lib/admin-mappers';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common';
 
 interface RestaurantBranchesDetailViewProps {
   restaurant: RestaurantItem;
   onBack: () => void;
   onOpenBranchDashboard?: (branch: BranchItem) => void;
+}
+
+function weekHours(openTime: string, closeTime: string) {
+  return Array.from({ length: 7 }, (_, dayOfWeek) => ({
+    dayOfWeek,
+    openTime,
+    closeTime,
+  }));
 }
 
 export default function RestaurantBranchesDetailView({
@@ -27,145 +43,118 @@ export default function RestaurantBranchesDetailView({
   onOpenBranchDashboard,
 }: RestaurantBranchesDetailViewProps) {
   const router = useRouter();
-  // Load branches associated with this restaurant
-  const [branches, setBranches] = useState<BranchItem[]>(() => {
-    const matched = MOCK_BRANCHES.filter(
-      (b) =>
-        b.restaurantId === restaurant.id ||
-        b.restaurantName.toLowerCase().includes(restaurant.name.toLowerCase().slice(0, 7))
-    );
-    if (matched.length > 0) return matched;
-    // Fallback default branches for any restaurant
-    return [
-      {
-        id: `br-${restaurant.id}-1`,
-        restaurantId: restaurant.id,
-        restaurantName: restaurant.name,
-        name: 'Georgia Flagship',
-        location: restaurant.address || 'Cusseta, Georgia',
-        manager: 'Nobin Mille',
-        hours: '09:00–23:00',
-        openingTime: '09:00',
-        closingTime: '23:00',
-        contactNumber: '992548756',
-        tablesCount: 18,
-        occupancy: 78,
-        status: 'Active',
-      },
-      {
-        id: `br-${restaurant.id}-2`,
-        restaurantId: restaurant.id,
-        restaurantName: restaurant.name,
-        name: 'Florida Flagship',
-        location: 'Pompano Beach, Florida',
-        manager: 'Samira Khan',
-        hours: '10:00–22:30',
-        openingTime: '10:00',
-        closingTime: '22:30',
-        contactNumber: '+19545558910',
-        tablesCount: 14,
-        occupancy: 64,
-        status: 'Active',
-      },
-    ];
+  const { data, isLoading, isError, error, refetch } = useGetBranchesQuery({
+    restaurantId: restaurant.id,
+    page: 1,
+    limit: 50,
   });
+  const [createBranch] = useCreateBranchMutation();
+  const [updateBranch] = useUpdateBranchMutation();
+  const [deleteBranch] = useDeleteBranchMutation();
+  const [setOperatingHours] = useSetOperatingHoursMutation();
 
-  // Modal States
+  const branches: BranchItem[] = useMemo(
+    () => (data?.data || []).map((branch) => mapBranch(branch, restaurant.name)),
+    [data, restaurant.name],
+  );
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<BranchItem | null>(null);
   const [deletingBranch, setDeletingBranch] = useState<BranchItem | null>(null);
 
-  // Submit Create Branch
-  const handleCreateSubmit = (form: BranchFormData) => {
+  const handleCreateSubmit = async (form: BranchFormData) => {
     if (!form.name.trim()) {
       toast.error('Please enter a branch name.');
       return;
     }
-
-    const newBranch: BranchItem = {
-      id: `br-${Date.now()}`,
-      restaurantId: restaurant.id,
-      restaurantName: restaurant.name,
-      name: form.name.trim(),
-      location: form.address.trim() || 'Cusseta, Georgia',
-      manager: form.manager,
-      hours: `${form.openingTime}–${form.closingTime}`,
-      openingTime: form.openingTime,
-      closingTime: form.closingTime,
-      contactNumber: form.contactNumber,
-      status: form.status,
-      tablesCount: 16,
-      occupancy: 60,
-      kitchenSync: 'Online',
-      monthlyRevenue: '$45,000',
-    };
-
-    setBranches([newBranch, ...branches]);
-    setIsCreateOpen(false);
-    toast.success(`Branch "${newBranch.name}" created successfully!`);
+    try {
+      const created = await createBranch({
+        restaurantId: restaurant.id,
+        name: form.name.trim(),
+        address: parseBranchAddress(form.address),
+        phone: form.contactNumber || undefined,
+      }).unwrap();
+      await setOperatingHours({
+        branchId: created.id,
+        hours: weekHours(form.openingTime, form.closingTime),
+      });
+      setIsCreateOpen(false);
+      toast.success(`Branch "${form.name.trim()}" created successfully!`);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to create branch.');
+    }
   };
 
-  // Submit Edit Branch
-  const handleEditSubmit = (form: BranchFormData) => {
+  const handleEditSubmit = async (form: BranchFormData) => {
     if (!editingBranch) return;
     if (!form.name.trim()) {
       toast.error('Branch name cannot be empty.');
       return;
     }
-
-    setBranches((prev) =>
-      prev.map((b) =>
-        b.id === editingBranch.id
-          ? {
-              ...b,
-              name: form.name.trim(),
-              location: form.address.trim(),
-              contactNumber: form.contactNumber,
-              manager: form.manager,
-              status: form.status,
-              openingTime: form.openingTime,
-              closingTime: form.closingTime,
-              hours: `${form.openingTime}–${form.closingTime}`,
-            }
-          : b
-      )
-    );
-    toast.success(`Branch "${form.name}" updated successfully!`);
-    setEditingBranch(null);
+    try {
+      await updateBranch({
+        id: editingBranch.id,
+        body: {
+          name: form.name.trim(),
+          address: parseBranchAddress(form.address),
+          phone: form.contactNumber || undefined,
+          isActive: form.status !== 'Closed',
+        },
+      }).unwrap();
+      await setOperatingHours({
+        branchId: editingBranch.id,
+        hours: weekHours(form.openingTime, form.closingTime),
+      });
+      toast.success(`Branch "${form.name}" updated successfully!`);
+      setEditingBranch(null);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to update branch.');
+    }
   };
 
-  // Confirm Delete Branch
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deletingBranch) return;
-    const deletedName = deletingBranch.name;
-    setBranches((prev) => prev.filter((b) => b.id !== deletingBranch.id));
-    toast.success(`"${deletedName}" branch permanently deleted.`);
-    setDeletingBranch(null);
+    try {
+      await deleteBranch(deletingBranch.id).unwrap();
+      toast.success(`"${deletingBranch.name}" branch deleted.`);
+      setDeletingBranch(null);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to delete branch.');
+    }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Navigation & Header */}
       <RestaurantBranchesHeader
         restaurantName={restaurant.name}
         onBack={onBack}
         onCreateBranchClick={() => setIsCreateOpen(true)}
       />
 
-      {/* Restaurant Summary Banner */}
-      <RestaurantSummaryBanner restaurant={restaurant} />
+      <RestaurantSummaryBanner restaurant={{ ...restaurant, branchesCount: branches.length }} />
 
-      {/* Manage Branches Section Title */}
       <div className="flex flex-col justify-start items-start gap-1 pt-2">
-        <h2 className="text-white text-lg font-semibold font-sans">
-          Manage Branches
-        </h2>
+        <h2 className="text-white text-lg font-semibold font-sans">Manage Branches</h2>
         <p className="text-zinc-500 text-sm font-normal font-sans leading-6">
           {branches.length} locations connected to this restaurant
         </p>
       </div>
 
-      {/* Branch Cards Row */}
+      {isLoading && <LoadingState message="Loading branches..." />}
+      {isError && (
+        <ErrorState
+          message={(error as any)?.data?.message || 'Unable to load branches.'}
+          onRetry={() => refetch()}
+        />
+      )}
+      {!isLoading && !isError && branches.length === 0 && (
+        <EmptyState
+          title="No branches yet"
+          description="Add the first location for this restaurant."
+          action={{ label: 'Create branch', onClick: () => setIsCreateOpen(true) }}
+        />
+      )}
+
       <div className="flex flex-wrap items-start gap-5">
         {branches.map((branch) => (
           <RestaurantBranchCard
@@ -184,7 +173,6 @@ export default function RestaurantBranchesDetailView({
         ))}
       </div>
 
-      {/* Create Modal */}
       {isCreateOpen && (
         <CreateBranchModal
           restaurantName={restaurant.name}
@@ -193,7 +181,6 @@ export default function RestaurantBranchesDetailView({
         />
       )}
 
-      {/* Edit Modal */}
       {editingBranch && (
         <EditBranchModal
           restaurantName={restaurant.name}
@@ -203,7 +190,6 @@ export default function RestaurantBranchesDetailView({
         />
       )}
 
-      {/* Delete Confirmation Modal */}
       {deletingBranch && (
         <DeleteBranchModal
           branch={deletingBranch}

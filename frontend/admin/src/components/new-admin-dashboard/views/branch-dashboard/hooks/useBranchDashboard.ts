@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { BranchItem, RestaurantItem } from '../../../types';
-import { MOCK_RESTAURANTS } from '../../../data';
 import {
   SubTab,
   TableItem,
@@ -14,39 +13,135 @@ import {
   StaffEditFormData,
 } from '../types';
 import {
-  DEFAULT_TABLES,
-  DEFAULT_MENU_ITEMS,
-  DEFAULT_STAFF,
-} from '../data';
+  useCreateBranchStaffMutation,
+  useCreateMenuCategoryMutation,
+  useCreateMenuItemMutation,
+  useCreateTableMutation,
+  useDeleteMenuItemMutation,
+  useDeleteTableMutation,
+  useGetBranchStaffQuery,
+  useGetMenuCategoriesQuery,
+  useGetMenuItemsQuery,
+  useGetRestaurantsQuery,
+  useGetTablesQuery,
+  useRegenerateTableQrMutation,
+  useSetOperatingHoursMutation,
+  useUpdateBranchMutation,
+  useUpdateBranchStaffMutation,
+  useUpdateMenuItemMutation,
+  useUpdateTableMutation,
+} from '@/redux/features/adminApi';
+import { useAppSelector } from '@/redux/store';
+import { getCustomerAppUrl } from '@/redux/api/baseApi';
+import { mapRestaurant, parseBranchAddress } from '@/lib/admin-mappers';
 
 interface UseBranchDashboardProps {
   initialBranch: BranchItem;
   onUpdateBranch?: (updated: BranchItem) => void;
 }
 
+function mapTableStatus(serviceStatus?: string, operationalFlag?: string): TableItem['status'] {
+  if (operationalFlag === 'RESERVED') return 'Reserved';
+  if (serviceStatus === 'AVAILABLE') return 'Available';
+  return 'Occupied';
+}
+
+function weekHours(openTime: string, closeTime: string) {
+  return Array.from({ length: 7 }, (_, dayOfWeek) => ({ dayOfWeek, openTime, closeTime }));
+}
+
 export function useBranchDashboard({
   initialBranch,
   onUpdateBranch,
 }: UseBranchDashboardProps) {
+  const organizationId = useAppSelector((state) => state.tenant.organizationId);
   const [branch, setBranch] = useState<BranchItem>(initialBranch);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('Overview');
 
-  // Branch Edit Modal State
+  const { data: restaurantsData } = useGetRestaurantsQuery(
+    { organizationId: organizationId || undefined, page: 1, limit: 50 },
+    { skip: !organizationId },
+  );
+  const restaurants: RestaurantItem[] = useMemo(
+    () => (restaurantsData?.data || []).map((item) => mapRestaurant(item, 0)),
+    [restaurantsData],
+  );
+
+  const { data: tableRows = [] } = useGetTablesQuery({ branchId: branch.id });
+  const { data: categoryRows = [] } = useGetMenuCategoriesQuery(branch.id);
+  const { data: menuRows = [] } = useGetMenuItemsQuery(branch.id);
+  const { data: staffRows = [] } = useGetBranchStaffQuery({ branchId: branch.id });
+
+  const [updateBranch] = useUpdateBranchMutation();
+  const [setOperatingHours] = useSetOperatingHoursMutation();
+  const [createTable] = useCreateTableMutation();
+  const [updateTable] = useUpdateTableMutation();
+  const [deleteTable] = useDeleteTableMutation();
+  const [regenerateQr] = useRegenerateTableQrMutation();
+  const [createMenuCategory] = useCreateMenuCategoryMutation();
+  const [createMenuItem] = useCreateMenuItemMutation();
+  const [updateMenuItem] = useUpdateMenuItemMutation();
+  const [deleteMenuItem] = useDeleteMenuItemMutation();
+  const [createStaff] = useCreateBranchStaffMutation();
+  const [updateStaff] = useUpdateBranchStaffMutation();
+
+  const tables: TableItem[] = useMemo(
+    () =>
+      tableRows.map((row: any) => {
+        const joinUrl =
+          row.qrJoinUrl ||
+          (row.qrCodeToken ? `${getCustomerAppUrl()}/t/${row.qrCodeToken}` : '');
+        return {
+          id: row.id,
+          number: row.label || row.number,
+          capacity: row.capacity,
+          status: mapTableStatus(row.serviceStatus, row.operationalFlag),
+          qrCodeUrl: joinUrl,
+          qrCodeToken: row.qrCodeToken,
+          qrJoinUrl: joinUrl,
+        };
+      }),
+    [tableRows],
+  );
+
+  const menuItems: MenuItem[] = useMemo(
+    () =>
+      menuRows.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        category: row.categoryName || row.category || 'General',
+        price: typeof row.basePrice === 'number' ? `$${row.basePrice.toFixed(2)}` : String(row.price || row.basePrice || '$0.00'),
+        status: row.isAvailable === false || row.isActive === false ? 'Disable' : 'Active',
+      })),
+    [menuRows],
+  );
+
+  const staffList: StaffMember[] = useMemo(
+    () =>
+      staffRows.map((row: any) => ({
+        id: row.staffId || row.id,
+        name: row.name,
+        role: row.role,
+        branch: branch.name,
+        status: row.isActive === false ? 'Inactive' : 'Active',
+        contact: row.email,
+      })),
+    [staffRows, branch.name],
+  );
+
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<BranchFormData>({
     restaurantId: branch.restaurantId,
     restaurantName: branch.restaurantName,
     name: branch.name,
     address: branch.location,
-    contactNumber: branch.contactNumber || '992548756',
+    contactNumber: branch.contactNumber || '',
     manager: branch.manager,
     status: (branch.status as 'Active' | 'Setup' | 'Closed') || 'Active',
     openingTime: branch.openingTime || '09:00',
     closingTime: branch.closingTime || '23:00',
   });
 
-  // Tables State
-  const [tables, setTables] = useState<TableItem[]>(DEFAULT_TABLES);
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
   const [editingTable, setEditingTable] = useState<TableItem | null>(null);
   const [deletingTable, setDeletingTable] = useState<TableItem | null>(null);
@@ -59,8 +154,6 @@ export function useBranchDashboard({
   const [qrSeed, setQrSeed] = useState(42);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
-  // Menu State
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_MENU_ITEMS);
   const [menuFilterStatus, setMenuFilterStatus] = useState<'All Items' | 'Active' | 'Disable'>('All Items');
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
@@ -68,65 +161,50 @@ export function useBranchDashboard({
   const [menuForm, setMenuForm] = useState<MenuFormData>({
     name: '',
     category: 'Main Course',
-    price: '$12.20',
+    price: '12.20',
     status: 'Active',
   });
 
-  // Staff State
-  const [staffList, setStaffList] = useState<StaffMember[]>(DEFAULT_STAFF);
   const [staffRoleFilter, setStaffRoleFilter] = useState<string>('All Roles');
   const [staffBranchFilter, setStaffBranchFilter] = useState<string>('All branches');
   const [isInviteStaffOpen, setIsInviteStaffOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [inviteForm, setInviteForm] = useState<StaffInviteFormData>({
     name: '',
-    role: 'Manager',
-    branch: branch.name || 'Georgia Flagship',
+    email: '',
+    password: '',
+    role: 'WAITER',
+    branch: branch.name,
   });
   const [editStaffForm, setEditStaffForm] = useState<StaffEditFormData>({
     name: '',
-    role: 'Manager',
-    branch: 'Georgia Flagship',
+    role: 'WAITER',
+    branch: branch.name,
     status: 'Active',
   });
 
-  // Metrics for Tables
   const totalTables = tables.length;
   const availableTables = tables.filter((t) => t.status === 'Available').length;
   const occupiedTables = tables.filter((t) => t.status === 'Occupied').length;
   const totalCapacity = tables.reduce((acc, t) => acc + t.capacity, 0);
 
-  // Filtered Menu Items
   const filteredMenuItems = menuItems.filter((item) => {
     if (menuFilterStatus === 'All Items') return true;
     return item.status === menuFilterStatus;
   });
 
-  // Filtered Staff Items
   const filteredStaff = staffList.filter((staff) => {
-    if (staffRoleFilter !== 'All Roles') {
-      if (staffRoleFilter === 'Manager') {
-        if (!staff.role.toLowerCase().includes('manager')) return false;
-      } else if (staff.role.toLowerCase() !== staffRoleFilter.toLowerCase()) {
-        return false;
-      }
-    }
-    if (staffBranchFilter !== 'All branches') {
-      if (staff.branch.toLowerCase() !== staffBranchFilter.toLowerCase()) {
-        return false;
-      }
-    }
+    if (staffRoleFilter !== 'All Roles' && staff.role !== staffRoleFilter) return false;
     return true;
   });
 
-  // Handlers: Branch Edit
   const handleOpenEdit = () => {
     setEditForm({
       restaurantId: branch.restaurantId,
       restaurantName: branch.restaurantName,
       name: branch.name,
       address: branch.location,
-      contactNumber: branch.contactNumber || '992548756',
+      contactNumber: branch.contactNumber || '',
       manager: branch.manager,
       status: (branch.status as 'Active' | 'Setup' | 'Closed') || 'Active',
       openingTime: branch.openingTime || '09:00',
@@ -135,149 +213,174 @@ export function useBranchDashboard({
     setIsEditOpen(true);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editForm.name.trim()) {
       toast.error('Branch name cannot be empty.');
       return;
     }
-
-    const matchedRest = MOCK_RESTAURANTS.find((r: RestaurantItem) => r.id === editForm.restaurantId);
-    const updated: BranchItem = {
-      ...branch,
-      restaurantId: editForm.restaurantId,
-      restaurantName: matchedRest ? matchedRest.name : editForm.restaurantName,
-      name: editForm.name.trim(),
-      location: editForm.address.trim(),
-      contactNumber: editForm.contactNumber,
-      manager: editForm.manager,
-      status: editForm.status,
-      openingTime: editForm.openingTime,
-      closingTime: editForm.closingTime,
-      hours: `${editForm.openingTime} – ${editForm.closingTime}`,
-    };
-
-    setBranch(updated);
-    if (onUpdateBranch) {
-      onUpdateBranch(updated);
+    try {
+      await updateBranch({
+        id: branch.id,
+        body: {
+          name: editForm.name.trim(),
+          address: parseBranchAddress(editForm.address),
+          phone: editForm.contactNumber || undefined,
+          isActive: editForm.status !== 'Closed',
+        },
+      }).unwrap();
+      await setOperatingHours({
+        branchId: branch.id,
+        hours: weekHours(editForm.openingTime, editForm.closingTime),
+      });
+      const updated: BranchItem = {
+        ...branch,
+        name: editForm.name.trim(),
+        location: editForm.address.trim(),
+        contactNumber: editForm.contactNumber,
+        status: editForm.status,
+        openingTime: editForm.openingTime,
+        closingTime: editForm.closingTime,
+        hours: `${editForm.openingTime} – ${editForm.closingTime}`,
+      };
+      setBranch(updated);
+      onUpdateBranch?.(updated);
+      toast.success(`Branch "${updated.name}" updated successfully!`);
+      setIsEditOpen(false);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to update branch.');
     }
-    toast.success(`Branch "${updated.name}" updated successfully!`);
-    setIsEditOpen(false);
   };
 
-  // Handlers: Tables
-  const handleRegenerateQr = () => {
+  const handleRegenerateQr = async () => {
+    if (!viewingQrTable) return;
     setIsRegenerating(true);
-    setTimeout(() => {
-      setQrSeed((prev) => prev + Math.floor(Math.random() * 50) + 7);
+    try {
+      const result: any = await regenerateQr(viewingQrTable.id).unwrap();
+      const joinUrl =
+        result?.qrJoinUrl ||
+        (result?.qrCodeToken ? `${getCustomerAppUrl()}/t/${result.qrCodeToken}` : viewingQrTable.qrCodeUrl);
+      setViewingQrTable({
+        ...viewingQrTable,
+        qrCodeToken: result?.qrCodeToken,
+        qrJoinUrl: joinUrl,
+        qrCodeUrl: joinUrl,
+      });
+      toast.success('QR code regenerated. Print a new standee.');
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to regenerate QR code.');
+    } finally {
       setIsRegenerating(false);
-      toast.success('QR Code regenerated successfully!');
-    }, 300);
+      setQrSeed((prev) => prev + 1);
+    }
   };
 
   const handleOpenAddTable = () => {
     const nextNum = tables.length + 1;
-    const formatted = `T-${nextNum < 10 ? `0${nextNum}` : nextNum}`;
     setTableForm({
-      number: formatted,
+      number: `T-${String(nextNum).padStart(2, '0')}`,
       capacity: 4,
       status: 'Available',
     });
-    setQrSeed(Date.now() % 1000);
     setIsAddTableOpen(true);
   };
 
-  const handleSaveAddTable = (e: React.FormEvent) => {
+  const handleSaveAddTable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tableForm.number.trim()) {
       toast.error('Please enter a table number.');
       return;
     }
-
-    const newTable: TableItem = {
-      id: `tbl-${Date.now()}`,
-      number: tableForm.number.trim(),
-      capacity: Number(tableForm.capacity) || 4,
-      status: tableForm.status,
-      qrCodeUrl: `https://tavonza.ai/r/${branch.id}/${tableForm.number.trim().toLowerCase()}`,
-    };
-
-    setTables((prev) => [...prev, newTable]);
-    toast.success(`Table "${newTable.number}" added successfully!`);
-    setIsAddTableOpen(false);
+    try {
+      await createTable({
+        branchId: branch.id,
+        label: tableForm.number.trim(),
+        capacity: Number(tableForm.capacity) || 4,
+      }).unwrap();
+      toast.success(`Table "${tableForm.number}" added successfully!`);
+      setIsAddTableOpen(false);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to add table.');
+    }
   };
 
   const handleOpenEditTable = (table: TableItem) => {
     setEditingTable(table);
-    setTableForm({
-      number: table.number,
-      capacity: table.capacity,
-      status: table.status,
-    });
-    setQrSeed(table.number.split('').reduce((acc, char) => acc + char.charCodeAt(0), 10));
+    setTableForm({ number: table.number, capacity: table.capacity, status: table.status });
   };
 
-  const handleSaveEditTable = (e: React.FormEvent) => {
+  const handleSaveEditTable = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingTable) return;
-    if (!tableForm.number.trim()) {
-      toast.error('Please enter a table number.');
-      return;
+    if (!editingTable || !tableForm.number.trim()) return;
+    try {
+      await updateTable({
+        id: editingTable.id,
+        body: {
+          label: tableForm.number.trim(),
+          capacity: Number(tableForm.capacity) || 4,
+        },
+      }).unwrap();
+      toast.success(`Table "${tableForm.number}" updated successfully!`);
+      setEditingTable(null);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to update table.');
     }
-
-    setTables((prev) =>
-      prev.map((t) =>
-        t.id === editingTable.id
-          ? {
-              ...t,
-              number: tableForm.number.trim(),
-              capacity: Number(tableForm.capacity) || 4,
-              status: tableForm.status,
-            }
-          : t
-      )
-    );
-    toast.success(`Table "${tableForm.number}" updated successfully!`);
-    setEditingTable(null);
   };
 
-  const handleConfirmDeleteTable = () => {
+  const handleConfirmDeleteTable = async () => {
     if (!deletingTable) return;
-    const targetNum = deletingTable.number;
-    setTables((prev) => prev.filter((t) => t.id !== deletingTable.id));
-    toast.success(`Table "${targetNum}" has been removed.`);
-    setDeletingTable(null);
+    try {
+      await deleteTable(deletingTable.id).unwrap();
+      toast.success(`Table "${deletingTable.number}" has been removed.`);
+      setDeletingTable(null);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to delete table.');
+    }
   };
 
-  // Handlers: Menu
+  const resolveCategoryId = async (categoryName: string) => {
+    const existing = categoryRows.find(
+      (category: any) => String(category.name).toLowerCase() === categoryName.toLowerCase(),
+    );
+    if (existing) return existing.id;
+    const created: any = await createMenuCategory({
+      restaurantId: branch.restaurantId,
+      name: categoryName,
+    }).unwrap();
+    return created?.data?.id || created?.id;
+  };
+
+  const parsePrice = (value: string) => Number(String(value).replace(/[^0-9.]/g, '')) || 0;
+
   const handleOpenAddMenu = () => {
     setMenuForm({
       name: '',
-      category: 'Main Course',
-      price: '$12.20',
+      category: categoryRows[0]?.name || 'Main Course',
+      price: '12.20',
       status: 'Active',
     });
     setIsAddMenuOpen(true);
   };
 
-  const handleSaveAddMenu = (e: React.FormEvent) => {
+  const handleSaveAddMenu = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!menuForm.name.trim()) {
       toast.error('Please enter menu item name.');
       return;
     }
-
-    const newItem: MenuItem = {
-      id: `menu-${Date.now()}`,
-      name: menuForm.name.trim(),
-      category: menuForm.category,
-      price: menuForm.price.startsWith('$') ? menuForm.price : `$${menuForm.price}`,
-      status: menuForm.status,
-    };
-
-    setMenuItems((prev) => [...prev, newItem]);
-    toast.success(`Menu item "${newItem.name}" added successfully!`);
-    setIsAddMenuOpen(false);
+    try {
+      const categoryId = await resolveCategoryId(menuForm.category);
+      await createMenuItem({
+        restaurantId: branch.restaurantId,
+        categoryId,
+        name: menuForm.name.trim(),
+        basePrice: parsePrice(menuForm.price),
+      }).unwrap();
+      toast.success(`Menu item "${menuForm.name.trim()}" added successfully!`);
+      setIsAddMenuOpen(false);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to add menu item.');
+    }
   };
 
   const handleOpenEditMenu = (item: MenuItem) => {
@@ -290,85 +393,96 @@ export function useBranchDashboard({
     });
   };
 
-  const handleSaveEditMenu = (e: React.FormEvent) => {
+  const handleSaveEditMenu = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingMenuItem) return;
-    if (!menuForm.name.trim()) {
-      toast.error('Menu item name cannot be empty.');
-      return;
+    if (!editingMenuItem || !menuForm.name.trim()) return;
+    try {
+      await updateMenuItem({
+        id: editingMenuItem.id,
+        body: {
+          name: menuForm.name.trim(),
+          basePrice: parsePrice(menuForm.price),
+          isAvailable: menuForm.status === 'Active',
+        },
+      }).unwrap();
+      toast.success(`Menu item "${menuForm.name}" updated!`);
+      setEditingMenuItem(null);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to update menu item.');
     }
-
-    setMenuItems((prev) =>
-      prev.map((m) =>
-        m.id === editingMenuItem.id
-          ? {
-              ...m,
-              name: menuForm.name.trim(),
-              category: menuForm.category,
-              price: menuForm.price.startsWith('$') ? menuForm.price : `$${menuForm.price}`,
-              status: menuForm.status,
-            }
-          : m
-      )
-    );
-    toast.success(`Menu item "${menuForm.name}" updated!`);
-    setEditingMenuItem(null);
   };
 
-  const handleDuplicateMenu = (item: MenuItem) => {
-    const duplicated: MenuItem = {
-      id: `menu-${Date.now()}`,
-      name: `${item.name} (Copy)`,
-      category: item.category,
-      price: item.price,
-      status: item.status,
-    };
-    setMenuItems((prev) => [...prev, duplicated]);
-    toast.success(`Duplicated "${item.name}"`);
+  const handleDuplicateMenu = async (item: MenuItem) => {
+    try {
+      const categoryId = await resolveCategoryId(item.category);
+      await createMenuItem({
+        restaurantId: branch.restaurantId,
+        categoryId,
+        name: `${item.name} (Copy)`,
+        basePrice: parsePrice(item.price),
+      }).unwrap();
+      toast.success(`Duplicated "${item.name}"`);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to duplicate item.');
+    }
   };
 
-  const handleToggleMenuStatus = (item: MenuItem) => {
+  const handleToggleMenuStatus = async (item: MenuItem) => {
     const nextStatus = item.status === 'Active' ? 'Disable' : 'Active';
-    setMenuItems((prev) =>
-      prev.map((m) => (m.id === item.id ? { ...m, status: nextStatus } : m))
-    );
-    toast.info(`Item status changed to ${nextStatus}.`);
+    try {
+      await updateMenuItem({
+        id: item.id,
+        body: { isAvailable: nextStatus === 'Active' },
+      }).unwrap();
+      toast.info(`Item status changed to ${nextStatus}.`);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to update item.');
+    }
   };
 
-  const handleConfirmDeleteMenu = () => {
+  const handleConfirmDeleteMenu = async () => {
     if (!deletingMenuItem) return;
-    const name = deletingMenuItem.name;
-    setMenuItems((prev) => prev.filter((m) => m.id !== deletingMenuItem.id));
-    toast.success(`Menu item "${name}" deleted.`);
-    setDeletingMenuItem(null);
+    try {
+      await deleteMenuItem(deletingMenuItem.id).unwrap();
+      toast.success(`Menu item "${deletingMenuItem.name}" deleted.`);
+      setDeletingMenuItem(null);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to delete menu item.');
+    }
   };
 
-  // Handlers: Staff
   const handleOpenInviteStaff = () => {
     setInviteForm({
       name: '',
-      role: 'Manager',
-      branch: branch.name || 'Georgia Flagship',
+      email: '',
+      password: '',
+      role: 'WAITER',
+      branch: branch.name,
     });
     setIsInviteStaffOpen(true);
   };
 
-  const handleSaveInviteStaff = (e: React.FormEvent) => {
+  const handleSaveInviteStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteForm.name.trim()) {
-      toast.error('Please enter full name.');
+    if (!inviteForm.name.trim() || !inviteForm.email.trim() || !inviteForm.password) {
+      toast.error('Name, email, and password are required.');
       return;
     }
-    const newStaff: StaffMember = {
-      id: `st-${Date.now()}`,
-      name: inviteForm.name.trim(),
-      role: inviteForm.role,
-      branch: inviteForm.branch,
-      status: 'Active',
-    };
-    setStaffList((prev) => [...prev, newStaff]);
-    toast.success(`Invitation sent to ${newStaff.name}!`);
-    setIsInviteStaffOpen(false);
+    try {
+      await createStaff({
+        branchId: branch.id,
+        body: {
+          name: inviteForm.name.trim(),
+          email: inviteForm.email.trim(),
+          password: inviteForm.password,
+          role: inviteForm.role,
+        },
+      }).unwrap();
+      toast.success(`Staff account created for ${inviteForm.name.trim()}.`);
+      setIsInviteStaffOpen(false);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to invite staff.');
+    }
   };
 
   const handleOpenEditStaff = (staff: StaffMember) => {
@@ -381,40 +495,36 @@ export function useBranchDashboard({
     });
   };
 
-  const handleSaveEditStaff = (e: React.FormEvent) => {
+  const handleSaveEditStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStaff) return;
-    if (!editStaffForm.name.trim()) {
-      toast.error('Full name cannot be empty.');
-      return;
+    try {
+      await updateStaff({
+        branchId: branch.id,
+        staffId: editingStaff.id,
+        body: {
+          role: editStaffForm.role,
+          isActive: editStaffForm.status === 'Active',
+        },
+      }).unwrap();
+      toast.success(`Staff member "${editStaffForm.name}" updated!`);
+      setEditingStaff(null);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to update staff.');
     }
-
-    setStaffList((prev) =>
-      prev.map((s) =>
-        s.id === editingStaff.id
-          ? {
-              ...s,
-              name: editStaffForm.name.trim(),
-              role: editStaffForm.role,
-              branch: editStaffForm.branch,
-              status: editStaffForm.status,
-            }
-          : s
-      )
-    );
-    toast.success(`Staff member "${editStaffForm.name}" updated!`);
-    setEditingStaff(null);
   };
 
-  const handleToggleStaffStatus = (staff: StaffMember) => {
+  const handleToggleStaffStatus = async (staff: StaffMember) => {
     const nextStatus = staff.status === 'Active' ? 'Inactive' : 'Active';
-    setStaffList((prev) =>
-      prev.map((s) => (s.id === staff.id ? { ...s, status: nextStatus } : s))
-    );
-    if (nextStatus === 'Inactive') {
-      toast.error(`${staff.name} has been deactivated.`);
-    } else {
-      toast.success(`${staff.name} has been activated.`);
+    try {
+      await updateStaff({
+        branchId: branch.id,
+        staffId: staff.id,
+        body: { isActive: nextStatus === 'Active' },
+      }).unwrap();
+      toast.success(`${staff.name} is now ${nextStatus.toLowerCase()}.`);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to update staff.');
     }
   };
 
@@ -422,17 +532,13 @@ export function useBranchDashboard({
     branch,
     activeSubTab,
     setActiveSubTab,
-    restaurants: MOCK_RESTAURANTS,
-
-    // Branch Edit
+    restaurants,
     isEditOpen,
     setIsEditOpen,
     editForm,
     setEditForm,
     handleOpenEdit,
     handleEditSubmit,
-
-    // Tables
     tables,
     totalTables,
     availableTables,
@@ -456,8 +562,6 @@ export function useBranchDashboard({
     handleOpenEditTable,
     handleSaveEditTable,
     handleConfirmDeleteTable,
-
-    // Menu
     menuItems: filteredMenuItems,
     menuFilterStatus,
     setMenuFilterStatus,
@@ -476,8 +580,6 @@ export function useBranchDashboard({
     handleDuplicateMenu,
     handleToggleMenuStatus,
     handleConfirmDeleteMenu,
-
-    // Staff
     staffList: filteredStaff,
     staffRoleFilter,
     setStaffRoleFilter,
