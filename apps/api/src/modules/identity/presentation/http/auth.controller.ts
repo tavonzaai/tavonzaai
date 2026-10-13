@@ -195,10 +195,9 @@ export class AuthController {
   @ApiOperation({ summary: '[Customer] Send password reset OTP to email' })
   @ApiOkResponse({ type: MessageResponseDto })
   async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<MessageResponseDto> {
-    const devOtp = await this.authService.forgotPassword(dto);
+    await this.authService.forgotPassword(dto);
     return {
       message: 'If an account exists, a reset code has been sent to your email',
-      devOtp,
     };
   }
 
@@ -225,10 +224,9 @@ export class AuthController {
   @ApiOperation({ summary: '[Customer] Resend OTP verification code' })
   @ApiOkResponse({ type: MessageResponseDto })
   async resendOtp(@Body() dto: ResendOtpDto): Promise<MessageResponseDto> {
-    const devOtp = await this.authService.resendOtp(dto.email, dto.type);
+    await this.authService.resendOtp(dto.email, dto.type);
     return {
       message: 'If an account exists, a new code has been sent',
-      devOtp,
     };
   }
 }

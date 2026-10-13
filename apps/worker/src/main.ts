@@ -3,6 +3,14 @@
  * Handles asynchronous background workloads, FIFO email delivery via AWS SES,
  * outbox event propagation, idle session cleanup, and multichannel notifications.
  */
+try {
+  process.loadEnvFile('../../.env');
+} catch {
+  try {
+    process.loadEnvFile('.env');
+  } catch {}
+}
+
 import { closeSharedRedisConnection } from '@tavonza/queue';
 import { createEmailWorker } from './notifications/email.worker.js';
 import { createNotificationWorker } from './notifications/notification.worker.js';

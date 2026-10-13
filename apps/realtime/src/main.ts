@@ -3,6 +3,14 @@
  * Handles WebSocket delivery, presence, subscriptions, and live operational updates.
  * Realtime is not the source of truth for business state.
  */
+try {
+  process.loadEnvFile('../../.env');
+} catch {
+  try {
+    process.loadEnvFile('.env');
+  } catch {}
+}
+
 import { ChannelManager } from './channels/channel.manager';
 import { RedisSubscriber } from './publishers/redis.subscriber';
 import { RealtimeWebSocketServer } from './gateways/websocket.server';

@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { Redis, RedisOptions } from 'ioredis';
 
 let sharedConnection: Redis | null = null;
@@ -7,7 +9,24 @@ export interface RedisConnectionConfig {
   enableTls?: boolean;
 }
 
+export function autoLoadEnv(): void {
+  if (process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_URL) return;
+  try {
+    let dir = process.cwd();
+    for (let i = 0; i < 4; i++) {
+      const candidate = path.join(dir, '.env');
+      if (fs.existsSync(candidate)) {
+        process.loadEnvFile(candidate);
+        return;
+      }
+      dir = path.dirname(dir);
+    }
+  } catch {}
+}
+
 export function normalizeRedisUrl(rawUrl?: string): string {
+  autoLoadEnv();
+
   let redisUrl =
     rawUrl ||
     process.env.REDIS_URL ||
@@ -41,7 +60,6 @@ export function normalizeRedisUrl(rawUrl?: string): string {
 
 // Auto-populate REDIS_URL from Upstash REST variables if available
 normalizeRedisUrl();
-
 
 /**
  * Creates or retrieves a singleton ioredis connection configured for BullMQ and AWS ElastiCache.
