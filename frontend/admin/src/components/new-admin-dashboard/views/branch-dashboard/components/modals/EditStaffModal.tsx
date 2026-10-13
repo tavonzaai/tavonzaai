@@ -76,11 +76,12 @@ export const EditStaffModal: React.FC<EditStaffModalProps> = ({
                     onChange={(e) => onChange({ ...editStaffForm, role: e.target.value })}
                     className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-['Inter'] appearance-none focus:outline-none focus:border-amber-400 cursor-pointer"
                   >
-                    <option value="Manager">Manager</option>
-                    <option value="Branch Manager">Branch Manager</option>
-                    <option value="Waiter">Waiter</option>
-                    <option value="Chef">Chef</option>
-                    <option value="Cashier">Cashier</option>
+                    <option value="BRANCH_MANAGER">Branch Manager</option>
+                    <option value="HOST">Host</option>
+                    <option value="WAITER">Waiter</option>
+                    <option value="KITCHEN_STAFF">Kitchen</option>
+                    <option value="BARTENDER">Bartender</option>
+                    <option value="CASHIER">Cashier</option>
                   </select>
                   <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>

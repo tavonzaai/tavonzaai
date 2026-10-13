@@ -268,7 +268,62 @@ export class PaymentController {
     return this.paymentService.rejectOfflinePayment(paymentId, user?.sub || '', dto);
   }
 
-  // ── Existing Bill & Session Endpoints ────────────────────────────────
+  // ── Ledger, order, session, then parameterized :id ────────────────────
+
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Admin] List customer order payments for an organization or branch',
+    description: 'Tenant-scoped ledger of dine-in / QR payments. Distinct from platform SaaS subscription billing.',
+  })
+  @ApiQuery({ name: 'organizationId', required: false, type: String })
+  @ApiQuery({ name: 'branchId', required: false, type: String })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ description: 'Paginated payment ledger' })
+  @ApiStandardErrors(400, 401, 403, 500)
+  async listPayments(
+    @CurrentUser() user: JwtPayload,
+    @Query('organizationId') organizationId?: string,
+    @Query('branchId') branchId?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.paymentService.listPayments(user, {
+      organizationId,
+      branchId,
+      status,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get('order/:orderId')
+  @ApiOperation({
+    summary: '[Customer/Cashier] Get payments associated with an order',
+    description: 'Lists all payments and transactions registered under a specific order.',
+  })
+  @ApiParam({ name: 'orderId', type: String, description: 'Order UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
+  @ApiOkResponse({ type: [PaymentRecordResponseDto], description: 'List of order payments' })
+  @ApiStandardErrors(400, 404, 500)
+  async getPaymentsByOrder(@Param('orderId') orderId: string): Promise<any> {
+    return this.paymentService.getPaymentsByOrder(orderId);
+  }
+
+  @Get('session/:sessionId/bill')
+  @ApiOperation({
+    summary: '[Customer/Cashier] Calculate bill and outstanding balance for a table session',
+    description: 'Consolidates all session orders, taxes, service charges, payments made, and current balance due.',
+  })
+  @ApiParam({ name: 'sessionId', type: String, description: 'Table Session UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
+  @ApiOkResponse({ type: TableBillCalculationResponseDto, description: 'Consolidated table bill calculation' })
+  @ApiStandardErrors(400, 404, 500)
+  async getTableSessionBill(@Param('sessionId') sessionId: string): Promise<TableBillCalculationResponseDto> {
+    return this.paymentService.calculateTableBill(sessionId);
+  }
 
   @Post(':id/refund')
   @HttpCode(HttpStatus.OK)
@@ -298,29 +353,5 @@ export class PaymentController {
   @ApiStandardErrors(400, 404, 500)
   async getPayment(@Param('id') paymentId: string): Promise<any> {
     return this.paymentService.getPayment(paymentId);
-  }
-
-  @Get('order/:orderId')
-  @ApiOperation({
-    summary: '[Customer/Cashier] Get payments associated with an order',
-    description: 'Lists all payments and transactions registered under a specific order.',
-  })
-  @ApiParam({ name: 'orderId', type: String, description: 'Order UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
-  @ApiOkResponse({ type: [PaymentRecordResponseDto], description: 'List of order payments' })
-  @ApiStandardErrors(400, 404, 500)
-  async getPaymentsByOrder(@Param('orderId') orderId: string): Promise<any> {
-    return this.paymentService.getPaymentsByOrder(orderId);
-  }
-
-  @Get('session/:sessionId/bill')
-  @ApiOperation({
-    summary: '[Customer/Cashier] Calculate bill and outstanding balance for a table session',
-    description: 'Consolidates all session orders, taxes, service charges, payments made, and current balance due.',
-  })
-  @ApiParam({ name: 'sessionId', type: String, description: 'Table Session UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
-  @ApiOkResponse({ type: TableBillCalculationResponseDto, description: 'Consolidated table bill calculation' })
-  @ApiStandardErrors(400, 404, 500)
-  async getTableSessionBill(@Param('sessionId') sessionId: string): Promise<TableBillCalculationResponseDto> {
-    return this.paymentService.calculateTableBill(sessionId);
   }
 }

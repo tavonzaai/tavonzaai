@@ -49,7 +49,7 @@ export class OrganizationController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateOrganizationDto,
   ): Promise<OrganizationResponseDto> {
-    return this.orgService.create(user.sub, dto);
+    return this.orgService.create(user, dto);
   }
 
   @Get()
@@ -57,9 +57,10 @@ export class OrganizationController {
   @ApiOkResponse({ description: 'Paginated list of organizations', type: OrganizationPaginatedResponseDto })
   @ApiStandardErrors(401, 403, 500)
   async getAll(
+    @CurrentUser() user: JwtPayload,
     @Query() query: QueryOrganizationDto,
   ) {
-    return this.orgService.findAll(query);
+    return this.orgService.findAll(user, query);
   }
 
   @Get('my')
@@ -76,9 +77,10 @@ export class OrganizationController {
   @ApiOkResponse({ description: 'Organization details', type: OrganizationResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async getById(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<OrganizationResponseDto> {
-    return this.orgService.findById(id);
+    return this.orgService.findById(user, id);
   }
 
   @Patch(':id')
@@ -91,7 +93,7 @@ export class OrganizationController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: UpdateOrganizationDto,
   ): Promise<OrganizationResponseDto> {
-    return this.orgService.update(id, user.sub, dto);
+    return this.orgService.update(id, user, dto);
   }
 
   @Delete(':id')
@@ -112,6 +114,6 @@ export class OrganizationController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.orgService.delete(id, user.sub);
+    return this.orgService.delete(id, user);
   }
 }

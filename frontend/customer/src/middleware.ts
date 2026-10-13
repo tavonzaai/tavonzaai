@@ -15,12 +15,24 @@ export function middleware(request: NextRequest) {
   }
 
   const qrParam = searchParams.get('qr');
+  const tokenFromPath = pathname.startsWith('/t/') ? pathname.slice(3).split('/')[0] : '';
   const qrCookie = request.cookies.get('tavonza_qr_token')?.value;
-  const effectiveQr = qrParam || qrCookie;
-
+  const effectiveQr = qrParam || tokenFromPath || qrCookie;
   const hasAuth =
     request.cookies.has('access_token') ||
     request.cookies.has('customer_session');
+
+  if (tokenFromPath) {
+    const dest = new URL(hasAuth ? '/menu' : '/login', request.url);
+    dest.searchParams.set('qr', tokenFromPath);
+    const redirectRes = NextResponse.redirect(dest);
+    redirectRes.cookies.set('tavonza_qr_token', tokenFromPath, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+      sameSite: 'lax',
+    });
+    return redirectRes;
+  }
 
   // 2. Unauthenticated flows
   if (!hasAuth) {
