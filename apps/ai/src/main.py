@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Tavonza AI Service — Autonomous Restaurant Agent",
-    version="1.0.0",
+    version="1.0.1",
     lifespan=lifespan,
     docs_url="/docs" if settings.environment == "dev" else None,
     redoc_url=None,
