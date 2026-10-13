@@ -1,5 +1,6 @@
 // path to a file with schema you want to reset
 import * as schema from './schema';
+// @ts-ignore
 import { reset } from "drizzle-seed";
 import { drizzle } from 'drizzle-orm/node-postgres';
 
