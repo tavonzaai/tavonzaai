@@ -14,7 +14,7 @@ async function bootstrap() {
   console.log('  ⚡ Tavonza AI Realtime Service Starting');
   console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Port:        ${port}`);
-  console.log(`  Redis URL:   ${process.env.REDIS_URL ? '[CONFIGURED]' : 'redis://localhost:6379'}`);
+  console.log(`  Redis URL:   ${(process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL) ? '[CONFIGURED]' : 'redis://localhost:6379'}`);
   console.log('====================================================');
 
   const channelManager = new ChannelManager();

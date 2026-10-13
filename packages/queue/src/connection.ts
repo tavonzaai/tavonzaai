@@ -7,11 +7,47 @@ export interface RedisConnectionConfig {
   enableTls?: boolean;
 }
 
+export function normalizeRedisUrl(rawUrl?: string): string {
+  let redisUrl =
+    rawUrl ||
+    process.env.REDIS_URL ||
+    process.env.UPSTASH_REDIS_REST_URL ||
+    process.env.REDIS_REST_URL;
+
+  if (!redisUrl) {
+    return 'redis://localhost:6379';
+  }
+
+  // Automatically convert Upstash HTTP/HTTPS REST URLs into rediss:// protocol
+  if (redisUrl.startsWith('https://') || redisUrl.startsWith('http://')) {
+    try {
+      const parsed = new URL(redisUrl);
+      const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_REST_TOKEN;
+      if (token) {
+        const port = parsed.port || 6379;
+        const normalized = `rediss://default:${token}@${parsed.hostname}:${port}`;
+        if (!process.env.REDIS_URL) {
+          process.env.REDIS_URL = normalized;
+        }
+        return normalized;
+      }
+    } catch {
+      // fallback as-is
+    }
+  }
+
+  return redisUrl;
+}
+
+// Auto-populate REDIS_URL from Upstash REST variables if available
+normalizeRedisUrl();
+
+
 /**
  * Creates or retrieves a singleton ioredis connection configured for BullMQ and AWS ElastiCache.
  */
 export function getRedisConnection(config?: RedisConnectionConfig): Redis {
-  const redisUrl = config?.url || process.env.REDIS_URL || 'redis://localhost:6379';
+  const redisUrl = normalizeRedisUrl(config?.url);
 
   const options: RedisOptions = {
     maxRetriesPerRequest: null, // Required by BullMQ

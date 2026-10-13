@@ -8,7 +8,22 @@ export class RedisSubscriber {
   constructor(private readonly channelManager: ChannelManager) {}
 
   async start(): Promise<void> {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    let redisUrl =
+      process.env.REDIS_URL ||
+      process.env.UPSTASH_REDIS_REST_URL ||
+      process.env.REDIS_REST_URL ||
+      'redis://localhost:6379';
+    if (redisUrl.startsWith('https://') || redisUrl.startsWith('http://')) {
+      try {
+        const parsed = new URL(redisUrl);
+        const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_REST_TOKEN;
+        if (token) {
+          redisUrl = `rediss://default:${token}@${parsed.hostname}:${parsed.port || 6379}`;
+        }
+      } catch {
+        // keep fallback
+      }
+    }
 
     try {
       this.client = new Redis(redisUrl, {
