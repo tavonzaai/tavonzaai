@@ -5,12 +5,14 @@ import {
   ConflictException,
   NotFoundException,
   ServiceUnavailableException,
+  Optional,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomInt } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { GlobalRole, resolvePermissions } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
+import { DrizzleRbacRepository } from '../../../authorization/infrastructure/persistence/drizzle-rbac.repository';
 import { MailService } from '../../../notifications/application/mail.service';
 import type {
   RegisterDto,
@@ -34,6 +36,7 @@ export class AuthService {
     private readonly userRepo: DrizzleUserRepository,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    @Optional() private readonly rbacRepo?: DrizzleRbacRepository,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
@@ -222,9 +225,33 @@ export class AuthService {
   }
 
   private async issueTokens(user: any): Promise<AuthTokensDto> {
+    let effectiveRole = user.role;
+    let effectivePermissions: string[] = [];
+
+    // 1. Resolve dynamic database-backed role & permissions if assigned
+    if (this.rbacRepo) {
+      try {
+        const dynamicRole = await this.rbacRepo.getUserRole(user.id);
+        if (dynamicRole) {
+          effectiveRole = dynamicRole.roleName.toUpperCase().replace(/\s+/g, '_');
+          effectivePermissions = await this.rbacRepo.getUserPermissions(user.id);
+        }
+      } catch {
+        // Fallback to legacy assignments on error
+      }
+    }
+
+    // 2. Fallback to branch staff assignments and static role resolutions
     const assignments = await this.userRepo.findStaffAssignments(user.id);
     const primaryAssignment = assignments[0];
-    const effectiveRole = primaryAssignment?.role || user.role;
+    if (!effectivePermissions || effectivePermissions.length === 0) {
+      effectiveRole = primaryAssignment?.role || user.role;
+      effectivePermissions = resolvePermissions(
+        effectiveRole,
+        (primaryAssignment?.permissions as any) ?? [],
+      ) as string[];
+    }
+
     const branchId = primaryAssignment?.branchId ?? null;
     const branchName = primaryAssignment?.branchName ?? null;
 
@@ -234,10 +261,7 @@ export class AuthService {
       role: effectiveRole,
       globalRole: user.role,
       branchId,
-      permissions: resolvePermissions(
-        effectiveRole,
-        (primaryAssignment?.permissions as any) ?? [],
-      ),
+      permissions: effectivePermissions,
     };
 
     const accessToken = this.jwtService.sign(payload, {
