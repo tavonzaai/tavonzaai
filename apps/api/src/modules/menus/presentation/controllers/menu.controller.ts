@@ -2,7 +2,7 @@
 // Menu Presentation — MenuController
 // ============================================================================
 
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -10,6 +10,7 @@ import {
   ApiCreatedResponse,
   ApiParam,
   ApiQuery,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { MenuService } from '../../application/services/menu.service';
 import {
@@ -24,6 +25,10 @@ import {
   UpdateMenuItemDto,
 } from '../dtos/menu-mutation.dto';
 import { ApiStandardErrors } from '../../../../common/swagger';
+import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
+import { Permission } from '@tavonza/authorization';
 
 @ApiTags('Customer | Menus')
 @Controller('menus')
@@ -142,7 +147,13 @@ export class MenuController {
   // ── Category Management Endpoints ─────────────────────────────────────
 
   @Post('categories')
-  @ApiOperation({ summary: '[Manager] Create menu category' })
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.MENU_WRITE)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Manager] Create menu category',
+    description: 'Requires menu:write permission. Creates a new menu category for the branch.',
+  })
   @ApiCreatedResponse({
     description: 'Menu category successfully created',
     schema: {
@@ -163,7 +174,13 @@ export class MenuController {
   }
 
   @Patch('categories/:id')
-  @ApiOperation({ summary: '[Manager] Update menu category' })
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.MENU_UPDATE)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Manager] Update menu category',
+    description: 'Requires menu:update permission. Updates existing menu category metadata.',
+  })
   @ApiParam({
     name: 'id',
     type: String,
@@ -193,7 +210,13 @@ export class MenuController {
   }
 
   @Delete('categories/:id')
-  @ApiOperation({ summary: '[Manager] Soft delete menu category' })
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.MENU_DELETE)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Manager] Soft delete menu category',
+    description: 'Requires menu:delete permission. Soft-deletes a category.',
+  })
   @ApiParam({
     name: 'id',
     type: String,
@@ -224,7 +247,13 @@ export class MenuController {
   // ── Item Management Endpoints ─────────────────────────────────────────
 
   @Post('items')
-  @ApiOperation({ summary: '[Manager] Create menu item' })
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.MENU_WRITE)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Manager] Create menu item',
+    description: 'Requires menu:write permission. Creates a new menu item.',
+  })
   @ApiCreatedResponse({
     description: 'Menu item created successfully',
     schema: {
@@ -245,7 +274,13 @@ export class MenuController {
   }
 
   @Patch('items/:itemId')
-  @ApiOperation({ summary: '[Manager] Update menu item' })
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.MENU_UPDATE)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Manager] Update menu item',
+    description: 'Requires menu:update permission. Updates menu item details, pricing, or status.',
+  })
   @ApiParam({
     name: 'itemId',
     type: String,
@@ -275,7 +310,13 @@ export class MenuController {
   }
 
   @Delete('items/:itemId')
-  @ApiOperation({ summary: '[Manager] Soft delete menu item' })
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.MENU_DELETE)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Manager] Soft delete menu item',
+    description: 'Requires menu:delete permission. Soft-deletes a menu item.',
+  })
   @ApiParam({
     name: 'itemId',
     type: String,

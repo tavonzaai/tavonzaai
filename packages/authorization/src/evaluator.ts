@@ -13,6 +13,56 @@ export interface RequiredScopeCheck {
 }
 
 /**
+ * Normalizes a permission key for uniform matching.
+ * e.g. "orders.read" -> "orders:read"
+ */
+function normalizeKey(key: string): string {
+  return key.trim().replace('.', ':');
+}
+
+/**
+ * Checks whether the actor's permissions list satisfies the required permission.
+ * Supports:
+ * - Direct match (e.g. "orders:read")
+ * - Cross-format normalization ("orders.read" <-> "orders:read")
+ * - Wildcard system admin ("*")
+ * - Module wildcard ("orders:*")
+ */
+export function checkCapability(userPermissions: string[], requiredPermission: string): boolean {
+  if (!userPermissions || userPermissions.length === 0) {
+    return false;
+  }
+
+  // 1. Wildcard grants everything
+  if (userPermissions.includes('*') || userPermissions.includes('*:*')) {
+    return true;
+  }
+
+  const reqNorm = normalizeKey(requiredPermission);
+  const [reqModule] = reqNorm.split(':');
+
+  for (const perm of userPermissions) {
+    if (perm === '*' || perm === '*:*') {
+      return true;
+    }
+
+    const userNorm = normalizeKey(perm);
+
+    // Exact match
+    if (userNorm === reqNorm || perm === requiredPermission) {
+      return true;
+    }
+
+    // Module wildcard e.g. "orders:*" satisfies "orders:read"
+    if (reqModule && userNorm === `${reqModule}:*`) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Checks whether an actor has the required permission and meets the scope criteria.
  */
 export function hasPermission(
@@ -20,8 +70,13 @@ export function hasPermission(
   requiredPermission: Permission,
   requiredScope?: RequiredScopeCheck,
 ): boolean {
-  // 1. Permission check
-  const hasCapability = context.permissions.includes(requiredPermission);
+  // 0. Super Admin bypass
+  if (context.role === 'SUPER_ADMIN' || (context as any).globalRole === 'SUPER_ADMIN') {
+    return true;
+  }
+
+  // 1. Permission capability check
+  const hasCapability = checkCapability(context.permissions as string[], requiredPermission);
   if (!hasCapability) {
     return false;
   }

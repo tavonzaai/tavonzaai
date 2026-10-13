@@ -10,3 +10,4 @@ export * from './operations';
 export * from './audit';
 export * from './events';
 export * from './notifications';
+export * from './rbac';
