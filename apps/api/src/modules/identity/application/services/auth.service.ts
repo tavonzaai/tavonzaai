@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   BadRequestException,
   UnauthorizedException,
   ConflictException,
@@ -32,6 +33,8 @@ const OTP_EXPIRY_MINUTES = 10;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly userRepo: DrizzleUserRepository,
     private readonly jwtService: JwtService,
@@ -45,6 +48,13 @@ export class AuthService {
       throw new ConflictException('An account with this email already exists');
     }
 
+    if (dto.phone) {
+      const existingPhone = await this.userRepo.findByEmailOrPhone(dto.phone.trim());
+      if (existingPhone) {
+        throw new ConflictException('This phone number is already in use.');
+      }
+    }
+
     this.validatePassword(dto.password);
     const passwordHash = await argon2.hash(dto.password);
 
@@ -56,7 +66,7 @@ export class AuthService {
       role: GlobalRole.CUSTOMER,
     });
 
-    const devOtp = await this.generateAndSendOtp(
+    await this.generateAndSendOtp(
       user.email,
       'email_verification',
       dto.firstName.trim(),
@@ -65,7 +75,6 @@ export class AuthService {
     return {
       message: 'Account created successfully. Please verify your email with the OTP code sent to your email.',
       email: user.email,
-      devOtp: process.env.NODE_ENV !== 'production' ? devOtp : undefined,
     };
   }
 
@@ -175,16 +184,15 @@ export class AuthService {
     }
   }
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<string | undefined> {
+  async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
     const user = await this.userRepo.findByEmailOrPhone(dto.email);
-    if (!user) return undefined;
+    if (!user) return;
 
-    const devOtp = await this.generateAndSendOtp(
+    await this.generateAndSendOtp(
       user.email,
       'password_reset',
       user.name.split(' ')[0],
     );
-    return process.env.NODE_ENV !== 'production' ? devOtp : undefined;
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
@@ -209,19 +217,18 @@ export class AuthService {
   async resendOtp(
     identifier: string,
     type: 'email_verification' | 'phone_verification' | 'password_reset',
-  ): Promise<string | undefined> {
+  ): Promise<void> {
     if (type === 'phone_verification') {
       throw new BadRequestException('Phone verification is not supported');
     }
     const user = await this.userRepo.findByEmailOrPhone(identifier);
-    if (!user) return undefined;
+    if (!user) return;
 
-    const devOtp = await this.generateAndSendOtp(
+    await this.generateAndSendOtp(
       user.email,
       type,
       user.name.split(' ')[0],
     );
-    return process.env.NODE_ENV !== 'production' ? devOtp : undefined;
   }
 
   private async issueTokens(user: any): Promise<AuthTokensDto> {
@@ -308,6 +315,10 @@ export class AuthService {
       : await this.mailService.sendVerificationCode(email, firstName, code);
 
     if (!mailResult.success) {
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.warn(`Mail delivery failed in dev mode, but OTP was generated: ${code}`);
+        return code;
+      }
       await this.userRepo.deleteAuthOtp(email, type, code);
       throw new ServiceUnavailableException('Unable to send the OTP email. Please try again.');
     }

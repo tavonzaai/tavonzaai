@@ -15,7 +15,6 @@ export interface SendMailResult {
   success: boolean;
   messageId?: string;
   queued: boolean;
-  devOtp?: string;
   error?: string;
 }
 
@@ -49,7 +48,7 @@ export class MailService {
       html,
       text,
       metadata: { type: 'email_verification', code },
-    }, code);
+    });
   }
 
   /**
@@ -67,7 +66,7 @@ export class MailService {
       html,
       text,
       metadata: { type: 'password_reset', code },
-    }, code);
+    });
   }
 
   /**
@@ -91,17 +90,22 @@ export class MailService {
   /**
    * General dispatch: routes into Redis FIFO Queue if available, otherwise direct SES
    */
-  private async dispatchEmail(payload: EmailJobPayload, devOtp?: string): Promise<SendMailResult> {
+  private async dispatchEmail(payload: EmailJobPayload): Promise<SendMailResult> {
     // 1. Try to enqueue into Redis FIFO Queue
     if (this.emailQueue) {
       try {
-        const job = await this.emailQueue.enqueue('send-email', payload);
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Redis enqueue timed out (2500ms)')), 2500),
+        );
+        const job = await Promise.race([
+          this.emailQueue.enqueue('send-email', payload),
+          timeout,
+        ]);
         this.logger.log(`Enqueued email job [${job.id}] to "${QUEUE_NAMES.EMAIL}" (FIFO)`);
         return {
           success: true,
           messageId: `queued-job-${job.id}`,
           queued: true,
-          devOtp: process.env.NODE_ENV !== 'production' ? devOtp : undefined,
         };
       } catch (queueErr: any) {
         this.logger.warn(`Redis queue push failed (${queueErr.message}), falling back to direct SES dispatch`);
@@ -110,12 +114,17 @@ export class MailService {
 
     // 2. Direct SES Dispatch fallback
     try {
-      const result = await this.sesDispatcher.send(payload);
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('SES dispatch timed out (3500ms)')), 3500),
+      );
+      const result = await Promise.race([
+        this.sesDispatcher.send(payload),
+        timeout,
+      ]);
       return {
         success: true,
         messageId: result.messageId,
         queued: false,
-        devOtp: process.env.NODE_ENV !== 'production' ? devOtp : undefined,
       };
     } catch (sesErr: any) {
       this.logger.error(`Direct SES dispatch failed: ${sesErr.message}`, sesErr.stack);
@@ -123,7 +132,6 @@ export class MailService {
         success: false,
         queued: false,
         error: sesErr.message,
-        devOtp: process.env.NODE_ENV !== 'production' ? devOtp : undefined,
       };
     }
   }

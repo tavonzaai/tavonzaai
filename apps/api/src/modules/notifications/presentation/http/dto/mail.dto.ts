@@ -65,9 +65,6 @@ export class SendMailResponseDto {
   @ApiProperty({ example: true, description: 'True if pushed to Redis FIFO queue, false if dispatched directly' })
   queued!: boolean;
 
-  @ApiProperty({ required: false, example: '48291', description: 'Development OTP preview for quick testing' })
-  devOtp?: string;
-
   @ApiProperty({ required: false })
   error?: string;
 }
