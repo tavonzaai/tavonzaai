@@ -7,6 +7,7 @@ AI never accesses the database directly.
 from typing import Any
 
 from ...audit.audit_writer import write_tool_audit
+from ...config import settings
 from ...internal_client import InternalClient
 from ...models import ActorContext
 from ..authorization.auth_gate import (
@@ -206,7 +207,11 @@ class ToolExecutor:
     async def _fetch_order_detail(self, order_id: str) -> dict[str, Any] | None:
         try:
             import httpx
-            async with httpx.AsyncClient(base_url="http://localhost:3000", timeout=5.0) as http:
+            base_url = settings.internal_api_base_url.replace("/internal", "").rstrip("/") or "http://localhost:3000"
+            headers = {}
+            if settings.internal_api_service_token:
+                headers["Authorization"] = f"Bearer {settings.internal_api_service_token}"
+            async with httpx.AsyncClient(base_url=base_url, headers=headers, timeout=5.0) as http:
                 resp = await http.get(f"/orders/{order_id}")
                 if resp.status_code == 200:
                     od = resp.json()
@@ -302,7 +307,11 @@ class ToolExecutor:
                     pass
 
             pending_orders = []
-            async with httpx.AsyncClient(base_url="http://localhost:3000", timeout=5.0) as http:
+            base_url = settings.internal_api_base_url.replace("/internal", "").rstrip("/") or "http://localhost:3000"
+            headers = {}
+            if settings.internal_api_service_token:
+                headers["Authorization"] = f"Bearer {settings.internal_api_service_token}"
+            async with httpx.AsyncClient(base_url=base_url, headers=headers, timeout=5.0) as http:
                 for oid in unique_order_ids:
                     try:
                         resp = await http.get(f"/orders/{oid}")
