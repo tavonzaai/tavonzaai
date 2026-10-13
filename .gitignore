@@ -13,8 +13,6 @@ out/
 .turbo/
 
 # Environment files and credentials
-.env
-.env.*
 !.env.example
 !.env.*.example
 *.pem
@@ -34,7 +32,6 @@ Thumbs.db
 
 # IDEs
 .idea/
-.vscode/
 *.swp
 *.swo
 
@@ -59,3 +56,4 @@ coverage/
 .nyc_output/
 
 tfplan
+config.bat

@@ -3,12 +3,12 @@
   "version": "0.1.3",
   "private": true,
   "scripts": {
-    "build": "nest build",
-    "start": "dotenv -e ../../.env -- nest start",
-    "dev": "pnpm --filter @tavonza/database db:generate && dotenv -e ../../.env -- nest start --watch",
+    "build": "node init && nest build",
+    "start": "node init && dotenv -e ../../.env -- nest start",
+    "dev": "node init && pnpm --filter @tavonza/database db:generate && dotenv -e ../../.env -- nest start --watch",
     "db:push": "pnpm --filter @tavonza/database db:push",
     "lint": "tsc --noEmit",
-    "test": "echo 'No tests yet — add jest to devDependencies when writing tests' && exit 0",
+    "test": "echo 'No tests yet \u2014 add jest to devDependencies when writing tests' && exit 0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
