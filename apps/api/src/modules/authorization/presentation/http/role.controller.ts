@@ -10,6 +10,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -22,6 +23,7 @@ import {
   ApiOkResponse,
   ApiCreatedResponse,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
@@ -46,6 +48,25 @@ import { ApiStandardErrors } from '../../../../common/swagger';
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}
 
+  // ── Current Authenticated User Role & Capabilities ─────────────────────────
+
+  @Get('me')
+  @ApiOperation({
+    summary: 'Get assigned dynamic role and effective permissions for current authenticated user',
+    description: 'Resolves caller’s single assigned dynamic role from user_roles and effective permission array directly from the database.',
+  })
+  async getMyRole(@CurrentUser() user: any) {
+    const role = await this.roleService.getUserRole(user.sub);
+    const permissions = await this.roleService.getUserPermissions(user.sub);
+    return {
+      userId: user.sub,
+      email: user.email,
+      globalRole: user.role,
+      role,
+      permissions,
+    };
+  }
+
   // ── Permissions Catalog ───────────────────────────────────────────────────
 
   @Get('permissions')
@@ -64,11 +85,12 @@ export class RoleController {
   @RequirePermissions(Permission.ROLES_READ)
   @ApiOperation({
     summary: 'List all roles with assignment and permission metrics',
-    description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [roles:read]. Returns all system and custom roles with user count and permission count.',
+    description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [roles:read]. Returns all system and custom roles with user count and permission count. Supports optional search filtering.',
   })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Optional search text to filter by role name or slug', example: 'waiter' })
   @ApiOkResponse({ type: [RoleResponseDto] })
-  async getAllRoles(): Promise<RoleResponseDto[]> {
-    return this.roleService.getAllRoles();
+  async getAllRoles(@Query('search') search?: string): Promise<RoleResponseDto[]> {
+    return this.roleService.getAllRoles(search);
   }
 
   @Get('roles/:id')

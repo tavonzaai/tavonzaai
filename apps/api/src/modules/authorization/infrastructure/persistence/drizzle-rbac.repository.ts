@@ -117,8 +117,8 @@ export class DrizzleRbacRepository {
   // Role Queries & Mutations
   // ==========================================================================
 
-  async findAllRoles(): Promise<RoleWithCounts[]> {
-    const rolesList = await this.db
+  async findAllRoles(search?: string): Promise<RoleWithCounts[]> {
+    let query = this.db
       .select({
         id: schema.roles.id,
         name: schema.roles.name,
@@ -128,8 +128,16 @@ export class DrizzleRbacRepository {
         createdAt: schema.roles.createdAt,
         updatedAt: schema.roles.updatedAt,
       })
-      .from(schema.roles)
-      .orderBy(schema.roles.name);
+      .from(schema.roles);
+
+    if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
+      query = query.where(
+        sql`${schema.roles.name} ILIKE ${term} OR ${schema.roles.slug} ILIKE ${term}`
+      );
+    }
+
+    const rolesList = await query.orderBy(schema.roles.name);
 
     // Get counts
     const results: RoleWithCounts[] = [];

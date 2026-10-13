@@ -37,8 +37,8 @@ export interface RoleDetailWithMatrix {
 export class RoleService {
   constructor(private readonly rbacRepo: DrizzleRbacRepository) {}
 
-  async getAllRoles() {
-    return this.rbacRepo.findAllRoles();
+  async getAllRoles(search?: string) {
+    return this.rbacRepo.findAllRoles(search);
   }
 
   async getRoleById(id: string) {
