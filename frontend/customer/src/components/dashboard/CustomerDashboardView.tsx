@@ -202,7 +202,7 @@ export default function CustomerDashboardView({
                 </div>
 
                 <h2 className="text-base sm:text-lg md:text-xl font-semibold text-white leading-snug font-['Inter']">
-                  Good evening, {user?.name || user?.firstName || 'Alex'}. What are you in the mood for?
+                  Good evening, {user?.name || user?.firstName || 'Guest'}. What are you in the mood for?
                 </h2>
 
                 <p className="text-xs sm:text-sm text-neutral-400 font-normal leading-relaxed font-['Inter']">

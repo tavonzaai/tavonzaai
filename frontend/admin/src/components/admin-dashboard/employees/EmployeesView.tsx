@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   EmployeesHeader,
   EmployeesKPICards,
@@ -119,8 +120,19 @@ export default function EmployeesView() {
     setEmployees((prev) => [newEmployee, ...prev]);
   };
 
-  const handleDeleteEmployee = (empId: string) => {
-    setEmployees((prev) => prev.filter((item) => item.id !== empId));
+  const handleDeleteEmployee = async (empId: string) => {
+    try {
+      if (empId && !empId.startsWith('emp-')) {
+        await rawUserApi.deleteUser(empId);
+        toast.success('User account soft-deleted successfully');
+      } else {
+        toast.success('Employee removed');
+      }
+      setEmployees((prev) => prev.filter((item) => item.id !== empId));
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete user account');
+      setEmployees((prev) => prev.filter((item) => item.id !== empId));
+    }
   };
 
   return (

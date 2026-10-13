@@ -178,7 +178,7 @@ export default function CreateAccountView({
                 <AlertTriangle className="w-4 h-4 text-amber-400" />
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-amber-300">ইমেইলটি ইতিমধ্যে ব্যবহৃত হচ্ছে</h4>
+                <h4 className="text-sm font-semibold text-amber-300">Email Already Registered</h4>
                 <p className="text-xs text-white/80 mt-1 leading-relaxed">
                   An account with <strong className="text-white underline">{conflictEmail}</strong> already exists. You can log in directly without registering again.
                 </p>
@@ -194,7 +194,7 @@ export default function CreateAccountView({
                 }}
                 className="flex-1 h-9 bg-amber-400 hover:bg-amber-300 text-black text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-[0.98] cursor-pointer shadow-md shadow-amber-500/10"
               >
-                <span>লগইন করুন (Log In)</span>
+                <span>Log In Directly</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
               <button
@@ -205,7 +205,7 @@ export default function CreateAccountView({
                 }}
                 className="px-3 h-9 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-xs font-medium rounded-xl transition cursor-pointer"
               >
-                অন্য ইমেইল দিন
+                Use Different Email
               </button>
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function CreateAccountView({
                 <Clock className="w-4 h-4 text-orange-400" />
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-orange-300">সার্ভার সাড়ায় বিলম্ব হচ্ছে (504 Timeout)</h4>
+                <h4 className="text-sm font-semibold text-orange-300">Server Response Delayed (504 Timeout)</h4>
                 <p className="text-xs text-white/80 mt-1 leading-relaxed">
                   The server took longer than expected to confirm. Your account or verification code may already be created. You can try logging in now.
                 </p>
@@ -236,7 +236,7 @@ export default function CreateAccountView({
                 }}
                 className="flex-1 h-9 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition active:scale-[0.98] cursor-pointer"
               >
-                <span>লগইন করে দেখুন (Log In)</span>
+                <span>Proceed to Log In</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
               <button
@@ -247,7 +247,7 @@ export default function CreateAccountView({
                 }}
                 className="px-3 h-9 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-xs font-medium rounded-xl transition cursor-pointer"
               >
-                পুনরায় চেষ্টা
+                Retry
               </button>
             </div>
           </div>
@@ -321,7 +321,7 @@ export default function CreateAccountView({
           {/* Client-side Live Duplicate Alert Helper */}
           {conflictEmail && email.trim().toLowerCase() === conflictEmail && (
             <div className="flex items-center justify-between text-[11px] text-amber-400 font-['Inter'] px-1 pt-0.5 animate-in fade-in">
-              <span>⚠️ এই ইমেইলটি ইতিমধ্যে ব্যবহৃত হচ্ছে</span>
+              <span>⚠️ This email is already registered</span>
               <button
                 type="button"
                 onClick={() => {
@@ -330,7 +330,7 @@ export default function CreateAccountView({
                 }}
                 className="underline hover:text-amber-300 font-semibold cursor-pointer"
               >
-                লগইন করুন →
+                Log In Directly →
               </button>
             </div>
           )}

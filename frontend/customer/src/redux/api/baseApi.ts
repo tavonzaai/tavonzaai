@@ -19,7 +19,8 @@ export function setCookie(name: string, value: string,) {
 
 export function removeCookie(name: string) {
   if (typeof document !== 'undefined') {
-    document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
+    document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax`;
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax`;
   }
 }
 
@@ -59,6 +60,7 @@ export function removeAuthToken() {
   removeCookie('access_token');
   removeCookie('refresh_token');
   removeCookie('customer_session');
+  removeCookie('tavonza_customer_session_id');
 }
 
 export function getApiBaseUrl(): string {

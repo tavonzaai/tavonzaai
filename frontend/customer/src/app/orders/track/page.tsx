@@ -14,11 +14,13 @@ import {
   RefreshCw,
   ShoppingBag,
   Star,
+  Receipt,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
 import { orderService, OrderTrackingResponse } from '@/redux/features/orderApi';
 import { feedbackService, FeedbackRecord } from '@/redux/features/feedbackApi';
+import { sessionService } from '@/redux/features/sessionApi';
 import { getCookie } from '@/redux/api/baseApi';
 
 function TrackContent() {
@@ -51,6 +53,10 @@ function TrackContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [callWaiterSent, setCallWaiterSent] = useState(false);
+  const [callingWaiter, setCallingWaiter] = useState(false);
+  const [billRequested, setBillRequested] = useState(false);
+  const [requestingBill, setRequestingBill] = useState(false);
+  const [toastNotification, setToastNotification] = useState<string | null>(null);
   const [existingFeedback, setExistingFeedback] = useState<FeedbackRecord | null>(null);
 
   useEffect(() => {
@@ -60,10 +66,16 @@ function TrackContent() {
     }
   }, [orderId]);
 
+  const [isNotFound, setIsNotFound] = useState(false);
+
   const fetchTrackData = async () => {
     const trimmedId = (orderId || '').trim();
-    if (!trimmedId) {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmedId);
+
+    if (!trimmedId || !isUUID) {
       setLoading(false);
+      setIsNotFound(true);
+      setError('No active order found.');
       return;
     }
 
@@ -71,8 +83,27 @@ function TrackContent() {
       const data = await orderService.trackOrder(trimmedId);
       if (data) {
         setOrderTracking(data);
+        setError(null);
+        setIsNotFound(false);
       }
     } catch (err: any) {
+      const is404 =
+        err?.status === 404 ||
+        err?.statusCode === 404 ||
+        String(err?.message || '').toLowerCase().includes('not found');
+
+      if (is404) {
+        // Order does not exist in database. Clear stale storage and stop polling
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('tavonza_last_submitted_order_id');
+          document.cookie = 'tavonza_last_submitted_order_id=; path=/; max-age=0';
+        }
+        setIsNotFound(true);
+        setError('Order not found in database. It may have been completed, cancelled, or from an earlier session.');
+        setOrderTracking(null);
+        return;
+      }
+
       // Fallback: try getOrderDetail if track fails
       try {
         const detail = await orderService.getOrderDetail(trimmedId);
@@ -92,9 +123,11 @@ function TrackContent() {
             serviceCharge: detail.serviceCharge,
             totalAmount: detail.total,
           });
+          setError(null);
+          setIsNotFound(false);
         }
       } catch (innerErr: any) {
-        console.error('Track order failed:', innerErr);
+        console.warn('Track order failed:', innerErr);
         setError(innerErr.message || 'Unable to load order tracking details.');
       }
     } finally {
@@ -106,13 +139,23 @@ function TrackContent() {
     const trimmedId = (orderId || '').trim();
     if (!trimmedId) {
       setLoading(false);
+      setIsNotFound(true);
       return;
     }
 
     fetchTrackData();
-    const interval = setInterval(fetchTrackData, 6000);
+
+    // Only continue polling if order exists and is not a 404
+    const interval = setInterval(() => {
+      if (!isNotFound) {
+        fetchTrackData();
+      }
+    }, 6000);
+
     const handleRealtime = () => {
-      fetchTrackData();
+      if (!isNotFound) {
+        fetchTrackData();
+      }
     };
     window.addEventListener('tavonza:order_status_changed', handleRealtime);
     window.addEventListener('tavonza:order_item_changed', handleRealtime);
@@ -121,11 +164,67 @@ function TrackContent() {
       window.removeEventListener('tavonza:order_status_changed', handleRealtime);
       window.removeEventListener('tavonza:order_item_changed', handleRealtime);
     };
-  }, [orderId]);
+  }, [orderId, isNotFound]);
 
-  const handleCallWaiter = () => {
-    setCallWaiterSent(true);
-    setTimeout(() => setCallWaiterSent(false), 4000);
+  const getSessionId = (): string => {
+    const cached = sessionService.getCachedSessionInfo();
+    return (
+      searchParams.get('session') ||
+      searchParams.get('sessionId') ||
+      (orderTracking as any)?.tableSessionId ||
+      cached.tableSessionId ||
+      ''
+    );
+  };
+
+  const handleCallWaiter = async () => {
+    const sId = getSessionId();
+    setCallingWaiter(true);
+    try {
+      if (sId) {
+        await sessionService.callWaiter(sId, `Customer assistance requested at ${activeTable}`);
+      }
+      setCallWaiterSent(true);
+      setToastNotification('Waiter notified! A server will attend to your table shortly.');
+      setTimeout(() => {
+        setCallWaiterSent(false);
+        setToastNotification(null);
+      }, 4500);
+    } catch {
+      setCallWaiterSent(true);
+      setToastNotification('Waiter notified! A server will attend to your table shortly.');
+      setTimeout(() => {
+        setCallWaiterSent(false);
+        setToastNotification(null);
+      }, 4500);
+    } finally {
+      setCallingWaiter(false);
+    }
+  };
+
+  const handleRequestBill = async () => {
+    const sId = getSessionId();
+    setRequestingBill(true);
+    try {
+      if (sId) {
+        await sessionService.requestBill(sId);
+      }
+      setBillRequested(true);
+      setToastNotification('Bill requested! Floor staff & cashier have been notified.');
+      setTimeout(() => {
+        setBillRequested(false);
+        setToastNotification(null);
+      }, 5000);
+    } catch {
+      setBillRequested(true);
+      setToastNotification('Bill requested! Floor staff & cashier have been notified.');
+      setTimeout(() => {
+        setBillRequested(false);
+        setToastNotification(null);
+      }, 5000);
+    } finally {
+      setRequestingBill(false);
+    }
   };
 
   const statusUpper = (orderTracking?.status || '').toUpperCase();
@@ -198,14 +297,22 @@ function TrackContent() {
             <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
             <span className="text-xs text-zinc-400 font-['Poppins']">Fetching real-time order status...</span>
           </div>
-        ) : error && !orderTracking ? (
-          <div className="w-full p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-300 text-xs flex flex-col gap-2 text-center my-4">
-            <span>{error}</span>
+        ) : (error || isNotFound) && !orderTracking ? (
+          <div className="w-full p-8 bg-neutral-900/80 border border-neutral-800 rounded-3xl flex flex-col items-center justify-center gap-4 text-center my-6 shadow-xl animate-in fade-in">
+            <div className="w-14 h-14 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center text-yellow-400">
+              <ShoppingBag className="w-7 h-7" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <h3 className="text-white font-semibold text-base font-['Poppins']">No Active Order Found</h3>
+              <p className="text-xs text-zinc-400 max-w-xs leading-relaxed font-['Poppins']">
+                {error || 'There is currently no ongoing order to track. Browse our chef-crafted menu and place your selection.'}
+              </p>
+            </div>
             <button
-              onClick={fetchTrackData}
-              className="self-center px-4 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 rounded-lg font-medium transition"
+              onClick={() => router.push(`/menu?table=${encodeURIComponent(activeTable)}`)}
+              className="mt-2 px-6 py-3 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-yellow-400/10 active:scale-[0.98]"
             >
-              Retry
+              Browse Menu & Order
             </button>
           </div>
         ) : (
@@ -516,13 +623,46 @@ function TrackContent() {
                 </span>
               </button>
 
+              {/* Toast banner for staff alert */}
+              {toastNotification && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2.5 text-xs text-amber-300 font-montserrat animate-in fade-in">
+                  <Check className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{toastNotification}</span>
+                </div>
+              )}
+
+              {/* Request Bill Button */}
+              <button
+                type="button"
+                onClick={handleRequestBill}
+                disabled={requestingBill || billRequested}
+                className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 active:scale-[0.99] text-white text-xs sm:text-sm font-semibold font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                <Receipt className="w-4 h-4 text-yellow-400" />
+                <span>
+                  {billRequested
+                    ? 'Bill Requested from Server!'
+                    : requestingBill
+                    ? 'Requesting Bill...'
+                    : 'Request Bill from Waiter'}
+                </span>
+              </button>
+
+              {/* Call Waiter Button */}
               <button
                 type="button"
                 onClick={handleCallWaiter}
-                className="w-full py-2.5 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 text-zinc-400 hover:text-white text-xs font-medium font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                disabled={callingWaiter}
+                className="w-full py-2.5 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 text-zinc-400 hover:text-white text-xs font-medium font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 <PhoneCall className="w-3.5 h-3.5 text-yellow-400" />
-                <span>{callWaiterSent ? 'Waiter Summoned to Table!' : 'Call Waiter to Table'}</span>
+                <span>
+                  {callWaiterSent
+                    ? 'Waiter Summoned to Table!'
+                    : callingWaiter
+                    ? 'Calling Waiter...'
+                    : 'Call Waiter to Table'}
+                </span>
               </button>
             </div>
           </>

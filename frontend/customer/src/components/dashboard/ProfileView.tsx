@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Camera,
   CheckCircle2,
+  User as UserIcon,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { logoutUser, changePassword, getMe } from '@/redux/features/authApi';
@@ -59,8 +60,15 @@ export default function ProfileView() {
   }, [user]);
 
   const handleLogout = async () => {
-    await dispatch(logoutUser());
-    router.push('/login');
+    try {
+      await dispatch(logoutUser());
+    } catch {
+      // non-blocking
+    } finally {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -203,7 +211,15 @@ export default function ProfileView() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <span>{user?.name ? user.name.slice(0, 2).toUpperCase() : (fullName.slice(0, 2).toUpperCase() || 'CU')}</span>
+                    <span>
+                      {user?.name
+                        ? user.name.slice(0, 2).toUpperCase()
+                        : fullName
+                        ? fullName.slice(0, 2).toUpperCase()
+                        : email
+                        ? email.slice(0, 2).toUpperCase()
+                        : <UserIcon className="w-6 h-6 text-yellow-400" />}
+                    </span>
                   )}
                 </div>
                 <button
@@ -226,7 +242,7 @@ export default function ProfileView() {
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-lg font-semibold text-white font-['Inter']">
-                    {user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'John Doe'}
+                    {user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Customer'}
                   </h3>
                   {user?.role && (
                     <span className="px-2.5 py-0.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-[10px] font-bold rounded-md uppercase tracking-wider">
@@ -235,7 +251,7 @@ export default function ProfileView() {
                   )}
                 </div>
                 <p className="text-xs text-zinc-400 font-['Inter']">
-                  Email: <span className="text-zinc-200">{user?.email || 'N/A'}</span>
+                  Email: <span className="text-zinc-200">{user?.email || 'Not provided'}</span>
                 </p>
                 {avatarFile && (
                   <span className="text-[11px] text-yellow-400 font-medium animate-pulse">
@@ -253,7 +269,7 @@ export default function ProfileView() {
                 <Shield className="w-3 h-3" />
                 <span>Email {user?.isEmailVerified ? 'Verified ✓' : 'Unverified'}</span>
               </div>
-              {user?.customer?.loyaltyPoints !== undefined && (
+              {user?.customer?.loyaltyPoints !== undefined && user?.customer?.loyaltyPoints !== null && (
                 <div className="px-2.5 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 flex items-center gap-1.5 font-semibold">
                   <span>🏆 {user.customer.loyaltyPoints} Loyalty Points</span>
                 </div>
@@ -269,20 +285,24 @@ export default function ProfileView() {
             </div>
             <div>
               <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Loyalty Points</span>
-              <span className="text-yellow-400 font-bold">{user?.customer?.loyaltyPoints ?? 120} Points</span>
+              <span className="text-yellow-400 font-bold">
+                {user?.customer?.loyaltyPoints !== undefined && user?.customer?.loyaltyPoints !== null
+                  ? `${user.customer.loyaltyPoints} Points`
+                  : '0 Points'}
+              </span>
             </div>
             <div>
               <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Joined Date</span>
               <span className="text-zinc-300 font-medium">
-                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Active'}
+                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
               </span>
             </div>
             <div>
               <span className="text-zinc-500 block text-[10px] uppercase font-semibold">Default Address</span>
               <span className="text-zinc-300 font-medium truncate block">
-                {user?.customer?.defaultAddress
-                  ? `${user.customer.defaultAddress.street || ''}, ${user.customer.defaultAddress.city || ''}`
-                  : '123 Main St, London'}
+                {user?.customer?.defaultAddress?.street || user?.customer?.defaultAddress?.city
+                  ? `${user.customer.defaultAddress.street || ''}${user.customer.defaultAddress.street && user.customer.defaultAddress.city ? ', ' : ''}${user.customer.defaultAddress.city || ''}`
+                  : 'Not provided'}
               </span>
             </div>
           </div>

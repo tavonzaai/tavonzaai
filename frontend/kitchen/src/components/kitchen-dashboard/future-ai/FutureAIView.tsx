@@ -29,7 +29,6 @@ import { toast } from 'sonner';
 interface FeatureDetail {
   id: string;
   title: string;
-  bengaliTitle: string;
   status: 'In Development' | 'Planned' | 'Research';
   statusColor: string;
   badgeBg: string;
@@ -58,7 +57,6 @@ const upcomingFeatures: FeatureDetail[] = [
   {
     id: 'chef-auto-assignment',
     title: 'Chef Auto-Assignment',
-    bengaliTitle: 'Chef স্বয়ংক্রিয় Assignment',
     status: 'In Development',
     statusColor: 'text-yellow-500',
     badgeBg: 'bg-amber-500/10 border-amber-500/30 text-yellow-500',
@@ -90,7 +88,6 @@ const upcomingFeatures: FeatureDetail[] = [
   {
     id: 'workload-auto-balancing',
     title: 'Workload Auto-Balancing',
-    bengaliTitle: 'Workload স্বয়ংক্রিয় Balance',
     status: 'In Development',
     statusColor: 'text-yellow-500',
     badgeBg: 'bg-amber-500/10 border-amber-500/30 text-yellow-500',
@@ -122,7 +119,6 @@ const upcomingFeatures: FeatureDetail[] = [
   {
     id: 'ingredient-auto-reorder',
     title: 'Ingredient Auto-Reorder',
-    bengaliTitle: 'Ingredient স্বয়ংক্রিয় Reorder',
     status: 'Planned',
     statusColor: 'text-purple-400',
     badgeBg: 'bg-purple-500/10 border-purple-500/30 text-purple-400',
@@ -154,14 +150,13 @@ const upcomingFeatures: FeatureDetail[] = [
   {
     id: 'voice-command-support',
     title: 'Voice Command Support',
-    bengaliTitle: 'Voice Command Support',
     status: 'Planned',
     statusColor: 'text-purple-400',
     badgeBg: 'bg-purple-500/10 border-purple-500/30 text-purple-400',
     quarter: 'Q4 2025',
     tagline: 'Hands busy. Voice free. Kitchen moving.',
     description:
-      'Control your entire kitchen with natural voice commands — no touch required. Designed for chefs mid-prep, hands covered in flour or at a hot grill. Supports English and Bengali.',
+      'Control your entire kitchen with natural voice commands — no touch required. Designed for chefs mid-prep, hands covered in flour or at a hot grill. Supports standard English commands.',
     accentGradient: 'from-violet-500/10 via-black/0 to-black/0',
     iconBg: 'bg-violet-500/10',
     iconColor: 'text-violet-400',
@@ -176,7 +171,7 @@ const upcomingFeatures: FeatureDetail[] = [
       problem: 'Touching touchscreen monitors during prep breaks hygiene protocols and slows station cadence.',
       solution: 'Noise-filtering directional acoustic array tuned specifically for kitchen exhaust and fry sizzle noise.',
       technicalSpecs: [
-        'Dual-language acoustic model (English & Bengali kitchen slang)',
+        'Robust acoustic model tailored for noisy kitchen environments',
         'Local edge processing for zero-delay wake word "Hey Tavonza"',
         'Visual confirmation HUD flash on station screen',
       ],
@@ -186,7 +181,6 @@ const upcomingFeatures: FeatureDetail[] = [
   {
     id: 'bottleneck-prediction',
     title: 'Bottleneck Prediction',
-    bengaliTitle: 'Bottleneck আগাম Prediction',
     status: 'Research',
     statusColor: 'text-blue-400',
     badgeBg: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
@@ -467,10 +461,6 @@ export default function FutureAIView() {
                         <h3 className="text-slate-100 text-xl font-bold font-['Inter'] leading-snug">
                           {feature.title}
                         </h3>
-                        <span className="text-gray-500 text-sm font-mono">·</span>
-                        <span className="text-gray-400 text-sm font-normal font-['Inter']">
-                          {feature.bengaliTitle}
-                        </span>
                         <span
                           className={`text-xs font-medium font-['Inter'] px-2 py-0.5 rounded-full border ${feature.badgeBg}`}
                         >

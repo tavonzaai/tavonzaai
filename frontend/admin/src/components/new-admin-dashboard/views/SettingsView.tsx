@@ -29,6 +29,8 @@ import {
   Smartphone,
   ShieldCheck,
   Upload,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
@@ -48,6 +50,7 @@ import { useLogout } from '@/hooks/useLogout';
 interface OrganizationSettings {
   orgId?: string;
   orgName: string;
+  orgSlug?: string;
   contactEmail: string;
   contactPhone: string;
   countryCurrency: string;
@@ -60,12 +63,13 @@ interface OrganizationSettings {
 }
 
 const DEFAULT_SETTINGS: OrganizationSettings = {
-  orgName: 'Tavonza Group',
-  contactEmail: 'owner@tavonza.com',
-  contactPhone: '+1 (555) 234-5678',
-  countryCurrency: 'USD ($)',
-  timezone: 'America/New_York (UTC-5)',
-  address: '742 Evergreen Terrace, Atlanta, GA',
+  orgName: ' ',
+  orgSlug: ' ',
+  contactEmail: ' ',
+  contactPhone: ' ',
+  countryCurrency: ' ',
+  timezone: ' ',
+  address: ' ',
   dailyDigest: true,
   orderSoundAlerts: true,
   lowStockAlerts: true,
@@ -109,6 +113,13 @@ export default function SettingsView() {
   const [showDirectConfirmPass, setShowDirectConfirmPass] = useState(false);
   const [isDirectChangingPass, setIsDirectChangingPass] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
+  // Organization Management State
+  const [showCreateOrgModal, setShowCreateOrgModal] = useState(false);
+  const [newOrgName, setNewOrgName] = useState('');
+  const [newOrgDesc, setNewOrgDesc] = useState('');
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+  const [isDeletingOrg, setIsDeletingOrg] = useState(false);
 
   // 1. Load Authenticated User Profile & Organization on Mount (GET /auth/me & GET /organizations/my)
   useEffect(() => {
@@ -278,6 +289,87 @@ export default function SettingsView() {
     }
   };
 
+  // API: Create a New Tenant Organization (POST /organizations)
+  const handleCreateNewOrg = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newOrgName.trim()) {
+      toast.error('Please enter an organization name');
+      return;
+    }
+    setIsCreatingOrg(true);
+    try {
+      const res = await restaurantService.createOrganization({
+        name: newOrgName.trim(),
+        description: newOrgDesc.trim() || undefined,
+        slug: newOrgName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      });
+      toast.success(`Organization "${newOrgName}" created successfully!`);
+      if (res?.id) {
+        setSettings((prev) => ({
+          ...prev,
+          orgId: res.id,
+          orgName: res.name || newOrgName.trim(),
+        }));
+      }
+      setShowCreateOrgModal(false);
+      setNewOrgName('');
+      setNewOrgDesc('');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create organization');
+    } finally {
+      setIsCreatingOrg(false);
+    }
+  };
+
+  // API: Fetch Organization by ID (GET /organizations/:id)
+  const handleRefreshOrgDetails = async () => {
+    const targetId = settings.orgId || user?.organizationId;
+    if (!targetId) {
+      toast.error('No organization ID available to fetch');
+      return;
+    }
+    try {
+      const org = await restaurantService.getOrganizationById(targetId);
+      if (org) {
+        setSettings((prev) => ({
+          ...prev,
+          orgId: org.id || prev.orgId,
+          orgName: org.name || prev.orgName,
+          orgSlug: org.slug || prev.orgSlug,
+          contactEmail: org.email || prev.contactEmail,
+          contactPhone: org.phone || prev.contactPhone,
+          timezone: org.timezone || prev.timezone,
+          address: typeof org.address === 'string' ? org.address : (org.address?.line1 || prev.address),
+        }));
+        toast.success('Organization details loaded from server!');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not fetch organization details');
+    }
+  };
+
+  // API: Delete Organization (DELETE /organizations/:id)
+  const handleDeleteOrg = async () => {
+    const targetId = settings.orgId || user?.organizationId;
+    if (!targetId) {
+      toast.error('No organization selected to delete');
+      return;
+    }
+    if (!confirm('Are you sure you want to delete this organization? This cannot be undone.')) {
+      return;
+    }
+    setIsDeletingOrg(true);
+    try {
+      await restaurantService.deleteOrganization(targetId);
+      toast.success('Organization deleted successfully');
+      setSettings((prev) => ({ ...prev, orgId: '', orgName: '' }));
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete organization');
+    } finally {
+      setIsDeletingOrg(false);
+    }
+  };
+
   // 7. API: Sign Out / Invalidate Session (POST /auth/logout)
   const handleLogoutSession = async () => {
     await handleLogout();
@@ -358,13 +450,46 @@ export default function SettingsView() {
           onSubmit={handleSaveOrg}
           className="p-6 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 shadow-xl space-y-5"
         >
-          <div className="pb-3 border-b border-neutral-800 flex flex-col gap-1">
-            <h2 className="text-zinc-100 text-xl font-medium font-sans leading-6">
-              Organization Profile
-            </h2>
-            <p className="text-neutral-400 text-sm font-normal font-sans leading-4">
-              Public and contact information
-            </p>
+          <div className="pb-3 border-b border-neutral-800 flex flex-col md:flex-row justify-between md:items-center gap-3">
+            <div>
+              <h2 className="text-zinc-100 text-xl font-medium font-sans leading-6">
+                Organization Profile
+              </h2>
+              <p className="text-neutral-400 text-sm font-normal font-sans leading-4">
+                Public and contact information
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRefreshOrgDetails}
+                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-stone-200 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Fetch latest organization details from server"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Fetch Details</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateOrgModal(true)}
+                className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-neutral-950 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Organization</span>
+              </button>
+              {settings.orgId && (
+                <button
+                  type="button"
+                  onClick={handleDeleteOrg}
+                  disabled={isDeletingOrg}
+                  className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Delete organization"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeletingOrg ? 'Deleting...' : 'Delete Org'}</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1143,6 +1268,68 @@ export default function SettingsView() {
                     </>
                   ) : (
                     <span>Update Password</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Organization Modal (POST /organizations) */}
+      {showCreateOrgModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-xl p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-white mb-2">Create New Organization</h3>
+            <p className="text-xs text-neutral-400 mb-4">
+              Enter the organization name and details to register a new tenant organization.
+            </p>
+            <form onSubmit={handleCreateNewOrg} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                  Organization Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newOrgName}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                  placeholder="e.g. Acme Hospitality Group"
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={newOrgDesc}
+                  onChange={(e) => setNewOrgDesc(e.target.value)}
+                  placeholder="e.g. Fine dining and quick service restaurants across New York"
+                  rows={3}
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateOrgModal(false)}
+                  className="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingOrg || !newOrgName.trim()}
+                  className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isCreatingOrg ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <span>Create Organization</span>
                   )}
                 </button>
               </div>

@@ -25,6 +25,7 @@ import {
   ChatMessage as Message,
 } from '@/redux/slices/chatSlice';
 import FormattedMessage from '@/components/chat/FormattedMessage';
+import { sessionService } from '@/redux/features/sessionApi';
 
 const SUGGESTION_CHIPS = [
   { label: '⭐ Best-selling dishes', query: 'What are your best-selling dishes?' },
@@ -117,6 +118,13 @@ function ChatContent() {
     if (q.includes('call') || q.includes('waiter') || q.includes('server') || q.includes('help')) {
       dispatch(setShowWaiterAlert(true));
       setTimeout(() => dispatch(setShowWaiterAlert(false)), 4000);
+
+      const cached = sessionService.getCachedSessionInfo();
+      if (cached.tableSessionId) {
+        sessionService
+          .callWaiter(cached.tableSessionId, `Customer assistance requested via AI chat for table ${activeTable}`)
+          .catch(() => null);
+      }
 
       dispatch(
         addAiMessage({

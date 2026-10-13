@@ -11,17 +11,26 @@ import {
   Edit3,
   Clock,
   PackageCheck,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { MenuItem } from '../types';
 import ManageCategoriesModal from './ManageCategoriesModal';
 import AddNewItemModal from './AddNewItemModal';
 import ItemSuccessModal from './ItemSuccessModal';
-import { branchManagerService, getActiveBranchId } from '../../../redux/features/branchManagerApi';
+import {
+  branchManagerService,
+  getActiveBranchId,
+  MenuCategoryItem,
+} from '../../../redux/features/branchManagerApi';
 
 export default function MenuView() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<string[]>(['All Categories']);
+  const [categoryObjects, setCategoryObjects] = useState<MenuCategoryItem[]>([]);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -35,9 +44,11 @@ export default function MenuView() {
 
         if (isMounted) {
           if (apiCategories && apiCategories.length > 0) {
+            setCategoryObjects(apiCategories);
             const catNames = apiCategories.map((c: any) => c.name);
             setCategories(['All Categories', ...catNames]);
           } else {
+            setCategoryObjects([]);
             setCategories(['All Categories']);
           }
 
@@ -130,44 +141,171 @@ export default function MenuView() {
     return true;
   });
 
-  const toggleItemEnabled = (itemId: string) => {
+  const toggleItemEnabled = async (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const newEnabled = !item.enabled;
     setItems((prev) =>
       prev.map((i) =>
         i.id === itemId
           ? {
               ...i,
-              enabled: !i.enabled,
-              status: !i.enabled ? 'Available' : 'Disabled',
-              availability: !i.enabled ? 'In stock' : 'Out of stock',
+              enabled: newEnabled,
+              status: newEnabled ? 'Available' : 'Disabled',
+              availability: newEnabled ? 'In stock' : 'Out of stock',
             }
           : i
       )
     );
-  };
-
-  const handleAddCategory = (newCat: string) => {
-    if (!categories.includes(newCat)) {
-      setCategories((prev) => [...prev, newCat]);
+    try {
+      await branchManagerService.updateMenuItem(itemId, { isAvailable: newEnabled });
+    } catch (err) {
+      console.warn('Failed to update item availability on server:', err);
     }
   };
 
-  const handleDeleteCategory = (catToDelete: string) => {
-    setCategories((prev) => prev.filter((c) => c !== catToDelete));
-    if (activeCategory === catToDelete) {
+  const handleAddCategory = async (newCatName: string) => {
+    try {
+      const created = await branchManagerService.createCategory({
+        name: newCatName,
+      });
+      const catObj = created?.id
+        ? created
+        : { id: `cat-${Date.now()}`, name: newCatName, slug: newCatName.toLowerCase(), sortOrder: 0 };
+      setCategoryObjects((prev) => [...prev, catObj]);
+      setCategories((prev) => (prev.includes(newCatName) ? prev : [...prev, newCatName]));
+      toast.success(`Category "${newCatName}" created successfully!`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create category');
+      throw err;
+    }
+  };
+
+  const handleUpdateCategory = async (
+    target: MenuCategoryItem | { id?: string; name: string } | string,
+    newName: string
+  ) => {
+    const oldName = typeof target === 'string' ? target : target.name;
+    const targetObj =
+      typeof target === 'string' ? categoryObjects.find((c) => c.name === target) : target;
+    const catId = targetObj?.id;
+
+    if (!catId) {
+      toast.error('Category ID not found for updating');
+      return;
+    }
+
+    try {
+      await branchManagerService.updateCategory(catId, { name: newName });
+      setCategoryObjects((prev) =>
+        prev.map((c) => (c.id === catId || c.name === oldName ? { ...c, name: newName } : c))
+      );
+      setCategories((prev) => prev.map((c) => (c === oldName ? newName : c)));
+      if (activeCategory === oldName) {
+        setActiveCategory(newName);
+      }
+      toast.success(`Category renamed to "${newName}"!`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update category');
+      throw err;
+    }
+  };
+
+  const handleDeleteCategory = async (
+    target: MenuCategoryItem | { id?: string; name: string } | string
+  ) => {
+    const catName = typeof target === 'string' ? target : target.name;
+    const targetObj =
+      typeof target === 'string' ? categoryObjects.find((c) => c.name === target) : target;
+    const catId = targetObj?.id;
+
+    if (catId) {
+      try {
+        await branchManagerService.deleteCategory(catId);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to delete category');
+        throw err;
+      }
+    }
+
+    setCategoryObjects((prev) =>
+      prev.filter((c) => (catId ? c.id !== catId : c.name !== catName))
+    );
+    setCategories((prev) => prev.filter((c) => c !== catName));
+    if (activeCategory === catName) {
       setActiveCategory('All Categories');
     }
+    toast.success(`Category "${catName}" deleted successfully`);
   };
 
-  const handleItemCreated = (newItem: MenuItem) => {
+  const handleDeleteItem = async (itemId: string, itemName: string) => {
+    if (!confirm(`Are you sure you want to delete "${itemName}"? This will soft delete the item from the menu.`)) {
+      return;
+    }
+    setDeletingItemId(itemId);
+    try {
+      await branchManagerService.deleteMenuItem(itemId);
+      setItems((prev) => prev.filter((i) => i.id !== itemId));
+      toast.success(`Menu item "${itemName}" deleted successfully`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete menu item');
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
+
+  const handleItemCreated = async (newItem: MenuItem) => {
     if (editingItem) {
       setItems((prev) => prev.map((i) => (i.id === newItem.id ? newItem : i)));
       setEditingItem(null);
       setIsAddItemOpen(false);
+      try {
+        const numericPrice = Number(newItem.price.replace(/[^0-9.]/g, '')) || 0;
+        await branchManagerService.updateMenuItem(newItem.id, {
+          name: newItem.name,
+          description: newItem.description,
+          basePrice: numericPrice,
+          isAvailable: newItem.enabled,
+          estimatedPrepTime: newItem.estimatedPrepTime,
+          stockQuantity: newItem.stockQuantity,
+          isStockTracked: newItem.isStockTracked,
+        });
+        toast.success(`Menu item "${newItem.name}" updated successfully`);
+      } catch (err: any) {
+        console.warn('Failed to persist item update to server:', err);
+      }
     } else {
       setItems((prev) => [newItem, ...prev]);
       setLastCreatedItem(newItem);
       setIsAddItemOpen(false);
       setIsSuccessModalOpen(true);
+      try {
+        const branchId = getActiveBranchId();
+        const branch = await branchManagerService.getBranch(branchId).catch(() => null);
+        const targetCategory = categoryObjects.find((c) => c.name === newItem.category);
+        const categoryId =
+          targetCategory?.id ||
+          categoryObjects[0]?.id ||
+          'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+        const numericPrice = Number(newItem.price.replace(/[^0-9.]/g, '')) || 0;
+        const res = await branchManagerService.createMenuItem({
+          restaurantId: branch?.restaurantId || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          categoryId,
+          name: newItem.name,
+          description: newItem.description,
+          basePrice: numericPrice,
+          isVegetarian: false,
+          estimatedPrepTime: newItem.estimatedPrepTime,
+          stockQuantity: newItem.stockQuantity,
+          isStockTracked: newItem.isStockTracked,
+        });
+        if (res?.id) {
+          setItems((prev) => prev.map((i) => (i.id === newItem.id ? { ...i, id: res.id } : i)));
+        }
+        toast.success(`Menu item "${newItem.name}" created successfully`);
+      } catch (err: any) {
+        console.warn('Failed to persist new item to server:', err);
+      }
     }
   };
 
@@ -493,17 +631,33 @@ export default function MenuView() {
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingItem(item);
-                  setIsAddItemOpen(true);
-                }}
-                className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center gap-1.5 transition text-gray-200 text-sm font-medium font-['Inter'] cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit Item</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingItem(item);
+                    setIsAddItemOpen(true);
+                  }}
+                  className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center gap-1.5 transition text-gray-200 text-sm font-medium font-['Inter'] cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Item</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={deletingItemId === item.id}
+                  onClick={() => handleDeleteItem(item.id, item.name)}
+                  className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-lg border border-red-500/30 flex items-center justify-center transition cursor-pointer disabled:opacity-50"
+                  title="Delete menu item"
+                >
+                  {deletingItemId === item.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -513,9 +667,10 @@ export default function MenuView() {
       <ManageCategoriesModal
         isOpen={isManageCatOpen}
         onClose={() => setIsManageCatOpen(false)}
-        categories={categories}
+        categories={categoryObjects.length > 0 ? categoryObjects : categories}
         onAddCategory={handleAddCategory}
         onDeleteCategory={handleDeleteCategory}
+        onUpdateCategory={handleUpdateCategory}
       />
 
       {/* Add / Edit Menu Item Modal */}

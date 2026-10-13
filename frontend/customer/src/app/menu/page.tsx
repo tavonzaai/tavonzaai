@@ -293,7 +293,7 @@ function MenuContent() {
 
             {/* Profile Avatar Button (Clicking redirects to Profile Page) */}
             <button
-              onClick={() => router.push(`/profile${forwardParam}`)}
+              onClick={() => router.push('/profile')}
               className="relative w-8 h-8 rounded-full bg-neutral-900 border border-yellow-400/60 hover:border-yellow-400 flex items-center justify-center text-yellow-400 transition cursor-pointer overflow-hidden shadow-sm hover:scale-105 active:scale-95 shrink-0"
               title="View Profile"
             >
