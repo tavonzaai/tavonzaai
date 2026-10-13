@@ -43,17 +43,11 @@ ENV API_BASE_URL=${NEXT_PUBLIC_API_URL}
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nextjs:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder --chown=nextjs:nodejs /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/packages ./packages
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/.next ./frontend/${APP_NAME}/.next
 COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/public ./frontend/${APP_NAME}/public
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/next.config.js ./frontend/${APP_NAME}/next.config.js
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/package.json ./frontend/${APP_NAME}/package.json
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/node_modules ./frontend/${APP_NAME}/node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/.next/static ./frontend/${APP_NAME}/.next/static
 
 USER nextjs
 EXPOSE ${APP_PORT}
-CMD ["sh", "-c", "pnpm --filter @frontend/${APP_TARGET} exec next start -H 0.0.0.0 -p ${PORT}"]
+CMD ["sh", "-c", "node frontend/${APP_TARGET}/server.js"]
+
