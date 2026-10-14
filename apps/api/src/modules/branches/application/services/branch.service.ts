@@ -222,7 +222,10 @@ export class BranchService {
 
   // ── Staff Assignments ──────────────────────────────────────────────────
 
-  async getStaffByBranch(branchId: string, filters?: { role?: string; search?: string }) {
+  async getStaffByBranch(
+    branchId: string,
+    filters?: { role?: string; search?: string; status?: string },
+  ) {
     return this.branchRepo.findStaffByBranchId(branchId, filters);
   }
 

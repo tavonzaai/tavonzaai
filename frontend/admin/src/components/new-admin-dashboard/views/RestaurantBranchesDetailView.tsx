@@ -169,7 +169,7 @@ export default function RestaurantBranchesDetailView({
                 if (onOpenBranchDashboard) {
                   onOpenBranchDashboard(b);
                 } else {
-                  router.push(`/new-admin-dashboard/branches?branchId=${b.id}`);
+                  router.push(`/new-admin-dashboard/branches/${b.id}/overview`);
                 }
               }}
               onEdit={(b) => setEditingBranch(b)}

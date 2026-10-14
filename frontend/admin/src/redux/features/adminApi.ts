@@ -94,7 +94,10 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       }),
       invalidatesTags: ['BRANCH'],
     }),
-    getBranchStaff: builder.query<any[], { branchId: string; role?: string; search?: string }>({
+    getBranchStaff: builder.query<
+      any[],
+      { branchId: string; role?: string; search?: string; status?: 'all' | 'active' | 'inactive' }
+    >({
       query: ({ branchId, ...params }) => ({ url: `/branches/${branchId}/staff`, params }),
       transformResponse: (response: unknown) => unwrapList<any>(response),
       providesTags: ['STAFF'],

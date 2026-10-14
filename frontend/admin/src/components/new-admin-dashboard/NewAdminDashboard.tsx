@@ -8,6 +8,8 @@ import Header from './Header';
 import DashboardView from './views/DashboardView';
 import RestaurantsView from './views/RestaurantsView';
 import BranchesView from './views/BranchesView';
+import BranchDashboardView from './views/BranchDashboardView';
+import { canonicalBranchSection } from './views/branch-dashboard/sections';
 import PermissionsView from './views/PermissionsView';
 import PaymentsView from './views/PaymentsView';
 import ReportsView from './views/ReportsView';
@@ -21,12 +23,16 @@ interface NewAdminDashboardProps {
   initialTab?: string;
   initialRestaurantId?: string;
   initialSettingsSection?: string;
+  initialBranchId?: string;
+  initialBranchSection?: string;
 }
 
 export default function NewAdminDashboard({
   initialTab = 'dashboard',
   initialRestaurantId,
   initialSettingsSection,
+  initialBranchId,
+  initialBranchSection,
 }: NewAdminDashboardProps) {
   const router = useRouter();
 
@@ -110,7 +116,14 @@ export default function NewAdminDashboard({
           {activeTab === 'restaurants' && (
             <RestaurantsView initialRestaurantId={initialRestaurantId} />
           )}
-          {activeTab === 'branches' && (
+          {activeTab === 'branches' && initialBranchId && (
+            <BranchDashboardView
+              branchId={initialBranchId}
+              section={canonicalBranchSection(initialBranchSection) || 'overview'}
+              onBack={() => router.push('/new-admin-dashboard/branches', { scroll: false })}
+            />
+          )}
+          {activeTab === 'branches' && !initialBranchId && (
             <BranchesView onBack={() => handleTabSelect('restaurants')} />
           )}
           {activeTab === 'restaurant-branches' && (
