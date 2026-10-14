@@ -106,9 +106,18 @@ export default function SuperAdminLoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-300 pb-1.5">
-              Security Key / Password
-            </label>
+            <div className="flex justify-between items-center pb-1.5">
+              <label className="block text-xs font-medium text-zinc-300">
+                Security Key / Password
+              </label>
+              <button
+                type="button"
+                onClick={() => router.push('/superadmin/forgot-password')}
+                className="text-[11px] text-yellow-400/80 hover:text-yellow-400 cursor-pointer font-medium transition"
+              >
+                Forgot?
+              </button>
+            </div>
             <div className="relative">
               <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
