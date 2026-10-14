@@ -531,16 +531,9 @@ function MenuContent() {
         {viewMode === 'main' && (
           <div className="w-full flex flex-col gap-3">
             <div className="w-full flex items-center justify-between">
-              <div className="flex items-center gap-2 shrink-0">
-                <h2 className="text-white text-base font-semibold font-poppins">
-                  Categories
-                </h2>
-                {backendCategories.length > 0 && (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 font-medium">
-                    {backendCategories.length} live
-                  </span>
-                )}
-              </div>
+              <h2 className="text-white text-base font-semibold font-poppins">
+                Categories
+              </h2>
 
               <button
                 type="button"
@@ -627,23 +620,9 @@ function MenuContent() {
             {/* ALL ITEMS PREVIEW SECTION (NO SEARCH INPUT - Shows 6 items preview) */}
             <div className="w-full flex flex-col gap-3.5">
               <div className="w-full flex items-center justify-between">
-                <div className="flex items-center gap-2 shrink-0">
-                  <h2 className="text-white text-base font-semibold font-poppins">
-                    {selectedCategoryObj ? selectedCategoryObj.name : 'All Items'}
-                  </h2>
-                  <span className="text-xs text-zinc-400 font-poppins">
-                    ({filteredItems.length} {filteredItems.length === 1 ? 'dish' : 'dishes'})
-                  </span>
-                  {selectedCategory !== 'all' && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCategory('all')}
-                      className="text-[11px] px-2 py-0.5 rounded-full bg-neutral-800 hover:bg-neutral-700 text-yellow-400 font-medium transition cursor-pointer"
-                    >
-                      Show All
-                    </button>
-                  )}
-                </div>
+                <h2 className="text-white text-base font-semibold font-poppins">
+                  All Items
+                </h2>
 
                 <button
                   type="button"
