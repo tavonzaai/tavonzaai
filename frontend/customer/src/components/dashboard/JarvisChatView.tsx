@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
@@ -17,7 +17,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAppSelector } from '@/redux/store';
-import { getItemImage } from '@/lib/menuUtils';
+import { getItemImage, getCategoryImage, getCategoryLetters } from '@/lib/menuUtils';
 import { rawChatApi } from '@/redux/features/chatApi';
 import FormattedMessage from '@/components/chat/FormattedMessage';
 
@@ -36,6 +36,7 @@ export default function JarvisChatView({
 }: JarvisChatViewProps) {
   const router = useRouter();
   const { items: backendMenuItems } = useAppSelector((state) => state.menuItems);
+  const { categories: backendCategories } = useAppSelector((state) => state.menuCategories);
   const [jarvisQuery, setJarvisQuery] = useState('');
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [chatLog, setChatLog] = useState<{ sender: 'user' | 'jarvis'; text: string }[]>([]);
@@ -69,13 +70,13 @@ export default function JarvisChatView({
     'Help me choose a wine.',
   ];
 
-  const categories = [
-    { name: 'Burgers', icon: '🍔' },
-    { name: 'Dessert', icon: '🍰' },
-    { name: 'Mexican', icon: '🌮' },
-    { name: 'Sushi', icon: '🍣' },
-    { name: 'Pizza', icon: '🍕' },
-  ];
+  const categories = useMemo(() => {
+    return (backendCategories || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      imageUrl: getCategoryImage(c),
+    }));
+  }, [backendCategories]);
 
   const trendingDishes = (backendMenuItems && backendMenuItems.length > 0)
     ? backendMenuItems.slice(0, 4).map((item) => ({
@@ -225,15 +226,28 @@ export default function JarvisChatView({
           <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
             {categories.map((cat, idx) => (
               <button
-                key={idx}
+                key={cat.id || idx}
                 onClick={() => setSelectedCategory(cat.name)}
-                className={`w-20 h-24 rounded-2xl border flex flex-col items-center justify-center gap-2 shrink-0 transition ${selectedCategory === cat.name
+                className={`w-20 h-24 rounded-2xl border flex flex-col items-center justify-center gap-2 shrink-0 transition overflow-hidden p-2 ${
+                  selectedCategory === cat.name
                     ? 'bg-yellow-400/20 border-yellow-400 text-white shadow-lg shadow-yellow-500/10'
                     : 'bg-neutral-900 border-white/10 text-neutral-300 hover:border-white/20'
-                  }`}
+                }`}
               >
-                <span className="text-2xl">{cat.icon}</span>
-                <span className="text-xs font-medium font-['Inter']">{cat.name}</span>
+                {cat.imageUrl ? (
+                  <img
+                    src={cat.imageUrl}
+                    alt={cat.name}
+                    className="w-10 h-10 rounded-xl object-cover"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-neutral-800 to-black flex items-center justify-center text-xs font-bold text-yellow-400 uppercase tracking-wider">
+                    {getCategoryLetters(cat.name)}
+                  </div>
+                )}
+                <span className="text-[11px] font-medium font-['Inter'] text-center truncate w-full">
+                  {cat.name}
+                </span>
               </button>
             ))}
           </div>

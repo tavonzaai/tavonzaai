@@ -1,34 +1,10 @@
 import type { Metadata } from "next";
-import { Inter, Outfit, Poppins, Montserrat, DM_Sans } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
-
-const outfit = Outfit({
-  variable: "--font-outfit",
-  subsets: ["latin"],
-});
-
-const poppins = Poppins({
-  variable: "--font-poppins",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-});
-
-const montserrat = Montserrat({
-  variable: "--font-montserrat",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
+import { Suspense } from "react";
+import ReduxProvider from "@/redux/ReduxProvider";
+import { CartProvider } from "@/context/CartContext";
+import QrSessionSync from "@/components/common/QrSessionSync";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Tavonza AI | Customer Hospitality & Dining",
@@ -42,12 +18,6 @@ export const metadata: Metadata = {
   },
 };
 
-import { Suspense } from "react";
-import ReduxProvider from "@/redux/ReduxProvider";
-import { CartProvider } from "@/context/CartContext";
-import QrSessionSync from "@/components/common/QrSessionSync";
-import { Toaster } from "sonner";
-
 export default function RootLayout({
   children,
 }: {
@@ -57,9 +27,11 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${outfit.variable} ${poppins.variable} ${montserrat.variable} ${dmSans.variable} dark h-full antialiased`}
+      className="dark h-full antialiased font-sans"
     >
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="icon" type="image/png" href="/favicon.png" />
         <link rel="shortcut icon" type="image/png" href="/favicon.png" />
         <link rel="apple-touch-icon" href="/favicon.png" />

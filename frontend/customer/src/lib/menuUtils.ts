@@ -1,33 +1,50 @@
 /**
  * Utility functions for rendering categories and menu items
+ * Strictly real API data — zero mock/fake data or static emoji lists.
  */
 
-export function getCategoryIcon(name: string): string {
-  const lower = name.toLowerCase();
-  if (lower.includes('all')) return '🍽️';
-  if (lower.includes('burger')) return '🍔';
-  if (lower.includes('dessert') || lower.includes('sweet')) return '🍰';
-  if (lower.includes('soft') || lower.includes('drink') || lower.includes('tea') || lower.includes('water')) return '🥤';
-  if (lower.includes('cocktail')) return '🍸';
-  if (lower.includes('beer') || lower.includes('wine')) return '🍷';
-  if (lower.includes('starter') || lower.includes('arancini') || lower.includes('salad') || lower.includes('pepper')) return '🥗';
-  if (lower.includes('main') || lower.includes('meat') || lower.includes('steak') || lower.includes('lamb') || lower.includes('chicken')) return '🥩';
-  if (lower.includes('pizza') || lower.includes('flatbread')) return '🍕';
-  if (lower.includes('seafood') || lower.includes('fish') || lower.includes('calamari')) return '🐟';
-  return '🍽️';
-}
-
-export function getItemImage(name: string, categoryName = '', imageUrl?: string | null): string {
+/**
+ * Returns exact image from API without fake mock images.
+ */
+export function getItemImage(_name = '', _categoryName = '', imageUrl?: string | null): string {
   if (imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('/'))) {
     return imageUrl;
   }
-  const n = name.toLowerCase();
-  const c = categoryName.toLowerCase();
+  return '';
+}
 
-  if (n.includes('burger')) return '/images/burger.jpg';
-  if (n.includes('sea bass') || n.includes('fish') || n.includes('calamari')) return '/images/seabass.jpg';
-  if (c.includes('cocktail') || c.includes('wine') || c.includes('beer') || n.includes('drink') || n.includes('cocktail')) return '/images/slide2.jpg';
-  if (c.includes('dessert') || n.includes('cheesecake') || n.includes('sorbet') || n.includes('fondant')) return '/images/slide3.jpg';
-  if (n.includes('butter chicken') || n.includes('kofta') || n.includes('risotto') || n.includes('pizza') || n.includes('flatbread')) return '/images/slide1.jpg';
-  return '/images/burger.jpg';
+/**
+ * Resolves the real category image:
+ * Strictly from category.imageUrl directly (if provided in database/API).
+ * If null in category record, returns null (never borrows from items or uses mock fallbacks).
+ */
+export function getCategoryImage(
+  category: { id?: string; name?: string; imageUrl?: string | null },
+  _items?: any[]
+): string | null {
+  if (category?.imageUrl && (category.imageUrl.startsWith('http') || category.imageUrl.startsWith('/'))) {
+    return category.imageUrl;
+  }
+  return null;
+}
+
+/**
+ * Extracts 2-letter abbreviation / initials from category name for typography fallback badge
+ * If category has no image, shows just name letters:
+ * - "Starters & Small Plates" -> "ST"
+ * - "Chef's Signature Mains" -> "CS"
+ * - "Pastas & Risotto" -> "PR"
+ * - "Desserts" -> "DE"
+ */
+export function getCategoryLetters(name?: string): string {
+  if (!name || !name.trim()) return 'CA';
+  const clean = name.trim().replace(/[^a-zA-Z\s]/g, '');
+  const words = clean.split(/\s+/).filter((w) => w.length > 0 && w.toLowerCase() !== 'and');
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  if (words.length === 1 && words[0].length >= 2) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+  return name.trim().slice(0, 2).toUpperCase();
 }
