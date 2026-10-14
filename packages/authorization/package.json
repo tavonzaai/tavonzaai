@@ -7,10 +7,12 @@
   "scripts": {
     "build": "tsc",
     "lint": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsc --noEmit && node --import tsx --test src/evaluator.spec.ts"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
+    "tsx": "^4.19.2",
     "typescript": "^5.4.5"
   }
 }

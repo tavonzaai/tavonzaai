@@ -19,6 +19,7 @@ export interface UserProfile {
   phone?: string | null;
   contactNo?: string | null;
   role: string;
+  globalRole?: string;
   avatar?: string | null;
   avatarUrl?: string | null;
   permissions?: string[];
@@ -270,7 +271,12 @@ export const loginUser = createAsyncThunk(
       try {
         const profile = await rawAuthApi.getMe();
         if (profile) {
-          userProfile = { ...userProfile, ...profile };
+          userProfile = {
+            ...userProfile,
+            ...profile,
+            organizationId: profile.organizationId || userProfile.organizationId,
+            globalRole: profile.globalRole || userProfile.globalRole,
+          };
         }
         try {
           const assignmentsRes = await rawAuthApi.getMyAssignments();

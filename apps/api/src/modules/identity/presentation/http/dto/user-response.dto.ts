@@ -72,6 +72,9 @@ export class UserDetailResponseDto {
   @ApiPropertyOptional({ example: 'CUSTOMER' })
   globalRole?: string;
 
+  @ApiPropertyOptional({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  organizationId?: string | null;
+
   @ApiProperty({ example: 'ACTIVE', enum: ['ACTIVE', 'INACTIVE', 'BANNED', 'DELETED'] })
   status!: string;
 

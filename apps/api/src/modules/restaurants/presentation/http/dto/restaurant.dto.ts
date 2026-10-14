@@ -12,10 +12,10 @@ import {
 } from 'class-validator';
 
 export class CreateRestaurantDto {
-  @ApiProperty({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Organization ID owning this restaurant' })
+  @ApiPropertyOptional({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Organization ID owning this restaurant. Derived from the actor when omitted.' })
   @IsUUID()
-  @IsNotEmpty()
-  organizationId!: string;
+  @IsOptional()
+  organizationId?: string;
 
   @ApiProperty({ example: 'Tasty Bites Grill & Bar' })
   @IsString()

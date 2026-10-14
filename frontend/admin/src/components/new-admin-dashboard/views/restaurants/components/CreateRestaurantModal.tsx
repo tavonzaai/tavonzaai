@@ -54,6 +54,7 @@ export const CreateRestaurantModal: React.FC<CreateRestaurantModalProps> = ({
                   type="text"
                   required
                   minLength={2}
+                  data-testid="restaurant-name"
                   placeholder="e.g. Tavonza Bistro"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -98,6 +99,7 @@ export const CreateRestaurantModal: React.FC<CreateRestaurantModalProps> = ({
             </button>
             <button
               type="submit"
+              data-testid="restaurant-submit"
               disabled={submitting}
               className="px-3 py-2.5 bg-yellow-400 hover:bg-yellow-300 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-neutral-800 text-base font-medium font-sans leading-5 transition-colors cursor-pointer shadow-sm disabled:opacity-60"
             >

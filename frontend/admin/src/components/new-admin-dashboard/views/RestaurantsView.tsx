@@ -13,7 +13,7 @@ import {
   EditRestaurantModal,
   DeleteRestaurantModal,
 } from './restaurants/components';
-import { useAppSelector } from '@/redux/store';
+import { useOrganizationId } from '@/hooks/useOrganizationId';
 import {
   useCreateRestaurantMutation,
   useDeleteRestaurantMutation,
@@ -32,7 +32,7 @@ interface RestaurantsViewProps {
 export default function RestaurantsView({ initialRestaurantId }: RestaurantsViewProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const organizationId = useAppSelector((state) => state.tenant.organizationId);
+  const organizationId = useOrganizationId();
 
   const {
     data,
@@ -42,7 +42,6 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
     refetch,
   } = useGetRestaurantsQuery(
     { organizationId: organizationId || undefined, page: 1, limit: 50 },
-    { skip: !organizationId },
   );
   const { data: branchesData } = useGetBranchesQuery(
     { page: 1, limit: 200 },
@@ -86,13 +85,9 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
       toast.error('Please enter a restaurant name.');
       return;
     }
-    if (!organizationId) {
-      toast.error('No organization is available for this account.');
-      return;
-    }
     try {
       await createRestaurant({
-        organizationId,
+        ...(organizationId ? { organizationId } : {}),
         name: form.name.trim(),
         description: form.description.trim() || undefined,
       }).unwrap();
@@ -156,23 +151,16 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
     <div className="space-y-6 animate-in fade-in duration-300">
       <RestaurantsHeader onCreateClick={() => setIsCreateOpen(true)} />
 
-      {!organizationId && (
-        <ErrorState
-          title="Organization required"
-          message="This admin account has no organization yet. Super Admin can create one, then refresh."
-        />
-      )}
+      {isLoading && <LoadingState message="Loading restaurants..." />}
 
-      {organizationId && isLoading && <LoadingState message="Loading restaurants..." />}
-
-      {organizationId && isError && (
+      {isError && (
         <ErrorState
           message={(error as any)?.data?.message || 'Unable to load restaurants.'}
           onRetry={() => refetch()}
         />
       )}
 
-      {organizationId && !isLoading && !isError && restaurants.length === 0 && (
+      {!isLoading && !isError && restaurants.length === 0 && (
         <EmptyState
           title="No restaurants yet"
           description="Create the first restaurant under this organization."
@@ -180,7 +168,7 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
         />
       )}
 
-      {organizationId && !isLoading && restaurants.length > 0 && (
+      {!isLoading && restaurants.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {restaurants.map((rest) => (
             <RestaurantCard
