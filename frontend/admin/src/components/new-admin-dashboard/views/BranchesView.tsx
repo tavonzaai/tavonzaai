@@ -22,7 +22,7 @@ import {
   useSetOperatingHoursMutation,
   useUpdateBranchMutation,
 } from '@/redux/features/adminApi';
-import { useAppSelector } from '@/redux/store';
+import { useOrganizationId } from '@/hooks/useOrganizationId';
 import { mapBranch, mapRestaurant, parseBranchAddress } from '@/lib/admin-mappers';
 import { EmptyState, ErrorState, LoadingState } from '@/components/common';
 
@@ -42,7 +42,7 @@ function weekHours(openTime: string, closeTime: string) {
 export default function BranchesView({ onBack, initialBranchId }: BranchesViewProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const organizationId = useAppSelector((state) => state.tenant.organizationId);
+  const organizationId = useOrganizationId();
   const [searchQuery, setSearchQuery] = useState('');
 
   const { data: restaurantsData } = useGetRestaurantsQuery(

@@ -8,3 +8,4 @@ export * from './scope';
 export * from './role';
 export * from './security-context';
 export * from './evaluator';
+export * from './permission-aliases';

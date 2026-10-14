@@ -5,6 +5,7 @@
 import { Injectable, Inject, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { eq, and, sql } from 'drizzle-orm';
 import { DRIZZLE, schema } from '@tavonza/database';
+import { resolvePermissions, type Scope } from '@tavonza/authorization';
 import type { DeclaredPermission, SystemRoleDefinition } from '../../domain/system-permissions';
 
 type DrizzleDb = any;
@@ -390,6 +391,84 @@ export class DrizzleRbacRepository {
     const keys = permissions.map((p: any) => p.permissionKey);
 
     return keys;
+  }
+
+  /**
+   * Live effective permissions: global role defaults, RBAC user_roles,
+   * and active staff_assignment grants. Used so revoked access applies
+   * immediately instead of waiting for the JWT to expire.
+   */
+  async getEffectivePermissions(userId: string): Promise<{
+    permissions: string[];
+    scopes: Scope[];
+  }> {
+    const [user] = await this.db
+      .select({
+        id: schema.users.id,
+        role: schema.users.role,
+        status: schema.users.status,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1);
+
+    if (!user || (user.status && user.status !== 'ACTIVE')) {
+      return { permissions: [], scopes: [] };
+    }
+
+    const permissions = new Set<string>(
+      resolvePermissions(user.role) as string[],
+    );
+    const scopes: Scope[] = [];
+
+    if (user.role === 'SUPER_ADMIN') {
+      scopes.push({ type: 'global' });
+    }
+
+    const ownedOrgs = await this.db
+      .select({ id: schema.organizations.id })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.ownerId, userId));
+    for (const org of ownedOrgs) {
+      scopes.push({ type: 'organization', id: org.id });
+    }
+
+    const rolePerms = await this.getUserPermissions(userId);
+    for (const key of rolePerms) {
+      permissions.add(key);
+    }
+
+    const assignments = await this.db
+      .select({
+        role: schema.staffAssignments.role,
+        permissions: schema.staffAssignments.permissions,
+        branchId: schema.staffAssignments.branchId,
+        isActive: schema.staffAssignments.isActive,
+      })
+      .from(schema.staffAssignments)
+      .innerJoin(schema.staff, eq(schema.staffAssignments.staffId, schema.staff.id))
+      .where(eq(schema.staff.userId, userId));
+
+    for (const assignment of assignments) {
+      if (assignment.isActive === false) {
+        continue;
+      }
+      const resolved = resolvePermissions(
+        assignment.role,
+        (assignment.permissions as string[]) ?? [],
+      ) as string[];
+      for (const key of resolved) {
+        permissions.add(key);
+      }
+      if (assignment.branchId) {
+        scopes.push({ type: 'branch', id: assignment.branchId });
+      }
+    }
+
+    return {
+      permissions: Array.from(permissions),
+      scopes,
+    };
   }
 
   async removeUserRole(userId: string): Promise<boolean> {

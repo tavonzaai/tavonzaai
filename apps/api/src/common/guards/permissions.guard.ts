@@ -2,8 +2,8 @@
 // PermissionsGuard — Authoritative capability & scope authorization guard
 // ============================================================================
 // Evaluates Actor + Permission + Scope + Resource according to .agent/AUTHORIZATION.md
-// Resolves dynamic database-backed permissions from DrizzleRbacRepository with
-// graceful backward-compatible fallback to resolvePermissions(user.role).
+// Resolves live database-backed permissions (RBAC + staff assignments) so
+// revoked grants take effect without waiting for token expiry.
 // ============================================================================
 
 import {
@@ -22,6 +22,10 @@ import {
   ActorType,
 } from '@tavonza/authorization';
 import { PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
+import {
+  SCOPE_KEY,
+  type RequiredScopeMetadata,
+} from '../decorators/require-scope.decorator';
 import { DrizzleRbacRepository } from '../../modules/authorization/infrastructure/persistence/drizzle-rbac.repository';
 
 @Injectable()
@@ -48,43 +52,57 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('User is not authenticated');
     }
 
-    // 1. Super Admin bypasses all checks immediately
     if (user.role === 'SUPER_ADMIN' || user.globalRole === 'SUPER_ADMIN') {
       return true;
     }
 
-    // 2. Resolve dynamic permissions
-    let effectivePermissions: string[] = user.permissions ?? [];
+    let effectivePermissions: string[] = [];
+    let scopes = user.scopes ?? [];
 
     if (this.rbacRepo && user.sub) {
       try {
-        const dbPerms = await this.rbacRepo.getUserPermissions(user.sub);
-        if (dbPerms && dbPerms.length > 0) {
-          effectivePermissions = dbPerms;
+        const live = await this.rbacRepo.getEffectivePermissions(user.sub);
+        if (live.permissions.length > 0) {
+          effectivePermissions = live.permissions;
+        }
+        if (live.scopes.length > 0) {
+          scopes = live.scopes;
         }
       } catch {
-        // Fallback to token permissions on repository error
+        // Fall back to token permissions if the live lookup fails
       }
     }
 
-    // 3. Fallback to legacy static permissions if none resolved from database
-    if (!effectivePermissions || effectivePermissions.length === 0) {
-      effectivePermissions = resolvePermissions(user.role) as string[];
+    if (effectivePermissions.length === 0) {
+      effectivePermissions =
+        user.permissions?.length > 0
+          ? user.permissions
+          : (resolvePermissions(user.role) as string[]);
     }
 
-    // 4. Build canonical SecurityContext
     const securityContext: SecurityContext = {
       actorType: ActorType.USER,
       actorId: user.sub,
       role: user.role,
       permissions: effectivePermissions,
-      scopes: user.scopes ?? [],
+      scopes,
       organizationId: user.organizationId,
+      branchId: user.branchId,
     };
 
-    // 5. Evaluate capabilities
+    const requiredScope = this.reflector.getAllAndOverride<RequiredScopeMetadata>(
+      SCOPE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    const scopeCheck = requiredScope
+      ? {
+          type: requiredScope.type,
+          id: this.resolveScopeId(request, requiredScope.param),
+        }
+      : undefined;
+
     const hasAll = requiredPermissions.every((perm) =>
-      hasPermission(securityContext, perm),
+      hasPermission(securityContext, perm, scopeCheck),
     );
 
     if (!hasAll) {
@@ -94,5 +112,17 @@ export class PermissionsGuard implements CanActivate {
     }
 
     return true;
+  }
+
+  private resolveScopeId(request: any, param = 'id'): string | undefined {
+    return (
+      request.params?.[param] ||
+      request.params?.branchId ||
+      request.query?.branchId ||
+      request.body?.branchId ||
+      request.params?.organizationId ||
+      request.query?.organizationId ||
+      request.body?.organizationId
+    );
   }
 }

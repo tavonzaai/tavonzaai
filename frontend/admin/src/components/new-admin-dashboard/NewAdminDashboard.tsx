@@ -94,7 +94,10 @@ export default function NewAdminDashboard({
         />
 
         {/* Dynamic View Body - full width matching other dashboards */}
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8 w-full custom-scrollbar relative">
+        <main
+          data-testid={`admin-view-${activeTab}`}
+          className="flex-1 overflow-y-auto p-6 lg:p-8 w-full custom-scrollbar relative"
+        >
           {activeTab === 'dashboard' && (
             <DashboardView onNavigateTab={handleTabSelect} />
           )}

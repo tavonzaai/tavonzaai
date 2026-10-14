@@ -8,6 +8,7 @@ import { DrizzleRestaurantRepository } from '../../../restaurants/infrastructure
 import { DrizzleOrganizationRepository } from '../../../organizations/infrastructure/persistence/drizzle-organization.repository';
 import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 import { assertCanAccessOrganization, isSuperAdmin } from '../../../../common/auth/actor.util';
+import { assertStaffAssignmentInput } from '../../../authorization/application/staff-access.policy';
 import type {
   CreateBranchDto,
   UpdateBranchDto,
@@ -236,11 +237,16 @@ export class BranchService {
     return member;
   }
 
-  async createStaffForBranch(branchId: string, dto: CreateBranchStaffDto) {
+  async createStaffForBranch(user: JwtPayload, branchId: string, dto: CreateBranchStaffDto) {
     const branch = await this.branchRepo.findBranchById(branchId);
     if (!branch) {
       throw new NotFoundException(`Branch "${branchId}" not found`);
     }
+
+    const assignment = assertStaffAssignmentInput(user, {
+      role: dto.role,
+      permissions: dto.permissions,
+    });
 
     return await this.branchRepo.createStaffAndAssignment({
       branchId,
@@ -248,22 +254,37 @@ export class BranchService {
       email: dto.email,
       password: dto.password,
       phone: dto.phone,
-      role: dto.role,
-      permissions: dto.permissions,
+      role: assignment.role ?? dto.role,
+      permissions: assignment.permissions ?? [],
     });
   }
 
-  async assignStaffToBranch(branchId: string, dto: { staffId: string; role: any; permissions?: string[] }) {
+  async assignStaffToBranch(
+    user: JwtPayload,
+    branchId: string,
+    dto: { staffId: string; role: any; permissions?: string[] },
+  ) {
+    const assignment = assertStaffAssignmentInput(user, {
+      role: dto.role,
+      permissions: dto.permissions,
+    });
     return this.branchRepo.assignStaff({
       branchId,
       staffId: dto.staffId,
-      role: dto.role,
-      permissions: dto.permissions,
+      role: assignment.role ?? dto.role,
+      permissions: assignment.permissions ?? dto.permissions,
     });
   }
 
-  async updateStaff(branchId: string, staffId: string, dto: any) {
-    const updated = await this.branchRepo.updateStaffAssignment(branchId, staffId, dto);
+  async updateStaff(user: JwtPayload, branchId: string, staffId: string, dto: any) {
+    const assignment = assertStaffAssignmentInput(user, {
+      role: dto.role,
+      permissions: dto.permissions,
+    });
+    const updated = await this.branchRepo.updateStaffAssignment(branchId, staffId, {
+      ...dto,
+      ...assignment,
+    });
     if (!updated) {
       throw new NotFoundException(`Staff assignment for staff "${staffId}" in branch "${branchId}" not found`);
     }

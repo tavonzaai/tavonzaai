@@ -26,7 +26,8 @@ import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
-import { Permission } from '@tavonza/authorization';
+import { Permission, ScopeType } from '@tavonza/authorization';
+import { RequireScope } from '../../../../common/decorators/require-scope.decorator';
 import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 import { BranchService } from '../../application/services/branch.service';
 import {
@@ -260,6 +261,7 @@ export class BranchController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(PermissionsGuard)
   @RequirePermissions(Permission.STAFF_WRITE)
+  @RequireScope(ScopeType.BRANCH, 'id')
   @ApiOperation({
     summary: 'Create a new staff member and assign to this branch',
     description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:write]. Creates user credentials and assigns branch role.',
@@ -273,13 +275,14 @@ export class BranchController {
     @Body() dto: CreateBranchStaffDto,
   ) {
     await this.branchService.assertBranchAccess(user, id);
-    return this.branchService.createStaffForBranch(id, dto);
+    return this.branchService.createStaffForBranch(user, id, dto);
   }
 
   @Post(':id/staff/assign')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(PermissionsGuard)
   @RequirePermissions(Permission.STAFF_WRITE)
+  @RequireScope(ScopeType.BRANCH, 'id')
   @ApiOperation({
     summary: 'Assign an existing staff member to this branch',
     description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:write]. Assigns staff member to branch.',
@@ -293,12 +296,13 @@ export class BranchController {
     @Body() dto: AssignBranchStaffDto,
   ) {
     await this.branchService.assertBranchAccess(user, id);
-    return this.branchService.assignStaffToBranch(id, dto);
+    return this.branchService.assignStaffToBranch(user, id, dto);
   }
 
   @Patch(':id/staff/:staffId')
   @UseGuards(PermissionsGuard)
   @RequirePermissions(Permission.STAFF_UPDATE)
+  @RequireScope(ScopeType.BRANCH, 'id')
   @ApiOperation({
     summary: 'Update staff assignment details in this branch',
     description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:update]. Updates assigned role and capabilities.',
@@ -314,12 +318,13 @@ export class BranchController {
     @Body() dto: UpdateBranchStaffDto,
   ) {
     await this.branchService.assertBranchAccess(user, id);
-    return this.branchService.updateStaff(id, staffId, dto);
+    return this.branchService.updateStaff(user, id, staffId, dto);
   }
 
   @Delete(':id/staff/:staffId')
   @UseGuards(PermissionsGuard)
   @RequirePermissions(Permission.STAFF_DELETE)
+  @RequireScope(ScopeType.BRANCH, 'id')
   @ApiOperation({
     summary: 'Deactivate / soft delete staff assignment in this branch',
     description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:delete]. Deactivates assignment.',

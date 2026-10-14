@@ -11,7 +11,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { randomInt } from 'node:crypto';
 import * as argon2 from 'argon2';
-import { GlobalRole, resolvePermissions } from '@tavonza/authorization';
+import { GlobalRole, resolvePermissions, type Scope } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
 import { DrizzleRbacRepository } from '../../../authorization/infrastructure/persistence/drizzle-rbac.repository';
 import { DrizzleOrganizationRepository } from '../../../organizations/infrastructure/persistence/drizzle-organization.repository';
@@ -269,6 +269,20 @@ export class AuthService {
     const ownedOrgs = await this.orgRepo.findByOwnerId(user.id);
     const organizationId = ownedOrgs[0]?.id ?? null;
 
+    const scopes: Scope[] = [];
+    if (user.role === GlobalRole.SUPER_ADMIN) {
+      scopes.push({ type: 'global' });
+    }
+    if (organizationId) {
+      scopes.push({ type: 'organization', id: organizationId });
+    }
+    for (const assignment of assignments) {
+      if (assignment?.isActive === false || !assignment?.branchId) {
+        continue;
+      }
+      scopes.push({ type: 'branch', id: assignment.branchId });
+    }
+
     const payload = {
       sub: user.id,
       email: user.email,
@@ -277,6 +291,7 @@ export class AuthService {
       organizationId,
       branchId,
       permissions: effectivePermissions,
+      scopes,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -301,6 +316,8 @@ export class AuthService {
         branchId,
         branchName,
         assignments,
+        permissions: effectivePermissions,
+        scopes,
       } as any,
     };
   }

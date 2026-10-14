@@ -58,4 +58,9 @@ ENV/
 coverage/
 .nyc_output/
 
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
 tfplan
