@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { BranchPerformanceRecord } from './reports/types';
-import { useAppSelector } from '@/redux/store';
+import { useOrganizationId } from '@/hooks/useOrganizationId';
 import { useGetBranchPerformanceQuery } from '@/redux/features/adminApi';
 import {
   ReportsHeader,
@@ -21,7 +21,7 @@ export default function ReportsView() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('All Methods');
 
   // Modal inspection state
-  const organizationId = useAppSelector((state) => state.tenant.organizationId);
+  const organizationId = useOrganizationId();
   const { data: performance = [] } = useGetBranchPerformanceQuery(
     { organizationId: organizationId || undefined },
     { skip: !organizationId },

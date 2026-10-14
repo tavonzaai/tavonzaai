@@ -203,6 +203,26 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       query: ({ id, body }) => ({ url: `/payments/${id}/refund`, method: 'POST', body }),
       invalidatesTags: ['PAYMENT', 'ANALYTICS', 'DASHBOARD'],
     }),
+    getUsers: builder.query<
+      { data: any[]; meta?: any },
+      { page?: number; limit?: number; search?: string; role?: string; status?: string } | void
+    >({
+      query: (params) => ({ url: '/users', params: params || undefined }),
+      transformResponse: (response: unknown) => {
+        if (Array.isArray(response)) return { data: response };
+        const body = response as { data?: any[]; meta?: any };
+        return { data: body?.data ?? [], meta: body?.meta };
+      },
+      providesTags: ['USER', 'STAFF'],
+    }),
+    updateUserStatus: builder.mutation<any, { id: string; status?: string }>({
+      query: ({ id, status }) => ({
+        url: `/users/status/${id}`,
+        method: 'PATCH',
+        body: status ? { status } : {},
+      }),
+      invalidatesTags: ['USER', 'STAFF'],
+    }),
   }),
 });
 
@@ -242,4 +262,6 @@ export const {
   useGetBranchPerformanceQuery,
   useGetPaymentsQuery,
   useRefundPaymentMutation,
+  useGetUsersQuery,
+  useUpdateUserStatusMutation,
 } = adminApi;

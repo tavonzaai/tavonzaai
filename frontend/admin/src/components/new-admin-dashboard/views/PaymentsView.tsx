@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { PaymentItem } from './payments/types';
-import { useAppSelector } from '@/redux/store';
+import { useOrganizationId } from '@/hooks/useOrganizationId';
 import { useGetPaymentsQuery, useRefundPaymentMutation } from '@/redux/features/adminApi';
 import { ErrorState, LoadingState } from '@/components/common';
 import {
@@ -33,7 +33,7 @@ function mapStatus(status?: string): PaymentItem['status'] {
 }
 
 export default function PaymentsView() {
-  const organizationId = useAppSelector((state) => state.tenant.organizationId);
+  const organizationId = useOrganizationId();
   const { data, isLoading, isError, error, refetch } = useGetPaymentsQuery(
     { organizationId: organizationId || undefined, page: 1, limit: 50 },
     { skip: !organizationId },

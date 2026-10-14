@@ -6,14 +6,21 @@ import { store, useAppDispatch } from './store';
 import { getMe } from './features/authApi';
 import { getAuthToken, getCookie, removeAuthToken } from './api/baseApi';
 import { setInitialized, setUser } from './slices/authSlice';
-import { setOrganizations, setTenantError, setTenantLoading } from './slices/tenantSlice';
+import { setOrganizationId, setOrganizations, setTenantError, setTenantLoading } from './slices/tenantSlice';
 import { restaurantService } from './features/restaurantApi';
 
 export function isRoleAllowedForAdmin(user: any): boolean {
   if (!user) return false;
   const role = String(user.role || user.globalRole || '').toLowerCase();
   // ONLY Admin and Owner roles allowed - strictly no unauthorized staff or customer roles
-  const allowedRoles = ['admin', 'super_admin', 'superadmin', 'owner', 'restaurant_owner'];
+  const allowedRoles = [
+    'admin',
+    'super_admin',
+    'superadmin',
+    'owner',
+    'restaurant_owner',
+    'organization_admin',
+  ];
   if (allowedRoles.includes(role)) {
     return true;
   }
@@ -60,6 +67,9 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
         const userObj = userProfile?.user || userProfile;
         if (isRoleAllowedForAdmin(userObj)) {
           dispatch(setUser(userObj));
+          if (userObj.organizationId) {
+            dispatch(setOrganizationId(userObj.organizationId));
+          }
           dispatch(setTenantLoading(true));
           try {
             const org = await restaurantService.getMyOrganization();

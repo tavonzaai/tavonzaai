@@ -5,6 +5,7 @@
 import type { Permission } from './permission';
 import type { ScopeType } from './scope';
 import type { SecurityContext } from './security-context';
+import { normalizePermissionKey } from './permission-aliases';
 
 export interface RequiredScopeCheck {
   type: ScopeType;
@@ -14,10 +15,10 @@ export interface RequiredScopeCheck {
 
 /**
  * Normalizes a permission key for uniform matching.
- * e.g. "orders.read" -> "orders:read"
+ * Accepts `orders.read`, `orders:read`, and `VIEW_ORDERS`.
  */
 function normalizeKey(key: string): string {
-  return key.trim().replace('.', ':');
+  return normalizePermissionKey(key);
 }
 
 /**
@@ -55,6 +56,17 @@ export function checkCapability(userPermissions: string[], requiredPermission: s
 
     // Module wildcard e.g. "orders:*" satisfies "orders:read"
     if (reqModule && userNorm === `${reqModule}:*`) {
+      return true;
+    }
+
+    // `module:manage` satisfies the common CRUD verbs for that module
+    const [, reqAction] = reqNorm.split(':');
+    if (
+      reqModule &&
+      reqAction &&
+      userNorm === `${reqModule}:manage` &&
+      ['read', 'write', 'update', 'delete', 'create', 'manage'].includes(reqAction)
+    ) {
       return true;
     }
   }
