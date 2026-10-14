@@ -19,7 +19,7 @@ import {
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { fetchMenuItems } from '@/redux/features/menu-items/menuItemApi';
 import { fetchMenuCategories } from '@/redux/features/menu-category/menuCategoryApi';
-import { getItemImage, getCategoryIcon } from '@/lib/menuUtils';
+import { getItemImage, getCategoryImage, getCategoryLetters } from '@/lib/menuUtils';
 import { useCart } from '@/context/CartContext';
 
 interface SearchViewProps {
@@ -74,9 +74,9 @@ export default function SearchView({ onReserveClick, onDishClick }: SearchViewPr
     const list = (backendCategories || []).map((c) => ({
       id: c.id,
       name: c.name,
-      icon: getCategoryIcon(c.name),
+      imageUrl: getCategoryImage(c),
     }));
-    const allList = [{ id: 'all', name: 'ALL', icon: '🍽️' }, ...list];
+    const allList = [{ id: 'all', name: 'ALL', imageUrl: null }, ...list];
     if (!categorySearchQuery.trim()) return allList;
     return allList.filter((cat) =>
       cat.name.toLowerCase().includes(categorySearchQuery.trim().toLowerCase())
@@ -162,13 +162,23 @@ export default function SearchView({ onReserveClick, onDishClick }: SearchViewPr
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium font-['Montserrat'] whitespace-nowrap transition cursor-pointer ${
+                className={`px-3 py-1.5 rounded-full text-xs font-medium font-['Montserrat'] whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
                   selectedCategory === cat.id
                     ? 'bg-yellow-400 text-black font-semibold shadow-md shadow-yellow-500/20'
                     : 'bg-zinc-800 text-white hover:bg-zinc-700'
                 }`}
               >
-                <span className="mr-1.5">{cat.icon}</span>
+                {cat.imageUrl ? (
+                  <img
+                    src={cat.imageUrl}
+                    alt=""
+                    className="w-4 h-4 rounded-full object-cover"
+                  />
+                ) : cat.id !== 'all' ? (
+                  <span className="w-4 h-4 rounded-full bg-neutral-900 border border-neutral-700 text-[9px] font-bold text-yellow-400 flex items-center justify-center">
+                    {getCategoryLetters(cat.name)}
+                  </span>
+                ) : null}
                 <span>{cat.name}</span>
               </button>
             ))}

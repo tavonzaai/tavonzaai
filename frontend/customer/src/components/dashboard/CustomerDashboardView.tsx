@@ -29,6 +29,7 @@ import OrdersView from './OrdersView';
 import ProfileView from './ProfileView';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { fetchMenuItems, BackendMenuItem } from '@/redux/features/menu-items/menuItemApi';
+import { fetchMenuCategories } from '@/redux/features/menu-category/menuCategoryApi';
 import { getItemImage } from '@/lib/menuUtils';
 import { resolveDynamicBranchId, resolveDynamicTableId } from '@/context/CartContext';
 import { getActiveCustomerOrder } from '@/redux/features/orderApi';
@@ -46,6 +47,7 @@ export default function CustomerDashboardView({
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const { items: backendMenuItems, loading: menuLoading } = useAppSelector((state) => state.menuItems);
+  const { categories: backendCategories } = useAppSelector((state) => state.menuCategories);
 
   const [activeIntent, setActiveIntent] = useState('Date Night');
   const [activeDietary, setActiveDietary] = useState(['Keto & Low Carb']);
@@ -85,7 +87,10 @@ export default function CustomerDashboardView({
     if (!backendMenuItems || backendMenuItems.length === 0) {
       dispatch(fetchMenuItems({ page: 1, limit: 20 }));
     }
-  }, [dispatch, backendMenuItems]);
+    if (!backendCategories || backendCategories.length === 0) {
+      dispatch(fetchMenuCategories({ page: 1, limit: 20 }));
+    }
+  }, [dispatch, backendMenuItems, backendCategories]);
 
   useEffect(() => {
     setActiveTab(initialTab);
