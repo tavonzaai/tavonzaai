@@ -2,9 +2,9 @@
 
 import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Settings } from 'lucide-react';
-import { RoleDefinition, PermissionCategory } from './permissions/types';
-import { PermissionsHeader, PermissionsMatrix } from './permissions/components';
+import { ChevronDown, ChevronRight, Search, Settings } from 'lucide-react';
+import { PermissionCategory } from './permissions/types';
+import { PermissionsHeader } from './permissions/components';
 import {
   useGetBranchesQuery,
   useGetBranchStaffQuery,
@@ -13,7 +13,8 @@ import {
   useGetUsersQuery,
   useUpdateUserStatusMutation,
 } from '@/redux/features/adminApi';
-import { EmptyState, ErrorState, LoadingState } from '@/components/common';
+import { EmptyState, ErrorState, LoadingState, PaginationBar } from '@/components/common';
+import { useClampPage, useListPagination } from '@/hooks/useListPagination';
 
 const STAFF_PERMISSIONS: PermissionCategory[] = [
   {
@@ -44,9 +45,11 @@ const STAFF_ROLES = [
   'CASHIER',
 ] as const;
 
-const TOTAL = 10;
-
 export default function PermissionsView() {
+  const { page, limit, setPage, resetPage } = useListPagination();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+
   const { data: branchesData, isLoading: loadingBranches } = useGetBranchesQuery({
     page: 1,
     limit: 100,
@@ -59,10 +62,17 @@ export default function PermissionsView() {
     { branchId: selectedBranchId },
     { skip: !selectedBranchId },
   );
-  const { data: usersData, isLoading: loadingUsers, refetch: refetchUsers } = useGetUsersQuery({
-    page: 1,
-    limit: 50,
+  const {
+    data: usersData,
+    isLoading: loadingUsers,
+    refetch: refetchUsers,
+  } = useGetUsersQuery({
+    page,
+    limit,
+    search: searchQuery.trim() || undefined,
   });
+  useClampPage(page, usersData?.meta?.totalPages, setPage);
+
   const [updateStaff] = useUpdateBranchStaffMutation();
   const [createStaff, { isLoading: creatingStaff }] = useCreateBranchStaffMutation();
   const [updateUserStatus] = useUpdateUserStatusMutation();
@@ -74,16 +84,14 @@ export default function PermissionsView() {
     role: 'WAITER',
   });
 
-  const roles: RoleDefinition[] = useMemo(
-    () =>
-      staffRows.map((row: any) => ({
-        id: row.staffId || row.id,
-        name: `${row.name} (${row.role})`,
-        staffCount: 1,
-        isLocked: true,
-      })),
-    [staffRows],
-  );
+  const staffByUserId = useMemo(() => {
+    const map = new Map<string, any>();
+    staffRows.forEach((row: any) => {
+      const key = row.userId || row.email;
+      if (key) map.set(key, row);
+    });
+    return map;
+  }, [staffRows]);
 
   const rolePermissions = useMemo(() => {
     const next: Record<string, string[]> = {};
@@ -94,21 +102,21 @@ export default function PermissionsView() {
     return next;
   }, [staffRows, draft]);
 
-  const handleTogglePermission = (roleId: string, permId: string) => {
-    const current = rolePermissions[roleId] || [];
+  const handleTogglePermission = (staffId: string, permId: string) => {
+    const current = rolePermissions[staffId] || [];
     const updated = current.includes(permId)
       ? current.filter((id) => id !== permId)
       : [...current, permId];
-    setDraft((prev) => ({ ...prev, [roleId]: updated }));
+    setDraft((prev) => ({ ...prev, [staffId]: updated }));
   };
 
-  const handleToggleCategorySelectAll = (roleId: string, category: PermissionCategory) => {
+  const handleToggleCategorySelectAll = (staffId: string, category: PermissionCategory) => {
     const catPermIds = category.permissions.map((p) => p.id);
-    const current = rolePermissions[roleId] || [];
+    const current = rolePermissions[staffId] || [];
     const allSelected = catPermIds.every((id) => current.includes(id));
     setDraft((prev) => ({
       ...prev,
-      [roleId]: allSelected
+      [staffId]: allSelected
         ? current.filter((id) => !catPermIds.includes(id))
         : Array.from(new Set([...current, ...catPermIds])),
     }));
@@ -173,6 +181,7 @@ export default function PermissionsView() {
   };
 
   const users = usersData?.data || [];
+  const permissionDefs = STAFF_PERMISSIONS[0]?.permissions || [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -182,12 +191,46 @@ export default function PermissionsView() {
       </p>
 
       <section className="p-4 bg-neutral-900 rounded-xl border border-neutral-800 space-y-4" data-testid="team-directory">
-        <div>
-          <h2 className="text-white text-lg font-medium">Team directory</h2>
-          <p className="text-zinc-500 text-sm">
-            Organization users returned by the backend. Status changes persist immediately.
-          </p>
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div>
+            <h2 className="text-white text-lg font-medium">Team directory</h2>
+            <p className="text-zinc-500 text-sm">
+              Organization users returned by the backend. Expand a row to view branch grants without hiding the list.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+            <div className="relative flex-1 sm:w-64">
+              <Search className="size-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="search"
+                data-testid="permissions-user-search"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (page !== 1) resetPage();
+                }}
+                placeholder="Search users..."
+                className="w-full h-11 pl-9 pr-3 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+              />
+            </div>
+            <select
+              value={selectedBranchId}
+              onChange={(e) => {
+                setBranchId(e.target.value);
+                setDraft({});
+              }}
+              data-testid="permissions-branch"
+              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm min-w-[180px]"
+            >
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
         {loadingUsers && <LoadingState message="Loading users..." />}
         {!loadingUsers && users.length === 0 && (
           <EmptyState
@@ -196,38 +239,129 @@ export default function PermissionsView() {
           />
         )}
         {users.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-zinc-500 text-left">
-                <tr>
-                  <th className="py-2 pr-3 font-medium">Name</th>
-                  <th className="py-2 pr-3 font-medium">Email</th>
-                  <th className="py-2 pr-3 font-medium">Role</th>
-                  <th className="py-2 pr-3 font-medium">Status</th>
-                  <th className="py-2 font-medium">Access</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user: any) => (
-                  <tr key={user.id} className="border-t border-neutral-800 text-stone-200">
-                    <td className="py-2 pr-3">{user.name}</td>
-                    <td className="py-2 pr-3">{user.email}</td>
-                    <td className="py-2 pr-3">{user.role}</td>
-                    <td className="py-2 pr-3">{user.status}</td>
-                    <td className="py-2">
-                      <button
-                        type="button"
-                        data-testid={`user-status-${user.id}`}
-                        onClick={() => handleToggleStatus(user)}
-                        className="px-2.5 py-1 rounded-md bg-zinc-800 text-xs text-white hover:bg-zinc-700"
-                      >
-                        {user.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </td>
+          <div className="space-y-4">
+            <div className="overflow-x-auto rounded-lg border border-zinc-800">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-900 text-white text-left">
+                  <tr>
+                    <th className="py-3 px-3 font-semibold w-10" />
+                    <th className="py-3 px-3 font-semibold">Name</th>
+                    <th className="py-3 px-3 font-semibold">Email</th>
+                    <th className="py-3 px-3 font-semibold">Role</th>
+                    <th className="py-3 px-3 font-semibold">Branch assignment</th>
+                    <th className="py-3 px-3 font-semibold">Status</th>
+                    <th className="py-3 px-3 font-semibold">Access</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {users.map((user: any) => {
+                    const assignment = staffByUserId.get(user.id) || staffByUserId.get(user.email);
+                    const staffId = assignment?.staffId || assignment?.id;
+                    const grants = staffId ? rolePermissions[staffId] || [] : [];
+                    const expanded = expandedUserId === user.id;
+                    return (
+                      <React.Fragment key={user.id}>
+                        <tr className="border-t border-neutral-800 text-stone-200">
+                          <td className="py-2 px-3">
+                            <button
+                              type="button"
+                              data-testid={`user-expand-${user.id}`}
+                              aria-expanded={expanded}
+                              onClick={() => setExpandedUserId(expanded ? null : user.id)}
+                              className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800"
+                            >
+                              {expanded ? (
+                                <ChevronDown className="w-4 h-4" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4" />
+                              )}
+                            </button>
+                          </td>
+                          <td className="py-2 px-3">{user.name}</td>
+                          <td className="py-2 px-3">{user.email}</td>
+                          <td className="py-2 px-3">{assignment?.role || user.role}</td>
+                          <td className="py-2 px-3 text-zinc-400">
+                            {assignment ? 'Assigned to selected branch' : 'Not assigned here'}
+                          </td>
+                          <td className="py-2 px-3">{user.status}</td>
+                          <td className="py-2 px-3">
+                            <button
+                              type="button"
+                              data-testid={`user-status-${user.id}`}
+                              onClick={() => handleToggleStatus(user)}
+                              className="px-2.5 py-1 rounded-md bg-zinc-800 text-xs text-white hover:bg-zinc-700"
+                            >
+                              {user.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                            </button>
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr className="border-t border-neutral-800 bg-black/40">
+                            <td colSpan={7} className="p-4">
+                              <div data-testid={`user-permissions-${user.id}`} className="space-y-3">
+                                {(loadingBranches || isLoading) && (
+                                  <LoadingState message="Loading staff assignments..." />
+                                )}
+                                {isError && (
+                                  <ErrorState
+                                    message={(error as any)?.data?.message || 'Unable to load staff permissions.'}
+                                    onRetry={() => refetch()}
+                                  />
+                                )}
+                                {!assignment && (
+                                  <p className="text-sm text-zinc-400">
+                                    This user is not assigned to the selected branch. Create a staff
+                                    assignment to grant branch capabilities.
+                                  </p>
+                                )}
+                                {assignment && staffId && (
+                                  <>
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-sm text-zinc-300">
+                                        Extra grants for {assignment.role.replaceAll('_', ' ')} at this branch
+                                      </p>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleToggleCategorySelectAll(staffId, STAFF_PERMISSIONS[0])
+                                        }
+                                        className="text-xs text-amber-400 hover:text-amber-300"
+                                      >
+                                        Toggle all
+                                      </button>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                                      {permissionDefs.map((perm) => {
+                                        const checked = grants.includes(perm.id);
+                                        return (
+                                          <label
+                                            key={perm.id}
+                                            className="flex items-center gap-2.5 p-3 rounded-lg bg-neutral-900 border border-neutral-800 cursor-pointer"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={checked}
+                                              onChange={() => handleTogglePermission(staffId, perm.id)}
+                                              className="size-4 accent-amber-400"
+                                            />
+                                            <span className="text-sm text-stone-200">{perm.label}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <PaginationBar meta={usersData?.meta} onPageChange={setPage} />
           </div>
         )}
       </section>
@@ -288,50 +422,6 @@ export default function PermissionsView() {
           </button>
         </div>
       </form>
-
-      <div className="flex flex-col gap-2 max-w-sm">
-        <label className="text-white text-sm">Branch</label>
-        <select
-          value={selectedBranchId}
-          onChange={(e) => {
-            setBranchId(e.target.value);
-            setDraft({});
-          }}
-          data-testid="permissions-branch"
-          className="h-11 px-3.5 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm"
-        >
-          {branches.map((branch) => (
-            <option key={branch.id} value={branch.id}>
-              {branch.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {(loadingBranches || isLoading) && <LoadingState message="Loading staff assignments..." />}
-      {isError && (
-        <ErrorState
-          message={(error as any)?.data?.message || 'Unable to load staff permissions.'}
-          onRetry={() => refetch()}
-        />
-      )}
-      {!isLoading && selectedBranchId && roles.length === 0 && (
-        <EmptyState
-          title="No staff at this branch"
-          description="Create a staff user above, then grant extra capabilities here."
-        />
-      )}
-      {roles.length > 0 && (
-        <PermissionsMatrix
-          roles={roles}
-          categories={STAFF_PERMISSIONS}
-          rolePermissions={rolePermissions}
-          totalPermissionsCount={TOTAL}
-          onTogglePermission={handleTogglePermission}
-          onToggleCategorySelectAll={handleToggleCategorySelectAll}
-          onRequestDeleteRole={() => undefined}
-        />
-      )}
     </div>
   );
 }

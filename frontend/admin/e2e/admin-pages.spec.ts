@@ -21,7 +21,11 @@ test.describe('Admin dashboard pages', () => {
     test(`renders ${tab} from the live shell`, async ({ page }) => {
       await page.getByTestId(`nav-${tab}`).click();
       await expect(page.getByTestId(`admin-view-${tab}`)).toBeVisible();
-      await expect(page).toHaveURL(new RegExp(`/new-admin-dashboard/${tab}`));
+      if (tab === 'settings') {
+        await expect(page).toHaveURL(/\/new-admin-dashboard\/settings\/org-profile/);
+      } else {
+        await expect(page).toHaveURL(new RegExp(`/new-admin-dashboard/${tab}`));
+      }
     });
   }
 
@@ -50,7 +54,6 @@ test.describe('Admin dashboard pages', () => {
     await expect(page.getByRole('heading', { name: 'Restaurants' })).toBeVisible();
     await expect(page.getByTestId('create-restaurant-open')).toBeEnabled();
     await page.getByTestId('create-restaurant-open').click();
-    await expect(page.getByRole('heading', { name: 'Create Restaurant' })).toBeVisible();
     await expect(page.getByTestId('restaurant-name')).toBeVisible();
     await page.getByTestId('restaurant-submit').click();
     await expect(page.getByTestId('restaurant-name')).toBeVisible();

@@ -73,13 +73,13 @@ export class GetUsersFilterDto {
   @IsOptional()
   page?: number = 1;
 
-  @ApiPropertyOptional({ example: 10, default: 10, description: 'Items per page (max 100)' })
+  @ApiPropertyOptional({ example: 12, default: 12, description: 'Items per page (max 100)' })
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
   @IsOptional()
-  limit?: number = 10;
+  limit?: number = 12;
 
   @ApiPropertyOptional({
     example: 'john',

@@ -6,9 +6,12 @@ test.describe('Admin persistence against the real backend', () => {
     await loginAsAdmin(page);
     await page.getByTestId('nav-restaurants').click();
     await expect(page.getByTestId('admin-view-restaurants')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Restaurants', exact: true })).toBeVisible();
+    await expect(page.getByTestId('create-restaurant-open')).toBeEnabled();
 
     const name = `E2E Restaurant ${Date.now()}`;
     await page.getByTestId('create-restaurant-open').click();
+    await expect(page.getByTestId('restaurant-name')).toBeVisible();
     await page.getByTestId('restaurant-name').fill(name);
     await page.getByTestId('restaurant-submit').click();
     await expect(page.getByText(/created successfully/i)).toBeVisible({ timeout: 20_000 });

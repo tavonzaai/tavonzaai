@@ -5,7 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { eq, inArray, and, desc, sql } from 'drizzle-orm';
+import { eq, inArray, and, desc, sql, or, ilike } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -1098,10 +1098,11 @@ export class PaymentService {
       status?: string;
       page?: number;
       limit?: number;
+      search?: string;
     },
   ) {
     const page = Math.max(1, query.page || 1);
-    const limit = Math.min(100, Math.max(1, query.limit || 20));
+    const limit = Math.min(100, Math.max(1, query.limit || 12));
     const offset = (page - 1) * limit;
 
     const organizationId = isSuperAdmin(user)
@@ -1121,6 +1122,12 @@ export class PaymentService {
     }
     if (query.status) {
       conditions.push(eq(payments.status, query.status as any));
+    }
+    if (query.search?.trim()) {
+      const term = `%${query.search.trim()}%`;
+      conditions.push(
+        or(ilike(orders.orderNumber, term), sql`${payments.id}::text ilike ${term}`),
+      );
     }
 
     const whereClause = conditions.length ? and(...conditions) : undefined;

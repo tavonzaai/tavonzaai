@@ -194,7 +194,7 @@ export class DrizzleUserRepository {
         data: [],
         meta: {
           page: Number(filters.page) || 1,
-          limit: Number(filters.limit) || 10,
+          limit: Number(filters.limit) || 12,
           total: 0,
           totalPages: 0,
           totalPage: 0,

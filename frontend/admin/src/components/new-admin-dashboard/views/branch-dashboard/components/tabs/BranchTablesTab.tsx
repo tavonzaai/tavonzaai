@@ -1,6 +1,9 @@
 import React from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import { TableItem } from '../types';
+import { PaginationBar } from '@/components/common';
+import { paginateItems } from '@/lib/pagination';
+import { useClientPage, useClampPage } from '@/hooks/useListPagination';
 
 interface BranchTablesTabProps {
   tables: TableItem[];
@@ -23,6 +26,10 @@ export const BranchTablesTab: React.FC<BranchTablesTabProps> = ({
   onEditTable,
   onDeleteTable,
 }) => {
+  const { page, setPage } = useClientPage(tables.length);
+  const paged = paginateItems(tables, page);
+  useClampPage(page, paged.meta.totalPages, setPage);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Row of 4 Metric Cards matching Tables snippet: Total tables (5), Available (3), Occupied (1), Total capacity (24) */}
@@ -111,7 +118,7 @@ export const BranchTablesTab: React.FC<BranchTablesTabProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
-            {tables.map((table) => {
+            {paged.items.map((table) => {
               return (
                 <tr key={table.id} className="hover:bg-zinc-900/40 transition-colors">
                   {/* Table Number */}
@@ -177,6 +184,7 @@ export const BranchTablesTab: React.FC<BranchTablesTabProps> = ({
           </tbody>
         </table>
       </div>
+      <PaginationBar meta={paged.meta} onPageChange={setPage} />
     </div>
   );
 };

@@ -53,7 +53,11 @@ export default function Sidebar({
 
   const handleNavClick = (tabId: AdminNavTab) => {
     onSelectTab(tabId);
-    router.push(`/new-admin-dashboard/${tabId}`, { scroll: false });
+    if (tabId === 'settings') {
+      router.push('/new-admin-dashboard/settings/org-profile', { scroll: false });
+    } else {
+      router.push(`/new-admin-dashboard/${tabId}`, { scroll: false });
+    }
     onClose();
   };
 

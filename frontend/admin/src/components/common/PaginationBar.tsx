@@ -28,7 +28,7 @@ export function PaginationBar({
   meta,
   onPageChange,
   onLimitChange,
-  pageSizeOptions = [10, 20, 50, 100],
+  pageSizeOptions = [12, 24, 48],
   className = '',
 }: PaginationBarProps) {
   if (!meta || meta.total === 0) return null;
@@ -41,6 +41,7 @@ export function PaginationBar({
 
   return (
     <div
+      data-testid="pagination-bar"
       className={`flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-[#0d0d0f] border border-zinc-800 rounded-2xl text-xs text-zinc-400 ${className}`}
     >
       <div className="flex items-center gap-3">
@@ -87,6 +88,7 @@ export function PaginationBar({
           onClick={() => onPageChange(page - 1)}
           disabled={!hasPrevious}
           title="Previous page"
+          data-testid="pagination-prev"
           className="p-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -102,6 +104,7 @@ export function PaginationBar({
           onClick={() => onPageChange(page + 1)}
           disabled={!hasNext}
           title="Next page"
+          data-testid="pagination-next"
           className="p-1.5 rounded-lg border border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronRight className="w-4 h-4" />

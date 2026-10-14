@@ -83,18 +83,15 @@ export class BranchService {
     }
 
     const organizationId = await this.resolveOrganizationId(user, options?.organizationId);
-    const data = await this.branchRepo.findBranchesByOrganizationId(organizationId, {
+    const res = await this.branchRepo.findBranchesByOrganizationId(organizationId, {
       search: options?.search,
       includeDeleted: options?.includeDeleted,
+      page: options?.page,
+      limit: options?.limit,
     });
     return {
-      data: data.map((b) => this.toResponseDto(b)),
-      meta: {
-        page: Number(options?.page) || 1,
-        limit: Number(options?.limit) || data.length,
-        total: data.length,
-        totalPages: 1,
-      },
+      data: res.data.map((b) => this.toResponseDto(b)),
+      meta: res.meta,
     };
   }
 

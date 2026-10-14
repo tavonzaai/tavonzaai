@@ -22,8 +22,9 @@ import {
   useUpdateRestaurantMutation,
 } from '@/redux/features/adminApi';
 import { mapRestaurant } from '@/lib/admin-mappers';
-import { EmptyState, ErrorState, LoadingState } from '@/components/common';
+import { EmptyState, ErrorState, LoadingState, PaginationBar } from '@/components/common';
 import { ApiError } from '@/redux/api/baseApi';
+import { useClampPage, useListPagination } from '@/hooks/useListPagination';
 
 interface RestaurantsViewProps {
   initialRestaurantId?: string;
@@ -34,6 +35,7 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
   const searchParams = useSearchParams();
   const organizationId = useOrganizationId();
 
+  const { page, limit, setPage } = useListPagination({ enabled: !initialRestaurantId });
   const {
     data,
     isLoading,
@@ -41,10 +43,11 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
     error,
     refetch,
   } = useGetRestaurantsQuery(
-    { organizationId: organizationId || undefined, page: 1, limit: 50 },
+    { organizationId: organizationId || undefined, page, limit },
   );
+  useClampPage(page, data?.meta?.totalPages, setPage);
   const { data: branchesData } = useGetBranchesQuery(
-    { page: 1, limit: 200 },
+    { page: 1, limit: 100 },
     { skip: !organizationId },
   );
 
@@ -169,16 +172,19 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
       )}
 
       {!isLoading && restaurants.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {restaurants.map((rest) => (
-            <RestaurantCard
-              key={rest.id}
-              restaurant={rest}
-              onSelect={handleSelectRestaurant}
-              onEdit={(r) => setEditingRestaurant(r)}
-              onDelete={(r) => setDeletingRestaurant(r)}
-            />
-          ))}
+        <div className="space-y-4" data-testid="restaurants-list">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {restaurants.map((rest) => (
+              <RestaurantCard
+                key={rest.id}
+                restaurant={rest}
+                onSelect={handleSelectRestaurant}
+                onEdit={(r) => setEditingRestaurant(r)}
+                onDelete={(r) => setDeletingRestaurant(r)}
+              />
+            ))}
+          </div>
+          <PaginationBar meta={data?.meta} onPageChange={setPage} />
         </div>
       )}
 

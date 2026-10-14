@@ -1,5 +1,8 @@
 import React from 'react';
 import { MenuItem } from '../types';
+import { PaginationBar } from '@/components/common';
+import { paginateItems } from '@/lib/pagination';
+import { useClientPage, useClampPage } from '@/hooks/useListPagination';
 
 interface BranchMenuTabProps {
   menuItems: MenuItem[];
@@ -16,6 +19,10 @@ export const BranchMenuTab: React.FC<BranchMenuTabProps> = ({
   onToggleMenuStatus,
   onDeleteMenu,
 }) => {
+  const { page, setPage } = useClientPage(menuItems.length);
+  const paged = paginateItems(menuItems, page);
+  useClampPage(page, paged.meta.totalPages, setPage);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       <div className="w-full overflow-x-auto rounded-xl border border-zinc-800 bg-neutral-900/50 shadow-xl">
@@ -40,7 +47,7 @@ export const BranchMenuTab: React.FC<BranchMenuTabProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
-            {menuItems.map((item) => (
+            {paged.items.map((item) => (
               <tr key={item.id} className="hover:bg-zinc-900/40 transition-colors">
                 {/* Item */}
                 <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
@@ -108,6 +115,7 @@ export const BranchMenuTab: React.FC<BranchMenuTabProps> = ({
           </tbody>
         </table>
       </div>
+      <PaginationBar meta={paged.meta} onPageChange={setPage} />
     </div>
   );
 };

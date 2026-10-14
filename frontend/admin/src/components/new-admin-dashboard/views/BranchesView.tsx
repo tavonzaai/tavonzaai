@@ -24,7 +24,8 @@ import {
 } from '@/redux/features/adminApi';
 import { useOrganizationId } from '@/hooks/useOrganizationId';
 import { mapBranch, mapRestaurant, parseBranchAddress } from '@/lib/admin-mappers';
-import { EmptyState, ErrorState, LoadingState } from '@/components/common';
+import { EmptyState, ErrorState, LoadingState, PaginationBar } from '@/components/common';
+import { useClampPage, useListPagination } from '@/hooks/useListPagination';
 
 interface BranchesViewProps {
   onBack?: () => void;
@@ -44,15 +45,19 @@ export default function BranchesView({ onBack, initialBranchId }: BranchesViewPr
   const searchParams = useSearchParams();
   const organizationId = useOrganizationId();
   const [searchQuery, setSearchQuery] = useState('');
+  const { page, limit, setPage, resetPage } = useListPagination();
 
   const { data: restaurantsData } = useGetRestaurantsQuery(
-    { organizationId: organizationId || undefined, page: 1, limit: 50 },
+    { organizationId: organizationId || undefined, page: 1, limit: 100 },
     { skip: !organizationId },
   );
-  const { data, isLoading, isError, error, refetch } = useGetBranchesQuery(
-    { page: 1, limit: 100, search: searchQuery || undefined },
-    { skip: !organizationId },
-  );
+  const { data, isLoading, isError, error, refetch } = useGetBranchesQuery({
+    page,
+    limit,
+    search: searchQuery || undefined,
+    organizationId: organizationId || undefined,
+  });
+  useClampPage(page, data?.meta?.totalPages, setPage);
   const [createBranch] = useCreateBranchMutation();
   const [updateBranch] = useUpdateBranchMutation();
   const [deleteBranch] = useDeleteBranchMutation();
@@ -180,9 +185,13 @@ export default function BranchesView({ onBack, initialBranchId }: BranchesViewPr
 
       {!isLoading && !isError && (
         <>
-          {branches.length > 4 && (
-            <BranchesSearch searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-          )}
+          <BranchesSearch
+            searchQuery={searchQuery}
+            onSearchChange={(value) => {
+              setSearchQuery(value);
+              if (page !== 1) resetPage();
+            }}
+          />
           {branches.length === 0 ? (
             <EmptyState
               title="No branches yet"
@@ -190,12 +199,15 @@ export default function BranchesView({ onBack, initialBranchId }: BranchesViewPr
               action={{ label: 'Create branch', onClick: () => setIsCreateOpen(true) }}
             />
           ) : (
-            <BranchesTable
-              branches={branches}
-              onViewBranch={handleViewBranch}
-              onEditBranch={(b) => setEditingBranch(b)}
-              onDeleteBranch={(b) => setDeletingBranch(b)}
-            />
+            <div className="space-y-4" data-testid="branches-list">
+              <BranchesTable
+                branches={branches}
+                onViewBranch={handleViewBranch}
+                onEditBranch={(b) => setEditingBranch(b)}
+                onDeleteBranch={(b) => setDeletingBranch(b)}
+              />
+              <PaginationBar meta={data?.meta} onPageChange={setPage} />
+            </div>
           )}
         </>
       )}

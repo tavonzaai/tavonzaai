@@ -1,5 +1,8 @@
 import React from 'react';
 import { StaffMember } from '../types';
+import { PaginationBar } from '@/components/common';
+import { paginateItems } from '@/lib/pagination';
+import { useClientPage, useClampPage } from '@/hooks/useListPagination';
 
 interface BranchStaffTabProps {
   staffList: StaffMember[];
@@ -12,6 +15,10 @@ export const BranchStaffTab: React.FC<BranchStaffTabProps> = ({
   onOpenEditStaff,
   onToggleStaffStatus,
 }) => {
+  const { page, setPage } = useClientPage(staffList.length);
+  const paged = paginateItems(staffList, page);
+  useClampPage(page, paged.meta.totalPages, setPage);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       <div className="w-full overflow-x-auto rounded-xl border border-zinc-800 bg-neutral-900/50 shadow-xl">
@@ -36,7 +43,7 @@ export const BranchStaffTab: React.FC<BranchStaffTabProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
-            {staffList.map((member) => (
+            {paged.items.map((member) => (
               <tr key={member.id} className="hover:bg-zinc-900/40 transition-colors">
                 {/* Staff member */}
                 <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
@@ -102,6 +109,7 @@ export const BranchStaffTab: React.FC<BranchStaffTabProps> = ({
           </tbody>
         </table>
       </div>
+      <PaginationBar meta={paged.meta} onPageChange={setPage} />
     </div>
   );
 };

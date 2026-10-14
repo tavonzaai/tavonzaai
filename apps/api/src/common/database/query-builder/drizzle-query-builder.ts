@@ -232,7 +232,7 @@ export class DrizzleQueryBuilder<TTable extends PgTable = any> {
    */
   paginate(params?: PaginationParams | null): this {
     this.paginationConfigured = true;
-    const defaultLimit = params?.defaultLimit ?? 10;
+    const defaultLimit = params?.defaultLimit ?? 12;
     const maxLimit = params?.maxLimit ?? 100;
 
     let p = params?.page !== undefined && params?.page !== null ? Number(params.page) : 1;
@@ -391,7 +391,7 @@ export class DrizzleQueryBuilder<TTable extends PgTable = any> {
    */
   async execute<T = any>(mapFn?: (row: any) => T): Promise<PaginatedResult<T>> {
     if (!this.paginationConfigured) {
-      this.paginate({ page: 1, limit: 10 });
+      this.paginate({ page: 1, limit: 12 });
     }
 
     const [countResult, selectResult] = await Promise.all([

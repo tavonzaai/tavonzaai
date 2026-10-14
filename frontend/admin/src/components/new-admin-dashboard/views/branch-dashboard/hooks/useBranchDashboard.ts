@@ -59,7 +59,7 @@ export function useBranchDashboard({
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('Overview');
 
   const { data: restaurantsData } = useGetRestaurantsQuery(
-    { organizationId: organizationId || undefined, page: 1, limit: 50 },
+    { organizationId: organizationId || undefined, page: 1, limit: 100 },
     { skip: !organizationId },
   );
   const restaurants: RestaurantItem[] = useMemo(

@@ -470,6 +470,11 @@ export class QueryBranchDto {
   @IsUUID()
   restaurantId?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by organization UUID', example: 'b2c3d4e5-f6a7-8901-bcde-f12345678901' })
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
+
   @ApiPropertyOptional({ description: 'Search term for branch name or phone', example: 'Downtown' })
   @IsOptional()
   @IsString()
@@ -479,7 +484,7 @@ export class QueryBranchDto {
   @IsOptional()
   page?: number;
 
-  @ApiPropertyOptional({ default: 10, example: 10 })
+  @ApiPropertyOptional({ default: 12, example: 12 })
   @IsOptional()
   limit?: number;
 

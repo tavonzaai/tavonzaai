@@ -21,7 +21,9 @@ import {
   useUpdateBranchMutation,
 } from '@/redux/features/adminApi';
 import { mapBranch, parseBranchAddress } from '@/lib/admin-mappers';
-import { EmptyState, ErrorState, LoadingState } from '@/components/common';
+import { EmptyState, ErrorState, LoadingState, PaginationBar } from '@/components/common';
+import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
+import { useClampPage } from '@/hooks/useListPagination';
 
 interface RestaurantBranchesDetailViewProps {
   restaurant: RestaurantItem;
@@ -43,11 +45,13 @@ export default function RestaurantBranchesDetailView({
   onOpenBranchDashboard,
 }: RestaurantBranchesDetailViewProps) {
   const router = useRouter();
+  const [page, setPage] = useState(1);
   const { data, isLoading, isError, error, refetch } = useGetBranchesQuery({
     restaurantId: restaurant.id,
-    page: 1,
-    limit: 50,
+    page,
+    limit: DEFAULT_PAGE_SIZE,
   });
+  useClampPage(page, data?.meta?.totalPages, setPage);
   const [createBranch] = useCreateBranchMutation();
   const [updateBranch] = useUpdateBranchMutation();
   const [deleteBranch] = useDeleteBranchMutation();
@@ -155,22 +159,25 @@ export default function RestaurantBranchesDetailView({
         />
       )}
 
-      <div className="flex flex-wrap items-start gap-5">
-        {branches.map((branch) => (
-          <RestaurantBranchCard
-            key={branch.id}
-            branch={branch}
-            onOpenDashboard={(b) => {
-              if (onOpenBranchDashboard) {
-                onOpenBranchDashboard(b);
-              } else {
-                router.push(`/new-admin-dashboard/branches?branchId=${b.id}`);
-              }
-            }}
-            onEdit={(b) => setEditingBranch(b)}
-            onDelete={(b) => setDeletingBranch(b)}
-          />
-        ))}
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-start gap-5">
+          {branches.map((branch) => (
+            <RestaurantBranchCard
+              key={branch.id}
+              branch={branch}
+              onOpenDashboard={(b) => {
+                if (onOpenBranchDashboard) {
+                  onOpenBranchDashboard(b);
+                } else {
+                  router.push(`/new-admin-dashboard/branches?branchId=${b.id}`);
+                }
+              }}
+              onEdit={(b) => setEditingBranch(b)}
+              onDelete={(b) => setDeletingBranch(b)}
+            />
+          ))}
+        </div>
+        <PaginationBar meta={data?.meta} onPageChange={setPage} />
       </div>
 
       {isCreateOpen && (

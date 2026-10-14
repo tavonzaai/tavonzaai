@@ -107,7 +107,7 @@ export class RestaurantPaginatedResponseDto {
   data!: RestaurantResponseDto[];
 
   @ApiProperty({
-    example: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    example: { page: 1, limit: 12, total: 1, totalPages: 1 },
     description: 'Pagination metadata'
   })
   meta!: {
@@ -133,7 +133,7 @@ export class QueryRestaurantDto {
   @IsOptional()
   page?: number;
 
-  @ApiPropertyOptional({ default: 10, example: 10 })
+  @ApiPropertyOptional({ default: 12, example: 12 })
   @IsOptional()
   limit?: number;
 
