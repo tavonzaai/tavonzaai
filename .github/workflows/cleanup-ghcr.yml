@@ -16,14 +16,27 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - tavonzaai-live-backend
-          - tavonzaai-live-worker
-          - tavonzaai-live-frontend
+          - tavonzaai-dev-api
+          - tavonzaai-dev-customer
+          - tavonzaai-dev-manager
+          - tavonzaai-dev-kitchen
+          - tavonzaai-dev-realtime
+          - tavonzaai-dev-worker
+          - tavonzaai-dev-ai
+          - tavonzaai-dev-waiter
+          - tavonzaai-dev-cashier
+          - tavonzaai-dev-admin
+          # live packages
+          - tavonzaai-live-ai
           - tavonzaai-live-admin-dashboard
+          - tavonzaai-live-worker
           - tavonzaai-live-kitchen
-          - tavonzaai-live-cashier
+          - tavonzaai-live-realtime
           - tavonzaai-live-manager
+          - tavonzaai-live-backend
+          - tavonzaai-live-cashier
           - tavonzaai-live-waiter
+          - tavonzaai-live-frontend
     steps:
       - name: Delete old versions for ${{ matrix.package }}
         uses: actions/delete-package-versions@v5
