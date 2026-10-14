@@ -87,12 +87,11 @@ export class MailService {
     });
   }
 
-  /**
-   * General dispatch: routes into Redis FIFO Queue if available, otherwise direct SES
-   */
   private async dispatchEmail(payload: EmailJobPayload): Promise<SendMailResult> {
-    // 1. Try to enqueue into Redis FIFO Queue
-    if (this.emailQueue) {
+    const forceDirectSend = process.env.MAIL_DIRECT_SEND === 'true';
+
+    // 1. Try to enqueue into Redis FIFO Queue (unless direct dispatch is forced)
+    if (this.emailQueue && !forceDirectSend) {
       try {
         const timeout = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Redis enqueue timed out (2500ms)')), 2500),
