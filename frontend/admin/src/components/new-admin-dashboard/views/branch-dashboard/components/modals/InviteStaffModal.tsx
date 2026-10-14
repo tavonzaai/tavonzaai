@@ -56,14 +56,42 @@ export const InviteStaffModal: React.FC<InviteStaffModalProps> = ({
               <label className="text-white text-sm font-normal font-['Inter'] leading-4">
                 Full Name
               </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Liam Henderson"
-                value={inviteForm.name}
-                onChange={(e) => onChange({ ...inviteForm, name: e.target.value })}
+                <input
+                  type="text"
+                  required
+                  data-testid="invite-staff-name"
+                  placeholder="e.g. Liam Henderson"
+                  value={inviteForm.name}
+                  onChange={(e) => onChange({ ...inviteForm, name: e.target.value })}
                 className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-['Inter']"
               />
+            </div>
+
+            <div className="self-stretch grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col justify-start items-start gap-2">
+                <label className="text-white text-sm font-normal font-['Inter'] leading-4">Email</label>
+                  <input
+                  type="email"
+                  required
+                  data-testid="invite-staff-email"
+                  placeholder="staff@restaurant.com"
+                  value={inviteForm.email}
+                  onChange={(e) => onChange({ ...inviteForm, email: e.target.value })}
+                  className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-['Inter']"
+                />
+              </div>
+              <div className="flex flex-col justify-start items-start gap-2">
+                <label className="text-white text-sm font-normal font-['Inter'] leading-4">Temporary password</label>
+                  <input
+                  type="password"
+                  required
+                  minLength={8}
+                  data-testid="invite-staff-password"
+                  value={inviteForm.password}
+                  onChange={(e) => onChange({ ...inviteForm, password: e.target.value })}
+                  className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-['Inter']"
+                />
+              </div>
             </div>
 
             {/* Role & Branch */}
@@ -75,40 +103,32 @@ export const InviteStaffModal: React.FC<InviteStaffModalProps> = ({
                 </label>
                 <div className="self-stretch relative">
                   <select
+                    data-testid="invite-staff-role"
                     value={inviteForm.role}
                     onChange={(e) => onChange({ ...inviteForm, role: e.target.value })}
                     className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-['Inter'] appearance-none focus:outline-none focus:border-amber-400 cursor-pointer"
                   >
-                    <option value="Manager">Manager</option>
-                    <option value="Branch Manager">Branch Manager</option>
-                    <option value="Waiter">Waiter</option>
-                    <option value="Chef">Chef</option>
-                    <option value="Cashier">Cashier</option>
+                    <option value="BRANCH_MANAGER">Branch Manager</option>
+                    <option value="HOST">Host</option>
+                    <option value="WAITER">Waiter</option>
+                    <option value="KITCHEN_STAFF">Kitchen</option>
+                    <option value="BARTENDER">Bartender</option>
+                    <option value="CASHIER">Cashier</option>
                   </select>
                   <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
 
-              {/* Branch */}
               <div className="flex flex-col justify-start items-start gap-2">
                 <label className="text-white text-sm font-normal font-['Inter'] leading-4">
                   Branch
                 </label>
-                <div className="self-stretch relative">
-                  <select
-                    value={inviteForm.branch}
-                    onChange={(e) => onChange({ ...inviteForm, branch: e.target.value })}
-                    className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-['Inter'] appearance-none focus:outline-none focus:border-amber-400 cursor-pointer"
-                  >
-                    <option value="Georgia Flagship">Georgia Flagship</option>
-                    <option value="Florida Flagship">Florida Flagship</option>
-                    <option value="Illinois Flagship">Illinois Flagship</option>
-                    <option value="Texas Flagship">Texas Flagship</option>
-                    <option value="Gulshan Flagship">Gulshan Flagship</option>
-                    {branchName && <option value={branchName}>{branchName}</option>}
-                  </select>
-                  <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
+                <input
+                  type="text"
+                  readOnly
+                  value={branchName || inviteForm.branch || 'Current branch'}
+                  className="w-full h-11 px-3.5 py-3 bg-neutral-950 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-400 text-sm font-normal font-['Inter']"
+                />
               </div>
             </div>
           </div>
@@ -124,6 +144,7 @@ export const InviteStaffModal: React.FC<InviteStaffModalProps> = ({
             </button>
             <button
               type="submit"
+              data-testid="invite-staff-submit"
               className="px-3 py-2.5 bg-yellow-400 hover:bg-yellow-300 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-neutral-800 text-base font-medium font-['Inter'] leading-5 transition-colors cursor-pointer shadow-sm"
             >
               Save

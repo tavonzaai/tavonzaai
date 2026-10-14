@@ -262,6 +262,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           build-args: ${{ matrix.build_args }}
           push: true
+          provenance: false
           tags: |
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.image_name }}:${{ github.sha }}
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.image_name }}:latest

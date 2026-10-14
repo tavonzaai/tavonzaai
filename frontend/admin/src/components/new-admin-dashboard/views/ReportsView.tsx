@@ -3,7 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { BranchPerformanceRecord } from './reports/types';
-import { INITIAL_BRANCH_PERFORMANCE } from './reports/data';
+import { useOrganizationId } from '@/hooks/useOrganizationId';
+import { useGetBranchPerformanceQuery } from '@/redux/features/adminApi';
 import {
   ReportsHeader,
   ReportsFiltersBar,
@@ -20,19 +21,50 @@ export default function ReportsView() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('All Methods');
 
   // Modal inspection state
+  const organizationId = useOrganizationId();
+  const { data: performance = [] } = useGetBranchPerformanceQuery(
+    { organizationId: organizationId || undefined },
+    { skip: !organizationId },
+  );
+
   const [inspectBranch, setInspectBranch] = useState<BranchPerformanceRecord | null>(null);
   const [showExportPDFModal, setShowExportPDFModal] = useState<boolean>(false);
 
-  // Filter records based on selected dropdowns
+  const records: BranchPerformanceRecord[] = useMemo(
+    () =>
+      performance.map((row: any) => {
+        const orders = Number(row.ordersCount || 0);
+        const revenue = Number(row.revenue || 0);
+        const avg = orders > 0 ? revenue / orders : 0;
+        return {
+          id: row.branchId,
+          name: row.branchName,
+          restaurant: row.restaurantName,
+          location: '',
+          orders,
+          revenue,
+          revenueFormatted: `$${revenue.toFixed(2)}`,
+          avgOrder: avg,
+          avgOrderFormatted: `$${avg.toFixed(2)}`,
+          growth: 0,
+          growthFormatted: '—',
+          performance: revenue > 0 ? 'Strong' : 'Review',
+          topItem: '—',
+          cardSplit: 0,
+          cashSplit: 0,
+        } as BranchPerformanceRecord;
+      }),
+    [performance],
+  );
+
   const filteredRecords = useMemo(() => {
-    return INITIAL_BRANCH_PERFORMANCE.filter((r) => {
+    return records.filter((r) => {
       const matchRestaurant =
         selectedRestaurant === 'All Restaurants' || r.restaurant === selectedRestaurant;
-      const matchBranch =
-        selectedBranch === 'All Branches' || r.name === selectedBranch;
+      const matchBranch = selectedBranch === 'All Branches' || r.name === selectedBranch;
       return matchRestaurant && matchBranch;
     });
-  }, [selectedRestaurant, selectedBranch]);
+  }, [records, selectedRestaurant, selectedBranch]);
 
   // Export to CSV
   const handleExportCSV = () => {
@@ -86,7 +118,7 @@ export default function ReportsView() {
       {/* 4. Branch Performance Comparison Table */}
       <BranchPerformanceTable
         records={filteredRecords}
-        totalRecordsCount={INITIAL_BRANCH_PERFORMANCE.length}
+        totalRecordsCount={records.length}
         onInspectBranch={(branch) => setInspectBranch(branch)}
       />
 

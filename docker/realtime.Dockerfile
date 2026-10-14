@@ -1,6 +1,11 @@
-FROM node:20-alpine AS base
+ARG BASE_IMAGE=node:20-alpine
+FROM ${BASE_IMAGE} AS base
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
+RUN pnpm config set fetch-retries 5 && \
+    pnpm config set fetch-retry-mintimeout 10000 && \
+    pnpm config set fetch-retry-maxtimeout 60000 && \
+    pnpm config set network-concurrency 16
 WORKDIR /app
 
 FROM base AS builder
@@ -10,10 +15,11 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.js
 COPY packages/ ./packages/
 COPY apps/realtime/ ./apps/realtime/
 
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 RUN npx turbo run build --filter=@tavonza/realtime...
 
-FROM base AS runner
+FROM ${BASE_IMAGE} AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV REALTIME_PORT=3001

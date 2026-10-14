@@ -3,6 +3,7 @@ import {
   SendEmailCommand,
   SendEmailCommandInput,
 } from "@aws-sdk/client-sesv2";
+import nodemailer, { Transporter } from "nodemailer";
 import { EmailJobPayload } from "./types.js";
 
 export interface SESDispatcherConfig {
@@ -13,9 +14,10 @@ export interface SESDispatcherConfig {
 
 export class SESEmailDispatcher {
   private client: SESv2Client | null = null;
+  private transporter: Transporter | null = null;
   private defaultFrom: string;
   private configurationSetName?: string;
-  private isDryRun: boolean;
+  private isDryRun: boolean = false;
 
   constructor(config?: SESDispatcherConfig) {
     const region = config?.region || process.env.AWS_REGION || "eu-west-2";
@@ -27,7 +29,22 @@ export class SESEmailDispatcher {
     this.configurationSetName =
       config?.configurationSetName || process.env.SES_CONFIGURATION_SET;
 
-    // Detect if we should dry-run (e.g. local dev without real AWS credentials)
+    // 1. Check for SES SMTP credentials (preferred for dedicated IAM SMTP users)
+    const hasSmtpCreds = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+    if (hasSmtpCreds) {
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || `email-smtp.${region}.amazonaws.com`,
+        port: parseInt(process.env.SMTP_PORT || "587", 10),
+        secure: process.env.SMTP_SECURE === "true",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+      return;
+    }
+
+    // 2. Check for AWS IAM Static Credentials with SES access
     const hasStaticCreds = !!(
       process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
     );
@@ -41,10 +58,9 @@ export class SESEmailDispatcher {
     ) {
       this.isDryRun = true;
       console.log(
-        "ℹ️ [SESEmailDispatcher] No AWS credentials detected in development. Running in DRY-RUN mode (mock).",
+        "ℹ️ [SESEmailDispatcher] No AWS SES credentials detected in development. Running in DRY-RUN mode (mock).",
       );
     } else {
-      this.isDryRun = false;
       this.client = new SESv2Client({
         region,
         ...(hasStaticCreds && {
@@ -66,6 +82,27 @@ export class SESEmailDispatcher {
   ): Promise<{ success: boolean; messageId?: string }> {
     const recipients = Array.isArray(payload.to) ? payload.to : [payload.to];
     const fromAddress = payload.from || this.defaultFrom;
+
+    // 1. Send via SES SMTP Transporter if available
+    if (this.transporter) {
+      const info = await this.transporter.sendMail({
+        from: fromAddress,
+        to: recipients,
+        subject: payload.subject,
+        html: payload.html,
+        text: payload.text,
+        replyTo: payload.replyTo,
+      });
+
+      console.log(
+        `[SESEmailDispatcher] Email sent via SES SMTP to ${recipients.join(", ")} (Message ID: ${info.messageId})`,
+      );
+
+      return {
+        success: true,
+        messageId: info.messageId,
+      };
+    }
 
     if (this.isDryRun || !this.client) {
       const mockId = `mock-ses-${Date.now()}-${Math.random().toString(36).substring(7)}`;

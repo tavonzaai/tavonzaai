@@ -125,9 +125,11 @@ export default function CustomerDashboardView({
         wine: ' ',
         description: " ' '",
       },
-      prepTime: ' ',
+      prepTime: dish.prepTime ? `${dish.prepTime} min` : (dish as any).estimatedPrepTime ? `${(dish as any).estimatedPrepTime} min` : '15 min',
       calories: ' ',
       image: dish.imageUrl || getItemImage(dish.name),
+      stockQuantity: (dish as any).stockQuantity,
+      isStockTracked: (dish as any).isStockTracked,
       addOns: dish.modifierGroups?.flatMap((mg: any) =>
         mg.modifiers.map((m: any) => ({ name: m.name, price: Number(m.priceDelta || 0) }))
       )

@@ -46,6 +46,9 @@ export class OrderItemResponseDto {
   @ApiProperty({ example: 32.00, description: 'Total line item cost ((unitPrice + addOnsTotal) * quantity)' })
   lineTotal!: number;
 
+  @ApiPropertyOptional({ example: 15, description: 'Estimated preparation time in minutes' })
+  estimatedPrepTime?: number | null;
+
   static fromProps(props: OrderItemProps): OrderItemResponseDto {
     const dto = new OrderItemResponseDto();
     dto.id = props.id;
@@ -57,6 +60,7 @@ export class OrderItemResponseDto {
     dto.addOns = props.addOns;
     dto.addOnsTotal = props.addOnsTotal;
     dto.lineTotal = props.lineTotal;
+    dto.estimatedPrepTime = props.estimatedPrepTime ?? 15;
     return dto;
   }
 }
@@ -79,6 +83,12 @@ export class CartResponseDto {
 
   @ApiProperty({ example: '5298804e-5847-4e5a-bdba-73a8f06d9ed2', description: 'Table UUID' })
   tableId!: string;
+
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label or identifier' })
+  tableLabel?: string | null;
+
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label alias / number' })
+  tableNumber?: string | null;
 
   @ApiProperty({ example: 'DRAFT', description: 'Current order state', enum: ['DRAFT', 'SUBMITTED', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'REJECTED', 'CANCELLED'] })
   status!: string;
@@ -120,6 +130,8 @@ export class CartResponseDto {
     dto.orderNumber = entity.orderNumber;
     dto.branchId = entity.branchId;
     dto.tableId = entity.tableId ?? '';
+    dto.tableLabel = entity.tableLabel;
+    dto.tableNumber = entity.tableNumber;
     dto.status = entity.status;
     dto.items = entity.items.map(OrderItemResponseDto.fromProps);
     dto.subtotal = entity.subtotal;
@@ -167,6 +179,12 @@ export class OrderTrackingResponseDto {
   @ApiProperty({ example: '5298804e-5847-4e5a-bdba-73a8f06d9ed2', description: 'Table UUID' })
   tableId!: string;
 
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label or identifier' })
+  tableLabel?: string | null;
+
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label alias / number' })
+  tableNumber?: string | null;
+
   @ApiProperty({ example: 'PREPARING', description: 'Raw state machine status' })
   status!: string;
 
@@ -194,11 +212,20 @@ export class OrderTrackingResponseDto {
   @ApiPropertyOptional({ example: '2026-10-08T14:36:10.000Z', description: 'Staff acceptance timestamp' })
   acceptedAt!: Date | null;
 
+  @ApiPropertyOptional({ example: '2026-10-08T14:40:00.000Z', description: 'Cooking preparation started timestamp' })
+  prepStartedAt!: Date | null;
+
   @ApiPropertyOptional({ example: null, description: 'Kitchen completion timestamp' })
   readyAt!: Date | null;
 
   @ApiPropertyOptional({ example: null, description: 'Service at table timestamp' })
   servedAt!: Date | null;
+
+  @ApiPropertyOptional({ example: true, description: 'Whether stock inventory was deducted for this order' })
+  inventoryDeducted!: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Whether stock inventory was restored after cancellation/rejection' })
+  inventoryRestored!: boolean;
 
   static fromEntity(entity: Order): OrderTrackingResponseDto {
     const dto = new OrderTrackingResponseDto();
@@ -207,6 +234,8 @@ export class OrderTrackingResponseDto {
     dto.orderNumber = entity.orderNumber;
     dto.branchId = entity.branchId;
     dto.tableId = entity.tableId ?? '';
+    dto.tableLabel = entity.tableLabel;
+    dto.tableNumber = entity.tableNumber;
     dto.status = entity.status;
     dto.displayStatus = entity.displayStatus;
     dto.estimatedPrepTime = entity.estimatedPrepTime;
@@ -216,8 +245,11 @@ export class OrderTrackingResponseDto {
     dto.totalAmount = entity.total;
     dto.submittedAt = entity.submittedAt;
     dto.acceptedAt = entity.acceptedAt;
+    dto.prepStartedAt = entity.prepStartedAt;
     dto.readyAt = entity.readyAt;
     dto.servedAt = entity.servedAt;
+    dto.inventoryDeducted = entity.inventoryDeducted;
+    dto.inventoryRestored = entity.inventoryRestored;
     return dto;
   }
 }
@@ -237,6 +269,12 @@ export class OrderListResponseDto {
 
   @ApiProperty({ example: '5298804e-5847-4e5a-bdba-73a8f06d9ed2', description: 'Table UUID' })
   tableId!: string;
+
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label or identifier' })
+  tableLabel?: string | null;
+
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label alias / number' })
+  tableNumber?: string | null;
 
   @ApiProperty({ example: 'SUBMITTED', description: 'Status code' })
   status!: string;
@@ -268,12 +306,17 @@ export class OrderListResponseDto {
   @ApiPropertyOptional({ example: '2026-10-08T14:35:00.000Z', description: 'Submission timestamp' })
   submittedAt!: Date | null;
 
+  @ApiPropertyOptional({ example: '2026-10-08T14:40:00.000Z', description: 'Cooking preparation started timestamp' })
+  prepStartedAt!: Date | null;
+
   static fromEntity(entity: Order): OrderListResponseDto {
     const dto = new OrderListResponseDto();
     dto.id = entity.id;
     dto.orderId = entity.id;
     dto.orderNumber = entity.orderNumber;
     dto.tableId = entity.tableId;
+    dto.tableLabel = entity.tableLabel;
+    dto.tableNumber = entity.tableNumber;
     dto.status = entity.status;
     dto.displayStatus = entity.displayStatus;
     dto.itemCount = entity.items.reduce((sum, i) => sum + i.quantity, 0);
@@ -284,6 +327,7 @@ export class OrderListResponseDto {
     dto.orderType = (entity as any).orderType || 'DINE_IN';
     dto.createdAt = entity.createdAt;
     dto.submittedAt = entity.submittedAt;
+    dto.prepStartedAt = entity.prepStartedAt;
     return dto;
   }
 }
@@ -303,6 +347,12 @@ export class OrderDetailResponseDto {
 
   @ApiProperty({ example: '5298804e-5847-4e5a-bdba-73a8f06d9ed2', description: 'Table UUID' })
   tableId!: string;
+
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label or identifier' })
+  tableLabel?: string | null;
+
+  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label alias / number' })
+  tableNumber?: string | null;
 
   @ApiProperty({ example: 'ACCEPTED', description: 'Order status code' })
   status!: string;
@@ -343,11 +393,20 @@ export class OrderDetailResponseDto {
   @ApiPropertyOptional({ example: '2026-10-08T14:36:00.000Z', description: 'Acceptance date' })
   acceptedAt!: Date | null;
 
+  @ApiPropertyOptional({ example: '2026-10-08T14:40:00.000Z', description: 'Cooking preparation started date' })
+  prepStartedAt!: Date | null;
+
   @ApiPropertyOptional({ example: null, description: 'Ready date' })
   readyAt!: Date | null;
 
   @ApiPropertyOptional({ example: null, description: 'Served date' })
   servedAt!: Date | null;
+
+  @ApiPropertyOptional({ example: true, description: 'Whether stock inventory was deducted for this order' })
+  inventoryDeducted!: boolean;
+
+  @ApiPropertyOptional({ example: false, description: 'Whether stock inventory was restored after cancellation/rejection' })
+  inventoryRestored!: boolean;
 
   static fromEntity(entity: Order): OrderDetailResponseDto {
     const dto = new OrderDetailResponseDto();
@@ -355,6 +414,8 @@ export class OrderDetailResponseDto {
     dto.orderNumber = entity.orderNumber;
     dto.branchId = entity.branchId;
     dto.tableId = entity.tableId;
+    dto.tableLabel = entity.tableLabel;
+    dto.tableNumber = entity.tableNumber;
     dto.status = entity.status;
     dto.displayStatus = entity.displayStatus;
     dto.items = entity.items.map(OrderItemResponseDto.fromProps);
@@ -368,8 +429,11 @@ export class OrderDetailResponseDto {
     dto.createdAt = entity.createdAt;
     dto.submittedAt = entity.submittedAt;
     dto.acceptedAt = entity.acceptedAt;
+    dto.prepStartedAt = entity.prepStartedAt;
     dto.readyAt = entity.readyAt;
     dto.servedAt = entity.servedAt;
+    dto.inventoryDeducted = entity.inventoryDeducted;
+    dto.inventoryRestored = entity.inventoryRestored;
     return dto;
   }
 }

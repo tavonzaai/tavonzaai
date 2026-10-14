@@ -3,6 +3,14 @@
  * Handles asynchronous background workloads, FIFO email delivery via AWS SES,
  * outbox event propagation, idle session cleanup, and multichannel notifications.
  */
+try {
+  process.loadEnvFile('../../.env');
+} catch {
+  try {
+    process.loadEnvFile('.env');
+  } catch {}
+}
+
 import { closeSharedRedisConnection } from '@tavonza/queue';
 import { createEmailWorker } from './notifications/email.worker.js';
 import { createNotificationWorker } from './notifications/notification.worker.js';
@@ -13,7 +21,7 @@ async function bootstrap() {
   console.log('====================================================');
   console.log('  🚀 Tavonza AI Worker Service Starting');
   console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`  Redis URL:   ${process.env.REDIS_URL ? '[CONFIGURED]' : 'redis://localhost:6379'}`);
+  console.log(`  Redis URL:   ${(process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL) ? '[CONFIGURED]' : 'redis://localhost:6379'}`);
   console.log('====================================================');
 
   // Initialize workers with strict FIFO handling

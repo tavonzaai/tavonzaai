@@ -7,7 +7,8 @@ import {
   doublePrecision,
   jsonb,
   index,
-  integer
+  integer,
+  boolean,
 } from 'drizzle-orm/pg-core';
 import {
   orderChannelEnum,
@@ -61,6 +62,12 @@ export const orders = pgTable('orders', {
   guestPhone: varchar('guest_phone', { length: 50 }),
   deliveryAddress: jsonb('delivery_address'),
   pickupAt: timestamp('pickup_at', { withTimezone: true }),
+  estimatedPrepTime: integer('estimated_prep_time').default(15),
+  prepStartedAt: timestamp('prep_started_at', { withTimezone: true }),
+  readyAt: timestamp('ready_at', { withTimezone: true }),
+  servedAt: timestamp('served_at', { withTimezone: true }),
+  inventoryDeducted: boolean('inventory_deducted').default(false),
+  inventoryRestored: boolean('inventory_restored').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
@@ -82,6 +89,7 @@ export const orderItems = pgTable('order_items', {
   subtotal: doublePrecision('subtotal').notNull(),
   stationType: stationTypeEnum('station_type').notNull(),
   status: orderItemStatusEnum('status').default('PENDING'),
+  estimatedPrepTime: integer('estimated_prep_time').default(15),
   preparingAt: timestamp('preparing_at', { withTimezone: true }),
   readyAt: timestamp('ready_at', { withTimezone: true }),
   servedAt: timestamp('served_at', { withTimezone: true }),

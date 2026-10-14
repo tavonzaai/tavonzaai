@@ -11,104 +11,38 @@ export interface SwaggerTagDefinition {
  * Follows the "Actor | Domain" convention
  */
 export const SWAGGER_TAGS: SwaggerTagDefinition[] = [
-  // ── Customer Experience ──────────────────────────────────────────────────
+  // ── Identity & Access Control ─────────────────────────────────────────────
   {
-    name: 'Customer | Auth',
-    description: 'Account registration, login, OTP verification, and password reset for customers',
+    name: 'Identity | Authentication',
+    description: 'Account registration, credential login, token refresh, OTP verification, and password resets',
   },
   {
-    name: 'Customer | Sessions',
-    description: 'Table QR scanning, guest joining, and order modes',
+    name: 'Identity | User Management',
+    description: 'User profiles, multi-branch staff assignments, user directory search, and account status management',
   },
   {
-    name: 'Customer | Menus',
-    description: 'Menu categories, items, and add-ons',
-  },
-  {
-    name: 'Customer | Orders',
-    description: 'Cart management, checkout, and order tracking',
-  },
-  {
-    name: 'Customer | Payments',
-    description: 'Payment methods, checkout, and receipts',
-  },
-  {
-    name: 'Customer | Feedback',
-    description: 'Customer ratings, tips, and reviews',
-  },
-  {
-    name: 'Customer | Alerts',
-    description: 'Send alerts to your waiter (call_waiter, request_bill, need_help, custom)',
+    name: 'Authorization | Roles & Permissions',
+    description: 'Dynamic RBAC management: roles catalog, permission matrix, single-role user assignments, and capability grants',
   },
 
-  // ── Waiter / Staff Operations ───────────────────────────────────────────
+  // ── Core Domain Hierarchy ─────────────────────────────────────────────────
   {
-    name: 'Waiter | Tables',
-    description: "View and manage table assignments for the waiter's shift",
+    name: 'Core | Organization Management',
+    description: 'Multi-tenant enterprise organization portfolios, organization owner administration, and hierarchy',
   },
   {
-    name: 'Waiter | Orders',
-    description: 'Accept, reject, serve, and create orders at assigned tables',
+    name: 'Core | Restaurant Management',
+    description: 'Restaurant brand definitions, cuisine concepts, and restaurant-level configuration',
   },
   {
-    name: 'Waiter | Alerts',
-    description: 'View, acknowledge, and resolve customer alerts',
-  },
-
-  // ── System & Diagnostic Utilities ────────────────────────────────────────
-  {
-    name: 'System | Mailer',
-    description: 'Diagnostic, testing, and queue tools for AWS SES and email verification',
-  },
-  {
-    name: 'System | Storage',
-    description: 'S3 object storage, direct file uploads, multipart streaming, presigned URLs, and asset management',
-  },
-
-  // ── Kitchen Operations (Planned/Upcoming) ────────────────────────────────
-  {
-    name: 'Kitchen | Tickets',
-    description: 'Kitchen ticket management, dish preparation workflow, and station routing',
-  },
-
-  // ── Cashier & POS ────────────────────────────────────────────────────────
-  {
-    name: 'Cashier | Payments',
-    description: 'Manual and card payments, bill splitting, refunds, and session closure',
-  },
-
-  // ── Operations & Hierarchy ──────────────────────────────────────────────
-  {
-    name: 'Organizations',
-    description: 'Multi-tenant organization management, owner relationships, and enterprise grouping',
-  },
-  {
-    name: 'Restaurants',
-    description: 'Restaurant brand portfolios under organizations',
-  },
-  {
-    name: 'Branches',
+    name: 'Core | Branch Management',
     description: 'Physical restaurant branch locations, operational settings, operating hours, holidays, and staff assignment',
   },
+
+  // ── Operations & Staff Workflows ──────────────────────────────────────────
   {
-    name: 'Tables & Areas',
-    description: 'Physical table layouts, QR code token resolution, seating capacity, and table reservations',
-  },
-  {
-    name: 'Users',
-    description: 'User directory, profile management, and global administrative users',
-  },
-  {
-    name: 'Notifications',
-    description: 'Persistent and real-time user notification feed, unread counters, and mark-as-read workflows',
-  },
-  {
-    name: 'Kitchen & Bar Display System (KDS)',
-    description: 'Kitchen ticket management, dish preparation workflow, line item status transitions, and 86 availability toggling',
-  },
-  {
-    name: 'Payments & Billing',
-    description: 'Payment collection, split-bill allocations, discount voucher evaluation, refunds, and table balance receipts',
+    name: 'Operations | Tables & Areas',
+    description: 'Physical dining tables, floor layouts, QR code token resolution, seating capacity, and table reservations',
   },
   {
     name: 'Operations | Work Shifts & Attendance',
@@ -119,22 +53,78 @@ export const SWAGGER_TAGS: SwaggerTagDefinition[] = [
     description: 'Branch ingredient suppliers, inventory categories, stock tracking, and inventory adjustments',
   },
   {
+    name: 'Operations | Notifications',
+    description: 'Persistent and real-time user notification feed, unread counters, and mark-as-read workflows',
+  },
+
+  // ── Customer Experience ───────────────────────────────────────────────────
+  {
+    name: 'Customer | Sessions',
+    description: 'Table QR scanning, dining party guest sessions, ordering modes, and dine-in initialization',
+  },
+  {
+    name: 'Customer | Menus',
+    description: 'Customer menu browsing: category chips, items grid, dietary tags, allergens, and add-on customizations',
+  },
+  {
+    name: 'Customer | Orders',
+    description: 'Cart management, order placement, order item specifications, and live order tracking',
+  },
+  {
+    name: 'Customer | Feedback',
+    description: 'Customer dining reviews, food quality ratings, and staff gratuity/tipping',
+  },
+  {
+    name: 'Customer | Alerts',
+    description: 'Send alerts to your waiter (call_waiter, request_bill, need_help, custom)',
+  },
+
+  // ── Floor Staff Operations (Waiter) ───────────────────────────────────────
+  {
+    name: 'Waiter | Tables',
+    description: "View and manage table assignments for the waiter's shift",
+  },
+  {
+    name: 'Waiter | Orders',
+    description: 'Accept, reject, serve, and create orders at assigned tables',
+  },
+  {
+    name: 'Waiter | Alerts',
+    description: 'View, acknowledge, and resolve customer waiter assistance and bill requests',
+  },
+
+  // ── Kitchen & Display Systems ─────────────────────────────────────────────
+  {
+    name: 'Kitchen & Bar Display System (KDS)',
+    description: 'Kitchen ticket management, dish preparation workflow, line item status transitions, and 86 availability toggling',
+  },
+
+  // ── Payments & Settlements ────────────────────────────────────────────────
+  {
+    name: 'Payments & Billing',
+    description: 'Payment collection, split-bill allocations, Stripe integration, refunds, manual tender, and receipts',
+  },
+
+  // ── System, Storage & AI Utilities ────────────────────────────────────────
+  {
+    name: 'System | Mailer',
+    description: 'Diagnostic, testing, and queue tools for AWS SES and email verification',
+  },
+  {
+    name: 'System | Storage',
+    description: 'S3 object storage, direct file uploads, multipart streaming, presigned URLs, and asset management',
+  },
+  {
     name: 'Internal | AI Agent Tool Gateway',
     description: 'Strict internal AI execution endpoints: actor resolution, context bootstrap, tool execution, and audit trail',
   },
   {
     name: 'Menu Compatibility',
-    description: 'Backward-compatible endpoints for legacy menu fetching',
+    description: 'Backward-compatible endpoints for legacy mobile clients and third-party menu aggregators',
   },
   {
     name: 'Health',
-    description: 'Service uptime and diagnostics health endpoints',
-  },
-
-  // ── Authorization & Access Control ───────────────────────────────────────
-  {
-    name: 'Authorization & Roles',
-    description: 'Dynamic roles, permissions catalog, user capability assignments, and authorization evaluation',
+    description: 'Service uptime, database connectivity, and system diagnostics',
   },
 ];
 
@@ -182,6 +172,7 @@ export function buildSwaggerConfig(options?: SwaggerConfigOptions) {
 
 /**
  * Mounts Swagger UI on the NestJS application with standard Tavonza AI theme and settings.
+ * Automatically prunes empty/orphan tags so every accordion folder in Swagger UI is fully expandable.
  *
  * @param app NestJS application instance
  * @param options Customization options (title, path, tags)
@@ -198,6 +189,28 @@ export function setupSwagger(
   const config = buildSwaggerConfig(options);
   const document = SwaggerModule.createDocument(app, config);
 
+  // Collect all tags that are actually attached to at least one operation in the endpoints
+  const usedTags = new Set<string>();
+  if (document.paths) {
+    for (const pathItem of Object.values(document.paths)) {
+      if (pathItem && typeof pathItem === 'object') {
+        for (const method of ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'] as const) {
+          const op = (pathItem as Record<string, any>)[method];
+          if (op && Array.isArray(op.tags)) {
+            for (const t of op.tags) {
+              usedTags.add(t);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Prune orphan tags that have 0 operations to prevent collapsed/unexpandable folders
+  if (document.tags) {
+    document.tags = document.tags.filter((t) => usedTags.has(t.name));
+  }
+
   SwaggerModule.setup(docsPath, app, document, {
     swaggerOptions: {
       persistAuthorization: persistAuth,
@@ -210,3 +223,4 @@ export function setupSwagger(
 
   return document;
 }
+

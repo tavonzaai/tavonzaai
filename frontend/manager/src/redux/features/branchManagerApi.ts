@@ -68,6 +68,8 @@ export interface TableItem {
   qrCodeUrl?: string | null;
   qrCodeToken?: string | null;
   isActive: boolean;
+  tableNumber?: string;
+  floor?: number;
   waiter?: string;
   waiterId?: string;
   assignedWaiter?: {
@@ -382,34 +384,91 @@ export const branchManagerService = {
     }
   },
 
+  getWaiterAssignments: async (
+    branchId: string,
+    waiterId?: string
+  ): Promise<any[]> => {
+    const params = new URLSearchParams({ branchId });
+    if (waiterId) params.append('waiterId', waiterId);
+    const res = await baseApiFetch<any>(`/waiter/tables/assignments?${params.toString()}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res || [];
+  },
+
   assignWaiterToTable: async (payload: {
     branchId: string;
-    tableId: string;
+    tableId?: string;
+    tableIds?: string[];
     waiterId: string;
     sessionStart?: string;
     sessionEnd?: string;
     shiftLabel?: string;
   }): Promise<any> => {
-    try {
-      const res = await baseApiFetch('/waiter/tables/assign', {
-        method: 'POST',
-        body: JSON.stringify(payload),
+    const res = await baseApiFetch('/waiter/tables/assign', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  unassignWaiterTable: async (payload: {
+    branchId: string;
+    waiterId: string;
+    tableId?: string;
+    tableIds?: string[];
+    assignmentId?: string;
+  }): Promise<any> => {
+    if (payload.assignmentId) {
+      const res = await baseApiFetch(`/waiter/tables/assign/${encodeURIComponent(payload.assignmentId)}`, {
+        method: 'DELETE',
       });
       return (res as any)?.data || res;
-    } catch (err: any) {
-      if (err?.message?.includes('sessionStart') || err?.message?.includes('property')) {
-        const fallbackRes = await baseApiFetch('/waiter/tables/assign', {
-          method: 'POST',
-          body: JSON.stringify({
-            branchId: payload.branchId,
-            tableId: payload.tableId,
-            waiterId: payload.waiterId,
-          }),
-        });
-        return (fallbackRes as any)?.data || fallbackRes;
-      }
-      throw err;
     }
+    const res = await baseApiFetch('/waiter/tables/unassign', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  createMenuItem: async (payload: {
+    restaurantId: string;
+    categoryId: string;
+    name: string;
+    description?: string;
+    basePrice: number;
+    imageUrl?: string;
+    isVegetarian?: boolean;
+    estimatedPrepTime?: number;
+    stockQuantity?: number;
+    isStockTracked?: boolean;
+  }): Promise<any> => {
+    const res = await baseApiFetch('/menus/items', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  updateMenuItem: async (
+    itemId: string,
+    payload: {
+      name?: string;
+      description?: string;
+      basePrice?: number;
+      imageUrl?: string;
+      isAvailable?: boolean;
+      estimatedPrepTime?: number;
+      stockQuantity?: number;
+      isStockTracked?: boolean;
+    }
+  ): Promise<any> => {
+    const res = await baseApiFetch(`/menus/items/${encodeURIComponent(itemId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
   },
 
   getOrders: async (

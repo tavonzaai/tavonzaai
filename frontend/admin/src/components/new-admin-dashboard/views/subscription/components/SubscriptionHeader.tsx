@@ -10,7 +10,7 @@ export const SubscriptionHeader: React.FC = () => {
           </h1>
         </div>
         <p className="text-zinc-500 text-sm font-normal font-sans leading-6">
-          Manage your plan, monitor usage and access your billing documents.
+          Platform SaaS billing between Super Admin and restaurant admins. Customer order payments stay on the Payments tab.
         </p>
       </div>
 

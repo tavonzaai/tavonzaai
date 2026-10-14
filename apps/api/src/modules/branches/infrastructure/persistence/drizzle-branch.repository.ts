@@ -1,11 +1,12 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, ilike } from 'drizzle-orm';
 import { DrizzleQueryBuilder } from '../../../../common/database';
 import * as argon2 from 'argon2';
 import {
   DRIZZLE,
   type DrizzleDatabase,
   branches,
+  restaurants,
   branchSettings,
   branchOperatingHours,
   branchHolidays,
@@ -91,6 +92,27 @@ export class DrizzleBranchRepository {
       .sort(options?.sortBy, options?.sortOrder, branches.createdAt);
 
     return builder.execute((r) => this.mapBranch(r));
+  }
+
+  async findBranchesByOrganizationId(
+    organizationId: string,
+    options?: { search?: string; includeDeleted?: boolean },
+  ): Promise<Branch[]> {
+    const conditions = [eq(restaurants.organizationId, organizationId)];
+    if (!options?.includeDeleted) {
+      conditions.push(eq(branches.isActive, true));
+    }
+    if (options?.search) {
+      conditions.push(ilike(branches.name, `%${options.search}%`));
+    }
+
+    const rows = await this.db
+      .select({ branch: branches })
+      .from(branches)
+      .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+      .where(and(...conditions));
+
+    return rows.map((row) => this.mapBranch(row.branch));
   }
 
   async findBranchesByRestaurantId(restaurantId: string, includeDeleted = false): Promise<Branch[]> {

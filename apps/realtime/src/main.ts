@@ -3,6 +3,14 @@
  * Handles WebSocket delivery, presence, subscriptions, and live operational updates.
  * Realtime is not the source of truth for business state.
  */
+try {
+  process.loadEnvFile('../../.env');
+} catch {
+  try {
+    process.loadEnvFile('.env');
+  } catch {}
+}
+
 import { ChannelManager } from './channels/channel.manager';
 import { RedisSubscriber } from './publishers/redis.subscriber';
 import { RealtimeWebSocketServer } from './gateways/websocket.server';
@@ -14,7 +22,7 @@ async function bootstrap() {
   console.log('  ⚡ Tavonza AI Realtime Service Starting');
   console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Port:        ${port}`);
-  console.log(`  Redis URL:   ${process.env.REDIS_URL ? '[CONFIGURED]' : 'redis://localhost:6379'}`);
+  console.log(`  Redis URL:   ${(process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL) ? '[CONFIGURED]' : 'redis://localhost:6379'}`);
   console.log('====================================================');
 
   const channelManager = new ChannelManager();

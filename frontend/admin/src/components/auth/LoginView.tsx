@@ -268,6 +268,7 @@ export default function LoginView({
               <input
                 type="email"
                 required
+                data-testid="login-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@tavonza.com"
@@ -292,6 +293,7 @@ export default function LoginView({
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
+                data-testid="login-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"
@@ -311,6 +313,7 @@ export default function LoginView({
 
           <button
             type="submit"
+            data-testid="login-submit"
             disabled={isSubmitting}
             className="w-full h-12 bg-yellow-400 hover:bg-yellow-300 text-black text-sm font-semibold font-['Inter'] rounded-xl flex items-center justify-center gap-2 transition shadow-lg shadow-yellow-500/10 active:scale-[0.99] mt-2 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
           >

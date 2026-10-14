@@ -3,7 +3,9 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { PaymentItem } from './payments/types';
-import { INITIAL_TRANSACTIONS } from './payments/data';
+import { useOrganizationId } from '@/hooks/useOrganizationId';
+import { useGetPaymentsQuery, useRefundPaymentMutation } from '@/redux/features/adminApi';
+import { ErrorState, LoadingState } from '@/components/common';
 import {
   PaymentsHeader,
   PaymentsKPICards,
@@ -15,9 +17,49 @@ import {
   BatchSettlementModal,
 } from './payments/components';
 
+function mapMethod(method?: string): PaymentItem['method'] {
+  const value = String(method || '').toUpperCase();
+  if (value === 'CASH') return 'Cash';
+  if (value === 'ONLINE_GATEWAY') return 'Stripe';
+  if (value === 'MOBILE_WALLET') return 'Apple Pay';
+  return 'Card';
+}
+
+function mapStatus(status?: string): PaymentItem['status'] {
+  const value = String(status || '').toUpperCase();
+  if (value === 'PAID') return 'Completed';
+  if (value === 'REFUNDED') return 'Refunded';
+  return 'Pending';
+}
+
 export default function PaymentsView() {
-  const [transactions, setTransactions] = useState<PaymentItem[]>(INITIAL_TRANSACTIONS);
-  const [selectedBranch, setSelectedBranch] = useState<string>('Gulshan Flagship');
+  const organizationId = useOrganizationId();
+  const { data, isLoading, isError, error, refetch } = useGetPaymentsQuery(
+    { organizationId: organizationId || undefined, page: 1, limit: 50 },
+    { skip: !organizationId },
+  );
+  const [refundPayment, { isLoading: isRefunding }] = useRefundPaymentMutation();
+
+  const transactions: PaymentItem[] = useMemo(
+    () =>
+      (data?.data || []).map((row: any) => ({
+        id: row.id,
+        orderNumber: row.orderNumber || '—',
+        restaurant: row.restaurantName || '—',
+        branch: row.branchName || '—',
+        tableNumber: '—',
+        server: '—',
+        amount: Number(row.amount || 0),
+        formattedAmount: `$${Number(row.amount || 0).toFixed(2)}`,
+        method: mapMethod(row.method),
+        status: mapStatus(row.status),
+        timestamp: row.paidAt || row.createdAt || '',
+        date: row.paidAt || row.createdAt || '',
+      })),
+    [data],
+  );
+
+  const [selectedBranch, setSelectedBranch] = useState<string>('All');
   const [filterMethod, setFilterMethod] = useState<string>('All');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -25,7 +67,6 @@ export default function PaymentsView() {
   // Modals state
   const [selectedTransaction, setSelectedTransaction] = useState<PaymentItem | null>(null);
   const [refundTarget, setRefundTarget] = useState<PaymentItem | null>(null);
-  const [isRefunding, setIsRefunding] = useState<boolean>(false);
   const [showBatchModal, setShowBatchModal] = useState<boolean>(false);
 
   // Filtered transactions for the ledger table
@@ -44,22 +85,17 @@ export default function PaymentsView() {
   }, [transactions, filterMethod, filterStatus, searchQuery]);
 
   // Handle Refund submission
-  const handleConfirmRefund = (target: PaymentItem, reason: string) => {
-    setIsRefunding(true);
-
-    setTimeout(() => {
-      setTransactions((prev) =>
-        prev.map((item) =>
-          item.id === target.id ? { ...item, status: 'Refunded' } : item
-        )
-      );
-      if (selectedTransaction?.id === target.id) {
-        setSelectedTransaction((curr) => curr ? { ...curr, status: 'Refunded' } : null);
-      }
-      setIsRefunding(false);
-      toast.success(`Refund of ${target.formattedAmount} issued for ${target.id} (${reason})`);
+  const handleConfirmRefund = async (target: PaymentItem, reason: string) => {
+    try {
+      await refundPayment({
+        id: target.id,
+        body: { refundAmount: target.amount, reason },
+      }).unwrap();
+      toast.success(`Refund of ${target.formattedAmount} issued for ${target.orderNumber}`);
       setRefundTarget(null);
-    }, 450);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to refund payment.');
+    }
   };
 
   // Handle Batch Settlement Payout
@@ -71,11 +107,8 @@ export default function PaymentsView() {
       return;
     }
 
-    setTransactions((prev) =>
-      prev.map((t) => (t.status === 'Pending' ? { ...t, status: 'Completed' } : t))
-    );
     setShowBatchModal(false);
-    toast.success('Batch settlement executed! Settled $ 5K across 24 transactions into SCB Operating Account.');
+    toast.info('Customer order payments settle individually. Platform SaaS billing is on the Subscription tab.');
   };
 
   // Export CSV Settlement Report
@@ -107,6 +140,13 @@ export default function PaymentsView() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-12">
+      {isLoading && <LoadingState message="Loading customer payments..." />}
+      {isError && (
+        <ErrorState
+          message={(error as any)?.data?.message || 'Unable to load payments.'}
+          onRetry={() => refetch()}
+        />
+      )}
       {/* 1. Header Section */}
       <PaymentsHeader
         selectedBranch={selectedBranch}

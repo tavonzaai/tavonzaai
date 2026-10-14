@@ -1,7 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsArray,
   IsBoolean,
+  IsEmail,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -14,6 +17,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { StaffRole } from '@tavonza/authorization';
 import { Type } from 'class-transformer';
 
 export class BranchAddressDto {
@@ -397,13 +401,15 @@ export class AssignBranchStaffDto {
   @IsNotEmpty()
   staffId!: string;
 
-  @ApiProperty({ example: 'WAITER', description: 'Branch role to assign' })
-  @IsString()
+  @ApiProperty({ example: 'WAITER', description: 'Branch role to assign', enum: Object.values(StaffRole) })
+  @IsIn(Object.values(StaffRole))
   @IsNotEmpty()
   role!: string;
 
   @ApiPropertyOptional({ example: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'], description: 'Explicit permissions granted' })
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   permissions?: string[];
 }
 
@@ -414,7 +420,7 @@ export class CreateBranchStaffDto {
   name!: string;
 
   @ApiProperty({ example: 'jane@restaurant.com' })
-  @IsString()
+  @IsEmail()
   @IsNotEmpty()
   email!: string;
 
@@ -428,24 +434,28 @@ export class CreateBranchStaffDto {
   @IsString()
   phone?: string;
 
-  @ApiProperty({ example: 'WAITER' })
-  @IsString()
+  @ApiProperty({ example: 'WAITER', enum: Object.values(StaffRole) })
+  @IsIn(Object.values(StaffRole))
   @IsNotEmpty()
   role!: string;
 
   @ApiPropertyOptional({ example: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'] })
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   permissions?: string[];
 }
 
 export class UpdateBranchStaffDto {
-  @ApiPropertyOptional({ example: 'WAITER' })
+  @ApiPropertyOptional({ example: 'WAITER', enum: Object.values(StaffRole) })
   @IsOptional()
-  @IsString()
+  @IsIn(Object.values(StaffRole))
   role?: string;
 
   @ApiPropertyOptional({ example: ['VIEW_ORDERS'] })
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   permissions?: string[];
 
   @ApiPropertyOptional({ example: true })

@@ -33,6 +33,9 @@ import {
   ApiConflictResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
+import { Permission } from '@tavonza/authorization';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../infrastructure/adapters/jwt.strategy';
 import { UserService } from '../../application/services/user.service';
@@ -130,12 +133,13 @@ export class UserController {
    * Requires admin role or staff reading capabilities.
    */
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.USERS_READ)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Get all users with search, filtering, and pagination',
     description:
-      'Search across name, email, contactNo with filters for role and status. Returns paginated list.',
+      'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [users:read]. Search across name, email, contactNo with filters for role and status.',
   })
   @ApiOkResponse({ type: UsersListResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient permissions' })
@@ -172,9 +176,14 @@ export class UserController {
    * Restricted to administrators.
    */
   @Patch('status/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.USERS_UPDATE)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Toggle or update user status' })
+  @ApiOperation({
+    summary: 'Toggle or update user status',
+    description:
+      'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [users:update]. Toggle or set status (ACTIVE, INACTIVE, BANNED, DELETED).',
+  })
   @ApiParam({ name: 'id', description: 'User UUID', example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef' })
   @ApiOkResponse({ type: UserDetailResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
@@ -193,9 +202,14 @@ export class UserController {
    * Restricted to administrators.
    */
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.USERS_DELETE)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Soft delete a user account' })
+  @ApiOperation({
+    summary: 'Soft delete a user account',
+    description:
+      'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [users:delete]. Sets user status to DELETED.',
+  })
   @ApiParam({ name: 'id', description: 'User UUID', example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef' })
   @ApiOkResponse({ type: UserDetailResponseDto })
   @ApiNotFoundResponse({ description: 'User not found' })
@@ -229,9 +243,14 @@ export class UserController {
    */
   @Post('create-admin')
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.USERS_WRITE)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Create an administrator account (SUPER_ADMIN only)' })
+  @ApiOperation({
+    summary: 'Create an administrator account (SUPER_ADMIN only)',
+    description:
+      'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [users:write]. Requires administrative privileges.',
+  })
   @ApiCreatedResponse({ type: UserDetailResponseDto })
   @ApiConflictResponse({ description: 'Email or phone already in use' })
   @ApiForbiddenResponse({ description: 'SUPER_ADMIN privilege required' })

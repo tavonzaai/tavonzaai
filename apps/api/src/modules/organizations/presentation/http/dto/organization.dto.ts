@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class CreateOrganizationDto {
   @ApiProperty({ example: 'Tasty Bites Group', description: 'Name of the organization' })
@@ -15,6 +15,14 @@ export class CreateOrganizationDto {
   @Matches(/^[a-z0-9-]+$/, { message: 'Slug can only contain lowercase alphanumeric characters and hyphens' })
   @MaxLength(100)
   slug?: string;
+
+  @ApiPropertyOptional({
+    example: 'f0e1d2c3-b4a5-6789-0123-456789abcdef',
+    description: 'Owner user UUID. SUPER_ADMIN may assign another admin; ADMIN is always the owner.',
+  })
+  @IsOptional()
+  @IsUUID()
+  ownerId?: string;
 }
 
 export class UpdateOrganizationDto {

@@ -6,17 +6,22 @@ export interface OrderItem {
   quantity: number;
   options: string[];
   isCompleted: boolean;
+  estimatedPrepTime?: number;
 }
 
 export interface KitchenOrder {
   id: string;
   orderNumber: string;
   table: string;
+  tableId?: string;
   orderType: string;
   waiter: string;
   status: OrderStatus;
   items: OrderItem[];
   timeElapsedMinutes: number;
+  estimatedPrepTime?: number;
+  prepStartedAt?: string | null;
+  readyAt?: string | null;
   station: string;
   flaggedIssue?: string;
   createdAt: string;

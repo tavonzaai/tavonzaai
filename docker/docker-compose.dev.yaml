@@ -11,13 +11,6 @@ services:
     environment:
       PORT: 3000
       API_PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-platform_dev}?schema=public
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
 
   worker:
     image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-worker:latest
@@ -25,14 +18,7 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-platform_dev}?schema=public
-      REDIS_URL: redis://redis:6379
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
       api:
         condition: service_started
 
@@ -46,10 +32,6 @@ services:
       - .env
     environment:
       REALTIME_PORT: 3001
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      redis:
-        condition: service_healthy
 
   ai:
     image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-ai:latest
@@ -61,13 +43,9 @@ services:
       - .env
     environment:
       AI_SERVICE_PORT: 8000
-      INTERNAL_API_BASE_URL: http://api:3000/internal
-      REDIS_URL: redis://redis:6379/0
     depends_on:
       api:
         condition: service_started
-      redis:
-        condition: service_healthy
 
   # ─── 3. Frontend Applications ─────────────────────────────────────────────
   customer:

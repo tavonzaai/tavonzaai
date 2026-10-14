@@ -5,11 +5,73 @@
 import type { Permission } from './permission';
 import type { ScopeType } from './scope';
 import type { SecurityContext } from './security-context';
+import { normalizePermissionKey } from './permission-aliases';
 
 export interface RequiredScopeCheck {
   type: ScopeType;
   id?: string;
   resourceId?: string;
+}
+
+/**
+ * Normalizes a permission key for uniform matching.
+ * Accepts `orders.read`, `orders:read`, and `VIEW_ORDERS`.
+ */
+function normalizeKey(key: string): string {
+  return normalizePermissionKey(key);
+}
+
+/**
+ * Checks whether the actor's permissions list satisfies the required permission.
+ * Supports:
+ * - Direct match (e.g. "orders:read")
+ * - Cross-format normalization ("orders.read" <-> "orders:read")
+ * - Wildcard system admin ("*")
+ * - Module wildcard ("orders:*")
+ */
+export function checkCapability(userPermissions: string[], requiredPermission: string): boolean {
+  if (!userPermissions || userPermissions.length === 0) {
+    return false;
+  }
+
+  // 1. Wildcard grants everything
+  if (userPermissions.includes('*') || userPermissions.includes('*:*')) {
+    return true;
+  }
+
+  const reqNorm = normalizeKey(requiredPermission);
+  const [reqModule] = reqNorm.split(':');
+
+  for (const perm of userPermissions) {
+    if (perm === '*' || perm === '*:*') {
+      return true;
+    }
+
+    const userNorm = normalizeKey(perm);
+
+    // Exact match
+    if (userNorm === reqNorm || perm === requiredPermission) {
+      return true;
+    }
+
+    // Module wildcard e.g. "orders:*" satisfies "orders:read"
+    if (reqModule && userNorm === `${reqModule}:*`) {
+      return true;
+    }
+
+    // `module:manage` satisfies the common CRUD verbs for that module
+    const [, reqAction] = reqNorm.split(':');
+    if (
+      reqModule &&
+      reqAction &&
+      userNorm === `${reqModule}:manage` &&
+      ['read', 'write', 'update', 'delete', 'create', 'manage'].includes(reqAction)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -20,8 +82,13 @@ export function hasPermission(
   requiredPermission: Permission,
   requiredScope?: RequiredScopeCheck,
 ): boolean {
-  // 1. Permission check
-  const hasCapability = context.permissions.includes(requiredPermission);
+  // 0. Super Admin bypass
+  if (context.role === 'SUPER_ADMIN' || (context as any).globalRole === 'SUPER_ADMIN') {
+    return true;
+  }
+
+  // 1. Permission capability check
+  const hasCapability = checkCapability(context.permissions as string[], requiredPermission);
   if (!hasCapability) {
     return false;
   }

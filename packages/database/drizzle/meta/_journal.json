@@ -36,6 +36,20 @@
       "when": 1791451115105,
       "tag": "0004_warm_meltdown",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791788837910,
+      "tag": "0005_breezy_omega_flight",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791873773484,
+      "tag": "0006_luxuriant_silvermane",
+      "breakpoints": true
     }
   ]
 }

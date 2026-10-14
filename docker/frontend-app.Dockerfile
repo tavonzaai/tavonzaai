@@ -1,9 +1,14 @@
 ARG APP_NAME=customer
 ARG APP_PORT=3000
+ARG BASE_IMAGE=node:20-alpine
 
-FROM node:20-alpine AS base
+FROM ${BASE_IMAGE} AS base
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
+RUN pnpm config set fetch-retries 5 && \
+    pnpm config set fetch-retry-mintimeout 10000 && \
+    pnpm config set fetch-retry-maxtimeout 60000 && \
+    pnpm config set network-concurrency 16
 WORKDIR /app
 
 FROM base AS builder
@@ -18,7 +23,8 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.js
 COPY packages/ ./packages/
 COPY frontend/ ./frontend/
 
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 RUN npx turbo run build --filter=@frontend/${APP_NAME}...
 
 FROM base AS runner
@@ -37,17 +43,11 @@ ENV API_BASE_URL=${NEXT_PUBLIC_API_URL}
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nextjs:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=builder --chown=nextjs:nodejs /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/packages ./packages
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/.next ./frontend/${APP_NAME}/.next
 COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/public ./frontend/${APP_NAME}/public
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/next.config.js ./frontend/${APP_NAME}/next.config.js
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/package.json ./frontend/${APP_NAME}/package.json
-COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/node_modules ./frontend/${APP_NAME}/node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/frontend/${APP_NAME}/.next/static ./frontend/${APP_NAME}/.next/static
 
 USER nextjs
 EXPOSE ${APP_PORT}
-CMD ["sh", "-c", "pnpm --filter @frontend/${APP_TARGET} exec next start -H 0.0.0.0 -p ${PORT}"]
+CMD ["sh", "-c", "node frontend/${APP_TARGET}/server.js"]
+

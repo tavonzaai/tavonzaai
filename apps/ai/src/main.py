@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Tavonza AI Service — Autonomous Restaurant Agent",
-    version="1.0.0",
+    version="1.0.1",
     lifespan=lifespan,
     docs_url="/docs" if settings.environment == "dev" else None,
     redoc_url=None,
@@ -100,7 +100,7 @@ allowed_origins = list(set(dev_origins + configured_origins))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|https://([a-zA-Z0-9-]+\.)*tavonza\.com)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

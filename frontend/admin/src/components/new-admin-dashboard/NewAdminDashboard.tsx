@@ -13,10 +13,8 @@ import PaymentsView from './views/PaymentsView';
 import ReportsView from './views/ReportsView';
 import SubscriptionView from './views/SubscriptionView';
 import SettingsView from './views/SettingsView';
-import RestaurantBranchesDetailView from './views/RestaurantBranchesDetailView';
 import AskAiModal from './modals/AskAiModal';
 import DraggableAiButton from '../common/DraggableAiButton';
-import { MOCK_RESTAURANTS } from './data';
 import { AdminNavTab } from './types';
 
 interface NewAdminDashboardProps {
@@ -96,7 +94,10 @@ export default function NewAdminDashboard({
         />
 
         {/* Dynamic View Body - full width matching other dashboards */}
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8 w-full custom-scrollbar relative">
+        <main
+          data-testid={`admin-view-${activeTab}`}
+          className="flex-1 overflow-y-auto p-6 lg:p-8 w-full custom-scrollbar relative"
+        >
           {activeTab === 'dashboard' && (
             <DashboardView onNavigateTab={handleTabSelect} />
           )}
@@ -107,22 +108,7 @@ export default function NewAdminDashboard({
             <BranchesView onBack={() => handleTabSelect('restaurants')} />
           )}
           {activeTab === 'restaurant-branches' && (
-            <RestaurantBranchesDetailView
-              restaurant={
-                (initialRestaurantId
-                  ? MOCK_RESTAURANTS.find(
-                      (r) =>
-                        r.id.toLowerCase() === initialRestaurantId.toLowerCase() ||
-                        r.name.toLowerCase().includes(initialRestaurantId.toLowerCase().slice(0, 7))
-                    )
-                  : null) || MOCK_RESTAURANTS[0]
-              }
-              onBack={() => handleTabSelect('restaurants')}
-              onOpenBranchDashboard={(b) => {
-                setActiveTab('branches');
-                router.push(`/new-admin-dashboard/branches?branchId=${b.id}`, { scroll: false });
-              }}
-            />
+            <RestaurantsView initialRestaurantId={initialRestaurantId} />
           )}
           {activeTab === 'permissions' && <PermissionsView />}
           {activeTab === 'payments' && <PaymentsView />}

@@ -21,6 +21,8 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
+import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 import { RestaurantService } from '../../application/services/restaurant.service';
 import {
   CreateRestaurantDto,
@@ -42,8 +44,11 @@ export class RestaurantController {
   @ApiOperation({ summary: 'Create a new restaurant under an organization' })
   @ApiCreatedResponse({ description: 'Restaurant created successfully', type: RestaurantResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
-  async create(@Body() dto: CreateRestaurantDto): Promise<RestaurantResponseDto> {
-    return this.restaurantService.create(dto);
+  async create(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateRestaurantDto,
+  ): Promise<RestaurantResponseDto> {
+    return this.restaurantService.create(user, dto);
   }
 
   @Get()
@@ -51,15 +56,16 @@ export class RestaurantController {
   @ApiOkResponse({ description: 'List of restaurants or paginated restaurant collection', type: [RestaurantResponseDto] })
   @ApiStandardErrors(401, 403, 500)
   async listByOrg(
+    @CurrentUser() user: JwtPayload,
     @Query() query: QueryRestaurantDto,
   ): Promise<any> {
     if (query.page !== undefined || query.search !== undefined) {
-      return this.restaurantService.findAll(query);
+      return this.restaurantService.findAll(user, query);
     }
     if (query.organizationId) {
-      return this.restaurantService.findByOrganizationId(query.organizationId, query.includeDeleted);
+      return this.restaurantService.findByOrganizationId(user, query.organizationId, query.includeDeleted);
     }
-    return this.restaurantService.findAll(query);
+    return this.restaurantService.findAll(user, query);
   }
 
   @Get(':id')
@@ -68,9 +74,10 @@ export class RestaurantController {
   @ApiOkResponse({ description: 'Restaurant details', type: RestaurantResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async getById(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<RestaurantResponseDto> {
-    return this.restaurantService.findById(id);
+    return this.restaurantService.findById(user, id);
   }
 
   @Patch(':id')
@@ -79,10 +86,11 @@ export class RestaurantController {
   @ApiOkResponse({ description: 'Restaurant updated successfully', type: RestaurantResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async update(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateRestaurantDto,
   ): Promise<RestaurantResponseDto> {
-    return this.restaurantService.update(id, dto);
+    return this.restaurantService.update(user, id, dto);
   }
 
   @Delete(':id')
@@ -91,8 +99,9 @@ export class RestaurantController {
   @ApiOkResponse({ description: 'Restaurant soft-deleted', type: RestaurantResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async delete(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<RestaurantResponseDto> {
-    return this.restaurantService.softDelete(id);
+    return this.restaurantService.softDelete(user, id);
   }
 }

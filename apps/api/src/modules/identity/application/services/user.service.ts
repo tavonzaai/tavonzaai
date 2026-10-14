@@ -12,7 +12,10 @@ import {
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { StorageService, generateKey } from '@tavonza/storage';
+import { actorHoldsPermission, isPrivilegedGlobalRole } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
+import { DrizzleOrganizationRepository } from '../../../organizations/infrastructure/persistence/drizzle-organization.repository';
+import { isSuperAdmin } from '../../../../common/auth/actor.util';
 import type { JwtPayload } from '../../infrastructure/adapters/jwt.strategy';
 import type {
   UpdateUserProfileDto,
@@ -30,6 +33,7 @@ import {
 export class UserService {
   constructor(
     private readonly userRepo: DrizzleUserRepository,
+    private readonly orgRepo: DrizzleOrganizationRepository,
     @Optional() private readonly storageService?: StorageService,
   ) {}
 
@@ -100,11 +104,7 @@ export class UserService {
     }
 
     const updatedUser = await this.userRepo.findByIdWithRelations(userId);
-    return UserDetailResponseDto.fromRecord(
-      updatedUser,
-      updatedUser.customer,
-      updatedUser.assignments,
-    );
+    return this.toUserDetail(updatedUser);
   }
 
   /**
@@ -115,7 +115,7 @@ export class UserService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return UserDetailResponseDto.fromRecord(user, user.customer, user.assignments);
+    return this.toUserDetail(user);
   }
 
   /**
@@ -123,18 +123,8 @@ export class UserService {
    */
   async getUserById(targetId: string, currentUser: JwtPayload): Promise<UserDetailResponseDto> {
     // If not self, verify admin/staff reading privileges
-    if (currentUser.sub !== targetId) {
-      const isPrivileged =
-        currentUser.role === 'SUPER_ADMIN' ||
-        currentUser.role === 'ADMIN' ||
-        currentUser.role === 'RESTAURANT_OWNER' ||
-        (Array.isArray(currentUser.permissions) &&
-          (currentUser.permissions.includes('staff.read' as any) ||
-            currentUser.permissions.includes('staff.manage' as any)));
-
-      if (!isPrivileged) {
-        throw new ForbiddenException('Access denied. You can only view your own profile.');
-      }
+    if (currentUser.sub !== targetId && !this.canManageUsers(currentUser)) {
+      throw new ForbiddenException('Access denied. You can only view your own profile.');
     }
 
     const user = await this.userRepo.findByIdWithRelations(targetId);
@@ -142,7 +132,9 @@ export class UserService {
       throw new NotFoundException(`User with ID "${targetId}" not found`);
     }
 
-    return UserDetailResponseDto.fromRecord(user, user.customer, user.assignments);
+    await this.assertCanAccessUserRecord(currentUser, user);
+
+    return this.toUserDetail(user);
   }
 
   /**
@@ -152,17 +144,14 @@ export class UserService {
     query: GetUsersFilterDto,
     currentUser: JwtPayload,
   ): Promise<UsersListResponseDto> {
-    // Verify admin/staff privileges
-    const isPrivileged =
-      currentUser.role === 'SUPER_ADMIN' ||
-      currentUser.role === 'ADMIN' ||
-      currentUser.role === 'RESTAURANT_OWNER' ||
-      (Array.isArray(currentUser.permissions) &&
-        (currentUser.permissions.includes('staff.read' as any) ||
-          currentUser.permissions.includes('staff.manage' as any)));
-
-    if (!isPrivileged) {
+    if (!this.canManageUsers(currentUser)) {
       throw new ForbiddenException('Access denied. Administrator or staff permission required.');
+    }
+
+    let userIds: string[] | undefined;
+    if (!isSuperAdmin(currentUser)) {
+      const organizationId = await this.resolveManagedOrganizationId(currentUser);
+      userIds = await this.userRepo.findUserIdsForOrganization(organizationId);
     }
 
     const res = await this.userRepo.findMany({
@@ -173,6 +162,7 @@ export class UserService {
       status: query.status,
       sortBy: query.sortBy,
       sortOrder: query.sortOrder,
+      userIds,
     });
 
     return {
@@ -189,12 +179,7 @@ export class UserService {
     status: string | undefined,
     currentUser: JwtPayload,
   ): Promise<UserDetailResponseDto> {
-    const isPrivileged =
-      currentUser.role === 'SUPER_ADMIN' ||
-      currentUser.role === 'ADMIN' ||
-      currentUser.role === 'RESTAURANT_OWNER';
-
-    if (!isPrivileged) {
+    if (!isPrivilegedGlobalRole(currentUser.globalRole) && !isPrivilegedGlobalRole(currentUser.role)) {
       throw new ForbiddenException('Access denied. Administrator permission required.');
     }
 
@@ -203,9 +188,14 @@ export class UserService {
       throw new NotFoundException(`User with ID "${targetId}" not found`);
     }
 
-    // Protect super admin status from modification by lower admins
+    await this.assertCanAccessUserRecord(currentUser, targetUser);
+
     if (targetUser.role === 'SUPER_ADMIN' && currentUser.role !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Cannot modify status of a SUPER_ADMIN account');
+    }
+
+    if (targetId === currentUser.sub && status && status !== 'ACTIVE') {
+      throw new ForbiddenException('You cannot deactivate your own account');
     }
 
     await this.userRepo.updateStatus(targetId, status);
@@ -315,6 +305,53 @@ export class UserService {
       staffId: staff?.id || (assignments[0] as any)?.staffId || null,
       assignments: assignments as any,
     };
+  }
+
+  private async toUserDetail(user: any): Promise<UserDetailResponseDto> {
+    const dto = UserDetailResponseDto.fromRecord(user, user.customer, user.assignments);
+    if (user.role === 'ADMIN' || user.role === 'RESTAURANT_OWNER') {
+      const owned = await this.orgRepo.findByOwnerId(user.id);
+      dto.organizationId = owned[0]?.id ?? null;
+    }
+    return dto;
+  }
+
+  private canManageUsers(currentUser: JwtPayload): boolean {
+    return (
+      isSuperAdmin(currentUser) ||
+      isPrivilegedGlobalRole(currentUser.globalRole) ||
+      isPrivilegedGlobalRole(currentUser.role) ||
+      actorHoldsPermission(currentUser.permissions ?? [], 'users:read') ||
+      actorHoldsPermission(currentUser.permissions ?? [], 'staff:read') ||
+      actorHoldsPermission(currentUser.permissions ?? [], 'staff:manage')
+    );
+  }
+
+  private async resolveManagedOrganizationId(currentUser: JwtPayload): Promise<string> {
+    if (currentUser.organizationId) {
+      return currentUser.organizationId;
+    }
+    const owned = await this.orgRepo.findByOwnerId(currentUser.sub);
+    const organizationId = owned[0]?.id;
+    if (!organizationId) {
+      throw new ForbiddenException('No organization is associated with this account');
+    }
+    return organizationId;
+  }
+
+  private async assertCanAccessUserRecord(
+    currentUser: JwtPayload,
+    target: { id: string; role?: string },
+  ): Promise<void> {
+    if (isSuperAdmin(currentUser) || currentUser.sub === target.id) {
+      return;
+    }
+
+    const organizationId = await this.resolveManagedOrganizationId(currentUser);
+    const scopedIds = await this.userRepo.findUserIdsForOrganization(organizationId);
+    if (!scopedIds.includes(target.id)) {
+      throw new ForbiddenException('You do not have access to this user');
+    }
   }
 
   private validatePassword(password: string): void {

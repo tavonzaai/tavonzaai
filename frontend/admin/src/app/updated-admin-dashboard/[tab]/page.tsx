@@ -1,20 +1,6 @@
-import React from 'react';
-import OwnerDashboard from '@/components/updated-admin-dashboard/OwnerDashboard';
-import AuthGuard from '@/components/auth/AuthGuard';
+import { redirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-
-export default async function UpdatedAdminTabPage({
-  params,
-}: {
-  params: { tab: string };
-}) {
-  const resolvedParams = await params;
-  const tabParam = resolvedParams?.tab || 'Dashboard';
-
-  return (
-    <AuthGuard>
-      <OwnerDashboard initialTab={tabParam} />
-    </AuthGuard>
-  );
+export default function LegacyUpdatedAdminTabRedirect({ params }: { params: { tab: string } }) {
+  const tab = params?.tab || 'dashboard';
+  redirect(`/new-admin-dashboard/${tab}`);
 }
