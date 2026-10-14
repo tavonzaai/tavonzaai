@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SuperAdminLayout } from '@/components/layout/SuperAdminLayout';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { updateProfile, changePassword } from '@/redux/features/authApi';
@@ -21,6 +21,9 @@ import {
   LogOut,
   AlertCircle,
   Save,
+  Camera,
+  Upload,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -37,6 +40,11 @@ export default function SuperAdminProfilePage() {
   const [department, setDepartment] = useState('');
   const [timezone, setTimezone] = useState('America/New_York');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Avatar Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   // Security / Password Form State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -57,8 +65,36 @@ export default function SuperAdminProfilePage() {
       setTitle(user.title || 'Head of Platform Operations');
       setDepartment(user.department || 'Super Administration & SecOps');
       setTimezone(user.timezone || 'America/New_York');
+      if ((user.avatar || user.avatarUrl) && !avatarFile) {
+        setAvatarPreview(user.avatar || user.avatarUrl || null);
+      }
     }
-  }, [user]);
+  }, [user, avatarFile]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select a valid image file (PNG, JPG, WEBP, GIF)');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image size must not exceed 5MB');
+        return;
+      }
+      setAvatarFile(file);
+      const url = URL.createObjectURL(file);
+      setAvatarPreview(url);
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarFile(null);
+    setAvatarPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const initials =
     firstName && lastName
@@ -76,21 +112,29 @@ export default function SuperAdminProfilePage() {
     setIsSavingProfile(true);
     try {
       const fullName = `${firstName.trim()} ${lastName.trim()}`;
-      await dispatch(
-        updateProfile({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          name: fullName,
-          email: email.trim(),
-          phone: phone.trim(),
-          contactNo: phone.trim(),
-          title: title.trim(),
-          department: department.trim(),
-          timezone,
-        })
-      ).unwrap();
+      const payload: any = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        name: fullName,
+        email: email.trim(),
+        phone: phone.trim(),
+        contactNo: phone.trim(),
+        title: title.trim(),
+        department: department.trim(),
+        timezone,
+      };
 
-      toast.success('Administrator profile updated successfully!');
+      if (avatarFile) {
+        payload.avatar = avatarFile;
+      } else if (avatarPreview === null && (user?.avatar || user?.avatarUrl)) {
+        payload.avatar = null;
+        payload.avatarUrl = null;
+      }
+
+      await dispatch(updateProfile(payload)).unwrap();
+
+      toast.success('Administrator profile & photo updated successfully!');
+      setAvatarFile(null);
     } catch (err: any) {
       toast.error(err || 'Failed to update profile.');
     } finally {
@@ -154,13 +198,32 @@ export default function SuperAdminProfilePage() {
         {/* Top Banner Card: Admin Identity & Badges */}
         <div className="p-6 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-zinc-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl relative overflow-hidden">
           <div className="flex items-center gap-5">
-            {/* AM Avatar badge */}
-            <div className="size-16 rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 p-[2px] shadow-lg shadow-amber-500/20 flex items-center justify-center shrink-0">
-              <div className="w-full h-full bg-black rounded-[14px] flex items-center justify-center">
-                <span className="text-yellow-400 text-xl font-bold font-inter">
-                  {initials}
-                </span>
+            {/* AM Avatar badge with live preview & hover camera */}
+            <div className="relative group shrink-0">
+              <div className="size-16 rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 p-[2px] shadow-lg shadow-amber-500/20 flex items-center justify-center overflow-hidden">
+                <div className="w-full h-full bg-black rounded-[14px] flex items-center justify-center overflow-hidden relative">
+                  {avatarPreview ? (
+                    <img
+                      src={avatarPreview}
+                      alt={`${firstName} ${lastName}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-yellow-400 text-xl font-bold font-inter">
+                      {initials}
+                    </span>
+                  )}
+                </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute inset-0 bg-black/60 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition cursor-pointer"
+                title="Change Photo"
+              >
+                <Camera className="w-5 h-5 text-yellow-400" />
+              </button>
             </div>
 
             <div className="flex flex-col">
@@ -218,6 +281,70 @@ export default function SuperAdminProfilePage() {
               </div>
 
               <form onSubmit={handleProfileSave} className="w-full pt-5 space-y-4">
+                {/* Profile Photo Upload Block matching manager/kitchen style */}
+                <div className="p-4 bg-zinc-950/80 border border-zinc-800 rounded-xl flex items-center gap-4">
+                  <div className="relative group shrink-0">
+                    <div className="size-14 rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 p-[2px] shadow-lg shadow-amber-500/20 flex items-center justify-center overflow-hidden">
+                      <div className="w-full h-full bg-black rounded-[14px] flex items-center justify-center overflow-hidden relative">
+                        {avatarPreview ? (
+                          <img
+                            src={avatarPreview}
+                            alt={`${firstName} ${lastName}`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-yellow-400 text-base font-bold font-inter">
+                            {initials}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute inset-0 bg-black/60 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition cursor-pointer"
+                      title="Change Photo"
+                    >
+                      <Camera className="w-4 h-4 text-yellow-400" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white text-xs font-semibold rounded-lg border border-zinc-700/80 flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-yellow-400" />
+                        <span>Upload Photo</span>
+                      </button>
+                      {avatarPreview && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveAvatar}
+                          className="px-2.5 py-1.5 bg-zinc-900/60 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 text-xs rounded-lg border border-zinc-800 flex items-center gap-1 transition cursor-pointer"
+                          title="Remove Photo"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-zinc-500">
+                      JPG, PNG, GIF or WEBP up to 5MB. Click Save Changes below to apply.
+                    </p>
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* First Name */}
                   <div className="flex flex-col gap-1.5">

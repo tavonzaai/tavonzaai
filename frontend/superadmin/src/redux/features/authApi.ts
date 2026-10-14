@@ -4,6 +4,7 @@ import {
   setAuthTokens,
   removeAuthToken,
   getAuthToken,
+  getApiBaseUrl,
   setCookie,
   getCookie,
   SUPERADMIN_USER_KEY,
@@ -41,6 +42,10 @@ export interface ChangePasswordPayload {
   currentPassword: string;
   newPassword: string;
   confirmPassword?: string;
+}
+
+export interface UpdateProfilePayload extends Omit<Partial<UserProfile>, 'avatar'> {
+  avatar?: File | string | null;
 }
 
 export interface VerifyOtpPayload {
@@ -144,12 +149,54 @@ export const rawAuthApi = {
     return DEMO_SUPERADMIN_USER;
   },
 
-  updateProfile: async (data: Partial<UserProfile>): Promise<UserProfile> => {
-    let updatedUser: UserProfile = { ...DEMO_SUPERADMIN_USER, ...data };
+  updateProfile: async (data: UpdateProfilePayload): Promise<UserProfile> => {
+    let uploadedAvatarUrl: string | null | undefined = undefined;
+
+    if (data.avatar instanceof File) {
+      // 1. Attempt upload to backend storage endpoint (/storage/upload)
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', data.avatar);
+        const baseUrl = getApiBaseUrl();
+        const token = getAuthToken();
+        const uploadRes = await fetch(`${baseUrl}/storage/upload`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: uploadFormData,
+        });
+        if (uploadRes.ok) {
+          const uploadJson = await uploadRes.json();
+          uploadedAvatarUrl =
+            uploadJson.url ||
+            uploadJson.data?.url ||
+            uploadJson.location ||
+            uploadJson.fileUrl;
+        }
+      } catch {}
+
+      // 2. Fallback to Data URL for prototype/local demo session
+      if (!uploadedAvatarUrl && typeof window !== 'undefined') {
+        uploadedAvatarUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(data.avatar as File);
+        });
+      }
+    } else if (typeof data.avatar === 'string' || data.avatar === null) {
+      uploadedAvatarUrl = data.avatar;
+    }
+
+    const payloadToSend: Record<string, any> = { ...data };
+    if (uploadedAvatarUrl !== undefined) {
+      payloadToSend.avatar = uploadedAvatarUrl;
+      payloadToSend.avatarUrl = uploadedAvatarUrl;
+    }
+
+    let updatedUser: UserProfile = { ...DEMO_SUPERADMIN_USER, ...payloadToSend };
     try {
       const res = await baseApiFetch<UserProfile>('/auth/me', {
         method: 'PATCH',
-        body: JSON.stringify(data),
+        body: JSON.stringify(payloadToSend),
       });
       if (res?.data?.id) {
         updatedUser = res.data;
@@ -161,7 +208,7 @@ export const rawAuthApi = {
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        updatedUser = { ...parsed, ...data };
+        updatedUser = { ...parsed, ...payloadToSend };
       } catch {}
     }
     setCookie(SUPERADMIN_USER_KEY, JSON.stringify(updatedUser));
@@ -261,7 +308,7 @@ export const getMe = createAsyncThunk('auth/getMe', async (_, { rejectWithValue 
 
 export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
-  async (data: Partial<UserProfile>, { rejectWithValue }) => {
+  async (data: UpdateProfilePayload, { rejectWithValue }) => {
     try {
       return await rawAuthApi.updateProfile(data);
     } catch (err: any) {
