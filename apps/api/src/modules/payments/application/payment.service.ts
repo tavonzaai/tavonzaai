@@ -13,10 +13,14 @@ import {
   orders,
   tableSessions,
   tables,
+  branches,
+  restaurants,
   branchSettings,
   staff,
   OutboxService,
 } from '@tavonza/database';
+import type { JwtPayload } from '../../identity/infrastructure/adapters/jwt.strategy';
+import { isSuperAdmin } from '../../../common/auth/actor.util';
 import { DrizzlePaymentRepository } from '../infrastructure/persistence/drizzle-payment.repository';
 import { StripeAdapter } from '../infrastructure/adapters/stripe.adapter';
 import type {
@@ -1084,6 +1088,101 @@ export class PaymentService {
     }
 
     return updatedPayment;
+  }
+
+  async listPayments(
+    user: JwtPayload,
+    query: {
+      organizationId?: string;
+      branchId?: string;
+      status?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    const page = Math.max(1, query.page || 1);
+    const limit = Math.min(100, Math.max(1, query.limit || 20));
+    const offset = (page - 1) * limit;
+
+    const organizationId = isSuperAdmin(user)
+      ? query.organizationId
+      : query.organizationId || user.organizationId;
+
+    if (!isSuperAdmin(user) && !organizationId) {
+      throw new BadRequestException('organizationId is required');
+    }
+
+    const conditions = [];
+    if (organizationId) {
+      conditions.push(eq(restaurants.organizationId, organizationId));
+    }
+    if (query.branchId) {
+      conditions.push(eq(branches.id, query.branchId));
+    }
+    if (query.status) {
+      conditions.push(eq(payments.status, query.status as any));
+    }
+
+    const whereClause = conditions.length ? and(...conditions) : undefined;
+
+    const [countRow] = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(payments)
+      .leftJoin(orders, eq(payments.orderId, orders.id))
+      .leftJoin(tableSessions, eq(payments.tableSessionId, tableSessions.id))
+      .leftJoin(
+        branches,
+        sql`COALESCE(${orders.branchId}, ${tableSessions.branchId}) = ${branches.id}`,
+      )
+      .leftJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+      .where(whereClause);
+
+    const rows = await this.db
+      .select({
+        payment: payments,
+        orderNumber: orders.orderNumber,
+        branchId: branches.id,
+        branchName: branches.name,
+        restaurantName: restaurants.name,
+      })
+      .from(payments)
+      .leftJoin(orders, eq(payments.orderId, orders.id))
+      .leftJoin(tableSessions, eq(payments.tableSessionId, tableSessions.id))
+      .leftJoin(
+        branches,
+        sql`COALESCE(${orders.branchId}, ${tableSessions.branchId}) = ${branches.id}`,
+      )
+      .leftJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+      .where(whereClause)
+      .orderBy(desc(payments.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const total = countRow?.total ?? 0;
+    return {
+      data: rows.map((row) => ({
+        id: row.payment.id,
+        orderId: row.payment.orderId,
+        orderNumber: row.orderNumber,
+        tableSessionId: row.payment.tableSessionId,
+        branchId: row.branchId,
+        branchName: row.branchName,
+        restaurantName: row.restaurantName,
+        amount: row.payment.amount,
+        tipAmount: row.payment.tipAmount,
+        method: row.payment.method,
+        status: row.payment.status,
+        transactionRef: row.payment.transactionRef,
+        paidAt: row.payment.paidAt,
+        createdAt: row.payment.createdAt,
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 
   private async validateDiscountInternal(code: string, amount: number) {

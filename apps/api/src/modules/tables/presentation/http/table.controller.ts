@@ -49,6 +49,7 @@ export class TableController {
       user.role === 'SUPER_ADMIN' ||
       user.globalRole === 'SUPER_ADMIN' ||
       user.role === 'ADMIN' ||
+      user.globalRole === 'ADMIN' ||
       user.role === 'RESTAURANT_OWNER';
 
     if (isGlobalAdmin) {

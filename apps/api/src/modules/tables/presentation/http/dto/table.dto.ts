@@ -142,6 +142,12 @@ export class TableResponseDto {
   @ApiPropertyOptional({ example: 'qr_tok_live_998877665544332211', description: 'Opaque encrypted QR token' })
   qrCodeToken?: string | null;
 
+  @ApiPropertyOptional({
+    example: 'http://localhost:3100/t/qr_tok_live_998877665544332211',
+    description: 'Customer join URL encoded in the printed QR code',
+  })
+  qrJoinUrl?: string | null;
+
   @ApiProperty({ enum: TABLE_SHAPES, example: 'SQUARE', description: 'Floor map table shape' })
   shape!: string;
 

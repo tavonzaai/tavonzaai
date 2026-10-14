@@ -1,16 +1,20 @@
 import {
   Injectable,
+  Logger,
   BadRequestException,
   UnauthorizedException,
   ConflictException,
   NotFoundException,
   ServiceUnavailableException,
+  Optional,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomInt } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { GlobalRole, resolvePermissions } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
+import { DrizzleRbacRepository } from '../../../authorization/infrastructure/persistence/drizzle-rbac.repository';
+import { DrizzleOrganizationRepository } from '../../../organizations/infrastructure/persistence/drizzle-organization.repository';
 import { MailService } from '../../../notifications/application/mail.service';
 import type {
   RegisterDto,
@@ -30,16 +34,27 @@ const OTP_EXPIRY_MINUTES = 10;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly userRepo: DrizzleUserRepository,
+    private readonly orgRepo: DrizzleOrganizationRepository,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    @Optional() private readonly rbacRepo?: DrizzleRbacRepository,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
     const existing = await this.userRepo.findByEmail(dto.email.toLowerCase());
     if (existing) {
       throw new ConflictException('An account with this email already exists');
+    }
+
+    if (dto.phone) {
+      const existingPhone = await this.userRepo.findByEmailOrPhone(dto.phone.trim());
+      if (existingPhone) {
+        throw new ConflictException('This phone number is already in use.');
+      }
     }
 
     this.validatePassword(dto.password);
@@ -53,7 +68,7 @@ export class AuthService {
       role: GlobalRole.CUSTOMER,
     });
 
-    const devOtp = await this.generateAndSendOtp(
+    await this.generateAndSendOtp(
       user.email,
       'email_verification',
       dto.firstName.trim(),
@@ -62,7 +77,6 @@ export class AuthService {
     return {
       message: 'Account created successfully. Please verify your email with the OTP code sent to your email.',
       email: user.email,
-      devOtp: process.env.NODE_ENV !== 'production' ? devOtp : undefined,
     };
   }
 
@@ -139,6 +153,8 @@ export class AuthService {
     const effectiveRole = primaryAssignment?.role || user.role;
     const branchId = primaryAssignment?.branchId ?? null;
     const branchName = primaryAssignment?.branchName ?? null;
+    const ownedOrgs = await this.orgRepo.findByOwnerId(user.id);
+    const organizationId = ownedOrgs[0]?.id ?? null;
 
     return {
       id: user.id,
@@ -146,6 +162,7 @@ export class AuthService {
       name: user.name,
       role: effectiveRole,
       globalRole: user.role,
+      organizationId,
       branchId,
       branchName,
       assignments,
@@ -172,16 +189,15 @@ export class AuthService {
     }
   }
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<string | undefined> {
+  async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
     const user = await this.userRepo.findByEmailOrPhone(dto.email);
-    if (!user) return undefined;
+    if (!user) return;
 
-    const devOtp = await this.generateAndSendOtp(
+    await this.generateAndSendOtp(
       user.email,
       'password_reset',
       user.name.split(' ')[0],
     );
-    return process.env.NODE_ENV !== 'production' ? devOtp : undefined;
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
@@ -206,38 +222,61 @@ export class AuthService {
   async resendOtp(
     identifier: string,
     type: 'email_verification' | 'phone_verification' | 'password_reset',
-  ): Promise<string | undefined> {
+  ): Promise<void> {
     if (type === 'phone_verification') {
       throw new BadRequestException('Phone verification is not supported');
     }
     const user = await this.userRepo.findByEmailOrPhone(identifier);
-    if (!user) return undefined;
+    if (!user) return;
 
-    const devOtp = await this.generateAndSendOtp(
+    await this.generateAndSendOtp(
       user.email,
       type,
       user.name.split(' ')[0],
     );
-    return process.env.NODE_ENV !== 'production' ? devOtp : undefined;
   }
 
   private async issueTokens(user: any): Promise<AuthTokensDto> {
+    let effectiveRole = user.role;
+    let effectivePermissions: string[] = [];
+
+    // 1. Resolve dynamic database-backed role & permissions if assigned
+    if (this.rbacRepo) {
+      try {
+        const dynamicRole = await this.rbacRepo.getUserRole(user.id);
+        if (dynamicRole) {
+          effectiveRole = dynamicRole.roleName.toUpperCase().replace(/\s+/g, '_');
+          effectivePermissions = await this.rbacRepo.getUserPermissions(user.id);
+        }
+      } catch {
+        // Fallback to legacy assignments on error
+      }
+    }
+
+    // 2. Fallback to branch staff assignments and static role resolutions
     const assignments = await this.userRepo.findStaffAssignments(user.id);
     const primaryAssignment = assignments[0];
-    const effectiveRole = primaryAssignment?.role || user.role;
+    if (!effectivePermissions || effectivePermissions.length === 0) {
+      effectiveRole = primaryAssignment?.role || user.role;
+      effectivePermissions = resolvePermissions(
+        effectiveRole,
+        (primaryAssignment?.permissions as any) ?? [],
+      ) as string[];
+    }
+
     const branchId = primaryAssignment?.branchId ?? null;
     const branchName = primaryAssignment?.branchName ?? null;
+    const ownedOrgs = await this.orgRepo.findByOwnerId(user.id);
+    const organizationId = ownedOrgs[0]?.id ?? null;
 
     const payload = {
       sub: user.id,
       email: user.email,
       role: effectiveRole,
       globalRole: user.role,
+      organizationId,
       branchId,
-      permissions: resolvePermissions(
-        effectiveRole,
-        (primaryAssignment?.permissions as any) ?? [],
-      ),
+      permissions: effectivePermissions,
     };
 
     const accessToken = this.jwtService.sign(payload, {
@@ -258,6 +297,7 @@ export class AuthService {
         name: user.name,
         role: effectiveRole,
         globalRole: user.role,
+        organizationId,
         branchId,
         branchName,
         assignments,
@@ -284,6 +324,10 @@ export class AuthService {
       : await this.mailService.sendVerificationCode(email, firstName, code);
 
     if (!mailResult.success) {
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.warn(`Mail delivery failed in dev mode, but OTP was generated: ${code}`);
+        return code;
+      }
       await this.userRepo.deleteAuthOtp(email, type, code);
       throw new ServiceUnavailableException('Unable to send the OTP email. Please try again.');
     }

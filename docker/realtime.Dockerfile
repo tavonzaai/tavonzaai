@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=public.ecr.aws/docker/library/node:20-alpine
+ARG BASE_IMAGE=node:20-alpine
 FROM ${BASE_IMAGE} AS base
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.1.0 --activate

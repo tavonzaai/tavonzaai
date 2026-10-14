@@ -1,8 +1,13 @@
 import {
   Injectable,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { DrizzleBranchRepository } from '../../infrastructure/persistence/drizzle-branch.repository';
+import { DrizzleRestaurantRepository } from '../../../restaurants/infrastructure/persistence/drizzle-restaurant.repository';
+import { DrizzleOrganizationRepository } from '../../../organizations/infrastructure/persistence/drizzle-organization.repository';
+import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
+import { assertCanAccessOrganization, isSuperAdmin } from '../../../../common/auth/actor.util';
 import type {
   CreateBranchDto,
   UpdateBranchDto,
@@ -21,11 +26,16 @@ import type {
 
 @Injectable()
 export class BranchService {
-  constructor(private readonly branchRepo: DrizzleBranchRepository) {}
+  constructor(
+    private readonly branchRepo: DrizzleBranchRepository,
+    private readonly restaurantRepo: DrizzleRestaurantRepository,
+    private readonly orgRepo: DrizzleOrganizationRepository,
+  ) {}
 
   // ── Branches ──────────────────────────────────────────────────────────
 
-  async create(dto: CreateBranchDto): Promise<BranchResponseDto> {
+  async create(user: JwtPayload, dto: CreateBranchDto): Promise<BranchResponseDto> {
+    await this.assertRestaurantAccess(user, dto.restaurantId);
     const branch = await this.branchRepo.createBranch({
       restaurantId: dto.restaurantId,
       name: dto.name,
@@ -37,32 +47,59 @@ export class BranchService {
     return this.toResponseDto(branch);
   }
 
-  async findById(id: string): Promise<BranchResponseDto> {
-    const branch = await this.branchRepo.findBranchById(id);
-    if (!branch) {
-      throw new NotFoundException(`Branch with ID "${id}" not found`);
-    }
+  async findById(user: JwtPayload, id: string): Promise<BranchResponseDto> {
+    const branch = await this.requireBranch(id);
+    await this.assertRestaurantAccess(user, branch.restaurantId);
     return this.toResponseDto(branch);
   }
 
-  async findByRestaurantId(restaurantId: string, includeDeleted = false): Promise<BranchResponseDto[]> {
-    const branches = await this.branchRepo.findBranchesByRestaurantId(restaurantId, includeDeleted);
-    return branches.map((b) => this.toResponseDto(b));
+  async findByRestaurantId(
+    user: JwtPayload,
+    restaurantId: string,
+    includeDeleted = false,
+  ): Promise<BranchResponseDto[]> {
+    await this.assertRestaurantAccess(user, restaurantId);
+    const list = await this.branchRepo.findBranchesByRestaurantId(restaurantId, includeDeleted);
+    return list.map((b) => this.toResponseDto(b));
   }
 
-  async findAll(options?: any): Promise<{ data: BranchResponseDto[]; meta: any }> {
-    const res = await this.branchRepo.findAllBranches(options);
+  async findAll(user: JwtPayload, options?: any): Promise<{ data: BranchResponseDto[]; meta: any }> {
+    if (options?.restaurantId) {
+      await this.assertRestaurantAccess(user, options.restaurantId);
+      const res = await this.branchRepo.findAllBranches(options);
+      return {
+        data: res.data.map((b) => this.toResponseDto(b)),
+        meta: res.meta,
+      };
+    }
+
+    if (isSuperAdmin(user) && !options?.organizationId) {
+      const res = await this.branchRepo.findAllBranches(options);
+      return {
+        data: res.data.map((b) => this.toResponseDto(b)),
+        meta: res.meta,
+      };
+    }
+
+    const organizationId = await this.resolveOrganizationId(user, options?.organizationId);
+    const data = await this.branchRepo.findBranchesByOrganizationId(organizationId, {
+      search: options?.search,
+      includeDeleted: options?.includeDeleted,
+    });
     return {
-      data: res.data.map((b) => this.toResponseDto(b)),
-      meta: res.meta,
+      data: data.map((b) => this.toResponseDto(b)),
+      meta: {
+        page: Number(options?.page) || 1,
+        limit: Number(options?.limit) || data.length,
+        total: data.length,
+        totalPages: 1,
+      },
     };
   }
 
-  async softDelete(id: string): Promise<BranchResponseDto> {
-    const branch = await this.branchRepo.findBranchById(id);
-    if (!branch) {
-      throw new NotFoundException(`Branch with ID "${id}" not found`);
-    }
+  async softDelete(user: JwtPayload, id: string): Promise<BranchResponseDto> {
+    const branch = await this.requireBranch(id);
+    await this.assertRestaurantAccess(user, branch.restaurantId);
     const updated = await this.branchRepo.softDeleteBranch(id);
     if (!updated) {
       throw new NotFoundException(`Failed to soft-delete branch "${id}"`);
@@ -70,11 +107,9 @@ export class BranchService {
     return this.toResponseDto(updated);
   }
 
-  async update(id: string, dto: UpdateBranchDto): Promise<BranchResponseDto> {
-    const branch = await this.branchRepo.findBranchById(id);
-    if (!branch) {
-      throw new NotFoundException(`Branch with ID "${id}" not found`);
-    }
+  async update(user: JwtPayload, id: string, dto: UpdateBranchDto): Promise<BranchResponseDto> {
+    const branch = await this.requireBranch(id);
+    await this.assertRestaurantAccess(user, branch.restaurantId);
 
     const updated = await this.branchRepo.updateBranch(id, dto);
     if (!updated) {
@@ -82,6 +117,52 @@ export class BranchService {
     }
 
     return this.toResponseDto(updated);
+  }
+
+  private async requireBranch(id: string) {
+    const branch = await this.branchRepo.findBranchById(id);
+    if (!branch) {
+      throw new NotFoundException(`Branch with ID "${id}" not found`);
+    }
+    return branch;
+  }
+
+  async assertBranchAccess(user: JwtPayload, branchId: string): Promise<void> {
+    const branch = await this.requireBranch(branchId);
+    await this.assertRestaurantAccess(user, branch.restaurantId);
+  }
+
+  private async assertRestaurantAccess(user: JwtPayload, restaurantId: string): Promise<void> {
+    const restaurant = await this.restaurantRepo.findById(restaurantId);
+    if (!restaurant) {
+      throw new NotFoundException(`Restaurant with ID "${restaurantId}" not found`);
+    }
+    const org = await this.orgRepo.findById(restaurant.organizationId);
+    if (!org) {
+      throw new NotFoundException(`Organization with ID "${restaurant.organizationId}" not found`);
+    }
+    assertCanAccessOrganization(user, org);
+  }
+
+  private async resolveOrganizationId(user: JwtPayload, requestedId?: string): Promise<string> {
+    if (isSuperAdmin(user)) {
+      if (!requestedId) {
+        throw new ForbiddenException('organizationId is required');
+      }
+      return requestedId;
+    }
+    const owned = await this.orgRepo.findByOwnerId(user.sub);
+    if (owned.length === 0) {
+      throw new ForbiddenException('No organization is associated with this account');
+    }
+    if (requestedId && !owned.some((org) => org.id === requestedId)) {
+      throw new ForbiddenException('You do not have access to this organization');
+    }
+    const fallbackId = owned[0]?.id;
+    if (!requestedId && !user.organizationId && !fallbackId) {
+      throw new ForbiddenException('No organization is associated with this account');
+    }
+    return requestedId || user.organizationId || fallbackId!;
   }
 
   // ── Branch Settings ───────────────────────────────────────────────────

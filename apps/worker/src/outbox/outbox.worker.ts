@@ -1,4 +1,5 @@
 import { Redis } from 'ioredis';
+import { normalizeRedisUrl } from '@tavonza/queue';
 import {
   createDrizzleDatabase,
   OutboxService,
@@ -18,7 +19,7 @@ export class OutboxProcessor {
       return;
     }
 
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const redisUrl = normalizeRedisUrl();
     try {
       this.redis = new Redis(redisUrl, {
         lazyConnect: true,

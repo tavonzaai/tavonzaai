@@ -66,6 +66,31 @@ export const InviteStaffModal: React.FC<InviteStaffModalProps> = ({
               />
             </div>
 
+            <div className="self-stretch grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col justify-start items-start gap-2">
+                <label className="text-white text-sm font-normal font-['Inter'] leading-4">Email</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="staff@restaurant.com"
+                  value={inviteForm.email}
+                  onChange={(e) => onChange({ ...inviteForm, email: e.target.value })}
+                  className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-['Inter']"
+                />
+              </div>
+              <div className="flex flex-col justify-start items-start gap-2">
+                <label className="text-white text-sm font-normal font-['Inter'] leading-4">Temporary password</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={inviteForm.password}
+                  onChange={(e) => onChange({ ...inviteForm, password: e.target.value })}
+                  className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-['Inter']"
+                />
+              </div>
+            </div>
+
             {/* Role & Branch */}
             <div className="self-stretch grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Role */}
@@ -79,11 +104,12 @@ export const InviteStaffModal: React.FC<InviteStaffModalProps> = ({
                     onChange={(e) => onChange({ ...inviteForm, role: e.target.value })}
                     className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-['Inter'] appearance-none focus:outline-none focus:border-amber-400 cursor-pointer"
                   >
-                    <option value="Manager">Manager</option>
-                    <option value="Branch Manager">Branch Manager</option>
-                    <option value="Waiter">Waiter</option>
-                    <option value="Chef">Chef</option>
-                    <option value="Cashier">Cashier</option>
+                    <option value="BRANCH_MANAGER">Branch Manager</option>
+                    <option value="HOST">Host</option>
+                    <option value="WAITER">Waiter</option>
+                    <option value="KITCHEN_STAFF">Kitchen</option>
+                    <option value="BARTENDER">Bartender</option>
+                    <option value="CASHIER">Cashier</option>
                   </select>
                   <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
