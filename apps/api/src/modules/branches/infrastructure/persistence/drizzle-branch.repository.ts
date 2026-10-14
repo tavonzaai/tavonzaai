@@ -20,6 +20,7 @@ import type {
   BranchOperatingHours,
   BranchHoliday,
 } from '../../domain/entities/branch.entity';
+import { resolveStaffActiveFilter } from '../../domain/staff-list-filter';
 import {
   ResourceConflictException,
   InternalOperationException,
@@ -352,7 +353,10 @@ export class DrizzleBranchRepository {
 
   // ── Staff Assignments ──────────────────────────────────────────────────
 
-  async findStaffByBranchId(branchId: string, filters?: { role?: string; search?: string }) {
+  async findStaffByBranchId(
+    branchId: string,
+    filters?: { role?: string; search?: string; status?: string },
+  ) {
     const roleFilter = filters?.role && filters.role !== 'ALL' ? (filters.role.toUpperCase() as any) : undefined;
     return DrizzleQueryBuilder.from(this.db, staffAssignments)
       .innerJoin(staff, eq(staff.id, staffAssignments.staffId))
@@ -360,7 +364,7 @@ export class DrizzleBranchRepository {
       .filterExact({
         branchId,
         role: roleFilter,
-        isActive: true,
+        isActive: resolveStaffActiveFilter(filters?.status),
       })
       .search(filters?.search, [users.name, users.email, users.contactNo])
       .select({
