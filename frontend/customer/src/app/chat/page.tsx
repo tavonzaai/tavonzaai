@@ -25,6 +25,7 @@ import {
   ChatMessage as Message,
 } from '@/redux/slices/chatSlice';
 import FormattedMessage from '@/components/chat/FormattedMessage';
+import { sessionService } from '@/redux/features/sessionApi';
 
 const SUGGESTION_CHIPS = [
   { label: '⭐ Best-selling dishes', query: 'What are your best-selling dishes?' },
@@ -118,6 +119,13 @@ function ChatContent() {
       dispatch(setShowWaiterAlert(true));
       setTimeout(() => dispatch(setShowWaiterAlert(false)), 4000);
 
+      const cached = sessionService.getCachedSessionInfo();
+      if (cached.tableSessionId) {
+        sessionService
+          .callWaiter(cached.tableSessionId, `Customer assistance requested via AI chat for table ${activeTable}`)
+          .catch(() => null);
+      }
+
       dispatch(
         addAiMessage({
           text: `🛎️ I have notified your server for **${activeTable}**. A waiter will be at your table shortly! Is there anything else you'd like while you wait?`,
@@ -133,26 +141,6 @@ function ChatContent() {
         addAiMessage({
           text: 'Here are our top chef recommendations loved by our guests today! Both are prepared fresh to order:',
           timestamp,
-          dishes: [
-            {
-              id: 'potato-corn-burger-1',
-              name: 'Potato Corn Burger',
-              price: 26.0,
-              image: '/images/burger.jpg',
-              description:
-                'Crispy seasoned potato patty, sweet grilled corn relish, and smoked cheddar sauce on a brioche bun.',
-              tags: ['Chef Special', 'Top Seller'],
-            },
-            {
-              id: 'seabass-special-1',
-              name: 'Pan-Seared Sea Bass',
-              price: 34.0,
-              image: '/images/seabass.jpg',
-              description:
-                'Line-caught sea bass with braised garden carrots, fennel crisp, and citrus herb reduction.',
-              tags: ['Gluten-Free', 'High Protein'],
-            },
-          ],
         })
       );
       return;
@@ -161,19 +149,8 @@ function ChatContent() {
     if (q.includes('veg') || q.includes('keto') || q.includes('healthy') || q.includes('salad')) {
       dispatch(
         addAiMessage({
-          text: '🌱 Here are our organic, keto-friendly and vegetarian options made with farm-to-table ingredients:',
+          text: '🌱 Here are our organic, keto-friendly and vegetarian options made with farm-to-table ingredients. You can explore our live menu or customize toppings anytime!',
           timestamp,
-          dishes: [
-            {
-              id: 'arancini-truffle-1',
-              name: 'Arancini al Tartufo',
-              price: 30.5,
-              image: '/images/slide1.jpg',
-              description:
-                'Crisp black truffle risotto croquettes with aged parmesan and warm roasted garlic aioli.',
-              tags: ['Vegetarian', 'Organic'],
-            },
-          ],
         })
       );
       return;

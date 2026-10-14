@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Bot } from 'lucide-react';
 
 export interface DraggableAiButtonProps {
   isOpen: boolean;
@@ -223,7 +223,10 @@ export default function DraggableAiButton({
           touchAction: 'none',
         }}
       >
-        <Sparkles className="w-4 h-4 text-black group-hover:rotate-12 transition-transform duration-200 shrink-0" />
+        <div className="w-5 h-5 rounded-full bg-black/10 flex items-center justify-center shrink-0">
+          <Bot className="w-3.5 h-3.5 text-black" />
+        </div>
+        <Sparkles className="w-3.5 h-3.5 text-black group-hover:rotate-12 transition-transform duration-200 shrink-0" />
         <span className="font-semibold tracking-tight">{isOpen ? openLabel : label}</span>
       </button>
     </div>

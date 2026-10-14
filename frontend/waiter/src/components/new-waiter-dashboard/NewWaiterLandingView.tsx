@@ -82,7 +82,7 @@ interface TableOrderDetail {
   id: string;
   orderNumber: string;
   tableId: string;
-  status: 'Pending' | 'Cooking' | 'Ready to Serve' | 'Completed';
+  status: 'Pending' | 'Cooking' | 'Ready to Serve' | 'Completed' | 'Served';
   targetTime: string;
   targetDuration: string;
   items: {
@@ -92,89 +92,8 @@ interface TableOrderDetail {
   totalAmount: string;
 }
 
-// Master Menu Catalog matching Figma "The Burger Lab" style
-const MENU_CATALOG: MenuItem[] = [
-  {
-    id: 'm-1',
-    name: 'The Burger Lab',
-    description: 'Brioche, wagyu patty, cheddar, secret aioli',
-    price: 26.5,
-    priceFormatted: '$26.5',
-    image: '/images/burger.jpg',
-    tag: 'None Veg',
-    category: 'Mains',
-  },
-  {
-    id: 'm-2',
-    name: 'Classic Burger',
-    description: 'Double beef patty, aged cheddar, crisp lettuce',
-    price: 12.99,
-    priceFormatted: '$12.99',
-    image: '/images/burger.jpg',
-    tag: 'None Veg',
-    category: 'Mains',
-  },
-  {
-    id: 'm-3',
-    name: 'Grilled Seabass',
-    description: 'Pan-seared Mediterranean fillet, herb butter',
-    price: 34.0,
-    priceFormatted: '$34.0',
-    image: '/images/seabass.jpg',
-    tag: 'None Veg',
-    category: 'Mains',
-  },
-  {
-    id: 'm-4',
-    name: 'Truffle Caesar',
-    description: 'Crispy romaine, parmesan shavings, truffle dressing',
-    price: 14.5,
-    priceFormatted: '$14.5',
-    image: '/images/slide1.jpg',
-    tag: 'Veg',
-    category: 'Starters',
-  },
-  {
-    id: 'm-5',
-    name: 'Smoked Bruschetta',
-    description: 'Heirloom tomatoes, fresh basil, balsamic glaze',
-    price: 11.0,
-    priceFormatted: '$11.0',
-    image: '/images/slide2.jpg',
-    tag: 'Veg',
-    category: 'Starters',
-  },
-  {
-    id: 'm-6',
-    name: 'Iced Citrus Fizz',
-    description: 'Sparkling tonic, yuzu, fresh mint leaves',
-    price: 8.5,
-    priceFormatted: '$8.5',
-    image: '/images/slide3.jpg',
-    tag: 'Veg',
-    category: 'Drinks',
-  },
-  {
-    id: 'm-7',
-    name: 'Chocolate Lava',
-    description: 'Warm molten center, bourbon vanilla bean gelato',
-    price: 12.0,
-    priceFormatted: '$12.0',
-    image: '/images/slide1.jpg',
-    tag: 'Veg',
-    category: 'Desserts',
-  },
-  {
-    id: 'm-8',
-    name: 'Crispy Calamari',
-    description: 'Flash-fried squid, smoked chili dipping sauce',
-    price: 16.5,
-    priceFormatted: '$16.5',
-    image: '/images/slide2.jpg',
-    tag: 'None Veg',
-    category: 'Starters',
-  },
-];
+// Master Menu Catalog
+const MENU_CATALOG: MenuItem[] = [];
 
 export default function NewWaiterLandingView({ initialTab = 'home' }: { initialTab?: string }) {
   const router = useRouter();
@@ -281,20 +200,31 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
       const branchId = getActiveBranchId();
       const [backendTables, liveOrders] = await Promise.all([
         waiterService.getMyTables(branchId).catch(() => []),
-        waiterService.queryOrders({ branchId, status: 'PENDING' }).catch(() => []),
+        waiterService.queryOrders({ branchId }).catch(() => []),
       ]);
 
       if (Array.isArray(backendTables) && backendTables.length > 0) {
         const mappedTables = backendTables.map((bt: any) => {
           const tableLabel = bt.tableNumber || bt.label || `Table-${bt.id?.slice(0, 2)}`;
           const tableOrdersCount = Array.isArray(liveOrders)
-            ? liveOrders.filter(
-                (o: any) =>
+            ? liveOrders.filter((o: any) => {
+                const matchTable =
                   o.tableId === bt.tableId ||
                   o.tableId === bt.id ||
                   o.tableNumber === tableLabel ||
-                  o.tableLabel === tableLabel
-              ).length
+                  o.tableLabel === tableLabel ||
+                  `Table-${o.tableNumber}` === tableLabel ||
+                  `Table-${o.tableLabel}` === tableLabel ||
+                  o.tableNumber === bt.tableNumber ||
+                  o.tableLabel === bt.tableNumber;
+                const st = String(o.status || '').toUpperCase();
+                const isActionable =
+                  st !== 'CANCELLED' &&
+                  st !== 'REJECTED' &&
+                  st !== 'SERVED' &&
+                  st !== 'COMPLETED';
+                return matchTable && isActionable;
+              }).length
             : 0;
 
           let statusDisplay: 'Available' | 'New Order' | 'Ready To Serve' | 'Occupied' = 'Available';
@@ -319,11 +249,28 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
         setSelectedTable((prev) => prev || mappedTables[0] || null);
       }
 
-
-
       if (Array.isArray(liveOrders)) {
+        const pendingLiveOrders = liveOrders.filter((lo: any) => {
+          const st = String(lo.status || '').toUpperCase();
+          const hasPendingItems =
+            Array.isArray(lo.items) &&
+            lo.items.some((it: any) => String(it.status || '').toUpperCase() === 'PENDING');
+          const isPending =
+            st === 'PENDING' ||
+            st === 'SUBMITTED' ||
+            (st === 'DRAFT' && ((lo.itemsCount || lo.items?.length || 0) > 0 || hasPendingItems)) ||
+            hasPendingItems;
+          return (
+            isPending &&
+            st !== 'CANCELLED' &&
+            st !== 'REJECTED' &&
+            st !== 'SERVED' &&
+            st !== 'COMPLETED'
+          );
+        });
+
         setPendingOrders(
-          liveOrders.map((lo: any) => {
+          pendingLiveOrders.map((lo: any) => {
             const itemsSummary =
               Array.isArray(lo.items) && lo.items.length > 0
                 ? lo.items.map((i: any) => `${i.quantity || 1}x ${i.productName || i.name || 'Dish'}`).join(', ')
@@ -335,7 +282,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                   ? lo.orderNumber
                   : `#${lo.orderNumber}`
                 : `#${(lo.id || '').slice(0, 5)}`,
-              table: lo.tableLabel || lo.tableNumber || 'Table',
+              table: lo.tableLabel || lo.tableNumber || (lo.tableId ? `Table-${lo.tableId.slice(0, 4)}` : 'Table'),
               items: itemsSummary,
               price: `$${Number(lo.totalAmount || lo.total || 0).toFixed(2)}`,
               status: 'Pending',
@@ -419,11 +366,43 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   }, [selectedTable?.id]);
 
   // 4. Browse Menu & Search States
+  const [menuCatalog, setMenuCatalog] = useState<MenuItem[]>([]);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'All' | 'Starters' | 'Mains' | 'Drinks' | 'Desserts'>('All');
 
+  useEffect(() => {
+    let mounted = true;
+    const fetchCatalog = async () => {
+      try {
+        const branchId = getActiveBranchId();
+        const items = await waiterService.getMenuItems(branchId);
+        if (mounted && Array.isArray(items)) {
+          const mapped: MenuItem[] = items.map((it: any) => ({
+            id: it.id,
+            name: it.name,
+            description: it.description || '',
+            price: Number(it.price) || 0,
+            priceFormatted: `$${Number(it.price || 0).toFixed(2)}`,
+            image: it.imageUrl || it.image || '/images/burger.jpg',
+            tag: it.dietaryTags?.includes('Vegetarian') ? 'Veg' : 'None Veg',
+            category: (['Starters', 'Mains', 'Drinks', 'Desserts'].includes(it.categoryName)
+              ? it.categoryName
+              : 'Mains') as any,
+          }));
+          setMenuCatalog(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load menu catalog:', err);
+      }
+    };
+    fetchCatalog();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Filtered menu items
-  const filteredMenuItems = MENU_CATALOG.filter((item) => {
+  const filteredMenuItems = menuCatalog.filter((item) => {
     const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
     const matchesQuery =
       item.name.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
@@ -432,20 +411,10 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   });
 
   // 5. Cart / Order Ticket State
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: 'm-2',
-      name: 'Classic Burger',
-      price: 12.99,
-      priceFormatted: '$12.99',
-      image: '/images/burger.jpg',
-      tag: 'None Veg',
-      quantity: 1,
-    },
-  ]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   // 6. Create Order Form States
-  const [selectedModifications, setSelectedModifications] = useState<string[]>(['No Onions']);
+  const [selectedModifications, setSelectedModifications] = useState<string[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedTableId, setSelectedTableId] = useState('T-01');
@@ -538,7 +507,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
 
   const handleMarkTableOrderServed = (orderId: string) => {
     setTableOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'Completed' } : o))
+      prev.map((o) => (o.id === orderId ? { ...o, status: 'Served' } : o))
     );
     setTables((prev) =>
       prev.map((t) =>
@@ -547,7 +516,12 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
           : t
       )
     );
-    toast.success('Order #1230 marked as Served to Table-01!');
+    toast.success('Order marked as Served!');
+  };
+
+  const handleDeleteTableOrder = (orderId: string) => {
+    setTableOrders((prev) => prev.filter((o) => o.id !== orderId));
+    toast.success('Order deleted/dismissed.');
   };
 
   // Submit New Order to Kitchen
@@ -781,43 +755,47 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
 
                 {/* Pending Orders Cards List */}
                 <div className="flex flex-col gap-2.5">
-                  {pendingOrders.map((order, i) => (
-                    <div
-                      key={i}
-                      className="p-3 bg-neutral-900 rounded-[10px] border border-white/5 flex items-center justify-between hover:border-white/10 transition"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-slate-200 text-xs font-semibold font-['Inter']">
-                              {order.id}
-                            </span>
-                            <span className="text-amber-400 text-xs font-medium font-['Inter']">
-                              {order.table}
+                  {pendingOrders.length === 0 ? (
+                    <div className="p-4 bg-neutral-900/60 rounded-[10px] border border-white/5 text-center text-zinc-500 text-xs font-['Inter']">
+                      No pending orders waiting right now. All caught up!
+                    </div>
+                  ) : (
+                    pendingOrders.map((order, i) => (
+                      <div
+                        key={i}
+                        onClick={() => {
+                          setCameFromFloor(true);
+                          setActiveTab('order');
+                        }}
+                        className="p-3 bg-neutral-900 rounded-[10px] border border-white/5 flex items-center justify-between hover:border-amber-400/30 transition cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-200 text-xs font-semibold font-['Inter'] group-hover:text-amber-400 transition">
+                                {order.id}
+                              </span>
+                              <span className="text-amber-400 text-xs font-medium font-['Inter'] px-1.5 py-0.5 rounded bg-amber-400/10">
+                                {order.table}
+                              </span>
+                            </div>
+                            <span className="text-zinc-400 text-xs font-normal font-['Inter'] line-clamp-1 mt-0.5">
+                              {order.items}
                             </span>
                           </div>
-                          <span className="text-zinc-400 text-xs font-normal font-['Inter'] line-clamp-1 mt-0.5">
-                            {order.items}
+                        </div>
+
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-white text-xs font-semibold font-['Inter']">
+                            {order.price}
+                          </span>
+                          <span className="px-2.5 py-1 text-xs font-medium font-['Inter'] rounded-[5px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 group-hover:bg-yellow-400 group-hover:text-black transition">
+                            Review
                           </span>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-3">
-                        <span className="text-white text-xs font-semibold font-['Inter']">
-                          {order.price}
-                        </span>
-                        <span
-                          className={`px-2.5 py-1 text-xs font-medium font-['Inter'] rounded-[5px] ${
-                            order.status === 'Active'
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-neutral-800 text-stone-300'
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -1021,25 +999,50 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                         </div>
                       )}
 
-                      {/* State 2: Waiting to Serve (Simulates Kitchen cooking -> Click to make Ready) */}
+                      {/* State 2: Cooking in Kitchen (Disabled, toast on click) */}
                       {isCooking && (
                         <button
-                          onClick={() => handleAdvanceToReadyToServe(order.id)}
-                          className="w-full h-9 py-1.5 px-2 bg-yellow-700 hover:bg-yellow-600 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-800 flex justify-center items-center text-zinc-900 text-xs font-medium font-['Poppins'] transition cursor-pointer shadow-sm"
-                          title="Click to advance to Ready to Serve"
+                          type="button"
+                          onClick={() => {
+                            toast.warning(`Order #${order.orderNumber} is currently cooking in the kitchen! Please wait until kitchen marks it "Ready to Serve".`, {
+                              duration: 4000,
+                            });
+                          }}
+                          className="w-full h-9 bg-neutral-800/80 border border-neutral-700/80 rounded-md flex justify-center items-center gap-2 text-zinc-400 text-xs font-medium cursor-not-allowed transition hover:bg-neutral-800"
+                          title="Food is cooking in the kitchen. Cannot serve yet."
                         >
-                          Waiting to Serve
+                          <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-pulse" />
+                          <span>Cooking in Kitchen (Not Ready to Serve)</span>
                         </button>
                       )}
 
-                      {/* State 3: Mark as Served */}
+                      {/* State 3: Mark as Served (Only when Ready to Serve) */}
                       {isReadyToServe && (
                         <button
                           onClick={() => handleMarkTableOrderServed(order.id)}
-                          className="w-full h-9 bg-yellow-400 hover:bg-yellow-300 rounded-lg flex justify-center items-center text-black text-sm font-medium font-['Inter'] transition shadow-sm cursor-pointer"
+                          className="w-full h-9 bg-yellow-400 hover:bg-yellow-300 rounded-lg flex justify-center items-center text-black text-sm font-semibold font-['Inter'] transition shadow-sm cursor-pointer active:scale-[0.99]"
                         >
                           Mark as Served
                         </button>
+                      )}
+
+                      {/* State 4: Served & Completed (Show Served badge + Delete button) */}
+                      {(order.status === 'Served' || order.status === 'Completed') && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <div className="flex-1 h-9 bg-emerald-500/10 border border-emerald-500/20 rounded-md flex items-center justify-center gap-1.5 text-emerald-400 text-xs font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Served &amp; Completed</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTableOrder(order.id)}
+                            className="h-9 px-3 bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 rounded-md flex items-center justify-center gap-1 text-red-400 text-xs font-medium transition cursor-pointer active:scale-95"
+                            title="Delete / Dismiss order"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   );

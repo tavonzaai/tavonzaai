@@ -10,6 +10,9 @@ const tabMap: Record<string, string> = {
   'bill-queue': 'Bill Queue',
   'profile': 'Profile',
   'dashboard': 'Table View',
+  'order-details': 'Order Details',
+  'order-detail': 'Order Details',
+  'orders': 'Order Details',
 };
 
 export async function generateMetadata({

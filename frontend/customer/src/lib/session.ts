@@ -23,5 +23,9 @@ export async function getCustomerToken(): Promise<string | undefined> {
 }
 
 export async function deleteCustomerSession(): Promise<void> {
-  (await cookies()).delete(CUSTOMER_COOKIE);
+  const cookieStore = await cookies();
+  cookieStore.delete(CUSTOMER_COOKIE);
+  cookieStore.delete("access_token");
+  cookieStore.delete("refresh_token");
+  cookieStore.delete("tavonza_customer_session_id");
 }

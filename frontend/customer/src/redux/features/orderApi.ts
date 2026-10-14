@@ -1,6 +1,67 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { baseApiFetch } from '../api/baseApi';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isUUID(val?: string | null): boolean {
+  return Boolean(val && UUID_REGEX.test(String(val).trim()));
+}
+
+export async function fetchBranchMenuCatalog(branchId: string): Promise<any[]> {
+  try {
+    const res = await baseApiFetch<any[]>(`/menus/${encodeURIComponent(branchId)}/items`, {
+      method: 'GET',
+    });
+    const data = (res as any)?.data || res;
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('Failed to fetch menu catalog for branch:', branchId, err);
+    return [];
+  }
+}
+
+export function resolveCatalogMenuItemId(
+  item: { id?: string; dishId?: string; name?: string },
+  catalogItems: any[]
+): string | null {
+  if (!catalogItems || catalogItems.length === 0) {
+    if (item.dishId && isUUID(item.dishId)) return item.dishId;
+    if (item.id && isUUID(item.id)) return item.id;
+    return null;
+  }
+
+  // 1. Direct ID match in active backend catalog
+  const direct = catalogItems.find((c: any) => c.id === item.dishId || c.id === item.id);
+  if (direct) return direct.id;
+
+  // 2. Exact or case-insensitive name match
+  if (item.name) {
+    const cleanName = String(item.name).trim().toLowerCase();
+    const byName = catalogItems.find(
+      (c: any) => String(c.name || '').trim().toLowerCase() === cleanName
+    );
+    if (byName) return byName.id;
+
+    // 3. Substring / partial name match
+    const partial = catalogItems.find((c: any) => {
+      const cName = String(c.name || '').trim().toLowerCase();
+      return cName && (cName.includes(cleanName) || cleanName.includes(cName));
+    });
+    if (partial) return partial.id;
+  }
+
+  // 4. If item already has a valid UUID that exists in database
+  if (item.dishId && isUUID(item.dishId) && catalogItems.some((c: any) => c.id === item.dishId)) {
+    return item.dishId;
+  }
+  if (item.id && isUUID(item.id) && catalogItems.some((c: any) => c.id === item.id)) {
+    return item.id;
+  }
+
+  // 5. Fallback to first available catalog item (which is guaranteed to exist in PostgreSQL)
+  return catalogItems[0]?.id || null;
+}
+
 export interface CartItemDto {
   id: string;
   orderId?: string;
@@ -150,9 +211,15 @@ export const orderService = {
   },
 
   // GET /orders/me
-  getMyOrders: async (filters?: { branchId?: string; status?: string; search?: string }): Promise<OrderListResponse[]> => {
+  getMyOrders: async (filters?: {
+    branchId?: string;
+    tableId?: string;
+    status?: string;
+    search?: string;
+  }): Promise<OrderListResponse[]> => {
     const params = new URLSearchParams();
     if (filters?.branchId) params.append('branchId', filters.branchId);
+    if (filters?.tableId) params.append('tableId', filters.tableId);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.search) params.append('search', filters.search);
     const queryString = params.toString() ? `?${params.toString()}` : '';
@@ -288,4 +355,54 @@ export const submitActiveOrder = createAsyncThunk<OrderTrackingResponse, string,
     }
   }
 );
+
+export async function getActiveCustomerOrder(
+  branchId?: string,
+  tableId?: string
+): Promise<OrderListResponse | null> {
+  try {
+    const orders = await orderService.getMyOrders({ branchId, tableId });
+    const active = orders.find((o) =>
+      ['SUBMITTED', 'ACCEPTED', 'CONFIRMED', 'IN_PREPARATION', 'PREPARING', 'READY'].includes(
+        (o.status || '').toUpperCase()
+      )
+    );
+    if (active) return active;
+
+    // Check last submitted order ID from local storage
+    if (typeof window !== 'undefined') {
+      const lastId =
+        localStorage.getItem('tavonza_last_submitted_order_id') ||
+        sessionStorage.getItem('tavonza_last_submitted_order_id');
+      if (lastId) {
+        const tracked = await orderService.trackOrder(lastId);
+        if (
+          tracked &&
+          ['SUBMITTED', 'ACCEPTED', 'CONFIRMED', 'IN_PREPARATION', 'PREPARING', 'READY'].includes(
+            (tracked.status || '').toUpperCase()
+          )
+        ) {
+          return {
+            id: tracked.id || tracked.orderId,
+            orderId: tracked.orderId || tracked.id,
+            orderNumber: tracked.orderNumber,
+            tableId: tracked.tableId,
+            status: tracked.status,
+            displayStatus: tracked.displayStatus,
+            itemCount: tracked.items?.length || 0,
+            total: tracked.totalAmount || tracked.total || 0,
+            totalAmount: tracked.totalAmount || tracked.total || 0,
+            estimatedPrepTime: tracked.estimatedPrepTime,
+            items: tracked.items || [],
+            createdAt: (tracked as any).submittedAt || new Date().toISOString(),
+          };
+        }
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 

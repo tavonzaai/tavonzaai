@@ -45,6 +45,7 @@ export interface QueryRestaurantParams {
 
 export interface QueryBranchParams {
   restaurantId?: string;
+  organizationId?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -255,6 +256,26 @@ export const restaurantService = {
     return (res as any)?.data || res;
   },
 
+  createOrganization: async (payload: {
+    name: string;
+    slug?: string;
+    description?: string;
+    logoUrl?: string;
+  }): Promise<any> => {
+    const res = await baseApiFetch<any>('/organizations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  getOrganizationById: async (id: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/organizations/${encodeURIComponent(id)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
   getOrganizations: async (): Promise<any[]> => {
     const res = await baseApiFetch<any[]>('/organizations', {
       method: 'GET',
@@ -276,6 +297,13 @@ export const restaurantService = {
     const res = await baseApiFetch<any>(`/organizations/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  deleteOrganization: async (id: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/organizations/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     });
     return (res as any)?.data || res;
   },

@@ -13,6 +13,8 @@ function ThankYouContent() {
 
   const activeTable = searchParams.get('table') || tableNumber || 'Table 08';
 
+  const ratingParam = parseInt(searchParams.get('rating') || '5', 10);
+
   return (
     <DesktopSplitLayout
       imageSrc="/images/slide2.jpg"
@@ -39,6 +41,18 @@ function ThankYouContent() {
           <h1 className="text-white text-2xl sm:text-3xl font-bold font-poppins tracking-wide">
             Thank You!
           </h1>
+          <div className="flex items-center gap-1.5 justify-center py-1">
+            {[1, 2, 3, 4, 5].map((s) => (
+              <Star
+                key={s}
+                className={`w-5 h-5 ${
+                  s <= ratingParam
+                    ? 'fill-[#FFD60A] text-[#FFD60A] drop-shadow-[0_0_8px_rgba(255,214,10,0.6)]'
+                    : 'text-neutral-700 fill-transparent'
+                }`}
+              />
+            ))}
+          </div>
           <p className="text-[#ECE4D1] text-xs sm:text-sm font-montserrat font-normal leading-relaxed">
             Your feedback was successfully received. We look forward to serving you again soon!
           </p>

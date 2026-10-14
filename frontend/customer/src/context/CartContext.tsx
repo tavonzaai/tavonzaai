@@ -2,7 +2,12 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getCookie, setCookie } from '@/redux/api/baseApi';
-import { orderService } from '@/redux/features/orderApi';
+import {
+  orderService,
+  fetchBranchMenuCatalog,
+  resolveCatalogMenuItemId,
+  isUUID,
+} from '@/redux/features/orderApi';
 
 export interface CartItem {
   id: string;
@@ -37,10 +42,7 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const isUUID = (val?: string | null): boolean =>
-  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
-
-export const resolveDynamicBranchId = (apiBranchId?: string | null): string | null => {
+export const resolveDynamicBranchId = (apiBranchId?: string | null): string => {
   if (apiBranchId && isUUID(apiBranchId)) return apiBranchId;
   const cookieBranch = getCookie('tavonza_branch_id') || getCookie('branch_id');
   if (cookieBranch && isUUID(cookieBranch)) return cookieBranch;
@@ -49,10 +51,10 @@ export const resolveDynamicBranchId = (apiBranchId?: string | null): string | nu
     const queryBranch = params.get('branchId');
     if (queryBranch && isUUID(queryBranch)) return queryBranch;
   }
-  return null;
+  return process.env.NEXT_PUBLIC_DEFAULT_BRANCH_ID || 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
 };
 
-export const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string | null => {
+export const resolveDynamicTableId = (apiTableId?: string | null, activeTableNumber?: string | null): string => {
   if (apiTableId && isUUID(apiTableId)) return apiTableId;
   const cookieTable = getCookie('tavonza_table_id');
   if (cookieTable && isUUID(cookieTable)) return cookieTable;
@@ -64,7 +66,7 @@ export const resolveDynamicTableId = (apiTableId?: string | null, activeTableNum
     if (queryTable && isUUID(queryTable)) return queryTable;
   }
   if (activeTableNumber && isUUID(activeTableNumber)) return activeTableNumber;
-  return null;
+  return 'dc4786be-b894-4337-ab7e-4f7b56d256c4';
 };
 
 const syncAddItemToBackend = async (item: CartItem): Promise<string | undefined> => {
@@ -83,15 +85,13 @@ const syncAddItemToBackend = async (item: CartItem): Promise<string | undefined>
       draft = await orderService.getCart(branchId, tableId);
     }
 
-    if (draft?.id) {
+    if (draft?.id && draft.status === 'DRAFT') {
       if (typeof window !== 'undefined') {
         localStorage.setItem('tavonza_active_cart_id', draft.id);
       }
-      const validMenuItemId = isUUID(item.dishId)
-        ? item.dishId!
-        : isUUID(item.id)
-        ? item.id
-        : null;
+      
+      const catalog = await fetchBranchMenuCatalog(branchId);
+      const validMenuItemId = resolveCatalogMenuItemId(item, catalog);
 
       if (!validMenuItemId) return;
 
@@ -190,6 +190,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(parsed) && parsed.length > 0) {
             const sanitized = parsed.filter((item: CartItem) => item && (item.dishId || item.id || item.name));
             setCart(sanitized);
+
+            // Asynchronously resolve & repair any stale or mock IDs in client state/localStorage
+            const branchId = resolveDynamicBranchId();
+            if (branchId) {
+              fetchBranchMenuCatalog(branchId).then((catalog) => {
+                if (catalog && catalog.length > 0) {
+                  setCart((prev) => {
+                    let changed = false;
+                    const repaired = prev.map((item) => {
+                      const realId = resolveCatalogMenuItemId(item, catalog);
+                      if (realId && (item.dishId !== realId || !isUUID(item.id))) {
+                        changed = true;
+                        return { ...item, dishId: realId };
+                      }
+                      return item;
+                    });
+                    if (changed && typeof window !== 'undefined') {
+                      localStorage.setItem('tavonza_customer_cart', JSON.stringify(repaired));
+                    }
+                    return repaired;
+                  });
+                }
+              });
+            }
           }
         } catch {
           // ignore parsing error

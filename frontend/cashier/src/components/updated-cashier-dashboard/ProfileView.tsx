@@ -2,10 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '@/redux/store';
-import { getMe } from '@/redux/features/authApi';
+import { getMe, changePassword } from '@/redux/features/authApi';
 import { rawUserApi } from '@/redux/features/userApi';
 import { setUser } from '@/redux/slices/authSlice';
-import { User, Mail, Phone, Camera, Check, Loader2, Save, ArrowLeft, Building2, CheckCircle2 } from 'lucide-react';
+import { User, Mail, Phone, Camera, Check, Loader2, Save, ArrowLeft, Building2, CheckCircle2, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ProfileView({ onBack }: { onBack?: () => void }) {
@@ -19,6 +19,15 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Change Password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,6 +84,45 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
       toast.error(err.message || 'Failed to update profile. Please try again.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error('Please fill in all password fields');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters long');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const res = await dispatch(
+        changePassword({
+          currentPassword,
+          newPassword,
+        })
+      );
+      setIsChangingPassword(false);
+
+      if (changePassword.fulfilled.match(res)) {
+        toast.success((res.payload as string) || 'Password changed successfully!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        toast.error((res.payload as string) || 'Failed to change password. Please verify your current password.');
+      }
+    } catch (err: any) {
+      setIsChangingPassword(false);
+      toast.error(err?.message || 'Failed to change password');
     }
   };
 
@@ -314,6 +362,120 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
           </button>
         </div>
       </form>
+
+      {/* Change Password Card */}
+      <div className="p-6 bg-zinc-900/90 rounded-2xl border border-neutral-800 space-y-5 shadow-lg">
+        <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-400/10 border border-amber-400/20 flex items-center justify-center text-amber-400">
+              <Lock className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-white font-['Inter']">
+                Change Password
+              </h3>
+              <p className="text-xs text-zinc-400 font-['Inter']">
+                Update your cashier terminal account password (minimum 8 characters)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5 font-['Inter']">
+              Current Password *
+            </label>
+            <div className="relative">
+              <input
+                type={showCurrentPassword ? 'text' : 'password'}
+                required
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter current password"
+                className="w-full h-11 px-4 pr-11 bg-zinc-950 rounded-xl border border-neutral-800 text-white text-sm font-['Inter'] focus:outline-none focus:border-amber-400 transition"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                className="absolute right-3.5 top-3 text-zinc-500 hover:text-white transition"
+              >
+                {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5 font-['Inter']">
+                New Password *
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min 8 characters"
+                  className="w-full h-11 px-4 pr-11 bg-zinc-950 rounded-xl border border-neutral-800 text-white text-sm font-['Inter'] focus:outline-none focus:border-amber-400 transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3.5 top-3 text-zinc-500 hover:text-white transition"
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5 font-['Inter']">
+                Confirm New Password *
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="w-full h-11 px-4 pr-11 bg-zinc-950 rounded-xl border border-neutral-800 text-white text-sm font-['Inter'] focus:outline-none focus:border-amber-400 transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3.5 top-3 text-zinc-500 hover:text-white transition"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              disabled={isChangingPassword}
+              className="h-11 px-6 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-sm rounded-xl flex items-center justify-center gap-2 border border-neutral-700 transition cursor-pointer disabled:opacity-50"
+            >
+              {isChangingPassword ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                  <span>Updating Password...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4 text-amber-400" />
+                  <span>Update Password</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   UtensilsCrossed,
   AlertCircle,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import {
   branchManagerService,
@@ -21,6 +22,25 @@ import {
   StaffAssignmentItem,
   TableItem,
 } from '../../../redux/features/branchManagerApi';
+
+const AVAILABLE_ROLES = [
+  { value: 'WAITER', label: 'Waiter / Server' },
+  { value: 'KITCHEN', label: 'Kitchen / Chef' },
+  { value: 'MANAGER', label: 'Branch Manager' },
+  { value: 'HOST', label: 'Host / Reception' },
+  { value: 'BARTENDER', label: 'Bartender' },
+  { value: 'CASHIER', label: 'Cashier / Billing' },
+];
+
+const AVAILABLE_PERMISSIONS = [
+  'VIEW_ORDERS',
+  'UPDATE_ORDER_STATUS',
+  'MANAGE_TABLES',
+  'CALL_WAITER',
+  'PROCESS_PAYMENTS',
+  'VIEW_REPORTS',
+  'MANAGE_INVENTORY',
+];
 
 interface AssignedTableInfo {
   id: string;
@@ -53,6 +73,11 @@ export default function StaffDetailView({
   const [shiftSchedule, setShiftSchedule] = useState('Lunch Shift (10:00 AM - 4:00 PM)');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [updateSuccess, setUpdateSuccess] = useState(false);
+
+  // Role and Permissions States (PATCH /branches/:id/staff/:staffId)
+  const [selectedRole, setSelectedRole] = useState<string>('WAITER');
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [isUpdatingStaffAssignment, setIsUpdatingStaffAssignment] = useState(false);
 
   // Live Table Assignment States
   const [assignedTables, setAssignedTables] = useState<AssignedTableInfo[]>([]);
@@ -126,6 +151,8 @@ export default function StaffDetailView({
         if (isMounted && member) {
           setStaffMember(member);
           setStatus(member.isActive ? 'Active' : 'Break');
+          setSelectedRole(member.role || 'WAITER');
+          setSelectedPermissions(member.permissions || []);
           const targetId = member.staffId || staffId!;
           loadAssignments(targetId);
         }
@@ -144,12 +171,56 @@ export default function StaffDetailView({
     };
   }, [staffId]);
 
-  const handleUpdate = () => {
-    setUpdateSuccess(true);
-    if (onUpdateShift) {
-      onUpdateShift(`Updated schedule for ${staffMember?.name || 'Staff Member'} to ${shiftSchedule}`);
+  const handleTogglePermission = (perm: string) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
+    );
+  };
+
+  const handleUpdate = async () => {
+    const targetStaffId = staffMember?.staffId || staffMember?.id || staffId;
+    if (!targetStaffId) return;
+
+    try {
+      setIsUpdatingStaffAssignment(true);
+      setActionMessage(null);
+      const branchId = getActiveBranchId();
+      const updated = await branchManagerService.updateStaff(branchId, targetStaffId, {
+        role: selectedRole,
+        permissions: selectedPermissions,
+        isActive: status === 'Active',
+      });
+
+      if (updated) {
+        setStaffMember((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...updated,
+                role: selectedRole,
+                permissions: selectedPermissions,
+                isActive: status === 'Active',
+              }
+            : updated
+        );
+      }
+      setUpdateSuccess(true);
+      setActionMessage({
+        type: 'success',
+        text: `Staff assignment updated! Role: ${selectedRole}, Status: ${status}`,
+      });
+      if (onUpdateShift) {
+        onUpdateShift(`Updated role & schedule for ${staffMember?.name || 'Staff Member'} to ${selectedRole} - ${shiftSchedule}`);
+      }
+      setTimeout(() => setUpdateSuccess(false), 3000);
+    } catch (err: any) {
+      setActionMessage({
+        type: 'error',
+        text: err?.message || 'Failed to update staff assignment',
+      });
+    } finally {
+      setIsUpdatingStaffAssignment(false);
     }
-    setTimeout(() => setUpdateSuccess(false), 3000);
   };
 
   const handleAssignTable = async () => {
@@ -515,6 +586,53 @@ export default function StaffDetailView({
 
           <div className="w-full h-px bg-neutral-800" />
 
+          {/* Role & Permissions Configuration (PATCH /branches/:id/staff/:staffId) */}
+          <div className="flex flex-col gap-2">
+            <label className="text-white text-xs font-semibold flex items-center justify-between">
+              <span>Assigned Branch Role</span>
+              <span className="text-[10px] text-yellow-400 font-mono">PATCH /branches/:id/staff/:staffId</span>
+            </label>
+            <select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-neutral-950/60 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-200 text-sm focus:outline-yellow-400 cursor-pointer"
+            >
+              {AVAILABLE_ROLES.map((r) => (
+                <option key={r.value} value={r.value} className="bg-neutral-900 text-white">
+                  {r.label} ({r.value})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-white text-xs font-semibold">
+              Assignment Permissions
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {AVAILABLE_PERMISSIONS.map((perm) => {
+                const isSelected = selectedPermissions.includes(perm);
+                return (
+                  <button
+                    key={perm}
+                    type="button"
+                    onClick={() => handleTogglePermission(perm)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-mono transition cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-yellow-400 text-neutral-950 font-semibold shadow-sm'
+                        : 'bg-neutral-950/70 border border-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    {isSelected && <Check className="w-3 h-3 text-black" />}
+                    <span>{perm}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="w-full h-px bg-neutral-800" />
+
           {/* Section & Shift Schedule */}
           <div className="flex flex-col gap-2">
             <label className="text-white text-xs font-normal">
@@ -548,16 +666,22 @@ export default function StaffDetailView({
 
             <button
               type="button"
+              disabled={isUpdatingStaffAssignment}
               onClick={handleUpdate}
-              className="px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-neutral-900 font-medium text-sm rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 transition flex items-center justify-center gap-1.5 active:scale-95 shrink-0"
+              className="px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-neutral-900 font-medium text-sm rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 transition flex items-center justify-center gap-1.5 active:scale-95 shrink-0 shadow-md cursor-pointer"
             >
-              {updateSuccess ? (
+              {isUpdatingStaffAssignment ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-black" />
+                  <span>Saving...</span>
+                </>
+              ) : updateSuccess ? (
                 <>
                   <Check className="w-4 h-4 text-black" />
                   <span>Saved</span>
                 </>
               ) : (
-                <span>Update Schedule</span>
+                <span>Save Role &amp; Schedule</span>
               )}
             </button>
           </div>

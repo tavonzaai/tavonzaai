@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/auth/AuthGuard";
+import { useAppSelector } from "@/redux/store";
+import { getStoredKitchenUser } from "@/lib/auth";
 import { TavonzaLogoIcon } from "../TavonzaLogo";
 import KitchenAIModal from "./KitchenAIModal";
-import AskAiModal from "./AskAiModal";
 import DraggableAiButton from "../common/DraggableAiButton";
 import Sidebar, { updatedKitchenNavItems } from "./Sidebar";
 import ProfileView from "./ProfileView";
@@ -39,6 +41,16 @@ export interface KitchenDashboardViewProps {
 }
 
 export default function KitchenDashboardView({ initialNav = "Dashboard" }: KitchenDashboardViewProps) {
+  const router = useRouter();
+  const { user } = useAppSelector((state) => state.auth);
+  const activeUser = user || (typeof document !== "undefined" ? getStoredKitchenUser() : null);
+  const displayName = activeUser?.name || "Kitchen Staff";
+  const displayBranch =
+    (activeUser as any)?.branchName ||
+    (activeUser as any)?.assignments?.[0]?.branch?.name ||
+    "Branch 4 ( Downtown )";
+  const avatarUrl = (activeUser as any)?.avatarUrl || (activeUser as any)?.avatar || null;
+
   const [activeNav, setActiveNav] = useState<string>(initialNav);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [orders, setOrders] = useState<KitchenOrder[]>([]);
@@ -46,81 +58,86 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
   const [activeTabFilter, setActiveTabFilter] = useState<string>("ALL");
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [stationDropdownOpen, setStationDropdownOpen] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const loadKitchenData = useCallback(async () => {
+    try {
+      const branchId = getActiveBranchId();
+      const rawOrders = await kitchenService.getOrders(branchId);
+      if (Array.isArray(rawOrders)) {
+        const mapped: KitchenOrder[] = rawOrders
+          .filter(
+            (o: any) =>
+              o.status === "ACCEPTED" ||
+              o.status === "KITCHEN_QUEUE" ||
+              o.status === "CONFIRMED" ||
+              o.status === "PREPARING" ||
+              o.status === "READY" ||
+              o.status === "READY_TO_SERVE"
+          )
+          .map((o: any) => {
+            let status: OrderStatus = "NEW";
+            if (o.status === "PREPARING") status = "PREPARING";
+            else if (o.status === "READY" || o.status === "READY_TO_SERVE") status = "READY";
+
+            const prepStart = o.prepStartedAt ? new Date(o.prepStartedAt) : null;
+            const ready = o.readyAt ? new Date(o.readyAt) : null;
+            const created = new Date(o.createdAt);
+
+            let elapsed = 0;
+            if (ready && (prepStart || !isNaN(created.getTime()))) {
+              const startMs = (prepStart || created).getTime();
+              elapsed = Math.max(0, Math.floor((ready.getTime() - startMs) / 60000));
+            } else if (prepStart && !isNaN(prepStart.getTime())) {
+              elapsed = Math.max(0, Math.floor((Date.now() - prepStart.getTime()) / 60000));
+            } else if (!isNaN(created.getTime())) {
+              elapsed = Math.max(0, Math.floor((Date.now() - created.getTime()) / 60000));
+            }
+
+            const estimatedPrepTime = Number(o.estimatedPrepTime) || 15;
+            const isOverdue = status !== "READY" && estimatedPrepTime > 0 && elapsed > estimatedPrepTime;
+            if (isOverdue && status !== "READY") {
+              status = "OVERDUE";
+            }
+
+            const tableLabel =
+              o.tableLabel ||
+              (o.tableNumber ? `Table ${o.tableNumber}` : o.tableId ? `Table ${o.tableId.slice(0, 4)}` : "Takeaway");
+
+            return {
+              id: o.orderId || o.id,
+              orderNumber: o.orderNumber,
+              table: tableLabel,
+              tableId: o.tableId,
+              orderType: "DINE_IN",
+              waiter: o.waiterName || "Staff Assigned",
+              status,
+              timeElapsedMinutes: elapsed,
+              estimatedPrepTime,
+              prepStartedAt: o.prepStartedAt,
+              readyAt: o.readyAt,
+              station: "Grill Station",
+              createdAt: o.createdAt,
+              items: (o.items || []).map((it: any, idx: number) => ({
+                id: it.id || `item-${idx}`,
+                name: it.name,
+                quantity: it.quantity,
+                options: it.notes ? [it.notes] : [],
+                isCompleted: status === "READY",
+                estimatedPrepTime: it.estimatedPrepTime,
+              })),
+            };
+          });
+        setOrders(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to load kitchen dashboard orders from database:", err);
+    }
+  }, []);
 
   useEffect(() => {
-    let mounted = true;
-    const loadKitchenData = async () => {
-      try {
-        const branchId = getActiveBranchId();
-        const rawOrders = await kitchenService.getOrders(branchId);
-        if (mounted && Array.isArray(rawOrders)) {
-          const mapped: KitchenOrder[] = rawOrders
-            .filter(
-              (o: any) =>
-                o.status === "ACCEPTED" ||
-                o.status === "PREPARING" ||
-                o.status === "READY_TO_SERVE"
-            )
-            .map((o: any) => {
-              let status: OrderStatus = "NEW";
-              if (o.status === "PREPARING") status = "PREPARING";
-              else if (o.status === "READY_TO_SERVE") status = "READY";
-
-              const prepStart = o.prepStartedAt ? new Date(o.prepStartedAt) : null;
-              const ready = o.readyAt ? new Date(o.readyAt) : null;
-              const created = new Date(o.createdAt);
-
-              let elapsed = 0;
-              if (ready && (prepStart || !isNaN(created.getTime()))) {
-                const startMs = (prepStart || created).getTime();
-                elapsed = Math.max(0, Math.floor((ready.getTime() - startMs) / 60000));
-              } else if (prepStart && !isNaN(prepStart.getTime())) {
-                elapsed = Math.max(0, Math.floor((Date.now() - prepStart.getTime()) / 60000));
-              } else if (!isNaN(created.getTime())) {
-                elapsed = Math.max(0, Math.floor((Date.now() - created.getTime()) / 60000));
-              }
-
-              const estimatedPrepTime = Number(o.estimatedPrepTime) || 15;
-              const isOverdue = status !== "READY" && estimatedPrepTime > 0 && elapsed > estimatedPrepTime;
-              if (isOverdue && status !== "READY") {
-                status = "OVERDUE";
-              }
-
-              const tableLabel =
-                o.tableLabel ||
-                (o.tableNumber ? `Table ${o.tableNumber}` : o.tableId ? `Table ${o.tableId.slice(0, 4)}` : "Takeaway");
-
-              return {
-                id: o.orderId || o.id,
-                orderNumber: o.orderNumber,
-                table: tableLabel,
-                tableId: o.tableId,
-                orderType: "DINE_IN",
-                waiter: o.waiterName || "Staff Assigned",
-                status,
-                timeElapsedMinutes: elapsed,
-                estimatedPrepTime,
-                prepStartedAt: o.prepStartedAt,
-                readyAt: o.readyAt,
-                station: "Grill Station",
-                createdAt: o.createdAt,
-                items: (o.items || []).map((it: any, idx: number) => ({
-                  id: it.id || `item-${idx}`,
-                  name: it.name,
-                  quantity: it.quantity,
-                  options: it.notes ? [it.notes] : [],
-                  isCompleted: status === "READY",
-                  estimatedPrepTime: it.estimatedPrepTime,
-                })),
-              };
-            });
-          setOrders(mapped);
-        }
-      } catch (err) {
-        console.error("Failed to load kitchen dashboard orders:", err);
-      }
-    };
     loadKitchenData();
+
     const handleRealtimeUpdate = () => {
       loadKitchenData();
     };
@@ -152,14 +169,13 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     }, 15000);
 
     return () => {
-      mounted = false;
       clearInterval(timerInterval);
       window.removeEventListener("tavonza:order_created", handleRealtimeUpdate);
       window.removeEventListener("tavonza:order_status_changed", handleRealtimeUpdate);
       window.removeEventListener("tavonza:order_item_changed", handleRealtimeUpdate);
       window.removeEventListener("tavonza:table_status_changed", handleRealtimeUpdate);
     };
-  }, []);
+  }, [loadKitchenData]);
 
   // Flag Issue Modal State
   const [flagModalOpen, setFlagModalOpen] = useState<boolean>(false);
@@ -167,7 +183,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
   const [selectedFlagReason, setSelectedFlagReason] = useState<string>("Food Quality / Problem");
 
   // Kitchen AI Modal State
-  const [aiModalOpen, setAiModalOpen] = useState<boolean>(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState<boolean>(false);
 
   // Notifications Popover State
@@ -253,83 +268,157 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
   });
 
   // Action Handlers
-  const handleStartPreparing = (orderId: string) => {
-    const nowIso = new Date().toISOString();
+  const handleStartPreparing = async (orderId: string) => {
+    try {
+      await kitchenService.updateOrderStatus(orderId, "PREPARING");
+      const nowIso = new Date().toISOString();
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                status: "PREPARING" as OrderStatus,
+                prepStartedAt: o.prepStartedAt || nowIso,
+                timeElapsedMinutes: 0,
+              }
+            : o
+        )
+      );
+      playChime("new");
+      toast.success("Order status updated to Preparing");
+    } catch (e: any) {
+      console.error("Backend order preparing status update error:", e);
+      const errMsg = e?.message || e?.data?.message || "Failed to update order status";
+      toast.error(errMsg);
+    }
+  };
+
+  const handleToggleItem = async (orderId: string, itemId: string) => {
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (!targetOrder) return;
+
+    const targetItem = targetOrder.items.find((i) => i.id === itemId);
+    if (!targetItem) return;
+
+    const nextCompleted = !targetItem.isCompleted;
+    const updatedItems = targetOrder.items.map((i) =>
+      i.id === itemId ? { ...i, isCompleted: nextCompleted } : i
+    );
+    const allCompleted = updatedItems.every((i) => i.isCompleted);
+
+    // Persist line item status in database if item has a valid backend ID
+    if (itemId && !itemId.startsWith("item-")) {
+      try {
+        await kitchenService.updateItemStatus({
+          itemId,
+          status: nextCompleted ? "READY" : "PREPARING",
+        });
+      } catch (itemErr) {
+        console.warn("Item status update in DB warning:", itemErr);
+      }
+    }
+
+    // If all items are completed, mark order READY via backend API
+    if (allCompleted && targetOrder.status !== "READY") {
+      try {
+        if (targetOrder.status === "NEW") {
+          try {
+            await kitchenService.updateOrderStatus(orderId, "PREPARING");
+          } catch {}
+        }
+        await kitchenService.updateOrderStatus(orderId, "READY");
+        const nowIso = new Date().toISOString();
+        setOrders((prev) =>
+          prev.map((order) =>
+            order.id === orderId
+              ? {
+                  ...order,
+                  items: updatedItems,
+                  status: "READY" as OrderStatus,
+                  readyAt: order.readyAt || nowIso,
+                }
+              : order
+          )
+        );
+        playChime("ready");
+        const notif = `Ticket ${targetOrder.orderNumber} items completed! ${targetOrder.table || "Table"} ready.`;
+        setReadyNotification(notif);
+        toast.success(notif);
+      } catch (err: any) {
+        console.error("Backend order ready status update failed:", err);
+        const errMsg = err?.message || err?.data?.message || "Cannot transition order status";
+        toast.error(`Ticket ${targetOrder.orderNumber}: ${errMsg}`);
+      }
+      return;
+    }
+
+    // Normal item toggle
+    const newStatus: OrderStatus =
+      targetOrder.status === "READY" || targetOrder.status === "NEW" ? "PREPARING" : targetOrder.status;
+
+    // Transition order to PREPARING in DB if it was NEW
+    if (targetOrder.status === "NEW") {
+      try {
+        await kitchenService.updateOrderStatus(orderId, "PREPARING");
+      } catch (err) {
+        console.warn("Could not transition order to PREPARING on item toggle:", err);
+      }
+    }
+
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
+      prev.map((order) =>
+        order.id === orderId
           ? {
-              ...o,
-              status: "PREPARING" as OrderStatus,
-              prepStartedAt: o.prepStartedAt || nowIso,
-              timeElapsedMinutes: 0,
+              ...order,
+              items: updatedItems,
+              status: newStatus,
             }
-          : o
+          : order
       )
     );
-    kitchenService.updateOrderStatus(orderId, "PREPARING").catch((e) => {
-      console.warn("Backend order preparing status update:", e);
-    });
-    playChime("new");
-    toast.success("Order status updated to Preparing");
   };
 
-  const handleToggleItem = (orderId: string, itemId: string) => {
-    setOrders((prev) =>
-      prev.map((order) => {
-        if (order.id !== orderId) return order;
-        const updatedItems = order.items.map((item) =>
-          item.id === itemId ? { ...item, isCompleted: !item.isCompleted } : item
-        );
-        const allCompleted = updatedItems.every((i) => i.isCompleted);
-        const newStatus: OrderStatus = allCompleted
-          ? "READY"
-          : order.status === "READY" || order.status === "NEW"
-          ? "PREPARING"
-          : order.status;
-
-        if (allCompleted && order.status !== "READY") {
-          kitchenService.updateOrderStatus(orderId, "READY").catch((e) => {
-            console.warn("Backend order ready status update:", e);
-          });
-          playChime("ready");
-          const notif = `Ticket ${order.orderNumber} items completed! ${order.table} ready.`;
-          setReadyNotification(notif);
-          toast.success(notif);
-        }
-
-        return {
-          ...order,
-          items: updatedItems,
-          status: newStatus,
-          readyAt: allCompleted ? new Date().toISOString() : order.readyAt,
-        };
-      })
-    );
-  };
-
-  const handleMarkOrderReady = (orderId: string) => {
-    const nowIso = new Date().toISOString();
-    setOrders((prev) =>
-      prev.map((order) => {
-        if (order.id !== orderId) return order;
-        const updatedItems = order.items.map((item) => ({ ...item, isCompleted: true }));
-        return {
-          ...order,
-          items: updatedItems,
-          status: "READY" as OrderStatus,
-          readyAt: order.readyAt || nowIso,
-        };
-      })
-    );
-    kitchenService.updateOrderStatus(orderId, "READY").catch((e) => {
-      console.warn("Backend order ready status update:", e);
-    });
-    playChime("ready");
+  const handleMarkOrderReady = async (orderId: string) => {
     const targetOrder = orders.find((o) => o.id === orderId);
-    const notif = `Ticket ${targetOrder?.orderNumber || ""} items completed! ${targetOrder?.table || "Table"} ready.`;
-    setReadyNotification(notif);
-    toast.success(notif);
+    if (!targetOrder) return;
+
+    if (targetOrder.status === "READY") {
+      toast.info(`Ticket ${targetOrder.orderNumber} is already Ready to Serve.`);
+      return;
+    }
+
+    try {
+      // Transition through PREPARING first if currently NEW/ACCEPTED
+      if (targetOrder.status === "NEW") {
+        try {
+          await kitchenService.updateOrderStatus(orderId, "PREPARING");
+        } catch (e) {
+          // If already in PREPARING in backend, continue to READY
+        }
+      }
+      await kitchenService.updateOrderStatus(orderId, "READY");
+      const nowIso = new Date().toISOString();
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId) return order;
+          const updatedItems = order.items.map((item) => ({ ...item, isCompleted: true }));
+          return {
+            ...order,
+            items: updatedItems,
+            status: "READY" as OrderStatus,
+            readyAt: order.readyAt || nowIso,
+          };
+        })
+      );
+      playChime("ready");
+      const notif = `Ticket ${targetOrder.orderNumber} items completed! ${targetOrder.table || "Table"} ready.`;
+      setReadyNotification(notif);
+      toast.success(notif);
+    } catch (err: any) {
+      console.error("Backend order ready status update failed:", err);
+      const errMsg = err?.message || err?.data?.message || "Failed to mark order as Ready";
+      toast.error(`Ticket ${targetOrder.orderNumber}: ${errMsg}`);
+    }
   };
 
   const openFlagModal = (order: KitchenOrder) => {
@@ -357,39 +446,11 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     setSelectedOrderForFlag(null);
   };
 
-  const handleSimulateOrder = () => {
-    const newNum = Math.floor(1520 + Math.random() * 80);
-    const tableNum = `T-0${Math.floor(1 + Math.random() * 9)}`;
-    const newOrder: KitchenOrder = {
-      id: `ord-sim-${Date.now()}`,
-      orderNumber: `#${newNum}`,
-      table: tableNum,
-      orderType: "Dine-in",
-      waiter: "Marco",
-      status: "NEW",
-      station: selectedStation === "All Stations" ? "Grill Station" : selectedStation,
-      timeElapsedMinutes: 0,
-      createdAt: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-      items: [
-        {
-          id: `item-1-${Date.now()}`,
-          name: "Classic Burger",
-          quantity: 1,
-          options: ["Medium Well", "No Onions"],
-          isCompleted: false,
-        },
-        {
-          id: `item-2-${Date.now()}`,
-          name: "Classic Burger",
-          quantity: 1,
-          options: ["Medium Well", "No Onions"],
-          isCompleted: false,
-        },
-      ],
-    };
-    setOrders((prev) => [newOrder, ...prev]);
-    playChime("new");
-    toast.info(`New incoming order ${newOrder.orderNumber} for Table ${newOrder.table}`);
+  const handleRefreshOrders = async () => {
+    setIsRefreshing(true);
+    await loadKitchenData();
+    setIsRefreshing(false);
+    toast.success("Synchronized orders with live database");
   };
 
   return (
@@ -439,12 +500,12 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
             {/* Branch & Staff Info */}
             <div className="flex flex-col">
               <span className="text-white font-bold text-sm lg:text-base leading-tight font-['Inter']">
-                Branch 4 ( Downtown )
+                {displayBranch}
               </span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse shrink-0" />
                 <span className="text-[11px] font-semibold text-zinc-400 tracking-wider uppercase">
-                  STAFF : MARCO VANCE
+                  STAFF : {displayName.toUpperCase()}
                 </span>
               </div>
             </div>
@@ -566,15 +627,15 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
               </button>
             </div>
 
-            {/* Quick Simulate Order Button */}
+            {/* Live Database Sync Button */}
             <button
               type="button"
-              onClick={handleSimulateOrder}
-              className="h-9 px-2.5 bg-zinc-900 border border-zinc-800 hover:border-yellow-400 text-zinc-400 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition"
-              title="Simulate incoming ticket"
+              onClick={handleRefreshOrders}
+              className="h-9 px-2.5 bg-zinc-900 border border-zinc-800 hover:border-yellow-400 text-zinc-300 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              title="Sync latest orders from live database"
             >
-              <Plus className="w-3.5 h-3.5 text-yellow-400" />
-              <span className="hidden xl:inline">Simulate</span>
+              <RotateCcw className={`w-3.5 h-3.5 text-yellow-400 ${isRefreshing ? "animate-spin" : ""}`} />
+              <span className="hidden xl:inline">Sync DB</span>
             </button>
           </div>
 
@@ -610,6 +671,37 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                 {currentDate}
               </span>
             </div>
+
+            <div className="h-8 w-px bg-zinc-800 hidden sm:block" />
+
+            {/* Profile Avatar Button */}
+            <button
+              type="button"
+              onClick={() => router.push('/profile')}
+              className="flex items-center gap-2.5 p-1 rounded-xl bg-[#18181b] border border-zinc-800 hover:border-yellow-400 transition group cursor-pointer shrink-0"
+              title="My Kitchen Profile"
+            >
+              <div className="w-9 h-9 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700/60 relative flex items-center justify-center shrink-0">
+                {avatarUrl ? (
+                  <Image
+                    src={avatarUrl}
+                    alt={displayName}
+                    fill
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-yellow-500/20 to-amber-500/10 flex items-center justify-center">
+                    <ChefHat className="w-4 h-4 text-yellow-400" />
+                  </div>
+                )}
+              </div>
+              <div className="hidden xl:flex flex-col text-left pr-2">
+                <span className="text-xs font-semibold text-white group-hover:text-yellow-400 transition font-['Inter'] line-clamp-1 max-w-[120px]">
+                  {displayName}
+                </span>
+                <span className="text-[10px] text-zinc-400 font-['Inter']">Profile</span>
+              </div>
+            </button>
           </div>
         </header>
 
@@ -692,12 +784,12 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
 
                     {/* Cooking Time Tracker Bar */}
                     <div className="mb-3 px-3 py-2 bg-[#121214] border border-zinc-800/80 rounded-xl flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5 text-zinc-300">
-                        <Clock className="w-3.5 h-3.5 text-amber-400" />
-                        <span>ETA: <strong className="text-white">{order.estimatedPrepTime || 15} min</strong></span>
-                      </div>
+                       <span className="flex items-center gap-2"> <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>ETA:</span></span>
+                        <span> <strong className="text-white">{order.estimatedPrepTime} min</strong></span>
+                      
 
-                      <div className="flex items-center gap-1.5">
+                      {/* <div className="flex items-center gap-1.5">
                         <span className="text-zinc-500">Elapsed:</span>
                         <span
                           className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
@@ -712,7 +804,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                         >
                           {order.timeElapsedMinutes} min
                         </span>
-                      </div>
+                      </div> */}
                     </div>
 
                     {/* Food Items List */}
@@ -824,32 +916,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           )}
         </main>
 
-        {/* FLOATING AI ROBOT BUTTON IN BOTTOM CORNER MATCHING USER SPEC */}
-        <div className="fixed bottom-8 right-8 z-40">
-          <button
-            type="button"
-            onClick={() => setAiModalOpen(true)}
-            className="w-14 h-14 rounded-full border-2 border-yellow-400 bg-zinc-900 shadow-[0_0_25px_rgba(250,204,21,0.5)] flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all group relative overflow-hidden"
-            title="Ask Tavonza AI Kitchen Co-Pilot"
-          >
-            {/* Robot Image */}
-            <Image
-              src="/images/jarvis-robot.jpg"
-              alt="Tavonza AI Robot"
-              width={56}
-              height={56}
-              className="w-full h-full object-cover rounded-full"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
-            />
-            {/* Fallback Icon */}
-            <Bot className="w-7 h-7 text-yellow-400 absolute" />
-            
-            {/* Sparkling pulse indicator */}
-            <div className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-black animate-pulse" />
-          </button>
-        </div>
 
         {/* FLAG ISSUE MODAL */}
         {flagModalOpen && selectedOrderForFlag && (
@@ -918,10 +984,10 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           </div>
         )}
 
-        {/* KITCHEN AI CO-PILOT MODAL CONNECTED TO AI ENGINE (Voice) */}
+        {/* KITCHEN AI CO-PILOT MODAL CONNECTED TO AI ENGINE (Voice & Chat APIs) */}
         <KitchenAIModal
-          isOpen={aiModalOpen}
-          onClose={() => setAiModalOpen(false)}
+          isOpen={isAskAiOpen}
+          onClose={() => setIsAskAiOpen(false)}
           activeStation={selectedStation}
         />
 
@@ -932,13 +998,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           defaultBottom={24}
           defaultRight={24}
           storageKey="updated_kitchen_ask_ai_pos"
-        />
-
-        {/* Floating Ask AI Interactive Modal */}
-        <AskAiModal
-          isOpen={isAskAiOpen}
-          onClose={() => setIsAskAiOpen(false)}
-          activeStation={selectedStation}
         />
       </div>
     </AuthGuard>

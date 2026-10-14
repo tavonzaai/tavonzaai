@@ -35,6 +35,9 @@ import { useOrganizationId } from '@/hooks/useOrganizationId';
 import { getCustomerAppUrl } from '@/redux/api/baseApi';
 import { mapRestaurant, parseBranchAddress } from '@/lib/admin-mappers';
 
+const isValidUUID = (val?: string) =>
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
 interface UseBranchDashboardProps {
   initialBranch: BranchItem;
   onUpdateBranch?: (updated: BranchItem) => void;
@@ -57,6 +60,8 @@ export function useBranchDashboard({
   const organizationId = useOrganizationId();
   const [branch, setBranch] = useState<BranchItem>(initialBranch);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('Overview');
+  const [activeBranchId, setActiveBranchId] = useState<string>(initialBranch.id);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const { data: restaurantsData } = useGetRestaurantsQuery(
     { organizationId: organizationId || undefined, page: 1, limit: 100 },

@@ -297,6 +297,33 @@ export const sessionService = {
   },
 
   /**
+   * 7. POST /sessions/:sessionId/request-bill
+   * Notifies floor staff and cashier that guests are ready to settle the bill.
+   */
+  requestBill: async (sessionId: string): Promise<{ message: string; tableSessionId?: string; status?: string }> => {
+    const res = await baseApiFetch<{ message: string; tableSessionId?: string; status?: string }>(
+      `/sessions/${encodeURIComponent(sessionId)}/request-bill`,
+      { method: 'POST' }
+    );
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * 8. POST /sessions/:sessionId/call-waiter
+   * Sends real-time assistance alert to assigned table waiter and floor staff.
+   */
+  callWaiter: async (sessionId: string, reason?: string): Promise<{ message: string; tableSessionId?: string }> => {
+    const res = await baseApiFetch<{ message: string; tableSessionId?: string }>(
+      `/sessions/${encodeURIComponent(sessionId)}/call-waiter`,
+      {
+        method: 'POST',
+        body: JSON.stringify(reason ? { reason } : {}),
+      }
+    );
+    return (res as any)?.data || res;
+  },
+
+  /**
    * Helper to retrieve cached session identifiers from cookies
    */
   getCachedSessionInfo: () => {
@@ -385,5 +412,29 @@ export const closeTableSession = createAsyncThunk<
     return await sessionService.closeSession(sessionId);
   } catch (error: any) {
     return rejectWithValue(error?.message || 'Failed to close table session');
+  }
+});
+
+export const requestTableBill = createAsyncThunk<
+  { message: string; tableSessionId?: string; status?: string },
+  string,
+  { rejectValue: string }
+>('session/requestBill', async (sessionId, { rejectWithValue }) => {
+  try {
+    return await sessionService.requestBill(sessionId);
+  } catch (error: any) {
+    return rejectWithValue(error?.message || 'Failed to request bill from staff');
+  }
+});
+
+export const callTableWaiter = createAsyncThunk<
+  { message: string; tableSessionId?: string },
+  { sessionId: string; reason?: string },
+  { rejectValue: string }
+>('session/callWaiter', async ({ sessionId, reason }, { rejectWithValue }) => {
+  try {
+    return await sessionService.callWaiter(sessionId, reason);
+  } catch (error: any) {
+    return rejectWithValue(error?.message || 'Failed to call table waiter');
   }
 });

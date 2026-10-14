@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CashierSidebar from "./Sidebar";
 import ProfileView from "./ProfileView";
 import { CashierOrder, BillQueueItem } from "./types";
@@ -54,6 +54,9 @@ export default function CashierDashboardView({
   embedded = false,
 }: CashierDashboardViewProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryOrderId = searchParams?.get("orderId");
   const { user } = useAppSelector((state) => state.auth);
 
   // Determine activeNav from pathname or initialNav
@@ -61,6 +64,7 @@ export default function CashierDashboardView({
     if (pathname?.includes("/profile")) return "Profile";
     if (pathname?.includes("/create-order")) return "Create Order";
     if (pathname?.includes("/bill-queue")) return "Bill Queue";
+    if (pathname?.includes("/order-details") || pathname?.includes("/orders")) return "Order Details";
     if (pathname?.includes("/table-view") || pathname?.includes("/dashboard")) return "Table View";
     return initialNav || "Table View";
   }, [pathname, initialNav]);
@@ -68,6 +72,7 @@ export default function CashierDashboardView({
   const [activeNav, setActiveNav] = useState<string>(() => getNavFromPath());
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [isAskAiOpen, setIsAskAiOpen] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     if (initialNav) {
@@ -108,9 +113,16 @@ export default function CashierDashboardView({
   const [offlineRequests, setOfflineRequests] = useState<OfflinePaymentRequestItem[]>([]);
 
   useEffect(() => {
+    if (queryOrderId) {
+      setSelectedOrderId(queryOrderId);
+    }
+  }, [queryOrderId]);
+
+  useEffect(() => {
     let mounted = true;
     const loadCashierData = async () => {
       try {
+        setIsLoading(true);
         const branchId = getActiveBranchId();
         const [rawOrders, rawMenu, rawRequests] = await Promise.all([
           cashierService.getOrders(branchId),
@@ -197,12 +209,18 @@ export default function CashierDashboardView({
 
           setOrders(mappedOrders);
           setBillQueueItems(mappedBills);
-          if (mappedOrders.length > 0 && !selectedOrderId && mappedOrders[0]) {
+          if (queryOrderId) {
+            setSelectedOrderId(queryOrderId);
+          } else if (mappedOrders.length > 0 && !selectedOrderId && mappedOrders[0]) {
             setSelectedOrderId(mappedOrders[0].id);
           }
         }
       } catch (err) {
         console.error("Failed to load cashier dashboard data:", err);
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
     loadCashierData();
@@ -222,7 +240,7 @@ export default function CashierDashboardView({
       window.removeEventListener('tavonza:table_status_changed', handleUpdate);
       window.removeEventListener('tavonza:table_session_changed', handleUpdate);
     };
-  }, [selectedOrderId]);
+  }, [selectedOrderId, queryOrderId]);
   const [orderNo, setOrderNo] = useState<string>("#1230");
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
@@ -341,6 +359,11 @@ export default function CashierDashboardView({
     activeNav.toLowerCase() === "select item";
 
   const isBillQueueMode = activeNav.toLowerCase() === "bill queue";
+  const isOrderDetailsMode =
+    activeNav.toLowerCase() === "order details" ||
+    activeNav.toLowerCase() === "order-details" ||
+    activeNav.toLowerCase() === "order detail" ||
+    activeNav.toLowerCase() === "orders";
 
   const bodyContent = (
     <>
@@ -467,63 +490,84 @@ export default function CashierDashboardView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800 text-slate-200 text-base font-medium font-['Inter']">
-                  {filteredBillQueue.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="hover:bg-zinc-800/50 transition cursor-pointer"
-                    >
-                      <td className="px-4 py-4 border-r border-zinc-800 font-semibold text-white">
-                        {row.orderNumber}
-                      </td>
-                      <td className="px-4 py-4 border-r border-zinc-800">
-                        {row.tableNumber}
-                      </td>
-                      <td className="px-4 py-4 border-r border-zinc-800">
-                        {row.customerName}
-                      </td>
-                      <td className="px-4 py-4 border-r border-zinc-800">
-                        {row.itemCount} Items
-                      </td>
-                      <td className="px-4 py-4 border-r border-zinc-800">
-                        {row.paymentMethod}
-                      </td>
-                      <td className="px-4 py-3 border-r border-zinc-800">
-                        <span
-                          className={`px-3 py-1.5 rounded-md text-sm font-medium font-['Inter'] inline-block ${
-                            row.status === "Preparing"
-                              ? "bg-fuchsia-500/10 text-fuchsia-500 border border-fuchsia-500/20"
-                              : row.status === "Ready"
-                              ? "bg-teal-500/10 text-teal-500 border border-teal-500/20"
-                              : row.status === "Pending"
-                              ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20"
-                              : row.status === "Payment Pending"
-                              ? "bg-orange-400/10 text-orange-400 border border-orange-400/20"
-                              : row.status === "Needs Attention"
-                              ? "bg-red-400/10 text-red-400 border border-red-400/20"
-                              : "bg-blue-400/10 text-blue-400 border border-blue-400/20"
-                          }`}
-                        >
-                          {row.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 border-r border-zinc-800 font-bold text-white">
-                        ${row.total.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedBillItem(row);
-                            setIsBillDetailModalOpen(true);
-                          }}
-                          className="p-2 bg-zinc-800 hover:bg-amber-400 hover:text-black rounded-lg border border-zinc-700 transition cursor-pointer inline-flex items-center justify-center"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                  {isLoading ? (
+                    [1, 2, 3, 4, 5].map((k) => (
+                      <tr key={k} className="animate-pulse">
+                        <td className="px-4 py-4 border-r border-zinc-800"><div className="h-4 w-20 bg-neutral-800 rounded" /></td>
+                        <td className="px-4 py-4 border-r border-zinc-800"><div className="h-4 w-16 bg-neutral-800 rounded" /></td>
+                        <td className="px-4 py-4 border-r border-zinc-800"><div className="h-4 w-24 bg-neutral-800 rounded" /></td>
+                        <td className="px-4 py-4 border-r border-zinc-800"><div className="h-4 w-16 bg-neutral-800 rounded" /></td>
+                        <td className="px-4 py-4 border-r border-zinc-800"><div className="h-4 w-20 bg-neutral-800 rounded" /></td>
+                        <td className="px-4 py-4 border-r border-zinc-800"><div className="h-6 w-20 bg-neutral-800 rounded-md" /></td>
+                        <td className="px-4 py-4 border-r border-zinc-800"><div className="h-4 w-16 bg-neutral-800 rounded" /></td>
+                        <td className="px-4 py-4 text-center"><div className="w-8 h-8 bg-neutral-800 rounded-lg mx-auto" /></td>
+                      </tr>
+                    ))
+                  ) : filteredBillQueue.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-12 text-center text-neutral-500">
+                        No pending bills in queue
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredBillQueue.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="hover:bg-zinc-800/50 transition cursor-pointer"
+                      >
+                        <td className="px-4 py-4 border-r border-zinc-800 font-semibold text-white">
+                          {row.orderNumber}
+                        </td>
+                        <td className="px-4 py-4 border-r border-zinc-800">
+                          {row.tableNumber}
+                        </td>
+                        <td className="px-4 py-4 border-r border-zinc-800">
+                          {row.customerName}
+                        </td>
+                        <td className="px-4 py-4 border-r border-zinc-800">
+                          {row.itemCount} Items
+                        </td>
+                        <td className="px-4 py-4 border-r border-zinc-800">
+                          {row.paymentMethod}
+                        </td>
+                        <td className="px-4 py-4 border-r border-zinc-800">
+                          <span
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium font-['Inter'] inline-block ${
+                              row.status === "Preparing"
+                                ? "bg-fuchsia-500/10 text-fuchsia-500 border border-fuchsia-500/20"
+                                : row.status === "Ready"
+                                ? "bg-teal-500/10 text-teal-500 border border-teal-500/20"
+                                : row.status === "Pending"
+                                ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20"
+                                : row.status === "Payment Pending"
+                                ? "bg-orange-400/10 text-orange-400 border border-orange-400/20"
+                                : row.status === "Needs Attention"
+                                ? "bg-red-400/10 text-red-400 border border-red-400/20"
+                                : "bg-blue-400/10 text-blue-400 border border-blue-400/20"
+                            }`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 border-r border-zinc-800 font-bold text-white">
+                          ${row.total.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedBillItem(row);
+                              setIsBillDetailModalOpen(true);
+                            }}
+                            className="p-2 bg-zinc-800 hover:bg-amber-400 hover:text-black rounded-lg border border-zinc-700 transition cursor-pointer inline-flex items-center justify-center"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -946,12 +990,416 @@ export default function CashierDashboardView({
               </div>
             </div>
           </div>
+        ) : isOrderDetailsMode ? (
+          /* ========================================================================= */
+          /* DEDICATED ORDER DETAILS MODE                                              */
+          /* ========================================================================= */
+          <div className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 max-w-[1600px] w-full mx-auto">
+            {/* Top Bar with Back Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-800">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveNav("Table View");
+                    router.push("/updated-cashier-dashboard/table-view");
+                  }}
+                  className="p-2 bg-neutral-900 hover:bg-neutral-800 rounded-lg border border-neutral-800 text-neutral-300 hover:text-white transition flex items-center gap-2 text-sm font-medium cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Table View</span>
+                </button>
+
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold font-['Inter'] text-white">
+                    Order Details {activeOrder ? `— ${activeOrder.orderNumber}` : ""}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-neutral-400 font-['Inter']">
+                    {activeOrder
+                      ? `Table ${activeOrder.tableNumber} • ${activeOrder.guestCount} Guests • ${activeOrder.customerName}`
+                      : "Detailed line items, receipt, and payment settlement"}
+                  </p>
+                </div>
+              </div>
+
+              {activeOrder && (
+                <div className="flex items-center gap-2">
+                  {/* Kitchen Status Badge */}
+                  <div className="px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-500/20 flex items-center gap-2">
+                    <div className="w-6 h-6 bg-green-500/20 rounded-md border border-green-500/50 flex items-center justify-center">
+                      <ChefHat className="w-3.5 h-3.5 text-green-400" />
+                    </div>
+                    <span className="text-green-500 text-xs sm:text-sm font-normal font-['Poppins']">
+                      {activeOrder.kitchenStatus === "READY_TO_SERVE"
+                        ? "Ready to serve"
+                        : activeOrder.kitchenStatus === "PREPARING"
+                        ? "Preparing"
+                        : "Completed"}
+                    </span>
+                  </div>
+
+                  {/* Finance Status Badge */}
+                  {activeOrder.financeStatus === "PAID_CASH" ? (
+                    <div className="px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-500/20 flex items-center gap-2">
+                      <div className="w-6 h-6 bg-green-500/20 rounded-md border border-green-500/50 flex items-center justify-center">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                      </div>
+                      <span className="text-green-500 text-xs sm:text-sm font-normal font-['Poppins']">
+                        Paid (Cash)
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="px-3 py-1.5 bg-amber-500/10 rounded-lg border border-amber-500/20 flex items-center gap-2">
+                      <div className="w-6 h-6 bg-amber-500/20 rounded-md border border-amber-500/50 flex items-center justify-center">
+                        <Banknote className="w-3.5 h-3.5 text-amber-500" />
+                      </div>
+                      <span className="text-amber-500 text-xs sm:text-sm font-normal font-['Poppins']">
+                        Request to Pay Cash
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {isLoading ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-pulse">
+                <div className="lg:col-span-8 bg-neutral-900 rounded-xl border border-neutral-800 p-6 space-y-6">
+                  <div className="h-6 w-48 bg-neutral-800 rounded" />
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((k) => (
+                      <div key={k} className="h-14 bg-neutral-800/40 rounded-lg" />
+                    ))}
+                  </div>
+                  <div className="h-28 bg-neutral-800/30 rounded-lg" />
+                </div>
+                <div className="lg:col-span-4 bg-neutral-900 rounded-xl border border-neutral-800 p-6 space-y-6">
+                  <div className="h-40 bg-neutral-800/50 rounded-xl" />
+                  <div className="h-12 bg-neutral-800 rounded-lg" />
+                </div>
+              </div>
+            ) : activeOrder ? (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Left Column: Full Order Itemization & Metadata */}
+                <div className="lg:col-span-8 space-y-6">
+                  {/* Metadata Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3.5 bg-neutral-900 rounded-xl border border-neutral-800 space-y-1">
+                      <span className="text-xs text-neutral-500 font-medium font-['Poppins']">Table</span>
+                      <p className="text-base font-semibold text-white font-['Poppins']">{activeOrder.tableNumber}</p>
+                    </div>
+                    <div className="p-3.5 bg-neutral-900 rounded-xl border border-neutral-800 space-y-1">
+                      <span className="text-xs text-neutral-500 font-medium font-['Poppins']">Customer</span>
+                      <p className="text-base font-semibold text-white font-['Poppins'] truncate">{activeOrder.customerName}</p>
+                    </div>
+                    <div className="p-3.5 bg-neutral-900 rounded-xl border border-neutral-800 space-y-1">
+                      <span className="text-xs text-neutral-500 font-medium font-['Poppins']">Guests</span>
+                      <p className="text-base font-semibold text-white font-['Poppins']">{activeOrder.guestCount} Guests</p>
+                    </div>
+                    <div className="p-3.5 bg-neutral-900 rounded-xl border border-neutral-800 space-y-1">
+                      <span className="text-xs text-neutral-500 font-medium font-['Poppins']">Wait Time</span>
+                      <p className="text-base font-semibold text-amber-400 font-['Poppins']">{activeOrder.waitTime}</p>
+                    </div>
+                  </div>
+
+                  {/* Itemized Table */}
+                  <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-5 sm:p-6 space-y-4 shadow-xl">
+                    <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+                      <h3 className="text-lg font-semibold text-white font-['Poppins']">
+                        Item Breakdown ({activeOrder.items?.length || activeOrder.itemCount || 1} items)
+                      </h3>
+                      <span className="text-xs text-neutral-400 font-['Inter']">Line Items</span>
+                    </div>
+
+                    <div className="divide-y divide-neutral-800/80">
+                      {(activeOrder.items && activeOrder.items.length > 0
+                        ? activeOrder.items
+                        : [{ id: "def-1", name: "Crispy Calamari", price: activeOrder.subtotal, quantity: 1 }]
+                      ).map((it, idx) => (
+                        <div key={it.id || idx} className="py-3.5 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="w-7 h-7 rounded-md bg-neutral-800 border border-neutral-700 text-xs font-semibold text-amber-400 flex items-center justify-center font-['Poppins']">
+                              {it.quantity || 1}x
+                            </span>
+                            <div>
+                              <p className="text-base font-medium text-white font-['Poppins']">{it.name}</p>
+                              <p className="text-xs text-neutral-500 font-['Inter']">${it.price.toFixed(2)} each</p>
+                            </div>
+                          </div>
+                          <span className="text-base font-semibold text-white font-['Poppins']">
+                            ${(it.price * (it.quantity || 1)).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Calculations Breakdown */}
+                    <div className="pt-4 border-t border-neutral-800 space-y-2.5 font-['Poppins']">
+                      <div className="flex justify-between text-sm text-neutral-400">
+                        <span>Subtotal</span>
+                        <span className="text-white">${activeOrder.subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-neutral-400">
+                        <span>Service Charge (5%)</span>
+                        <span className="text-white">${activeOrder.serviceCharge.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-neutral-400">
+                        <span>Tax (8%)</span>
+                        <span className="text-white">${activeOrder.tax.toFixed(2)}</span>
+                      </div>
+                      <div className="pt-3 border-t border-neutral-800 flex justify-between text-lg sm:text-xl font-bold">
+                        <span className="text-white">AMOUNT TO BE PAID</span>
+                        <span className="text-amber-500">${activeOrder.totalAmount.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Actions & Payment Settlement */}
+                <div className="lg:col-span-4 bg-neutral-900 rounded-xl border border-neutral-800 p-5 sm:p-6 space-y-6 shadow-xl">
+                  <h3 className="text-white text-lg font-semibold font-['Poppins'] text-center">
+                    Summary & Actions
+                  </h3>
+
+                  <div className="h-px bg-neutral-800 w-full" />
+
+                  {/* Status Box */}
+                  <div className="p-4 bg-neutral-950/60 rounded-xl border border-neutral-800 flex flex-col items-center gap-3 text-center">
+                    <div className="w-12 h-12 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center text-green-400">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-white font-['Poppins']">
+                        ${activeOrder.totalAmount.toFixed(2)}
+                      </div>
+                      <div className="text-green-400 text-sm font-semibold font-['Poppins']">
+                        {activeOrder.financeStatus === "PAID_CASH"
+                          ? "Payment Successful"
+                          : "Awaiting Cash Settle"}
+                      </div>
+                    </div>
+
+                    <div className="w-full text-left space-y-2 pt-2 border-t border-neutral-800 text-xs text-neutral-400 font-['Poppins']">
+                      <div className="flex justify-between">
+                        <span>Status</span>
+                        <span className="text-white font-medium">
+                          {activeOrder.financeStatus === "PAID_CASH" ? "Paid" : "Pending Cash"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Date</span>
+                        <span className="text-white font-medium">{activeOrder.paymentDate || "Today"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Payment Method</span>
+                        <span className="text-white font-medium">{activeOrder.paymentMethod || "Cash"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-3">
+                    {activeOrder.financeStatus === "PAID_CASH" ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-3 px-4 bg-neutral-800 text-neutral-400 rounded-lg font-medium text-base text-center cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle2 className="w-5 h-5 text-green-400" />
+                        Payment Settled
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmCashPaid(activeOrder.id)}
+                        className="w-full py-3 px-4 bg-green-500 hover:bg-green-400 text-black font-semibold rounded-lg text-base text-center shadow-lg shadow-green-500/20 transition cursor-pointer active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        <Banknote className="w-5 h-5" />
+                        Confirm Cash Paid
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toast.success(`Printing receipt for Order ${activeOrder.orderNumber}...`);
+                        if (typeof window !== "undefined") window.print();
+                      }}
+                      className="w-full py-2.5 px-4 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg font-medium text-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Print Order Receipt</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveNav("Table View");
+                        router.push("/updated-cashier-dashboard/table-view");
+                      }}
+                      className="w-full py-2.5 px-4 border border-neutral-700 hover:bg-neutral-800 text-neutral-300 hover:text-white rounded-lg font-medium text-sm transition cursor-pointer text-center"
+                    >
+                      Back to Table Floor
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-12 text-center text-neutral-400 bg-neutral-900 rounded-xl border border-neutral-800 space-y-4">
+                <p className="text-lg">No order selected.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveNav("Table View");
+                    router.push("/updated-cashier-dashboard/table-view");
+                  }}
+                  className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-black font-semibold rounded-lg text-sm transition cursor-pointer"
+                >
+                  Return to Table View
+                </button>
+              </div>
+            )}
+          </div>
         ) : (
           /* ========================================================================= */
           /* TABLE VIEW / DEFAULT MODE (Figma Snippets 1 & 2)                          */
           /* ========================================================================= */
           <div className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 max-w-[1600px] w-full mx-auto">
-            {/* Section Header & Search */}
+            {isLoading ? (
+              /* SKELETON LOADER FOR TABLE VIEW */
+              <div className="space-y-6 animate-pulse">
+                {/* Header Skeleton */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="h-8 w-44 bg-neutral-800 rounded-lg" />
+                    <div className="h-4 w-60 bg-neutral-800/60 rounded" />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="h-10 w-36 bg-neutral-800 rounded-lg" />
+                    <div className="h-10 w-44 bg-neutral-800 rounded-lg" />
+                    <div className="h-10 w-72 bg-neutral-800 rounded-lg" />
+                  </div>
+                </div>
+
+                {/* 3-Column POS Skeleton */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  {/* Left Column Skeleton */}
+                  <div className="lg:col-span-4 space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+                      <div className="h-5 w-36 bg-neutral-800 rounded" />
+                      <div className="h-4 w-16 bg-neutral-800/60 rounded" />
+                    </div>
+                    {[1, 2, 3].map((idx) => (
+                      <div
+                        key={idx}
+                        className="p-4 bg-neutral-900 rounded-xl border border-neutral-800 space-y-3.5"
+                      >
+                        <div className="flex justify-between items-center">
+                          <div className="h-5 w-32 bg-neutral-800 rounded" />
+                          <div className="h-5 w-16 bg-neutral-800 rounded" />
+                        </div>
+                        <div className="h-px bg-neutral-800 w-full" />
+                        <div className="flex justify-between items-center">
+                          <div className="space-y-1">
+                            <div className="h-5 w-16 bg-neutral-800 rounded" />
+                            <div className="h-3 w-20 bg-neutral-800/60 rounded" />
+                          </div>
+                          <div className="h-6 w-20 bg-neutral-800 rounded-lg" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-neutral-800" />
+                          <div className="h-4 w-28 bg-neutral-800 rounded" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-12 bg-neutral-800/40 rounded-lg" />
+                          <div className="h-12 bg-neutral-800/40 rounded-lg" />
+                        </div>
+                        <div className="h-px bg-neutral-800 w-full" />
+                        <div className="flex justify-between items-center pt-1">
+                          <div className="h-4 w-16 bg-neutral-800 rounded" />
+                          <div className="h-4 w-24 bg-neutral-800 rounded" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Middle Column Skeleton */}
+                  <div className="lg:col-span-5 bg-neutral-900 rounded-xl border border-neutral-800 p-4 sm:p-6 space-y-4">
+                    <div className="flex justify-between items-center pb-3 border-b border-neutral-800">
+                      <div className="space-y-1">
+                        <div className="h-3 w-16 bg-neutral-800/60 rounded" />
+                        <div className="h-6 w-20 bg-neutral-800 rounded" />
+                      </div>
+                      <div className="space-y-1 text-right">
+                        <div className="h-3 w-16 bg-neutral-800/60 rounded" />
+                        <div className="h-6 w-24 bg-neutral-800 rounded" />
+                      </div>
+                    </div>
+                    <div className="h-4 w-32 bg-neutral-800 rounded pt-2" />
+                    <div className="space-y-3 py-2">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="flex justify-between items-center">
+                          <div className="h-4 w-40 bg-neutral-800 rounded" />
+                          <div className="h-4 w-14 bg-neutral-800 rounded" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="h-px bg-neutral-800 w-full" />
+                    <div className="space-y-2.5">
+                      <div className="flex justify-between">
+                        <div className="h-4 w-20 bg-neutral-800 rounded" />
+                        <div className="h-4 w-14 bg-neutral-800 rounded" />
+                      </div>
+                      <div className="flex justify-between">
+                        <div className="h-4 w-28 bg-neutral-800 rounded" />
+                        <div className="h-4 w-14 bg-neutral-800 rounded" />
+                      </div>
+                      <div className="flex justify-between">
+                        <div className="h-4 w-24 bg-neutral-800 rounded" />
+                        <div className="h-4 w-14 bg-neutral-800 rounded" />
+                      </div>
+                    </div>
+                    <div className="pt-3 border-t border-neutral-800 flex justify-between">
+                      <div className="h-6 w-36 bg-neutral-800 rounded" />
+                      <div className="h-6 w-20 bg-neutral-800 rounded" />
+                    </div>
+                  </div>
+
+                  {/* Right Column Skeleton */}
+                  <div className="lg:col-span-3 bg-neutral-900 rounded-xl border border-neutral-800 p-4 sm:p-6 space-y-6">
+                    <div className="h-5 w-36 bg-neutral-800 rounded mx-auto" />
+                    <div className="h-px bg-neutral-800 w-full" />
+                    <div className="p-4 bg-neutral-800/30 rounded-xl border border-neutral-800 flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-neutral-800" />
+                      <div className="h-6 w-24 bg-neutral-800 rounded" />
+                      <div className="h-4 w-32 bg-neutral-800/60 rounded" />
+                      <div className="h-px bg-neutral-800 w-full" />
+                      <div className="w-full space-y-2">
+                        <div className="h-3 w-16 bg-neutral-800/60 rounded" />
+                        <div className="h-4 w-24 bg-neutral-800 rounded" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <div className="h-4 w-20 bg-neutral-800 rounded" />
+                        <div className="h-4 w-16 bg-neutral-800 rounded" />
+                      </div>
+                      <div className="flex justify-between">
+                        <div className="h-4 w-20 bg-neutral-800 rounded" />
+                        <div className="h-4 w-16 bg-neutral-800 rounded" />
+                      </div>
+                      <div className="pt-2 border-t border-neutral-800 flex justify-between">
+                        <div className="h-6 w-16 bg-neutral-800 rounded" />
+                        <div className="h-6 w-24 bg-neutral-800 rounded" />
+                      </div>
+                    </div>
+                    <div className="h-12 w-full bg-neutral-800 rounded-lg" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Section Header & Search */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl sm:text-3xl font-semibold font-['Inter'] text-white leading-tight">
@@ -1160,12 +1608,26 @@ export default function CashierDashboardView({
                         <span className="text-white text-base font-medium font-['Poppins']">
                           {ord.itemCount} Items
                         </span>
-                        <div className="flex items-center gap-1 text-amber-500 hover:underline">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedOrderId(ord.id);
+                            setActiveNav("Order Details");
+                            router.push(
+                              `/updated-cashier-dashboard/order-details?orderId=${encodeURIComponent(
+                                ord.id
+                              )}`
+                            );
+                          }}
+                          className="flex items-center gap-1 text-amber-500 hover:text-amber-400 hover:underline transition cursor-pointer"
+                          title="Open Order Details Page"
+                        >
                           <span className="text-base font-medium font-['Poppins']">
                             View Details
                           </span>
                           <ChevronRight className="w-4 h-4" />
-                        </div>
+                        </button>
                       </div>
                     </div>
                   );
@@ -1368,6 +1830,8 @@ export default function CashierDashboardView({
                 )}
               </div>
             </div>
+              </>
+            )}
           </div>
         )}
     </>
