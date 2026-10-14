@@ -29,7 +29,10 @@ function LoginContent() {
       {/* Background glow effects */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-yellow-400/5 rounded-full blur-[140px] pointer-events-none" />
       <div className="relative z-10 w-full">
-        <LoginView onLoginSuccess={() => router.replace(returnUrl)} />
+        <LoginView
+          onLoginSuccess={() => router.replace(returnUrl)}
+          onForgotPassword={() => router.push('/forgot-password')}
+        />
       </div>
     </div>
   );

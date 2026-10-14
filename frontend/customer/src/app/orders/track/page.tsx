@@ -606,7 +606,7 @@ function TrackContent() {
                 <span>Proceed to Payment</span>
               </button>
 
-              <button
+              {/* <button
                 type="button"
                 onClick={() =>
                   router.push(
@@ -621,7 +621,7 @@ function TrackContent() {
                     ? `View Your Feedback (Rated ${existingFeedback.rating}★)`
                     : 'Rate Your Experience & Leave Feedback'}
                 </span>
-              </button>
+              </button> */}
 
               {/* Toast banner for staff alert */}
               {toastNotification && (
@@ -632,7 +632,7 @@ function TrackContent() {
               )}
 
               {/* Request Bill Button */}
-              <button
+              {/* <button
                 type="button"
                 onClick={handleRequestBill}
                 disabled={requestingBill || billRequested}
@@ -646,10 +646,10 @@ function TrackContent() {
                     ? 'Requesting Bill...'
                     : 'Request Bill from Waiter'}
                 </span>
-              </button>
+              </button> */}
 
               {/* Call Waiter Button */}
-              <button
+              {/* <button
                 type="button"
                 onClick={handleCallWaiter}
                 disabled={callingWaiter}
@@ -663,7 +663,7 @@ function TrackContent() {
                     ? 'Calling Waiter...'
                     : 'Call Waiter to Table'}
                 </span>
-              </button>
+              </button> */}
             </div>
           </>
         )}
