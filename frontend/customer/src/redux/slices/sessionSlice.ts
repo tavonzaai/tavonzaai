@@ -10,6 +10,8 @@ import {
   joinTableSession,
   updateOrderMode,
   closeTableSession,
+  requestTableBill,
+  callTableWaiter,
 } from '../features/sessionApi';
 
 export interface SessionState {
@@ -25,6 +27,10 @@ export interface SessionState {
   isLoading: boolean;
   isGeneratingCode: boolean;
   isJoining: boolean;
+  isRequestingBill: boolean;
+  billRequested: boolean;
+  isCallingWaiter: boolean;
+  waiterCalled: boolean;
   error: string | null;
   shareCodeError: string | null;
 }
@@ -39,6 +45,10 @@ const initialState: SessionState = {
   isLoading: false,
   isGeneratingCode: false,
   isJoining: false,
+  isRequestingBill: false,
+  billRequested: false,
+  isCallingWaiter: false,
+  waiterCalled: false,
   error: null,
   shareCodeError: null,
 };
@@ -218,6 +228,34 @@ export const sessionSlice = createSlice({
       .addCase(closeTableSession.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload || 'Failed to close table session';
+      });
+
+    // ── 7. requestTableBill ──
+    builder
+      .addCase(requestTableBill.pending, (state) => {
+        state.isRequestingBill = true;
+      })
+      .addCase(requestTableBill.fulfilled, (state) => {
+        state.isRequestingBill = false;
+        state.billRequested = true;
+      })
+      .addCase(requestTableBill.rejected, (state, action) => {
+        state.isRequestingBill = false;
+        state.error = action.payload || 'Failed to request bill';
+      });
+
+    // ── 8. callTableWaiter ──
+    builder
+      .addCase(callTableWaiter.pending, (state) => {
+        state.isCallingWaiter = true;
+      })
+      .addCase(callTableWaiter.fulfilled, (state) => {
+        state.isCallingWaiter = false;
+        state.waiterCalled = true;
+      })
+      .addCase(callTableWaiter.rejected, (state, action) => {
+        state.isCallingWaiter = false;
+        state.error = action.payload || 'Failed to call waiter';
       });
   },
 });

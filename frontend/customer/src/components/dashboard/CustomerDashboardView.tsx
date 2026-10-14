@@ -29,7 +29,10 @@ import OrdersView from './OrdersView';
 import ProfileView from './ProfileView';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { fetchMenuItems, BackendMenuItem } from '@/redux/features/menu-items/menuItemApi';
+import { fetchMenuCategories } from '@/redux/features/menu-category/menuCategoryApi';
 import { getItemImage } from '@/lib/menuUtils';
+import { resolveDynamicBranchId, resolveDynamicTableId } from '@/context/CartContext';
+import { getActiveCustomerOrder } from '@/redux/features/orderApi';
 
 interface CustomerDashboardViewProps {
   showAuthSuccessModal?: boolean;
@@ -44,24 +47,50 @@ export default function CustomerDashboardView({
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const { items: backendMenuItems, loading: menuLoading } = useAppSelector((state) => state.menuItems);
+  const { categories: backendCategories } = useAppSelector((state) => state.menuCategories);
 
   const [activeIntent, setActiveIntent] = useState('Date Night');
   const [activeDietary, setActiveDietary] = useState(['Keto & Low Carb']);
   const [jarvisQuery, setJarvisQuery] = useState('');
   const [showReserveModal, setShowReserveModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackOrderId, setFeedbackOrderId] = useState<string | undefined>(undefined);
   const [showAuthModal, setShowAuthModal] = useState(showAuthSuccessModal);
   const [selectedDishDetail, setSelectedDishDetail] = useState<DishData | null>(null);
   const [cartFlowStep, setCartFlowStep] = useState<CartStep | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
   const [chatMessages, setChatMessages] = useState<string[]>([]);
   const [isNavVisible, setIsNavVisible] = useState(true);
+  const [hasActiveOrder, setHasActiveOrder] = useState(false);
+
+  // Poll active kitchen order to highlight live indicator in BottomNav
+  useEffect(() => {
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+    const checkActive = () => {
+      getActiveCustomerOrder(branchId, tableId)
+        .then((ord) => setHasActiveOrder(Boolean(ord)))
+        .catch(() => setHasActiveOrder(false));
+    };
+
+    checkActive();
+    const timer = setInterval(checkActive, 8000);
+    const handleEvt = () => checkActive();
+    window.addEventListener('tavonza:order_status_changed', handleEvt);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('tavonza:order_status_changed', handleEvt);
+    };
+  }, []);
 
   useEffect(() => {
     if (!backendMenuItems || backendMenuItems.length === 0) {
       dispatch(fetchMenuItems({ page: 1, limit: 20 }));
     }
-  }, [dispatch, backendMenuItems]);
+    if (!backendCategories || backendCategories.length === 0) {
+      dispatch(fetchMenuCategories({ page: 1, limit: 20 }));
+    }
+  }, [dispatch, backendMenuItems, backendCategories]);
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -150,7 +179,15 @@ export default function CustomerDashboardView({
           />
         );
       case 'orders':
-        return <OrdersView onReserveClick={() => setShowReserveModal(true)} onOpenFeedback={() => setShowFeedbackModal(true)} />;
+        return (
+          <OrdersView
+            onReserveClick={() => setShowReserveModal(true)}
+            onOpenFeedback={(targetOrderId?: string) => {
+              setFeedbackOrderId(targetOrderId);
+              setShowFeedbackModal(true);
+            }}
+          />
+        );
       case 'profile':
         return <ProfileView />;
       case 'home':
@@ -170,7 +207,7 @@ export default function CustomerDashboardView({
                 </div>
 
                 <h2 className="text-base sm:text-lg md:text-xl font-semibold text-white leading-snug font-['Inter']">
-                  Good evening, {user?.name || user?.firstName || 'Alex'}. What are you in the mood for?
+                  Good evening, {user?.name || user?.firstName || 'Guest'}. What are you in the mood for?
                 </h2>
 
                 <p className="text-xs sm:text-sm text-neutral-400 font-normal leading-relaxed font-['Inter']">
@@ -525,9 +562,14 @@ export default function CustomerDashboardView({
       {/* Feedback & Review Modal */}
       {showFeedbackModal && (
         <FeedbackModal
-          onClose={() => setShowFeedbackModal(false)}
+          orderId={feedbackOrderId}
+          onClose={() => {
+            setShowFeedbackModal(false);
+            setFeedbackOrderId(undefined);
+          }}
           onGoHome={() => {
             setShowFeedbackModal(false);
+            setFeedbackOrderId(undefined);
             handleTabChange('home');
           }}
         />
@@ -543,6 +585,14 @@ export default function CustomerDashboardView({
 
       {/* Floating Draggable Ask AI Concierge Button & Popup Modal */}
       <DraggableAskAi defaultBottom={24} defaultRight={24} />
+
+      {/* Persistent Bottom Nav */}
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        isVisible={isNavVisible}
+        hasActiveOrder={hasActiveOrder}
+      />
     </div>
   );
 }

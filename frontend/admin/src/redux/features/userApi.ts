@@ -210,6 +210,17 @@ export const rawUserApi = {
     });
     return { data: response.data, meta: (response as any).meta };
   },
+
+  /**
+   * 7. Soft delete a user account (ADMIN only)
+   * DELETE /users/:id
+   */
+  deleteUser: async (id: string): Promise<UserResponse> => {
+    const response = await baseApiFetch<UserResponse>(`/users/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return response.data || (response as any);
+  },
 };
 
 // ─────────────────────────────────────────
@@ -284,6 +295,18 @@ export const getUsersList = createAsyncThunk(
       return await rawUserApi.getUsers(query);
     } catch (err: any) {
       return rejectWithValue(err.message || 'Failed to retrieve users.');
+    }
+  }
+);
+
+// 7. Soft Delete User Account
+export const deleteUser = createAsyncThunk(
+  'user/deleteUser',
+  async (id: string, { rejectWithValue }) => {
+    try {
+      return await rawUserApi.deleteUser(id);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to delete user.');
     }
   }
 );

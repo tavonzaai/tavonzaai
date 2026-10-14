@@ -16,6 +16,7 @@ import {
   Play,
   Square,
   CheckCircle2,
+  Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,27 +30,28 @@ type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 const VOICE_PRESETS = [
   { label: '⚡ Overdue Tickets', prompt: 'What tickets are overdue right now?' },
-  { label: '🍔 Grill Station Load', prompt: 'How many Classic Burgers on Grill Station?' },
-  { label: '📖 Wagyu Recipe Specs', prompt: 'Check Classic Wagyu Burger recipe specs' },
-  { label: '📢 Notify Waiter Marco', prompt: 'Notify Waiter Marco for Table T-01' },
+  { label: '📊 Station Load', prompt: 'How many items are in queue on this station?' },
+  { label: '📖 Recipe Specs', prompt: 'Check recipe specs for active tickets' },
+  { label: '📢 Notify Waitstaff', prompt: 'Notify floor waitstaff for ready items' },
 ];
 
 export default function KitchenAIModal({
   isOpen,
   onClose,
-  activeStation = 'Grill Station',
+  activeStation = 'Kitchen Line',
 }: KitchenAIModalProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [liveTranscript, setLiveTranscript] = useState<string>('');
   const [lastUserVoice, setLastUserVoice] = useState<string>('');
   const [lastAiResponse, setLastAiResponse] = useState<string>(
-    'Chef Marco, I am ready on the Grill Station. Speak any command hands-free.'
+    `I am ready on ${activeStation}. Speak any command hands-free.`
   );
   const [isAiOnline, setIsAiOnline] = useState<boolean | null>(null);
   const [autoListenNext, setAutoListenNext] = useState<boolean>(true);
   const [soundMuted, setSoundMuted] = useState<boolean>(false);
   const [micBlocked, setMicBlocked] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string>(() => `kitchen_${activeStation.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`);
+  const [textInput, setTextInput] = useState<string>('');
 
   const isOpenRef = useRef<boolean>(isOpen);
   isOpenRef.current = isOpen;
@@ -86,7 +88,7 @@ export default function KitchenAIModal({
       try {
         const aiBaseUrl =
           (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
-          'http://localhost:8000';
+          'https://ai.tavonza.com';
         const res = await fetch(`${aiBaseUrl}/health`, { signal: AbortSignal.timeout(2000) });
         setIsAiOnline(res.ok);
       } catch {
@@ -321,7 +323,7 @@ export default function KitchenAIModal({
 
       const aiBaseUrl =
         (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
-        'http://localhost:8000';
+        'https://ai.tavonza.com';
 
       const sentences = splitSentencesForSpeech(spokenText);
       if (!sentences.length) {
@@ -469,7 +471,7 @@ export default function KitchenAIModal({
       const currentStation = activeStationRef.current || 'Grill Station';
       const aiBaseUrl =
         (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
-        'http://localhost:8000';
+        'https://ai.tavonza.com';
 
       const chatAbort = new AbortController();
       chatAbortControllerRef.current = chatAbort;
@@ -522,22 +524,15 @@ export default function KitchenAIModal({
       let reply = `I have analyzed the kitchen line for ${currentStation}. Everything is operating smoothly.`;
 
       if (lower === 'hi' || lower === 'hello' || lower.startsWith('hi ') || lower.startsWith('hello ')) {
-        reply = `Hello Chef Marco! I am monitoring ${currentStation} tickets and line bottlenecks. What would you like to check?`;
+        reply = `Hello! I am monitoring ${currentStation} tickets and line bottlenecks. What would you like to check?`;
       } else if (lower.includes('overdue') || lower.includes('late') || lower.includes('time')) {
-        reply =
-          'Ticket #1524 for Table T-01 is currently flagged as Overdue with 18 minutes elapsed. Recommend plating the 2 Classic Burgers immediately.';
-      } else if (lower.includes('burger') || lower.includes('grill') || lower.includes('how many')) {
-        reply =
-          'Grill Station currently has 4 Classic Wagyu Burgers queued: 3 Medium Well with No Onions, and 1 Medium Well with Extra Cheese.';
-      } else if (lower.includes('recipe') || lower.includes('spec') || lower.includes('classic') || lower.includes('wagyu')) {
-        reply =
-          'Classic Wagyu Smash Burger specs: 2 100-gram Wagyu patties smashed for 2 minutes per side, aged yellow cheddar, smoked bacon jam, house aioli, toasted brioche bun. Allergens are gluten and dairy.';
-      } else if (lower.includes('waiter') || lower.includes('marco') || lower.includes('notify') || lower.includes('ready')) {
-        reply =
-          'Notification sent to Waiter Marco: Table T-01 order is completing on the grill; please prepare for pickup in 2 minutes.';
+        reply = `No overdue tickets currently flagged for ${currentStation}. All orders are progressing within target prep times.`;
+      } else if (lower.includes('recipe') || lower.includes('spec')) {
+        reply = `Dish recipe specs and allergen information can be referenced directly in the Recipes view.`;
+      } else if (lower.includes('waiter') || lower.includes('notify') || lower.includes('ready')) {
+        reply = `Notification dispatched to floor waitstaff for ready items.`;
       } else if (lower.includes('balance') || lower.includes('bottleneck') || lower.includes('load') || lower.includes('capacity')) {
-        reply =
-          'Grill Station is at 75% capacity with 8 active items. Fryer Station has spare capacity. Shift sides to the fryer station to shave approximately 3 minutes off ticket completion.';
+        reply = `Workloads are currently balanced across stations on the kitchen line.`;
       }
 
       if (activeRequestIdRef.current === currentReqId) {
@@ -726,7 +721,7 @@ export default function KitchenAIModal({
                       : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40'
                   }`}
                 >
-                  {isAiOnline ? 'Live Engine (8000)' : 'Hands-Free Voice Mode'}
+                  {isAiOnline ? 'Live AI Engine' : 'Hands-Free Voice Mode'}
                 </span>
               </div>
               <p className="text-zinc-400 text-xs">
@@ -981,11 +976,39 @@ export default function KitchenAIModal({
           )}
         </div>
 
-        {/* QUICK VOICE TRIGGER CHIPS (One-Touch Hands-Free Activation) */}
-        <div className="px-6 py-3 bg-[#141416] border-t border-zinc-800 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        {/* TEXT INPUT BAR (Type or Speak) */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const q = textInput.trim();
+            if (!q) return;
+            setTextInput('');
+            processVoiceCommand(q);
+          }}
+          className="px-6 py-3 bg-[#141416] border-t border-zinc-800 flex items-center gap-2"
+        >
+          <input
+            type="text"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            placeholder="Type a question / command or speak into the mic above..."
+            className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-xl px-4 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-400 font-sans"
+          />
+          <button
+            type="submit"
+            disabled={!textInput.trim() || voiceState === 'processing'}
+            className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold text-xs rounded-xl flex items-center gap-1.5 transition active:scale-95 cursor-pointer shrink-0 shadow-sm"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Send</span>
+          </button>
+        </form>
+
+        {/* QUICK PROMPT CHIPS */}
+        <div className="px-6 py-3 bg-[#141416] border-t border-zinc-800/80 flex items-center gap-2 overflow-x-auto no-scrollbar">
           <span className="text-[11px] text-zinc-400 font-semibold uppercase tracking-wider shrink-0 flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-yellow-400" />
-            Quick Voice:
+            Quick Prompts:
           </span>
           {VOICE_PRESETS.map((preset, idx) => (
             <button
@@ -1002,7 +1025,7 @@ export default function KitchenAIModal({
           ))}
         </div>
 
-        {/* FOOTER CONTROLS (NO KEYBOARD / NO TYPING) */}
+        {/* FOOTER CONTROLS */}
         <div className="px-6 py-4 bg-[#18181b] border-t border-zinc-800 flex items-center justify-between">
           <label className="flex items-center gap-2.5 text-xs text-zinc-300 cursor-pointer select-none">
             <input
@@ -1019,7 +1042,7 @@ export default function KitchenAIModal({
             onClick={onClose}
             className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition cursor-pointer"
           >
-            Close Voice Co-Pilot
+            Close AI Assistant
           </button>
         </div>
       </div>

@@ -47,71 +47,70 @@ export const BranchMenuTab: React.FC<BranchMenuTabProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
-            {paged.items.map((item) => (
-              <tr key={item.id} className="hover:bg-zinc-900/40 transition-colors">
-                {/* Item */}
-                <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
-                  {item.name}
-                </td>
-
-                {/* Category */}
-                <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
-                  {item.category}
-                </td>
-
-                {/* Price */}
-                <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
-                  {item.price}
-                </td>
-
-                {/* Status */}
-                <td className="px-5 py-3 text-center">
-                  <span
-                    className={`inline-flex px-3 py-1.5 rounded-md text-sm font-medium font-['Inter'] leading-4 ${
-                      item.status === 'Active'
-                        ? 'bg-green-500/10 text-green-500'
-                        : 'bg-neutral-400/20 text-neutral-400'
-                    }`}
-                  >
-                    {item.status}
-                  </span>
-                </td>
-
-                {/* Actions matching Figma: Edit, Duplicate, Disable / Enable, Delete */}
-                <td className="px-5 py-4 text-center">
-                  <div className="flex items-center justify-center gap-6">
-                    <button
-                      type="button"
-                      onClick={() => onOpenEditMenu(item)}
-                      className="text-neutral-400 hover:text-white text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDuplicateMenu(item)}
-                      className="text-neutral-400 hover:text-white text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
-                    >
-                      Duplicate
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onToggleMenuStatus(item)}
-                      className="text-neutral-400 hover:text-white text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
-                    >
-                      {item.status === 'Active' ? 'Disable' : 'Enable'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteMenu(item)}
-                      className="text-red-400 hover:text-red-300 text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
-                    >
-                      Delete
-                    </button>
-                  </div>
+            {paged.items.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-5 py-12 text-center text-neutral-400 font-medium">
+                  No menu items found. Click &quot;Add Menu Item&quot; to add one.
                 </td>
               </tr>
-            ))}
+            ) : (
+              paged.items.map((item) => (
+                <tr key={item.id} className="hover:bg-zinc-900/40 transition-colors">
+                  <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
+                    {item.name}
+                  </td>
+                  <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
+                    {item.category}
+                  </td>
+                  <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
+                    {item.price}
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    <span
+                      className={`inline-flex px-3 py-1.5 rounded-md text-sm font-medium font-['Inter'] leading-4 ${
+                        item.status === 'Active'
+                          ? 'bg-green-500/10 text-green-500'
+                          : 'bg-neutral-400/20 text-neutral-400'
+                      }`}
+                    >
+                      {item.status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-center">
+                    <div className="flex items-center justify-center gap-6">
+                      <button
+                        type="button"
+                        onClick={() => onOpenEditMenu(item)}
+                        className="text-neutral-400 hover:text-white text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDuplicateMenu(item)}
+                        className="text-neutral-400 hover:text-white text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
+                      >
+                        Duplicate
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onToggleMenuStatus(item)}
+                        className="text-neutral-400 hover:text-white text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
+                      >
+                        {item.status === 'Active' ? 'Disable' : 'Enable'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteMenu(item)}
+                        className="text-red-400 hover:text-red-300 text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

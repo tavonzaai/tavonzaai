@@ -261,6 +261,11 @@ export default function BranchManagerDashboard({
                 initialFilter={tableFilter}
                 onSelectTable={handleSelectTable}
                 tablesData={tables}
+                onTableCreated={async (newTable) => {
+                  showToast(`Table ${newTable?.number || (newTable as any)?.label || ''} created successfully!`);
+                  await loadLiveTables();
+                }}
+                onRefresh={loadLiveTables}
               />
             )
           ) : activeNav.toLowerCase() === 'orders' ? (

@@ -1,10 +1,13 @@
 'use client';
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Star, HeartHandshake } from 'lucide-react';
+import { ArrowLeft, Star, HeartHandshake, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
+import { feedbackService, FeedbackRecord } from '@/redux/features/feedbackApi';
+import { getActiveCustomerOrder, orderService } from '@/redux/features/orderApi';
 
 function FeedbackContent() {
   const router = useRouter();
@@ -13,13 +16,115 @@ function FeedbackContent() {
 
   const activeTable = searchParams.get('table') || tableNumber || 'Table 08';
 
+  const [orderId, setOrderId] = useState<string>(() => {
+    return (searchParams.get('order') || searchParams.get('orderId') || searchParams.get('id') || '').trim();
+  });
+
   const [rating, setRating] = useState(5);
   const [hoverRating, setHoverRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState('');
+  const [existingFeedback, setExistingFeedback] = useState<FeedbackRecord | null>(null);
+  const [isCheckingExisting, setIsCheckingExisting] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // 1. Resolve orderId if missing & fetch existing feedback
+  useEffect(() => {
+    let isMounted = true;
+
+    async function initOrderAndFeedback() {
+      try {
+        let currentOrderId = orderId;
+
+        // If no orderId in query, fallback to local storage or active customer orders
+        if (!currentOrderId) {
+          if (typeof window !== 'undefined') {
+            const lastSubmitted =
+              localStorage.getItem('tavonza_last_submitted_order_id') ||
+              sessionStorage.getItem('tavonza_last_submitted_order_id') ||
+              '';
+            if (lastSubmitted) {
+              currentOrderId = lastSubmitted.trim();
+            }
+          }
+
+          if (!currentOrderId) {
+            const active = await getActiveCustomerOrder().catch(() => null);
+            if (active && (active.orderId || active.id)) {
+              currentOrderId = (active.orderId || active.id).trim();
+            }
+          }
+
+          if (!currentOrderId) {
+            const myOrders = await orderService.getMyOrders().catch(() => []);
+            if (myOrders && myOrders.length > 0) {
+              const latest = myOrders[0];
+              if (latest && (latest.orderId || latest.id)) {
+                currentOrderId = (latest.orderId || latest.id).trim();
+              }
+            }
+          }
+
+          if (currentOrderId && isMounted) {
+            setOrderId(currentOrderId);
+          }
+        }
+
+        // If we have an orderId, check if feedback was already submitted
+        if (currentOrderId) {
+          const recorded = await feedbackService.getFeedbackByOrder(currentOrderId);
+          if (isMounted && recorded) {
+            setExistingFeedback(recorded);
+            setRating(recorded.rating || 5);
+            if (recorded.comment) {
+              setFeedbackText(recorded.comment);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not check existing feedback:', err);
+      } finally {
+        if (isMounted) {
+          setIsCheckingExisting(false);
+        }
+      }
+    }
+
+    initOrderAndFeedback();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [orderId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    router.push(`/feedback/thank-you?table=${encodeURIComponent(activeTable)}&rating=${rating}`);
+
+    if (!orderId) {
+      toast.error('No order detected for feedback. Please place an order first or scan a table QR code.');
+      router.push(`/menu?table=${encodeURIComponent(activeTable)}`);
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await feedbackService.submitFeedback({
+        orderId,
+        rating,
+        comment: feedbackText,
+      });
+
+      toast.success('Your feedback was submitted successfully!');
+      router.push(
+        `/feedback/thank-you?table=${encodeURIComponent(activeTable)}&rating=${rating}&order=${encodeURIComponent(
+          orderId
+        )}`
+      );
+    } catch (err: any) {
+      console.error('Submit feedback failed:', err);
+      toast.error(err?.message || 'Failed to submit feedback. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -73,13 +178,28 @@ function FeedbackContent() {
           </span>
         </header>
 
+        {/* Existing review notice banner if already reviewed */}
+        {existingFeedback && !isCheckingExisting && (
+          <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-3 animate-in fade-in">
+            <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="flex flex-col text-xs font-montserrat">
+              <span className="text-white font-semibold">Review Already Recorded</span>
+              <span className="text-amber-200/80">
+                You previously rated this order {existingFeedback.rating} stars. Thank you for your review!
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Heading */}
         <div className="flex flex-col gap-1">
           <h2 className="text-white text-lg font-semibold font-poppins tracking-wide">
-            Rate Your Visit
+            {existingFeedback ? 'Your Experience Rating' : 'Rate Your Visit'}
           </h2>
           <p className="text-[#ECE4D1] text-xs font-montserrat font-normal leading-relaxed">
-            We&apos;d love to hear how we did today.
+            {existingFeedback
+              ? 'Here is the rating and feedback you shared for this dining session.'
+              : "We'd love to hear how we did today."}
           </p>
         </div>
 
@@ -92,10 +212,13 @@ function FeedbackContent() {
                 <button
                   key={star}
                   type="button"
-                  onMouseEnter={() => setHoverRating(star)}
-                  onMouseLeave={() => setHoverRating(0)}
-                  onClick={() => setRating(star)}
-                  className="p-1 transition-transform active:scale-110 cursor-pointer"
+                  disabled={Boolean(existingFeedback)}
+                  onMouseEnter={() => !existingFeedback && setHoverRating(star)}
+                  onMouseLeave={() => !existingFeedback && setHoverRating(0)}
+                  onClick={() => !existingFeedback && setRating(star)}
+                  className={`p-1 transition-transform ${
+                    existingFeedback ? 'cursor-default' : 'active:scale-110 cursor-pointer'
+                  }`}
                 >
                   <Star
                     className={`w-8 h-8 sm:w-9 sm:h-9 transition-colors ${
@@ -117,25 +240,50 @@ function FeedbackContent() {
         {/* FEEDBACK TEXTAREA */}
         <div className="flex flex-col gap-2">
           <label className="text-white text-xs font-medium font-montserrat">
-            Your Comments (Optional)
+            {existingFeedback ? 'Your Comments' : 'Your Comments (Optional)'}
           </label>
           <textarea
             rows={4}
             value={feedbackText}
+            readOnly={Boolean(existingFeedback)}
             onChange={(e) => setFeedbackText(e.target.value)}
-            placeholder="Tell us what you loved, or how we can improve..."
-            className="w-full bg-[#181818] border border-neutral-800 rounded-xl p-3.5 text-white placeholder:text-zinc-500 text-xs sm:text-sm font-inter focus:outline-none focus:border-amber-400 transition resize-none"
+            placeholder={
+              existingFeedback
+                ? 'No additional comments provided.'
+                : 'Tell us what you loved, or how we can improve...'
+            }
+            className={`w-full bg-[#181818] border border-neutral-800 rounded-xl p-3.5 text-white placeholder:text-zinc-500 text-xs sm:text-sm font-inter focus:outline-none transition resize-none ${
+              existingFeedback ? 'opacity-80 cursor-default' : 'focus:border-amber-400'
+            }`}
           />
         </div>
 
-        {/* SUBMIT BUTTON */}
+        {/* SUBMIT BUTTON OR BACK TO MENU */}
         <div className="pt-1">
-          <button
-            type="submit"
-            className="w-full py-3.5 bg-[#FFD60A] hover:bg-yellow-300 active:scale-[0.99] text-black text-sm sm:text-base font-semibold font-inter rounded-xl shadow-[0px_8px_20px_rgba(227,172,56,0.25)] transition flex items-center justify-center cursor-pointer"
-          >
-            Submit Feedback
-          </button>
+          {existingFeedback ? (
+            <button
+              type="button"
+              onClick={() => router.push(`/menu?table=${encodeURIComponent(activeTable)}`)}
+              className="w-full py-3.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 active:scale-[0.99] text-white text-sm sm:text-base font-semibold font-inter rounded-xl transition flex items-center justify-center cursor-pointer"
+            >
+              Back to Menu
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={isSubmitting || isCheckingExisting}
+              className="w-full py-3.5 bg-[#FFD60A] hover:bg-yellow-300 disabled:opacity-60 active:scale-[0.99] text-black text-sm sm:text-base font-semibold font-inter rounded-xl shadow-[0px_8px_20px_rgba(227,172,56,0.25)] transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Submitting Review...</span>
+                </>
+              ) : (
+                <span>Submit Feedback</span>
+              )}
+            </button>
+          )}
         </div>
       </form>
     </DesktopSplitLayout>

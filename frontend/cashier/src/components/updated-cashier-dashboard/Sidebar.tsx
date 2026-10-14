@@ -111,7 +111,12 @@ export default function CashierSidebar({
         <div className="flex-1 overflow-y-auto px-4 pt-5 pb-6 space-y-2 no-scrollbar">
           {cashierNavItems.map((item) => {
             const Icon = item.icon;
-            const isPathActive = pathname === item.href || activeNav.toLowerCase() === item.name.toLowerCase();
+            const isPathActive =
+              pathname === item.href ||
+              activeNav.toLowerCase() === item.name.toLowerCase() ||
+              (item.name === "Table View" &&
+                (pathname?.includes("/order-details") ||
+                  activeNav.toLowerCase().includes("order detail")));
 
             return (
               <Link

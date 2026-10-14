@@ -6,6 +6,7 @@ import {
   getUserById,
   changeUserStatus,
   getUsersList,
+  deleteUser,
   UserResponse,
 } from '../features/userApi';
 
@@ -142,6 +143,22 @@ const userSlice = createSlice({
         state.usersMeta = action.payload.meta || null;
       })
       .addCase(getUsersList.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // 7. Delete User
+    builder
+      .addCase(deleteUser.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(deleteUser.fulfilled, (state, action) => {
+        state.loading = false;
+        const deletedId = action.meta.arg || (action.payload as any)?.id;
+        state.usersList = state.usersList.filter((u) => u.id !== deletedId);
+        state.successMessage = 'User deleted successfully!';
+      })
+      .addCase(deleteUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       });

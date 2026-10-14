@@ -193,7 +193,7 @@ function DishDetailContent() {
       subtitle: 'Chef Specialty',
       price: 0,
       category: '',
-      image: '/images/burger.jpg',
+      image: '',
       popular: false,
       description: 'Prepared fresh with the finest seasonal ingredients by Tavonza chefs.',
       addOns: [],

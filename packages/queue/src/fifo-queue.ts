@@ -24,6 +24,13 @@ export class FifoQueue<T = any> {
         removeOnFail: 500,     // Retain failed jobs for dead-letter analysis
       },
     });
+
+    this.queue.on('error', (err: Error) => {
+      if (process.env.NODE_ENV !== 'production') {
+        return;
+      }
+      console.error(`[BullQueue:${this.name}] Error:`, err.message);
+    });
   }
 
   /**

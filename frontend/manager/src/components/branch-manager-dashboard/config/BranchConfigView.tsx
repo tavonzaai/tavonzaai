@@ -14,9 +14,15 @@ import {
   Sliders,
   Loader2,
   X,
+  Calendar,
 } from 'lucide-react';
 import AddTableModal, { NewTableData } from './AddTableModal';
-import { branchManagerService, getActiveBranchId, buildTableQrCodeUrl } from '@/redux/features/branchManagerApi';
+import {
+  branchManagerService,
+  getActiveBranchId,
+  buildTableQrCodeUrl,
+  BranchHolidayItem,
+} from '@/redux/features/branchManagerApi';
 
 type ConfigSubTab =
   | 'Branch Info & Hours'
@@ -60,41 +66,7 @@ interface KitchenStationItem {
   active: boolean;
 }
 
-const INITIAL_STATIONS: KitchenStationItem[] = [
-  {
-    id: 's1',
-    name: 'Grill Station',
-    status: 'Active',
-    categories: ['Burger', 'Stakes', 'Sides'],
-    ip: '192.168.1.101',
-    active: true,
-  },
-  {
-    id: 's2',
-    name: 'Fryer & Apps',
-    status: 'Active',
-    categories: ['Appetizers', 'Fried Sides'],
-    ip: '192.168.1.102',
-    active: true,
-  },
-  {
-    id: 's3',
-    name: 'Salad & Cold Prep',
-    status: 'Active',
-    categories: ['Salads', 'Cold Starters', 'Desserts'],
-    ip: '192.168.1.103',
-    active: true,
-  },
-  {
-    id: 's4',
-    name: 'Beverage & Bar Station',
-    status: 'Active',
-    categories: ['Cocktails', 'Craft Beers', 'Wines'],
-    ip: '192.168.1.104',
-    active: true,
-  },
-];
-
+ 
 function BranchConfigContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -144,13 +116,24 @@ function BranchConfigContent() {
   const [configTables, setConfigTables] = useState<ConfigTable[]>([]);
 
   // Stations State
-  const [stations, setStations] = useState<KitchenStationItem[]>(INITIAL_STATIONS);
+  const [stations, setStations] = useState<KitchenStationItem[]>([]);
 
   // Order Acceptance Mode ('AUTO_ACCEPT' | 'WAITER_APPROVAL')
   const [acceptanceMode, setAcceptanceMode] = useState<'AUTO_ACCEPT' | 'WAITER_APPROVAL'>('WAITER_APPROVAL');
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const [isSavingHours, setIsSavingHours] = useState(false);
   const [isSavingBranchInfo, setIsSavingBranchInfo] = useState(false);
+
+  // Holidays State (GET /branches/:id/holidays & POST /branches/:id/holidays)
+  const [holidays, setHolidays] = useState<BranchHolidayItem[]>([]);
+  const [isLoadingHolidays, setIsLoadingHolidays] = useState(false);
+  const [isAddHolidayOpen, setIsAddHolidayOpen] = useState(false);
+  const [isSavingHoliday, setIsSavingHoliday] = useState(false);
+  const [holidayDate, setHolidayDate] = useState('');
+  const [holidayLabel, setHolidayLabel] = useState('');
+  const [holidayIsClosed, setHolidayIsClosed] = useState(true);
+  const [holidayOpenTime, setHolidayOpenTime] = useState('10:00');
+  const [holidayCloseTime, setHolidayCloseTime] = useState('16:00');
 
   // Sync subtab from URL query parameters on navigation
   useEffect(() => {
@@ -173,11 +156,13 @@ function BranchConfigContent() {
     const fetchBranchConfig = async () => {
       try {
         const branchId = getActiveBranchId();
-        const [branchRes, hoursRes, settingsRes, tablesRes] = await Promise.allSettled([
+        setIsLoadingHolidays(true);
+        const [branchRes, hoursRes, settingsRes, tablesRes, holidaysRes] = await Promise.allSettled([
           branchManagerService.getBranch(branchId),
           branchManagerService.getOperatingHours(branchId),
           branchManagerService.getSettings(branchId),
           branchManagerService.getTables(branchId),
+          branchManagerService.getHolidays(branchId),
         ]);
 
         if (mounted) {
@@ -230,9 +215,15 @@ function BranchConfigContent() {
             });
             setConfigTables(mappedTables);
           }
+
+          if (holidaysRes.status === 'fulfilled' && Array.isArray(holidaysRes.value)) {
+            setHolidays(holidaysRes.value);
+          }
         }
       } catch (err) {
         console.warn('Branch config fetch error:', err);
+      } finally {
+        if (mounted) setIsLoadingHolidays(false);
       }
     };
 
@@ -295,6 +286,8 @@ function BranchConfigContent() {
         branchId: getActiveBranchId(),
         label: newTable.number,
         capacity: Number(newTable.capacity) || 4,
+        shape: newTable.shape || 'SQUARE',
+        floor: newTable.floor || 1,
       });
 
       const qrToken = createdTable.qrCodeToken || createdTable.id || `token-${Date.now()}`;
@@ -377,6 +370,33 @@ function BranchConfigContent() {
       triggerSaveToast('Failed to save operating hours: ' + (err.message || 'Error'));
     } finally {
       setIsSavingHours(false);
+    }
+  };
+
+  const handleCreateHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!holidayDate) return;
+    setIsSavingHoliday(true);
+    try {
+      const branchId = getActiveBranchId();
+      const newHol = await branchManagerService.createHoliday(branchId, {
+        date: holidayDate,
+        label: holidayLabel.trim() || undefined,
+        isClosed: holidayIsClosed,
+        openTime: !holidayIsClosed ? holidayOpenTime : undefined,
+        closeTime: !holidayIsClosed ? holidayCloseTime : undefined,
+      });
+      setHolidays((prev) => [...prev, newHol]);
+      triggerSaveToast('Holiday scheduled successfully!');
+      setIsAddHolidayOpen(false);
+      setHolidayDate('');
+      setHolidayLabel('');
+      setHolidayIsClosed(true);
+    } catch (err: any) {
+      console.error('Failed to create holiday:', err);
+      triggerSaveToast(err?.message || 'Failed to schedule holiday');
+    } finally {
+      setIsSavingHoliday(false);
     }
   };
 
@@ -792,6 +812,79 @@ function BranchConfigContent() {
                   </button>
                 </div>
               </div>
+
+              {/* Branch Holidays & Special Closures Section (GET/POST /branches/:id/holidays) */}
+              <div className="p-6 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-yellow-400" />
+                      <h3 className="text-white text-lg font-medium font-['Poppins'] leading-5">
+                        Branch Holidays &amp; Special Closures
+                      </h3>
+                    </div>
+                    <span className="text-neutral-400 text-xs font-normal font-['Poppins']">
+                      Scheduled calendar exceptions, public holidays, and emergency closures
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAddHolidayOpen(true)}
+                    className="px-3.5 py-2 bg-yellow-400 hover:bg-yellow-300 text-neutral-950 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow-md"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Holiday / Closure</span>
+                  </button>
+                </div>
+
+                {isLoadingHolidays ? (
+                  <div className="p-6 text-center text-xs text-neutral-400 flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
+                    <span>Loading holiday calendar...</span>
+                  </div>
+                ) : holidays.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-neutral-400 bg-black/30 rounded-xl border border-dashed border-zinc-800 flex flex-col items-center gap-2">
+                    <Calendar className="w-6 h-6 text-neutral-600" />
+                    <span>No upcoming holidays or closures scheduled. Operating hours will follow standard weekly schedule.</span>
+                  </div>
+                ) : (
+                  <div className="bg-stone-950 rounded-xl border border-zinc-800 divide-y divide-zinc-800/80">
+                    {holidays.map((hol) => (
+                      <div
+                        key={hol.id}
+                        className="px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="px-2.5 py-1 bg-neutral-900 border border-neutral-700 rounded-md text-xs font-mono text-yellow-400 font-semibold">
+                            {hol.date}
+                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-white text-sm font-medium">
+                              {hol.label || 'Special Closure'}
+                            </span>
+                            <span className="text-neutral-500 text-[11px]">
+                              Branch Calendar Override
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {hol.isClosed ? (
+                            <span className="px-2.5 py-1 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium rounded-full">
+                              Closed All Day
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium rounded-full">
+                              Modified Hours: {hol.openTime || 'N/A'} - {hol.closeTime || 'N/A'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1178,6 +1271,109 @@ function BranchConfigContent() {
         onClose={() => setIsAddTableOpen(false)}
         onSaveTable={handleSaveNewTable}
       />
+
+      {/* Add Holiday Modal (POST /branches/:id/holidays) */}
+      {isAddHolidayOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-xl p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-white mb-1">Schedule Branch Holiday</h3>
+            <p className="text-xs text-neutral-400 mb-4">
+              Add a calendar exception or modified schedule for this branch.
+            </p>
+            <form onSubmit={handleCreateHoliday} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                  Holiday Date (YYYY-MM-DD) *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={holidayDate}
+                  onChange={(e) => setHolidayDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                  Holiday Label / Reason
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Christmas Day, Thanksgiving, Staff Outing"
+                  value={holidayLabel}
+                  onChange={(e) => setHolidayLabel(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-neutral-950/60 border border-neutral-800 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="holidayIsClosed"
+                  checked={holidayIsClosed}
+                  onChange={(e) => setHolidayIsClosed(e.target.checked)}
+                  className="w-4 h-4 rounded text-yellow-400 focus:ring-yellow-400 bg-neutral-900 border-neutral-700 cursor-pointer"
+                />
+                <label htmlFor="holidayIsClosed" className="text-xs text-white cursor-pointer select-none">
+                  Full Day Closure (Branch closed all day)
+                </label>
+              </div>
+
+              {!holidayIsClosed && (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-neutral-950/40 rounded-lg border border-neutral-800">
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-400 mb-1">
+                      Special Open Time
+                    </label>
+                    <input
+                      type="time"
+                      value={holidayOpenTime}
+                      onChange={(e) => setHolidayOpenTime(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-xs focus:outline-none focus:border-yellow-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-400 mb-1">
+                      Special Close Time
+                    </label>
+                    <input
+                      type="time"
+                      value={holidayCloseTime}
+                      onChange={(e) => setHolidayCloseTime(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-xs focus:outline-none focus:border-yellow-400"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddHolidayOpen(false)}
+                  className="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingHoliday || !holidayDate}
+                  className="px-4 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSavingHoliday ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Schedule Holiday</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

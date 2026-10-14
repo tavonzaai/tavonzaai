@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Loader2, UtensilsCrossed, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Loader2, UtensilsCrossed, ChevronLeft, ChevronRight, CheckCircle2, Trash2 } from 'lucide-react';
 import { YellowSparkleIcon, FuchsiaCookingPanIcon, GreenClockIcon } from './orderIcons';
 import { OrderItemData, OrderStatus } from './orderData';
 import BottomDock from '../navigation/BottomDock';
 import { useNewWaiterShell } from '../navigation/NewWaiterShellContext';
 import { waiterService, getActiveBranchId, WaiterOrderSummary } from '@/redux/features/waiterApi';
+import { baseApiFetch } from '@/redux/api/baseApi';
 import { toast } from 'sonner';
 
 interface OrdersListViewProps {
@@ -43,6 +44,8 @@ export default function OrdersListView({
   const mapBackendStatus = (backendStatus: string): OrderStatus => {
     switch (backendStatus?.toUpperCase()) {
       case 'PENDING':
+      case 'SUBMITTED':
+      case 'DRAFT':
         return 'Pending';
       case 'CONFIRMED':
       case 'PREPARING':
@@ -69,7 +72,7 @@ export default function OrdersListView({
     try {
       const branchId = getActiveBranchId();
       let statusParam: string | undefined = undefined;
-      if (filter === 'Pending') statusParam = 'PENDING';
+      if (filter === 'Pending') statusParam = 'PENDING,DRAFT,SUBMITTED';
       if (filter === 'Active') statusParam = 'CONFIRMED,PREPARING,READY';
       if (filter === 'Completed') statusParam = 'SERVED,COMPLETED';
 
@@ -82,7 +85,15 @@ export default function OrdersListView({
       });
 
       // Detect newly arrived customer orders
-      const currentPending = backendOrders.filter((bo: any) => bo.status?.toUpperCase() === 'PENDING');
+      const currentPending = backendOrders.filter((bo: any) => {
+        const st = bo.status?.toUpperCase();
+        return (
+          st === 'PENDING' ||
+          st === 'SUBMITTED' ||
+          st === 'DRAFT' ||
+          (Array.isArray(bo.items) && bo.items.some((it: any) => it.status?.toUpperCase() === 'PENDING'))
+        );
+      });
       const currentPendingIds = new Set(currentPending.map((bo: any) => bo.id || bo.orderId));
 
       if (!isInitialLoadRef.current) {
@@ -225,6 +236,19 @@ export default function OrdersListView({
     }
   };
 
+  const handleDeleteOrder = async (orderId: string, table: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await baseApiFetch(`/orders/${encodeURIComponent(orderId)}`, {
+        method: 'DELETE',
+      }).catch(() => null);
+      toast.success(`Order for ${table} deleted/dismissed.`);
+      await fetchOrders();
+    } catch (err: any) {
+      toast.error(`Failed to delete order: ${err.message || 'Error occurred'}`);
+    }
+  };
+
   const renderStatusBadge = (status: OrderStatus) => {
     switch (status) {
       case 'Pending':
@@ -363,6 +387,8 @@ export default function OrdersListView({
         {orders.map((order) => {
           const isPending = order.status === 'Pending';
           const isReadyToServe = order.status === 'Ready to Serve';
+          const isCooking = order.status === 'Cooking';
+          const isServed = order.status === 'Served';
 
           return (
             <div
@@ -449,13 +475,48 @@ export default function OrdersListView({
                 </div>
               )}
 
+              {isCooking && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toast.warning(`Order #${order.orderNumber} is currently cooking in the kitchen! Please wait until kitchen marks it "Ready to Serve".`, {
+                      duration: 4000,
+                    });
+                  }}
+                  className="w-full h-9 bg-neutral-800/80 border border-neutral-700/80 rounded-lg flex items-center justify-center gap-2 text-zinc-400 text-xs font-medium cursor-not-allowed transition hover:bg-neutral-800"
+                  title="Food is cooking in the kitchen. Cannot serve yet."
+                >
+                  <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-pulse" />
+                  <span>Cooking in Kitchen (Not Ready to Serve)</span>
+                </button>
+              )}
+
               {isReadyToServe && (
                 <button
                   onClick={(e) => handleMarkServed(order.realId || order.orderNumber, order.table, e)}
-                  className="w-full h-9 bg-yellow-400 hover:bg-yellow-300 rounded-lg flex items-center justify-center text-black text-sm font-medium font-['Inter'] leading-5 transition cursor-pointer font-semibold shadow-sm"
+                  className="w-full h-9 bg-yellow-400 hover:bg-yellow-300 rounded-lg flex items-center justify-center text-black text-sm font-semibold font-['Inter'] leading-5 transition cursor-pointer shadow-sm active:scale-[0.99]"
                 >
                   Mark as Served
                 </button>
+              )}
+
+              {isServed && (
+                <div className="flex items-center gap-2 pt-1">
+                  <div className="flex-1 h-9 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center justify-center gap-1.5 text-emerald-400 text-xs font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Served &amp; Completed</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteOrder(order.realId || order.orderNumber, order.table, e)}
+                    className="h-9 px-3 bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 rounded-lg flex items-center justify-center gap-1 text-red-400 text-xs font-medium transition cursor-pointer active:scale-95"
+                    title="Delete / Dismiss order"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
               )}
             </div>
           );

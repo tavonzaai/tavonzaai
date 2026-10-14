@@ -210,6 +210,14 @@ export const cashierService = {
     });
     return (res as any)?.data || res;
   },
+
+  getBranchSessions: async (branchId: string, status?: string): Promise<any[]> => {
+    const qs = status && status !== 'ALL' ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await baseApiFetch<any[]>(`/sessions/branch/${encodeURIComponent(branchId)}${qs}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res || [];
+  },
 };
 
 export const processCashierPayment = createAsyncThunk<

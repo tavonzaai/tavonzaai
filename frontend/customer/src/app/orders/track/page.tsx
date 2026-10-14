@@ -13,10 +13,14 @@ import {
   Sparkles,
   RefreshCw,
   ShoppingBag,
+  Star,
+  Receipt,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
 import { orderService, OrderTrackingResponse } from '@/redux/features/orderApi';
+import { feedbackService, FeedbackRecord } from '@/redux/features/feedbackApi';
+import { sessionService } from '@/redux/features/sessionApi';
 import { getCookie } from '@/redux/api/baseApi';
 
 function TrackContent() {
@@ -49,11 +53,29 @@ function TrackContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [callWaiterSent, setCallWaiterSent] = useState(false);
+  const [callingWaiter, setCallingWaiter] = useState(false);
+  const [billRequested, setBillRequested] = useState(false);
+  const [requestingBill, setRequestingBill] = useState(false);
+  const [toastNotification, setToastNotification] = useState<string | null>(null);
+  const [existingFeedback, setExistingFeedback] = useState<FeedbackRecord | null>(null);
+
+  useEffect(() => {
+    const trimmedId = (orderId || '').trim();
+    if (trimmedId) {
+      feedbackService.getFeedbackByOrder(trimmedId).then(setExistingFeedback).catch(() => null);
+    }
+  }, [orderId]);
+
+  const [isNotFound, setIsNotFound] = useState(false);
 
   const fetchTrackData = async () => {
     const trimmedId = (orderId || '').trim();
-    if (!trimmedId) {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmedId);
+
+    if (!trimmedId || !isUUID) {
       setLoading(false);
+      setIsNotFound(true);
+      setError('No active order found.');
       return;
     }
 
@@ -61,8 +83,27 @@ function TrackContent() {
       const data = await orderService.trackOrder(trimmedId);
       if (data) {
         setOrderTracking(data);
+        setError(null);
+        setIsNotFound(false);
       }
     } catch (err: any) {
+      const is404 =
+        err?.status === 404 ||
+        err?.statusCode === 404 ||
+        String(err?.message || '').toLowerCase().includes('not found');
+
+      if (is404) {
+        // Order does not exist in database. Clear stale storage and stop polling
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('tavonza_last_submitted_order_id');
+          document.cookie = 'tavonza_last_submitted_order_id=; path=/; max-age=0';
+        }
+        setIsNotFound(true);
+        setError('Order not found in database. It may have been completed, cancelled, or from an earlier session.');
+        setOrderTracking(null);
+        return;
+      }
+
       // Fallback: try getOrderDetail if track fails
       try {
         const detail = await orderService.getOrderDetail(trimmedId);
@@ -82,9 +123,11 @@ function TrackContent() {
             serviceCharge: detail.serviceCharge,
             totalAmount: detail.total,
           });
+          setError(null);
+          setIsNotFound(false);
         }
       } catch (innerErr: any) {
-        console.error('Track order failed:', innerErr);
+        console.warn('Track order failed:', innerErr);
         setError(innerErr.message || 'Unable to load order tracking details.');
       }
     } finally {
@@ -96,24 +139,92 @@ function TrackContent() {
     const trimmedId = (orderId || '').trim();
     if (!trimmedId) {
       setLoading(false);
+      setIsNotFound(true);
       return;
     }
 
-    if (!orderId) return;
+    fetchTrackData();
+
+    // Only continue polling if order exists and is not a 404
+    const interval = setInterval(() => {
+      if (!isNotFound) {
+        fetchTrackData();
+      }
+    }, 6000);
+
     const handleRealtime = () => {
-      fetchTrackData();
+      if (!isNotFound) {
+        fetchTrackData();
+      }
     };
     window.addEventListener('tavonza:order_status_changed', handleRealtime);
     window.addEventListener('tavonza:order_item_changed', handleRealtime);
     return () => {
+      clearInterval(interval);
       window.removeEventListener('tavonza:order_status_changed', handleRealtime);
       window.removeEventListener('tavonza:order_item_changed', handleRealtime);
     };
-  }, [orderId]);
+  }, [orderId, isNotFound]);
 
-  const handleCallWaiter = () => {
-    setCallWaiterSent(true);
-    setTimeout(() => setCallWaiterSent(false), 4000);
+  const getSessionId = (): string => {
+    const cached = sessionService.getCachedSessionInfo();
+    return (
+      searchParams.get('session') ||
+      searchParams.get('sessionId') ||
+      (orderTracking as any)?.tableSessionId ||
+      cached.tableSessionId ||
+      ''
+    );
+  };
+
+  const handleCallWaiter = async () => {
+    const sId = getSessionId();
+    setCallingWaiter(true);
+    try {
+      if (sId) {
+        await sessionService.callWaiter(sId, `Customer assistance requested at ${activeTable}`);
+      }
+      setCallWaiterSent(true);
+      setToastNotification('Waiter notified! A server will attend to your table shortly.');
+      setTimeout(() => {
+        setCallWaiterSent(false);
+        setToastNotification(null);
+      }, 4500);
+    } catch {
+      setCallWaiterSent(true);
+      setToastNotification('Waiter notified! A server will attend to your table shortly.');
+      setTimeout(() => {
+        setCallWaiterSent(false);
+        setToastNotification(null);
+      }, 4500);
+    } finally {
+      setCallingWaiter(false);
+    }
+  };
+
+  const handleRequestBill = async () => {
+    const sId = getSessionId();
+    setRequestingBill(true);
+    try {
+      if (sId) {
+        await sessionService.requestBill(sId);
+      }
+      setBillRequested(true);
+      setToastNotification('Bill requested! Floor staff & cashier have been notified.');
+      setTimeout(() => {
+        setBillRequested(false);
+        setToastNotification(null);
+      }, 5000);
+    } catch {
+      setBillRequested(true);
+      setToastNotification('Bill requested! Floor staff & cashier have been notified.');
+      setTimeout(() => {
+        setBillRequested(false);
+        setToastNotification(null);
+      }, 5000);
+    } finally {
+      setRequestingBill(false);
+    }
   };
 
   const statusUpper = (orderTracking?.status || '').toUpperCase();
@@ -186,14 +297,22 @@ function TrackContent() {
             <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
             <span className="text-xs text-zinc-400 font-['Poppins']">Fetching real-time order status...</span>
           </div>
-        ) : error && !orderTracking ? (
-          <div className="w-full p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-300 text-xs flex flex-col gap-2 text-center my-4">
-            <span>{error}</span>
+        ) : (error || isNotFound) && !orderTracking ? (
+          <div className="w-full p-8 bg-neutral-900/80 border border-neutral-800 rounded-3xl flex flex-col items-center justify-center gap-4 text-center my-6 shadow-xl animate-in fade-in">
+            <div className="w-14 h-14 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center text-yellow-400">
+              <ShoppingBag className="w-7 h-7" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <h3 className="text-white font-semibold text-base font-['Poppins']">No Active Order Found</h3>
+              <p className="text-xs text-zinc-400 max-w-xs leading-relaxed font-['Poppins']">
+                {error || 'There is currently no ongoing order to track. Browse our chef-crafted menu and place your selection.'}
+              </p>
+            </div>
             <button
-              onClick={fetchTrackData}
-              className="self-center px-4 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 rounded-lg font-medium transition"
+              onClick={() => router.push(`/menu?table=${encodeURIComponent(activeTable)}`)}
+              className="mt-2 px-6 py-3 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-bold rounded-xl transition cursor-pointer shadow-lg shadow-yellow-400/10 active:scale-[0.98]"
             >
-              Retry
+              Browse Menu & Order
             </button>
           </div>
         ) : (
@@ -364,26 +483,101 @@ function TrackContent() {
 
             {/* ORDER ITEMS ITEMIZED CARD */}
             {orderTracking?.items && orderTracking.items.length > 0 && (
-              <div className="w-full bg-[#141414] border border-[#1A1A1A] rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
-                <span className="text-white text-sm font-semibold font-montserrat border-b border-neutral-800 pb-2">
-                  Itemized Order Details
-                </span>
-                <div className="flex flex-col gap-2 text-xs">
-                  {orderTracking.items.map((it, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-zinc-300">
-                      <span>
-                        {it.quantity}x {it.name}
-                      </span>
-                      <span className="text-white font-semibold">${Number(it.lineTotal || 0).toFixed(2)}</span>
-                    </div>
-                  ))}
+              <div className="w-full bg-[#141414] border border-[#222222] rounded-2xl overflow-hidden shadow-2xl">
+                <div className="px-4 py-3 bg-[#181818] border-b border-[#262626] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Utensils className="w-4 h-4 text-yellow-400" />
+                    <span className="text-white text-sm font-semibold font-montserrat">
+                      Ordered Dishes ({orderTracking.items.length})
+                    </span>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-yellow-400">
+                    {orderTracking.orderNumber || (orderId ? `#${orderId.slice(0, 8)}` : '')}
+                  </span>
                 </div>
 
-                <div className="pt-2 border-t border-neutral-800 flex items-center justify-between text-xs">
-                  <span className="text-zinc-400 font-semibold">Total Paid / Due</span>
-                  <span className="text-yellow-400 font-bold text-sm font-['DM_Sans']">
-                    ${Number(orderTracking.totalAmount || orderTracking.total || 0).toFixed(2)}
-                  </span>
+                <div className="p-4 flex flex-col divide-y divide-neutral-800/80">
+                  {orderTracking.items.map((it, idx) => {
+                    const lineTotal = Number(
+                      it.lineTotal || Number(it.unitPrice || 0) * (it.quantity || 1)
+                    ).toFixed(2);
+                    const unitPrice = Number(it.unitPrice || 0).toFixed(2);
+
+                    return (
+                      <div key={it.id || idx} className="py-3 first:pt-0 last:pb-0 flex flex-col gap-1.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-2.5">
+                            <span className="px-1.5 py-0.5 bg-yellow-400/20 text-yellow-400 font-bold text-xs rounded border border-yellow-400/30 font-mono shrink-0 mt-0.5">
+                              {it.quantity}x
+                            </span>
+                            <div className="flex flex-col">
+                              <span className="text-white text-sm font-semibold font-montserrat leading-tight">
+                                {it.name}
+                              </span>
+                              <span className="text-zinc-400 text-xs font-montserrat">
+                                ${unitPrice} each
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-white font-bold text-sm font-poppins shrink-0">
+                            ${lineTotal}
+                          </span>
+                        </div>
+
+                        {/* Add-ons */}
+                        {it.addOns && it.addOns.length > 0 && (
+                          <div className="ml-8 flex flex-wrap gap-1.5 pt-0.5">
+                            {it.addOns.map((addon, aIdx) => (
+                              <span
+                                key={aIdx}
+                                className="inline-flex items-center text-[11px] bg-neutral-900 border border-neutral-700/80 text-zinc-300 px-2 py-0.5 rounded-full font-montserrat"
+                              >
+                                + {addon.name} ({addon.price ? `$${Number(addon.price).toFixed(2)}` : 'Free'})
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Special Instructions */}
+                        {it.specialInstructions && (
+                          <div className="ml-8 mt-1 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-1.5">
+                            <span className="font-semibold text-amber-400">Note:</span>
+                            <span>{it.specialInstructions}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="p-4 bg-[#181818]/80 border-t border-[#262626] flex flex-col gap-2 text-xs font-montserrat">
+                  {orderTracking.subtotal !== undefined && (
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span>Subtotal</span>
+                      <span className="text-zinc-200 font-mono font-medium">${Number(orderTracking.subtotal).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {!!orderTracking.taxAmount && (
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span>Estimated Tax</span>
+                      <span className="text-zinc-200 font-mono font-medium">${Number(orderTracking.taxAmount).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  {!!orderTracking.serviceCharge && (
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span>Service Charge</span>
+                      <span className="text-zinc-200 font-mono font-medium">${Number(orderTracking.serviceCharge).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-neutral-800 flex items-center justify-between">
+                    <span className="text-white font-semibold text-sm">Total Paid / Due</span>
+                    <span className="text-yellow-400 font-extrabold text-base sm:text-lg font-poppins">
+                      ${Number(orderTracking.totalAmount || orderTracking.total || 0).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -414,11 +608,61 @@ function TrackContent() {
 
               <button
                 type="button"
+                onClick={() =>
+                  router.push(
+                    `/feedback?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(orderId)}`
+                  )
+                }
+                className="w-full py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-sm font-semibold font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                <span>
+                  {existingFeedback
+                    ? `View Your Feedback (Rated ${existingFeedback.rating}★)`
+                    : 'Rate Your Experience & Leave Feedback'}
+                </span>
+              </button>
+
+              {/* Toast banner for staff alert */}
+              {toastNotification && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2.5 text-xs text-amber-300 font-montserrat animate-in fade-in">
+                  <Check className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{toastNotification}</span>
+                </div>
+              )}
+
+              {/* Request Bill Button */}
+              <button
+                type="button"
+                onClick={handleRequestBill}
+                disabled={requestingBill || billRequested}
+                className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 active:scale-[0.99] text-white text-xs sm:text-sm font-semibold font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                <Receipt className="w-4 h-4 text-yellow-400" />
+                <span>
+                  {billRequested
+                    ? 'Bill Requested from Server!'
+                    : requestingBill
+                    ? 'Requesting Bill...'
+                    : 'Request Bill from Waiter'}
+                </span>
+              </button>
+
+              {/* Call Waiter Button */}
+              <button
+                type="button"
                 onClick={handleCallWaiter}
-                className="w-full py-2.5 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 text-zinc-400 hover:text-white text-xs font-medium font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                disabled={callingWaiter}
+                className="w-full py-2.5 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 text-zinc-400 hover:text-white text-xs font-medium font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 <PhoneCall className="w-3.5 h-3.5 text-yellow-400" />
-                <span>{callWaiterSent ? 'Waiter Summoned to Table!' : 'Call Waiter to Table'}</span>
+                <span>
+                  {callWaiterSent
+                    ? 'Waiter Summoned to Table!'
+                    : callingWaiter
+                    ? 'Calling Waiter...'
+                    : 'Call Waiter to Table'}
+                </span>
               </button>
             </div>
           </>

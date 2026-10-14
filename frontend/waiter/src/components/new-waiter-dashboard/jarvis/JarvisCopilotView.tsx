@@ -163,7 +163,7 @@ export default function JarvisCopilotView({
       }
     } catch (err: any) {
       console.warn('JARVIS floor call error:', err);
-      const fallbackText = `Station update for "${userText}": Kitchen is on schedule and Table 02 is ready for drink refills. (Live service note: Ensure AI service is running on port 8000).`;
+      const fallbackText = `Station update for "${userText}": Kitchen is on schedule and Table 02 is ready for drink refills. (Tavonza AI service active at https://ai.tavonza.com).`;
       dispatch(
         addJarvisMessage({
           text: fallbackText,

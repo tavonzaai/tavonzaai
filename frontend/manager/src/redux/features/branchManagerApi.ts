@@ -41,7 +41,8 @@ export function getActiveBranchId(): string {
     }
   }
 
-  return '';
+  // Fallback to primary seed branch ID (Downtown HQ)
+  return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
 }
 
 export interface BranchSettings {
@@ -78,6 +79,45 @@ export interface TableItem {
     sessionStart?: string;
     sessionEnd?: string;
   } | null;
+}
+
+export interface BranchSessionItem {
+  id: string;
+  branchId: string;
+  tableId: string;
+  tableNumber?: string;
+  status: 'active' | 'closed' | 'paying' | 'ACTIVE' | 'PAYMENT_PENDING' | 'CLOSED' | 'ABANDONED' | string;
+  shareCode?: string | null;
+  openedAt: string;
+  closedAt?: string | null;
+  customerCount?: number;
+}
+
+export interface ReservationItem {
+  id: string;
+  branchId: string;
+  tableId?: string | null;
+  tableLabel?: string | null;
+  guestName: string;
+  guestPhone: string;
+  partySize: number;
+  reservedFor: string;
+  durationMins: number;
+  status: 'PENDING' | 'CONFIRMED' | 'SEATED' | 'CANCELLED' | 'NO_SHOW' | string;
+  specialRequest?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateReservationPayload {
+  branchId: string;
+  tableId?: string;
+  guestName: string;
+  guestPhone: string;
+  partySize: number;
+  reservedFor: string;
+  durationMins?: number;
+  specialRequest?: string;
 }
 
 export interface StaffAssignmentItem {
@@ -130,9 +170,13 @@ export interface LiveOrderItem {
 
 export interface MenuCategoryItem {
   id: string;
+  restaurantId?: string;
   name: string;
-  slug: string;
-  sortOrder: number;
+  slug?: string;
+  description?: string | null;
+  sortOrder?: number;
+  displayOrder?: number;
+  isActive?: boolean;
   itemCount?: number;
 }
 
@@ -175,6 +219,32 @@ export interface BranchOperatingHourItem {
   closeTime: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface BranchHolidayItem {
+  id: string;
+  branchId: string;
+  date: string;
+  label?: string | null;
+  isClosed: boolean;
+  openTime?: string | null;
+  closeTime?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateBranchHolidayPayload {
+  date: string;
+  label?: string;
+  isClosed?: boolean;
+  openTime?: string;
+  closeTime?: string;
+}
+
+export interface UpdateStaffPayload {
+  role?: string;
+  permissions?: string[];
+  isActive?: boolean;
 }
 
 export interface CreateStaffPayload {
@@ -244,6 +314,21 @@ export const branchManagerService = {
     return (res as any)?.data || res;
   },
 
+  getHolidays: async (branchId: string): Promise<BranchHolidayItem[]> => {
+    const res = await baseApiFetch<BranchHolidayItem[]>(`/branches/${encodeURIComponent(branchId)}/holidays`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  createHoliday: async (branchId: string, payload: CreateBranchHolidayPayload): Promise<BranchHolidayItem> => {
+    const res = await baseApiFetch<BranchHolidayItem>(`/branches/${encodeURIComponent(branchId)}/holidays`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
   getSettings: async (branchId: string): Promise<BranchSettings> => {
     const res = await baseApiFetch<BranchSettings>(`/branches/${encodeURIComponent(branchId)}/settings`, {
       method: 'GET',
@@ -291,7 +376,7 @@ export const branchManagerService = {
     };
   },
 
-  createTable: async (payload: { branchId: string; label: string; capacity: number; shape?: string }): Promise<TableItem> => {
+  createTable: async (payload: { branchId: string; label: string; capacity: number; shape?: string; floor?: number }): Promise<TableItem> => {
     const res = await baseApiFetch<TableItem>('/tables', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -384,6 +469,21 @@ export const branchManagerService = {
     }
   },
 
+  updateStaff: async (
+    branchId: string,
+    staffId: string,
+    payload: UpdateStaffPayload
+  ): Promise<StaffAssignmentItem> => {
+    const res = await baseApiFetch<StaffAssignmentItem>(
+      `/branches/${encodeURIComponent(branchId)}/staff/${encodeURIComponent(staffId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
+    return (res as any)?.data || res;
+  },
+
   getWaiterAssignments: async (
     branchId: string,
     waiterId?: string
@@ -471,6 +571,13 @@ export const branchManagerService = {
     return (res as any)?.data || res;
   },
 
+  deleteMenuItem: async (itemId: string): Promise<any> => {
+    const res = await baseApiFetch(`/menus/items/${encodeURIComponent(itemId)}`, {
+      method: 'DELETE',
+    });
+    return (res as any)?.data || res;
+  },
+
   getOrders: async (
     branchId: string,
     filters?: { status?: string; search?: string; tableId?: string } | string
@@ -520,6 +627,56 @@ export const branchManagerService = {
     return (res as any)?.data || res;
   },
 
+  createCategory: async (payload: {
+    restaurantId?: string;
+    name: string;
+    description?: string;
+    displayOrder?: number;
+  }): Promise<MenuCategoryItem> => {
+    let restaurantId = payload.restaurantId;
+    if (!restaurantId || !isValidUuid(restaurantId)) {
+      try {
+        const branch = await branchManagerService.getBranch(getActiveBranchId());
+        if (branch?.restaurantId && isValidUuid(branch.restaurantId)) {
+          restaurantId = branch.restaurantId;
+        }
+      } catch {}
+    }
+    const res = await baseApiFetch<MenuCategoryItem>('/menus/categories', {
+      method: 'POST',
+      body: JSON.stringify({
+        restaurantId: restaurantId || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        name: payload.name,
+        description: payload.description,
+        displayOrder: payload.displayOrder ?? 0,
+      }),
+    });
+    return (res as any)?.data || res;
+  },
+
+  updateCategory: async (
+    id: string,
+    payload: {
+      name?: string;
+      description?: string;
+      displayOrder?: number;
+      isActive?: boolean;
+    }
+  ): Promise<MenuCategoryItem> => {
+    const res = await baseApiFetch<MenuCategoryItem>(`/menus/categories/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  deleteCategory: async (id: string): Promise<any> => {
+    const res = await baseApiFetch(`/menus/categories/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return (res as any)?.data || res;
+  },
+
   getMenuItems: async (branchId: string, categoryId?: string, search?: string): Promise<MenuItemResponse[]> => {
     const params = new URLSearchParams();
     if (categoryId) params.append('categoryId', categoryId);
@@ -563,6 +720,54 @@ export const branchManagerService = {
       method: 'GET',
     });
     return (res as any)?.data || res || [];
+  },
+
+  getBranchSessions: async (branchId: string, status?: string): Promise<BranchSessionItem[]> => {
+    const qs = status && status !== 'ALL' ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await baseApiFetch<BranchSessionItem[]>(`/sessions/branch/${encodeURIComponent(branchId)}${qs}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res || [];
+  },
+
+  getReservations: async (branchId: string): Promise<ReservationItem[]> => {
+    const res = await baseApiFetch<ReservationItem[]>(`/tables/reservations/branch/${encodeURIComponent(branchId)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res || [];
+  },
+
+  getReservation: async (id: string): Promise<ReservationItem> => {
+    const res = await baseApiFetch<ReservationItem>(`/tables/reservations/${encodeURIComponent(id)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  createReservation: async (payload: CreateReservationPayload): Promise<ReservationItem> => {
+    const res = await baseApiFetch<ReservationItem>('/tables/reservations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  updateReservationStatus: async (
+    id: string,
+    status: 'PENDING' | 'CONFIRMED' | 'SEATED' | 'CANCELLED' | 'NO_SHOW' | string
+  ): Promise<ReservationItem> => {
+    const res = await baseApiFetch<ReservationItem>(`/tables/reservations/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return (res as any)?.data || res;
+  },
+
+  deleteReservation: async (id: string): Promise<any> => {
+    const res = await baseApiFetch(`/tables/reservations/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return (res as any)?.data || res;
   },
 };
 
