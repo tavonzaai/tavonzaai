@@ -31,7 +31,7 @@ import {
   useUpdateMenuItemMutation,
   useUpdateTableMutation,
 } from '@/redux/features/adminApi';
-import { useAppSelector } from '@/redux/store';
+import { useOrganizationId } from '@/hooks/useOrganizationId';
 import { getCustomerAppUrl } from '@/redux/api/baseApi';
 import { mapRestaurant, parseBranchAddress } from '@/lib/admin-mappers';
 
@@ -57,7 +57,7 @@ export function useBranchDashboard({
   initialBranch,
   onUpdateBranch,
 }: UseBranchDashboardProps) {
-  const organizationId = useAppSelector((state) => state.tenant.organizationId);
+  const organizationId = useOrganizationId();
   const [branch, setBranch] = useState<BranchItem>(initialBranch);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('Overview');
   const [activeBranchId, setActiveBranchId] = useState<string>(initialBranch.id);

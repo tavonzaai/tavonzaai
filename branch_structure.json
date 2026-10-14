@@ -14,7 +14,9 @@
     "kayes",
     "main",
     "origin",
-    "prod"
+    "prod",
+    "rbac_new",
+    "shuvo"
   ],
   "parent": {
     "RBAC": "main",
@@ -30,7 +32,9 @@
     "kayes": "main",
     "main": null,
     "origin": "main",
-    "prod": "main"
+    "prod": "main",
+    "rbac_new": "main",
+    "shuvo": "main"
   },
   "order": [
     "main",
@@ -46,6 +50,8 @@
     "kayes",
     "origin",
     "prod",
+    "rbac_new",
+    "shuvo",
     "devops-2"
   ]
 }

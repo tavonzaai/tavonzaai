@@ -158,6 +158,26 @@ export class DrizzleUserRepository {
     }
   }
 
+  async findUserIdsForOrganization(organizationId: string): Promise<string[]> {
+    const [owners, staffUsers] = await Promise.all([
+      this.db
+        .select({ id: schema.organizations.ownerId })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, organizationId)),
+      this.db
+        .select({ id: schema.staff.userId })
+        .from(schema.staffAssignments)
+        .innerJoin(schema.staff, eq(schema.staffAssignments.staffId, schema.staff.id))
+        .innerJoin(schema.branches, eq(schema.staffAssignments.branchId, schema.branches.id))
+        .innerJoin(schema.restaurants, eq(schema.branches.restaurantId, schema.restaurants.id))
+        .where(eq(schema.restaurants.organizationId, organizationId)),
+    ]);
+
+    return Array.from(
+      new Set([...owners.map((row: any) => row.id), ...staffUsers.map((row: any) => row.id)].filter(Boolean)),
+    );
+  }
+
   async findMany(filters: {
     page?: number;
     limit?: number;
@@ -167,7 +187,21 @@ export class DrizzleUserRepository {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     includeDeleted?: boolean;
+    userIds?: string[];
   }) {
+    if (filters.userIds && filters.userIds.length === 0) {
+      return {
+        data: [],
+        meta: {
+          page: Number(filters.page) || 1,
+          limit: Number(filters.limit) || 10,
+          total: 0,
+          totalPages: 0,
+          totalPage: 0,
+        },
+      };
+    }
+
     const builder = DrizzleQueryBuilder.from(this.db, schema.users)
       .paginate({ page: filters.page, limit: filters.limit })
       .search(filters.search, [schema.users.name, schema.users.email, schema.users.contactNo])
@@ -175,6 +209,7 @@ export class DrizzleUserRepository {
         role: filters.role?.trim().toUpperCase(),
         status: filters.status?.trim().toUpperCase(),
       })
+      .filterIn({ id: filters.userIds })
       .sort(filters.sortBy, filters.sortOrder, schema.users.createdAt)
       .select({
         id: schema.users.id,

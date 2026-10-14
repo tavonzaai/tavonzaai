@@ -123,6 +123,7 @@ export default function Sidebar({
               return (
                 <button
                   key={item.id}
+                  data-testid={`nav-${item.id}`}
                   onClick={() => handleNavClick(item.id)}
                   className={`w-full px-3.5 py-3 rounded-xl inline-flex items-center justify-between text-left transition-all ${
                     isActive
@@ -151,6 +152,7 @@ export default function Sidebar({
 
             {/* Settings Nav Item */}
             <button
+              data-testid="nav-settings"
               onClick={() => handleNavClick('settings')}
               className={`w-full px-3.5 py-3 rounded-xl inline-flex items-center justify-between text-left transition-all ${
                 activeTab === 'settings'
@@ -175,6 +177,7 @@ export default function Sidebar({
         {/* Bottom: Only Sign Out / Logout Button */}
         <div className="p-4 border-t border-neutral-800/80 bg-neutral-950/40 shrink-0">
           <button
+            data-testid="admin-sign-out"
             onClick={handleLogout}
             className="w-full px-3.5 py-3 rounded-xl flex items-center gap-3.5 text-neutral-300 hover:text-red-400 hover:bg-red-500/10 transition-colors text-left font-sans text-[15px] sm:text-base font-medium"
           >

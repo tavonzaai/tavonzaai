@@ -38,6 +38,7 @@ export const BranchesHeader: React.FC<BranchesHeaderProps> = ({
 
         <div className="flex justify-end items-start gap-2">
           <button
+            data-testid="create-branch-open"
             onClick={onCreateBranchClick}
             className="px-3 py-2.5 bg-yellow-400 hover:bg-yellow-300 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex justify-start items-center gap-1.5 transition-all text-neutral-800 text-base font-medium font-['Inter'] leading-5 shadow-sm cursor-pointer"
           >

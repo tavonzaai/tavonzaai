@@ -63,17 +63,16 @@ interface OrganizationSettings {
 }
 
 const DEFAULT_SETTINGS: OrganizationSettings = {
-  orgName: ' ',
-  orgSlug: ' ',
-  contactEmail: ' ',
-  contactPhone: ' ',
-  countryCurrency: ' ',
-  timezone: ' ',
-  address: ' ',
-  dailyDigest: true,
-  orderSoundAlerts: true,
-  lowStockAlerts: true,
-  twoFactorAuth: true,
+  orgName: '',
+  contactEmail: '',
+  contactPhone: '',
+  countryCurrency: '',
+  timezone: '',
+  address: '',
+  dailyDigest: false,
+  orderSoundAlerts: false,
+  lowStockAlerts: false,
+  twoFactorAuth: false,
 };
 
 type SettingsTab = 'organization' | 'admin-profile' | 'notifications' | 'security';
@@ -151,8 +150,8 @@ export default function SettingsView() {
 
       setAdminProfile({
         name: displayName,
-        email: user.email || 'owner@tavonza.com',
-        contactNo: user.contactNo || user.phone || '+1 (555) 234-5678',
+        email: user.email || '',
+        contactNo: user.contactNo || user.phone || '',
         avatarUrl: user.avatarUrl || user.avatar || '',
         role: user.role || 'ADMIN',
         id: user.id || '',

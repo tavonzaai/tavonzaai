@@ -96,6 +96,7 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
                 <input
                   type="text"
                   required
+                  data-testid="branch-name"
                   placeholder="e.g. Illinois Flagship"
                   value={createForm.name}
                   onChange={(e) =>
@@ -241,6 +242,7 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
             </button>
             <button
               type="submit"
+              data-testid="branch-submit"
               className="px-3 py-2.5 bg-yellow-400 hover:bg-yellow-300 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-neutral-800 text-base font-medium font-['Inter'] leading-5 transition-colors cursor-pointer shadow-sm"
             >
               Save 
