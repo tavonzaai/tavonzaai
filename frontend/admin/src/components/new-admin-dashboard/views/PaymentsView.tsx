@@ -5,7 +5,8 @@ import { toast } from 'sonner';
 import { PaymentItem } from './payments/types';
 import { useOrganizationId } from '@/hooks/useOrganizationId';
 import { useGetPaymentsQuery, useRefundPaymentMutation } from '@/redux/features/adminApi';
-import { ErrorState, LoadingState } from '@/components/common';
+import { ErrorState, LoadingState, PaginationBar } from '@/components/common';
+import { useClampPage, useListPagination } from '@/hooks/useListPagination';
 import {
   PaymentsHeader,
   PaymentsKPICards,
@@ -32,12 +33,29 @@ function mapStatus(status?: string): PaymentItem['status'] {
   return 'Pending';
 }
 
+function toApiStatus(filter: string): string | undefined {
+  if (filter === 'Completed') return 'PAID';
+  if (filter === 'Refunded') return 'REFUNDED';
+  if (filter === 'Pending') return 'PENDING';
+  return undefined;
+}
+
 export default function PaymentsView() {
   const organizationId = useOrganizationId();
-  const { data, isLoading, isError, error, refetch } = useGetPaymentsQuery(
-    { organizationId: organizationId || undefined, page: 1, limit: 50 },
-    { skip: !organizationId },
-  );
+  const { page, limit, setPage, resetPage } = useListPagination();
+  const [selectedBranch, setSelectedBranch] = useState<string>('All');
+  const [filterMethod, setFilterMethod] = useState<string>('All');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const { data, isLoading, isError, error, refetch } = useGetPaymentsQuery({
+    organizationId: organizationId || undefined,
+    page,
+    limit,
+    status: toApiStatus(filterStatus),
+    search: searchQuery.trim() || undefined,
+  });
+  useClampPage(page, data?.meta?.totalPages, setPage);
   const [refundPayment, { isLoading: isRefunding }] = useRefundPaymentMutation();
 
   const transactions: PaymentItem[] = useMemo(
@@ -58,11 +76,6 @@ export default function PaymentsView() {
       })),
     [data],
   );
-
-  const [selectedBranch, setSelectedBranch] = useState<string>('All');
-  const [filterMethod, setFilterMethod] = useState<string>('All');
-  const [filterStatus, setFilterStatus] = useState<string>('All');
-  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Modals state
   const [selectedTransaction, setSelectedTransaction] = useState<PaymentItem | null>(null);
@@ -168,18 +181,30 @@ export default function PaymentsView() {
       </div>
 
       {/* 4. Lower Section: Comprehensive All Transactions Ledger & Settlements Table */}
-      <PaymentsLedgerTable
-        transactions={transactions}
-        filteredTransactions={filteredTransactions}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        filterMethod={filterMethod}
-        onFilterMethodChange={setFilterMethod}
-        filterStatus={filterStatus}
-        onFilterStatusChange={setFilterStatus}
-        onSelectTransaction={setSelectedTransaction}
-        onOpenRefund={setRefundTarget}
-      />
+      <div className="space-y-4" data-testid="payments-list">
+        <PaymentsLedgerTable
+          transactions={transactions}
+          filteredTransactions={filteredTransactions}
+          searchQuery={searchQuery}
+          onSearchChange={(value) => {
+            setSearchQuery(value);
+            if (page !== 1) resetPage();
+          }}
+          filterMethod={filterMethod}
+          onFilterMethodChange={(value) => {
+            setFilterMethod(value);
+            if (page !== 1) resetPage();
+          }}
+          filterStatus={filterStatus}
+          onFilterStatusChange={(value) => {
+            setFilterStatus(value);
+            if (page !== 1) resetPage();
+          }}
+          onSelectTransaction={setSelectedTransaction}
+          onOpenRefund={setRefundTarget}
+        />
+        <PaginationBar meta={data?.meta} onPageChange={setPage} />
+      </div>
 
       {/* 5. Modal: Digital Receipt & Transaction Details */}
       <ReceiptModal

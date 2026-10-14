@@ -121,7 +121,7 @@ export class NotificationService {
     query: GetNotificationsQueryDto,
   ): Promise<PaginatedNotificationsDto> {
     const page = Math.max(1, query.page || 1);
-    const limit = Math.min(100, Math.max(1, query.limit || 20));
+    const limit = Math.min(100, Math.max(1, query.limit || 12));
     const offset = (page - 1) * limit;
 
     const baseFilter = this.buildUserVisibilityFilter(user);

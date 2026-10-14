@@ -20,7 +20,7 @@ export function NotificationCenter() {
   const unreadCount = countData?.unreadCount ?? 0;
 
   const { data: notificationsData, isLoading } = useGetNotificationsQuery(
-    { page: 1, limit: 15 },
+    { page: 1, limit: 12 },
     { skip: !isOpen }
   );
 

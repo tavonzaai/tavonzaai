@@ -282,6 +282,7 @@ export class PaymentController {
   @ApiQuery({ name: 'status', required: false, type: String })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
   @ApiOkResponse({ description: 'Paginated payment ledger' })
   @ApiStandardErrors(400, 401, 403, 500)
   async listPayments(
@@ -291,6 +292,7 @@ export class PaymentController {
     @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('search') search?: string,
   ) {
     return this.paymentService.listPayments(user, {
       organizationId,
@@ -298,6 +300,7 @@ export class PaymentController {
       status,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
+      search,
     });
   }
 

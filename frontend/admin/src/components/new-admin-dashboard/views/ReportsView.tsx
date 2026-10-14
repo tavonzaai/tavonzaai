@@ -5,6 +5,9 @@ import { toast } from 'sonner';
 import { BranchPerformanceRecord } from './reports/types';
 import { useOrganizationId } from '@/hooks/useOrganizationId';
 import { useGetBranchPerformanceQuery } from '@/redux/features/adminApi';
+import { PaginationBar } from '@/components/common';
+import { paginateItems } from '@/lib/pagination';
+import { useClientPage, useClampPage } from '@/hooks/useListPagination';
 import {
   ReportsHeader,
   ReportsFiltersBar,
@@ -66,6 +69,10 @@ export default function ReportsView() {
     });
   }, [records, selectedRestaurant, selectedBranch]);
 
+  const { page, setPage } = useClientPage(`${selectedRestaurant}:${selectedBranch}`);
+  const pagedRecords = paginateItems(filteredRecords, page);
+  useClampPage(page, pagedRecords.meta.totalPages, setPage);
+
   // Export to CSV
   const handleExportCSV = () => {
     const headers = ['Branch', 'Restaurant', 'Location', 'Orders', 'Revenue', 'Avg Order', 'Growth', 'Performance'];
@@ -116,11 +123,14 @@ export default function ReportsView() {
       <SalesReportKPICards dateRange={dateRange} />
 
       {/* 4. Branch Performance Comparison Table */}
-      <BranchPerformanceTable
-        records={filteredRecords}
-        totalRecordsCount={records.length}
-        onInspectBranch={(branch) => setInspectBranch(branch)}
-      />
+      <div className="space-y-4" data-testid="reports-list">
+        <BranchPerformanceTable
+          records={pagedRecords.items}
+          totalRecordsCount={pagedRecords.meta.total}
+          onInspectBranch={(branch) => setInspectBranch(branch)}
+        />
+        <PaginationBar meta={pagedRecords.meta} onPageChange={setPage} />
+      </div>
 
       {/* 5. Modal: Branch Detailed Analytics Breakdown */}
       {inspectBranch && (

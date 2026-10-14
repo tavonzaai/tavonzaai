@@ -100,8 +100,8 @@ export function ApiPaginationQuery(options?: {
       name: 'limit',
       required: false,
       type: Number,
-      example: options?.defaultLimit ?? 20,
-      description: 'Maximum number of items to return per page (default: 20, max: 100)',
+      example: options?.defaultLimit ?? 12,
+      description: 'Maximum number of items to return per page (default: 12, max: 100)',
     }),
     ApiQuery({
       name: 'search',

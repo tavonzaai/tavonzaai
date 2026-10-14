@@ -30,8 +30,19 @@ import {
   ShieldCheck,
   Upload,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { PaginationBar } from '@/components/common';
+import { useGetNotificationsQuery, useMarkAsReadMutation } from '@/redux/api/baseApi';
+import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
+import { useClampPage, useClientPage } from '@/hooks/useListPagination';
+import {
+  SECTION_TO_TAB,
+  TAB_TO_SECTION,
+  isSettingsSection,
+  type SettingsTab,
+} from '../settings-sections';
 import {
   getMe,
   forgotPasswordThunk,
@@ -48,39 +59,36 @@ import { useLogout } from '@/hooks/useLogout';
 interface OrganizationSettings {
   orgId?: string;
   orgName: string;
+  orgSlug: string;
   contactEmail: string;
   contactPhone: string;
-  countryCurrency: string;
-  timezone: string;
-  address: string;
-  dailyDigest: boolean;
-  orderSoundAlerts: boolean;
-  lowStockAlerts: boolean;
-  twoFactorAuth: boolean;
 }
 
 const DEFAULT_SETTINGS: OrganizationSettings = {
   orgName: '',
+  orgSlug: '',
   contactEmail: '',
   contactPhone: '',
-  countryCurrency: '',
-  timezone: '',
-  address: '',
-  dailyDigest: false,
-  orderSoundAlerts: false,
-  lowStockAlerts: false,
-  twoFactorAuth: false,
 };
 
-type SettingsTab = 'organization' | 'admin-profile' | 'notifications' | 'security';
+interface SettingsViewProps {
+  section?: string;
+}
 
-export default function SettingsView() {
+export default function SettingsView({ section }: SettingsViewProps) {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const { handleLogout } = useLogout();
+  const activeSubTab: SettingsTab = isSettingsSection(section)
+    ? SECTION_TO_TAB[section]
+    : 'organization';
+
+  const setActiveSubTab = (tab: SettingsTab) => {
+    router.push(`/new-admin-dashboard/settings/${TAB_TO_SECTION[tab]}`, { scroll: false });
+  };
 
   const [settings, setSettings] = useState<OrganizationSettings>(DEFAULT_SETTINGS);
-  const [activeSubTab, setActiveSubTab] = useState<SettingsTab>('organization');
   const [isSavingOrg, setIsSavingOrg] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
@@ -117,6 +125,22 @@ export default function SettingsView() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [isPwdLoading, setIsPwdLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const { page: notificationPage, setPage: setNotificationPage } = useClientPage();
+  const {
+    data: notificationsData,
+    isLoading: loadingNotifications,
+    isError: notificationsError,
+    refetch: refetchNotifications,
+  } = useGetNotificationsQuery(
+    { page: notificationPage, limit: DEFAULT_PAGE_SIZE },
+    { skip: activeSubTab !== 'notifications' },
+  );
+  const [markAsRead] = useMarkAsReadMutation();
+  useClampPage(
+    notificationPage,
+    notificationsData?.totalPages,
+    setNotificationPage,
+  );
 
   // 1. Load Authenticated User Profile & Organization on Mount (GET /auth/me & GET /organizations/my)
   useEffect(() => {
@@ -128,11 +152,7 @@ export default function SettingsView() {
           ...prev,
           orgId: org.id || prev.orgId,
           orgName: org.name || prev.orgName,
-          contactEmail: org.email || prev.contactEmail,
-          contactPhone: org.phone || prev.contactPhone,
-          countryCurrency: org.currency || prev.countryCurrency,
-          timezone: org.timezone || prev.timezone,
-          address: org.address || prev.address,
+          orgSlug: org.slug || prev.orgSlug,
         }));
       }
     });
@@ -278,21 +298,39 @@ export default function SettingsView() {
     setIsSavingOrg(true);
 
     try {
-      if (settings.orgId) {
-        await restaurantService.updateOrganization(settings.orgId, {
-          name: settings.orgName,
-          email: settings.contactEmail,
-          phone: settings.contactPhone,
-          currency: settings.countryCurrency,
-          timezone: settings.timezone,
-          address: settings.address,
-        });
+      if (!settings.orgId) {
+        toast.error('No organization is associated with this account.');
+        return;
       }
-      setIsSavingOrg(false);
+      if (!settings.orgName.trim()) {
+        toast.error('Organization name is required.');
+        return;
+      }
+
+      await restaurantService.updateOrganization(settings.orgId, {
+        name: settings.orgName.trim(),
+      });
+
+      const currentPhone = user?.contactNo || user?.phone || '';
+      if (settings.contactPhone.trim() !== currentPhone) {
+        const res = await dispatch(updateMe({ contactNo: settings.contactPhone.trim() }));
+        if (!updateMe.fulfilled.match(res)) {
+          toast.error(
+            (res.payload as string) ||
+              'Organization name saved, but contact phone could not be updated.',
+          );
+          return;
+        }
+        dispatch(getMe());
+      }
+
       toast.success('Organization settings updated successfully!');
-    } catch {
+    } catch (err: any) {
+      toast.error(
+        err?.data?.message || err?.message || 'Failed to update organization settings.',
+      );
+    } finally {
       setIsSavingOrg(false);
-      toast.success('Organization settings updated successfully!');
     }
   };
 
@@ -421,7 +459,7 @@ export default function SettingsView() {
     await handleLogout();
   };
 
-  const tenantKey = user?.organizationId || 'org_live_tav_88a91bc023';
+  const tenantKey = user?.organizationId || settings.orgId || '—';
 
   const userInitials = (adminProfile.name || 'Admin')
     .split(' ')
@@ -446,8 +484,13 @@ export default function SettingsView() {
         </div>
 
         {/* Sub-tab Pills navigation */}
-        <div className="flex items-center gap-1.5 p-1 bg-neutral-900 border border-neutral-800 rounded-lg overflow-x-auto">
+        <div
+          data-testid="settings-tabs"
+          className="flex items-center gap-1.5 p-1 bg-neutral-900 border border-neutral-800 rounded-lg overflow-x-auto"
+        >
           <button
+            type="button"
+            data-testid="settings-tab-org-profile"
             onClick={() => setActiveSubTab('organization')}
             className={`px-3.5 py-1.5 rounded-md text-xs font-medium font-sans transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'organization'
@@ -458,6 +501,8 @@ export default function SettingsView() {
             Organization Profile
           </button>
           <button
+            type="button"
+            data-testid="settings-tab-admin-profile"
             onClick={() => setActiveSubTab('admin-profile')}
             className={`px-3.5 py-1.5 rounded-md text-xs font-medium font-sans transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'admin-profile'
@@ -468,6 +513,8 @@ export default function SettingsView() {
             Admin Profile
           </button>
           <button
+            type="button"
+            data-testid="settings-tab-notifications"
             onClick={() => setActiveSubTab('notifications')}
             className={`px-3.5 py-1.5 rounded-md text-xs font-medium font-sans transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'notifications'
@@ -478,6 +525,8 @@ export default function SettingsView() {
             Notifications
           </button>
           <button
+            type="button"
+            data-testid="settings-tab-security"
             onClick={() => setActiveSubTab('security')}
             className={`px-3.5 py-1.5 rounded-md text-xs font-medium font-sans transition-all cursor-pointer whitespace-nowrap ${
               activeSubTab === 'security'
@@ -485,7 +534,7 @@ export default function SettingsView() {
                 : 'text-neutral-400 hover:text-white'
             }`}
           >
-            Security &amp; Tenant
+            Security
           </button>
         </div>
       </div>
@@ -493,6 +542,7 @@ export default function SettingsView() {
       {/* 2. Sub-tab 1: Organization Profile (Exact Layout matching screenshot) */}
       {activeSubTab === 'organization' && (
         <form
+          data-testid="settings-section-org-profile"
           onSubmit={handleSaveOrg}
           className="p-6 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 shadow-xl space-y-5"
         >
@@ -513,6 +563,7 @@ export default function SettingsView() {
               <div className="w-full h-11 px-3 bg-black rounded-lg outline outline-1 outline-zinc-800 flex items-center focus-within:outline-amber-400/80">
                 <input
                   type="text"
+                  data-testid="settings-org-name"
                   value={settings.orgName}
                   onChange={(e) =>
                     setSettings((prev) => ({ ...prev, orgName: e.target.value }))
@@ -527,16 +578,11 @@ export default function SettingsView() {
               <label className="text-gray-200 text-sm font-medium font-sans">
                 Contact Email
               </label>
-              <div className="w-full h-11 px-3 bg-black rounded-lg outline outline-1 outline-zinc-800 flex items-center focus-within:outline-amber-400/80">
-                <input
-                  type="email"
-                  value={settings.contactEmail}
-                  onChange={(e) =>
-                    setSettings((prev) => ({ ...prev, contactEmail: e.target.value }))
-                  }
-                  className="w-full bg-transparent text-white text-sm font-sans focus:outline-none placeholder-zinc-600"
-                  placeholder="owner@tavonza.com"
-                />
+              <div className="w-full h-11 px-3 bg-neutral-950 rounded-lg outline outline-1 outline-zinc-800/80 flex items-center justify-between text-zinc-400">
+                <span className="text-sm font-mono truncate">
+                  {settings.contactEmail || '—'}
+                </span>
+                <Lock className="w-3.5 h-3.5 text-zinc-500 shrink-0 ml-2" />
               </div>
             </div>
 
@@ -559,89 +605,34 @@ export default function SettingsView() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-gray-200 text-sm font-medium font-sans">
-                Country &amp; Currency
+                Organization Slug
               </label>
-              <div className="w-full h-11 px-3 bg-black rounded-lg outline outline-1 outline-zinc-800 relative flex items-center focus-within:outline-amber-400/80">
-                <select
-                  value={settings.countryCurrency}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      countryCurrency: e.target.value,
-                    }))
-                  }
-                  className="w-full bg-transparent text-white text-sm font-sans appearance-none focus:outline-none cursor-pointer"
-                >
-                  <option value="EUR (€) - Euro" className="bg-neutral-900 text-white">
-                    EUR (€) - Euro
-                  </option>
-                  <option value="USD ($)" className="bg-neutral-900 text-white">
-                    USD ($) - United States Dollar
-                  </option>
-                  <option value="GBP (£)" className="bg-neutral-900 text-white">
-                    GBP (£) - British Pound
-                  </option>
-                  <option value="BDT (৳)" className="bg-neutral-900 text-white">
-                    BDT (৳) - Bangladeshi Taka
-                  </option>
-                </select>
-                <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 pointer-events-none" />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-gray-200 text-sm font-medium font-sans">
-                Default Timezone
-              </label>
-              <div className="w-full h-11 px-3 bg-black rounded-lg outline outline-1 outline-zinc-800 relative flex items-center focus-within:outline-amber-400/80">
-                <select
-                  value={settings.timezone}
-                  onChange={(e) =>
-                    setSettings((prev) => ({ ...prev, timezone: e.target.value }))
-                  }
-                  className="w-full bg-transparent text-white text-sm font-sans appearance-none focus:outline-none cursor-pointer"
-                >
-                  <option value="America/New_York (UTC-5)" className="bg-neutral-900 text-white">
-                    America/New_York (UTC-5)
-                  </option>
-                  <option value="Europe/London (UTC+0)" className="bg-neutral-900 text-white">
-                    Europe/London (UTC+0)
-                  </option>
-                  <option value="Asia/Dhaka (UTC+6)" className="bg-neutral-900 text-white">
-                    Asia/Dhaka (UTC+6)
-                  </option>
-                  <option value="Asia/Dubai (UTC+4)" className="bg-neutral-900 text-white">
-                    Asia/Dubai (UTC+4)
-                  </option>
-                </select>
-                <ChevronDown className="w-4 h-4 text-zinc-400 absolute right-3 pointer-events-none" />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-gray-200 text-sm font-medium font-sans">
-                Headquarters Address
-              </label>
-              <div className="w-full h-11 px-3 bg-black rounded-lg outline outline-1 outline-zinc-800 flex items-center focus-within:outline-amber-400/80">
-                <input
-                  type="text"
-                  value={settings.address}
-                  onChange={(e) =>
-                    setSettings((prev) => ({ ...prev, address: e.target.value }))
-                  }
-                  className="w-full bg-transparent text-white text-sm font-sans focus:outline-none placeholder-zinc-600"
-                  placeholder="742 Evergreen Terrace, Atlanta, GA"
-                />
+              <div className="w-full h-11 px-3 bg-neutral-950 rounded-lg outline outline-1 outline-zinc-800/80 flex items-center justify-between text-zinc-400">
+                <span className="text-sm font-mono truncate">{settings.orgSlug || '—'}</span>
+                <Lock className="w-3.5 h-3.5 text-zinc-500 shrink-0 ml-2" />
               </div>
             </div>
           </div>
+          <p className="text-xs text-zinc-500">
+            Organization records store name and slug. Contact phone is saved on your admin profile.
+            Currency, timezone, and address are configured per branch, not on the organization.
+          </p>
 
           <div className="flex justify-end gap-3 pt-3">
             <button
               type="button"
               onClick={() => {
-                setSettings(DEFAULT_SETTINGS);
-                toast.info('Form reverted to default settings.');
+                restaurantService.getMyOrganization().then((org) => {
+                  setSettings((prev) => ({
+                    ...prev,
+                    orgId: org?.id || prev.orgId,
+                    orgName: org?.name || '',
+                    orgSlug: org?.slug || '',
+                    contactEmail: user?.email || prev.contactEmail,
+                    contactPhone: user?.contactNo || user?.phone || '',
+                  }));
+                });
+                toast.info('Form reverted to saved organization values.');
               }}
               className="px-5 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-sm font-medium rounded-lg transition-colors cursor-pointer"
             >
@@ -649,6 +640,7 @@ export default function SettingsView() {
             </button>
             <button
               type="submit"
+              data-testid="settings-org-save"
               disabled={isSavingOrg}
               className="px-6 py-2.5 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-neutral-950 text-sm font-semibold rounded-lg transition-all flex items-center gap-2 cursor-pointer shadow-md"
             >
@@ -667,7 +659,7 @@ export default function SettingsView() {
 
       {/* 3. Sub-tab 2: Admin Profile (Matching Branch Manager Profile View) */}
       {activeSubTab === 'admin-profile' && (
-        <div className="space-y-6">
+        <div className="space-y-6" data-testid="settings-section-admin-profile">
           {/* Card A: Personal Details & Avatar Upload Form (Connected to PATCH /users/me) */}
           <form
             onSubmit={handleSaveAdminProfile}
@@ -755,6 +747,7 @@ export default function SettingsView() {
                   <div className="w-full h-11 px-3 bg-black rounded-lg outline outline-1 outline-zinc-800 flex items-center focus-within:outline-amber-400/80">
                     <input
                       type="text"
+                      data-testid="settings-admin-name"
                       value={adminProfile.name}
                       onChange={(e) =>
                         setAdminProfile((prev) => ({ ...prev, name: e.target.value }))
@@ -807,6 +800,7 @@ export default function SettingsView() {
             <div className="flex justify-end pt-3 border-t border-neutral-800">
               <button
                 type="submit"
+                data-testid="settings-admin-save"
                 disabled={isSavingUser}
                 className="px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-neutral-950 text-sm font-semibold rounded-lg transition-all flex items-center gap-2 cursor-pointer shadow-md"
               >
@@ -926,90 +920,76 @@ export default function SettingsView() {
 
       {/* 4. Sub-tab 3: Notifications */}
       {activeSubTab === 'notifications' && (
-        <div className="p-6 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 space-y-5 shadow-xl">
+        <div
+          data-testid="settings-section-notifications"
+          className="p-6 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 space-y-5 shadow-xl"
+        >
           <div className="pb-3 border-b border-neutral-800 flex flex-col gap-1">
             <h2 className="text-zinc-100 text-xl font-medium font-sans leading-6 flex items-center gap-2">
               <Bell className="w-5 h-5 text-amber-400" />
-              <span>Notification Preferences</span>
+              <span>Notification inbox</span>
             </h2>
             <p className="text-neutral-400 text-sm font-normal font-sans leading-4">
-              Configure system alerts, daily digests, and real-time operational notifications.
+              Delivery preference toggles are not stored on the organization record. This inbox
+              lists notifications already persisted for your account.
             </p>
           </div>
 
-          <div className="space-y-3">
-            <div className="p-4 bg-black rounded-lg outline outline-1 outline-zinc-800/80 flex items-center justify-between">
-              <div>
-                <span className="text-sm font-medium text-white block">
-                  Daily Summary Digest
-                </span>
-                <span className="text-xs text-neutral-400">
-                  Receive executive KPI summaries and consolidated sales metrics every morning at 08:00 AM.
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.dailyDigest}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, dailyDigest: e.target.checked }))
-                }
-                className="size-4 accent-amber-400 cursor-pointer"
-              />
+          {loadingNotifications && (
+            <p className="text-sm text-zinc-500">Loading notifications...</p>
+          )}
+          {notificationsError && (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-red-400">Unable to load notifications.</p>
+              <button
+                type="button"
+                onClick={() => refetchNotifications()}
+                className="text-xs text-amber-400 hover:text-amber-300"
+              >
+                Retry
+              </button>
             </div>
-
-            <div className="p-4 bg-black rounded-lg outline outline-1 outline-zinc-800/80 flex items-center justify-between">
-              <div>
-                <span className="text-sm font-medium text-white block">
-                  Realtime Order Sound Alerts
-                </span>
-                <span className="text-xs text-neutral-400">
-                  Play acoustic chime when VIP table orders or high-value bookings are recorded.
-                </span>
+          )}
+          {!loadingNotifications && (notificationsData?.items?.length ?? 0) === 0 && (
+            <p className="text-sm text-zinc-500">No notifications yet.</p>
+          )}
+          <div className="space-y-2">
+            {(notificationsData?.items || []).map((item: any) => (
+              <div
+                key={item.id}
+                className="p-4 bg-black rounded-lg outline outline-1 outline-zinc-800/80 flex items-start justify-between gap-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-white">{item.title || 'Notification'}</p>
+                  <p className="text-xs text-neutral-400 mt-1">{item.body || item.message}</p>
+                </div>
+                {!item.isRead && (
+                  <button
+                    type="button"
+                    onClick={() => markAsRead(item.id)}
+                    className="text-xs text-amber-400 hover:text-amber-300 shrink-0"
+                  >
+                    Mark read
+                  </button>
+                )}
               </div>
-              <input
-                type="checkbox"
-                checked={settings.orderSoundAlerts}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, orderSoundAlerts: e.target.checked }))
-                }
-                className="size-4 accent-amber-400 cursor-pointer"
-              />
-            </div>
-
-            <div className="p-4 bg-black rounded-lg outline outline-1 outline-zinc-800/80 flex items-center justify-between">
-              <div>
-                <span className="text-sm font-medium text-white block">
-                  Low Inventory Alerts
-                </span>
-                <span className="text-xs text-neutral-400">
-                  Notify store manager immediately when key ingredients reach minimum reorder levels.
-                </span>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.lowStockAlerts}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, lowStockAlerts: e.target.checked }))
-                }
-                className="size-4 accent-amber-400 cursor-pointer"
-              />
-            </div>
+            ))}
           </div>
-
-          <div className="flex justify-end pt-2">
-            <button
-              onClick={() => handleSaveOrg()}
-              className="px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-neutral-950 text-sm font-semibold font-sans rounded-lg transition-all cursor-pointer shadow-md"
-            >
-              Save Notification Preferences
-            </button>
-          </div>
+          <PaginationBar
+            meta={{
+              page: notificationsData?.page || notificationPage,
+              limit: notificationsData?.limit || DEFAULT_PAGE_SIZE,
+              total: notificationsData?.total || 0,
+              totalPages: notificationsData?.totalPages || 1,
+            }}
+            onPageChange={setNotificationPage}
+          />
         </div>
       )}
 
       {/* 5. Sub-tab 4: Security & Tenant Credentials (Full Auth APIs Suite) */}
       {activeSubTab === 'security' && (
-        <div className="space-y-6">
+        <div className="space-y-6" data-testid="settings-section-security">
           {/* Card A: Account Security & Password Management */}
           <div className="p-6 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 space-y-5 shadow-xl">
             <div className="pb-3 border-b border-neutral-800 flex items-center justify-between">
@@ -1044,19 +1024,14 @@ export default function SettingsView() {
                     Two-Factor Authentication (2FA / TOTP)
                   </span>
                   <span className="text-xs text-neutral-400">
-                    Require 5-digit verification code sent to verified email upon login.
+                    Not available in this release. Password changes use the authenticated change-password and OTP reset endpoints.
                   </span>
                 </div>
                 <input
                   type="checkbox"
-                  checked={settings.twoFactorAuth}
-                  onChange={(e) => {
-                    setSettings((prev) => ({ ...prev, twoFactorAuth: e.target.checked }));
-                    toast.success(
-                      `Two-Factor Authentication policy ${e.target.checked ? 'enabled' : 'disabled'}.`
-                    );
-                  }}
-                  className="size-4 accent-amber-400 cursor-pointer"
+                  disabled
+                  checked={false}
+                  className="size-4 accent-amber-400 cursor-not-allowed opacity-40"
                 />
               </div>
 
@@ -1087,6 +1062,60 @@ export default function SettingsView() {
                   Manage Password
                 </button>
               </div>
+
+              <form onSubmit={handleDirectChangePassword} className="space-y-3 pt-1">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">
+                      Current Password
+                    </label>
+                    <input
+                      type="password"
+                      data-testid="settings-current-password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full h-10 px-3 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">
+                      New Password
+                    </label>
+                    <input
+                      type="password"
+                      data-testid="settings-new-password"
+                      value={directNewPassword}
+                      onChange={(e) => setDirectNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full h-10 px-3 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      data-testid="settings-confirm-password"
+                      value={directConfirmPassword}
+                      onChange={(e) => setDirectConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full h-10 px-3 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    data-testid="settings-password-save"
+                    disabled={isDirectChangingPass}
+                    className="px-5 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-white font-semibold text-xs sm:text-sm rounded-lg flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
+                  >
+                    {isDirectChangingPass ? 'Updating Password...' : 'Update Password'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
 
@@ -1153,13 +1182,13 @@ export default function SettingsView() {
                 <div>
                   <span className="text-xs text-neutral-400 block">Current User ID</span>
                   <span className="text-xs font-mono text-zinc-300 truncate block mt-0.5">
-                    {user?.id || 'usr_live_admin_01'}
+                    {user?.id || '—'}
                   </span>
                 </div>
                 <div>
                   <span className="text-xs text-neutral-400 block">Session Global Role</span>
                   <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide block mt-0.5">
-                    {user?.role || 'GLOBAL_ADMIN'}
+                    {user?.role || '—'}
                   </span>
                 </div>
               </div>

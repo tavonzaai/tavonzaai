@@ -20,11 +20,13 @@ import { AdminNavTab } from './types';
 interface NewAdminDashboardProps {
   initialTab?: string;
   initialRestaurantId?: string;
+  initialSettingsSection?: string;
 }
 
 export default function NewAdminDashboard({
   initialTab = 'dashboard',
   initialRestaurantId,
+  initialSettingsSection,
 }: NewAdminDashboardProps) {
   const router = useRouter();
 
@@ -72,6 +74,10 @@ export default function NewAdminDashboard({
 
   const handleTabSelect = (tab: AdminNavTab) => {
     setActiveTab(tab);
+    if (tab === 'settings') {
+      router.push('/new-admin-dashboard/settings/org-profile', { scroll: false });
+      return;
+    }
     router.push(`/new-admin-dashboard/${tab}`, { scroll: false });
   };
 
@@ -114,7 +120,9 @@ export default function NewAdminDashboard({
           {activeTab === 'payments' && <PaymentsView />}
           {activeTab === 'reports' && <ReportsView />}
           {activeTab === 'subscription' && <SubscriptionView />}
-          {activeTab === 'settings' && <SettingsView />}
+          {activeTab === 'settings' && (
+            <SettingsView section={initialSettingsSection} />
+          )}
         </main>
       </div>
 

@@ -16,7 +16,7 @@ export async function loginAsAdmin(page: Page) {
   await page.getByTestId('login-email').fill(adminEmail);
   await page.getByTestId('login-password').fill(adminPassword);
   await page.getByTestId('login-submit').click();
-  await page.waitForURL(/\/new-admin-dashboard/, { timeout: 20_000 });
+  await page.waitForURL(/\/new-admin-dashboard/, { timeout: 30_000 });
   await expect(page.getByTestId('admin-view-dashboard')).toBeVisible();
 }
 

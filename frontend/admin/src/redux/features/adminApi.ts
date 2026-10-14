@@ -189,7 +189,7 @@ export const adminApi = rtkBaseApi.injectEndpoints({
     }),
     getPayments: builder.query<
       { data: any[]; meta?: any },
-      { organizationId?: string; branchId?: string; status?: string; page?: number; limit?: number }
+      { organizationId?: string; branchId?: string; status?: string; page?: number; limit?: number; search?: string }
     >({
       query: (params) => ({ url: '/payments', params }),
       transformResponse: (response: unknown) => {

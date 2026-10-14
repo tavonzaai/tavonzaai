@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, or, ilike } from 'drizzle-orm';
+import { eq, and, or, ilike, sql, desc } from 'drizzle-orm';
 import { DrizzleQueryBuilder } from '../../../../common/database';
 import * as argon2 from 'argon2';
 import {
@@ -96,8 +96,12 @@ export class DrizzleBranchRepository {
 
   async findBranchesByOrganizationId(
     organizationId: string,
-    options?: { search?: string; includeDeleted?: boolean },
-  ): Promise<Branch[]> {
+    options?: { search?: string; includeDeleted?: boolean; page?: number; limit?: number },
+  ): Promise<{ data: Branch[]; meta: any }> {
+    const page = Math.max(1, Number(options?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(options?.limit) || 12));
+    const offset = (page - 1) * limit;
+
     const conditions = [eq(restaurants.organizationId, organizationId)];
     if (!options?.includeDeleted) {
       conditions.push(eq(branches.isActive, true));
@@ -106,13 +110,33 @@ export class DrizzleBranchRepository {
       conditions.push(ilike(branches.name, `%${options.search}%`));
     }
 
+    const whereClause = and(...conditions);
+
+    const [countRow] = await this.db
+      .select({ total: sql<number>`cast(count(*) as integer)` })
+      .from(branches)
+      .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+      .where(whereClause);
+
     const rows = await this.db
       .select({ branch: branches })
       .from(branches)
       .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
-      .where(and(...conditions));
+      .where(whereClause)
+      .orderBy(desc(branches.createdAt))
+      .limit(limit)
+      .offset(offset);
 
-    return rows.map((row) => this.mapBranch(row.branch));
+    const total = countRow?.total ?? 0;
+    return {
+      data: rows.map((row) => this.mapBranch(row.branch)),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit) || 1),
+      },
+    };
   }
 
   async findBranchesByRestaurantId(restaurantId: string, includeDeleted = false): Promise<Branch[]> {
@@ -347,6 +371,7 @@ export class DrizzleBranchRepository {
         permissions: staffAssignments.permissions,
         isActive: staffAssignments.isActive,
         assignedAt: staffAssignments.createdAt,
+        userId: users.id,
         name: users.name,
         email: users.email,
         phone: users.contactNo,
@@ -390,6 +415,7 @@ export class DrizzleBranchRepository {
         permissions: staffAssignments.permissions,
         isActive: staffAssignments.isActive,
         assignedAt: staffAssignments.createdAt,
+        userId: users.id,
         name: users.name,
         email: users.email,
         phone: users.contactNo,

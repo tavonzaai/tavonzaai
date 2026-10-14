@@ -21,13 +21,13 @@ export class GetNotificationsQueryDto {
   @Min(1)
   page: number = 1;
 
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100, example: 20, description: 'Items per page limit' })
+  @ApiPropertyOptional({ default: 12, minimum: 1, maximum: 100, example: 12, description: 'Items per page limit' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
-  limit: number = 20;
+  limit: number = 12;
 
   @ApiPropertyOptional({ description: 'Filter by read status', example: false })
   @IsOptional()
