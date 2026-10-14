@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BranchItem } from '../types';
+import { useRouter } from 'next/navigation';
 import { useBranchDashboard } from './branch-dashboard/hooks/useBranchDashboard';
 import {
   BranchDashboardHeader,
@@ -11,23 +11,50 @@ import {
   BranchStaffTab,
   BranchModals,
 } from './branch-dashboard/components';
+import { BranchSection, branchDetailPath } from './branch-dashboard/sections';
+import { ErrorState, LoadingState } from '@/components/common';
 
 export interface BranchDashboardViewProps {
-  branch: BranchItem;
+  branchId: string;
+  section: BranchSection;
   onBack: () => void;
-  onUpdateBranch?: (updated: BranchItem) => void;
 }
 
 export default function BranchDashboardView({
-  branch: initialBranch,
+  branchId,
+  section,
   onBack,
-  onUpdateBranch,
 }: BranchDashboardViewProps) {
-  const d = useBranchDashboard({ initialBranch, onUpdateBranch });
+  const router = useRouter();
+  const d = useBranchDashboard({
+    branchId,
+    section,
+    onSectionChange: (next) => {
+      router.push(branchDetailPath(branchId, next), { scroll: false });
+    },
+  });
+
+  if (d.isBranchLoading) {
+    return <LoadingState message="Loading branch..." />;
+  }
+
+  if (d.isBranchError || !d.branch) {
+    return (
+      <div className="space-y-4" data-testid="branch-dashboard-error">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-neutral-400 hover:text-white text-xs font-semibold"
+        >
+          Back to branches
+        </button>
+        <ErrorState message={d.branchErrorMessage} onRetry={() => d.refetchBranch()} />
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-300">
-      {/* Header and SubTab Navigation */}
+    <div className="w-full space-y-6 animate-in fade-in duration-300" data-testid="branch-dashboard">
       <BranchDashboardHeader
         branch={d.branch}
         activeSubTab={d.activeSubTab}
@@ -41,53 +68,57 @@ export default function BranchDashboardView({
         onMenuFilterStatusChange={d.setMenuFilterStatus}
         staffRoleFilter={d.staffRoleFilter}
         onStaffRoleFilterChange={d.setStaffRoleFilter}
-        staffBranchFilter={d.staffBranchFilter}
-        onStaffBranchFilterChange={d.setStaffBranchFilter}
+        staffStatusFilter={d.staffStatusFilter}
+        onStaffStatusFilterChange={d.setStaffStatusFilter}
       />
 
-      {/* Main Tab Panels */}
-      {d.activeSubTab === 'Overview' && (
-        <BranchOverviewTab
-          branch={d.branch}
-          availableTables={d.availableTables}
-          totalTables={d.totalTables}
-          occupiedTables={d.occupiedTables}
-          staffList={d.staffList}
-        />
+      {d.isTabLoading ? (
+        <LoadingState message="Loading branch section..." />
+      ) : (
+        <>
+          {d.activeSubTab === 'Overview' && (
+            <BranchOverviewTab
+              branch={d.branch}
+              availableTables={d.availableTables}
+              totalTables={d.totalTables}
+              occupiedTables={d.occupiedTables}
+              staffList={d.staffList}
+            />
+          )}
+
+          {d.activeSubTab === 'Tables' && (
+            <BranchTablesTab
+              tables={d.tables}
+              totalTables={d.totalTables}
+              availableTables={d.availableTables}
+              occupiedTables={d.occupiedTables}
+              totalCapacity={d.totalCapacity}
+              onViewQr={(table) => d.setViewingQrTable(table)}
+              onEditTable={d.handleOpenEditTable}
+              onDeleteTable={(table) => d.setDeletingTable(table)}
+            />
+          )}
+
+          {d.activeSubTab === 'Menu' && (
+            <BranchMenuTab
+              menuItems={d.menuItems}
+              onOpenEditMenu={d.handleOpenEditMenu}
+              onDuplicateMenu={d.handleDuplicateMenu}
+              onToggleMenuStatus={d.handleToggleMenuStatus}
+              onDeleteMenu={(item) => d.setDeletingMenuItem(item)}
+            />
+          )}
+
+          {d.activeSubTab === 'Staff' && (
+            <BranchStaffTab
+              staffList={d.staffList}
+              onOpenEditStaff={d.handleOpenEditStaff}
+              onToggleStaffStatus={d.handleToggleStaffStatus}
+            />
+          )}
+        </>
       )}
 
-      {d.activeSubTab === 'Tables' && (
-        <BranchTablesTab
-          tables={d.tables}
-          totalTables={d.totalTables}
-          availableTables={d.availableTables}
-          occupiedTables={d.occupiedTables}
-          totalCapacity={d.totalCapacity}
-          onViewQr={(table) => d.setViewingQrTable(table)}
-          onEditTable={d.handleOpenEditTable}
-          onDeleteTable={(table) => d.setDeletingTable(table)}
-        />
-      )}
-
-      {d.activeSubTab === 'Menu' && (
-        <BranchMenuTab
-          menuItems={d.menuItems}
-          onOpenEditMenu={d.handleOpenEditMenu}
-          onDuplicateMenu={d.handleDuplicateMenu}
-          onToggleMenuStatus={d.handleToggleMenuStatus}
-          onDeleteMenu={(item) => d.setDeletingMenuItem(item)}
-        />
-      )}
-
-      {d.activeSubTab === 'Staff' && (
-        <BranchStaffTab
-          staffList={d.staffList}
-          onOpenEditStaff={d.handleOpenEditStaff}
-          onToggleStaffStatus={d.handleToggleStaffStatus}
-        />
-      )}
-
-      {/* Grouped Modals */}
       <BranchModals
         branch={d.branch}
         restaurants={d.restaurants}

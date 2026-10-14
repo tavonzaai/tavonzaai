@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { BranchItem, RestaurantItem } from '../types';
-import BranchDashboardView from './BranchDashboardView';
 import { BranchFormData } from './branches/types';
+import { branchDetailPath } from './branch-dashboard/sections';
 import {
   BranchesHeader,
   BranchesSearch,
@@ -29,7 +29,6 @@ import { useClampPage, useListPagination } from '@/hooks/useListPagination';
 
 interface BranchesViewProps {
   onBack?: () => void;
-  initialBranchId?: string;
 }
 
 function weekHours(openTime: string, closeTime: string) {
@@ -40,9 +39,8 @@ function weekHours(openTime: string, closeTime: string) {
   }));
 }
 
-export default function BranchesView({ onBack, initialBranchId }: BranchesViewProps = {}) {
+export default function BranchesView({ onBack }: BranchesViewProps = {}) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const organizationId = useOrganizationId();
   const [searchQuery, setSearchQuery] = useState('');
   const { page, limit, setPage, resetPage } = useListPagination();
@@ -81,18 +79,12 @@ export default function BranchesView({ onBack, initialBranchId }: BranchesViewPr
     [data, restaurantNames],
   );
 
-  const selectedId =
-    initialBranchId || searchParams.get('branchId') || searchParams.get('branch') || null;
-  const selectedBranch = selectedId
-    ? branches.find((branch) => branch.id === selectedId) || null
-    : null;
-
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<BranchItem | null>(null);
   const [deletingBranch, setDeletingBranch] = useState<BranchItem | null>(null);
 
   const handleViewBranch = (branch: BranchItem) => {
-    router.push(`/new-admin-dashboard/branches?branchId=${branch.id}`, { scroll: false });
+    router.push(branchDetailPath(branch.id), { scroll: false });
   };
 
   const handleBack = () => {
@@ -160,16 +152,6 @@ export default function BranchesView({ onBack, initialBranchId }: BranchesViewPr
       toast.error(err?.data?.message || err?.message || 'Unable to delete branch.');
     }
   };
-
-  if (selectedBranch) {
-    return (
-      <BranchDashboardView
-        branch={selectedBranch}
-        onBack={() => router.push('/new-admin-dashboard/branches', { scroll: false })}
-        onUpdateBranch={() => undefined}
-      />
-    );
-  }
 
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-300">

@@ -13,16 +13,24 @@ import {
   StaffEditFormData,
 } from '../types';
 import {
+  BranchSection,
+  StaffStatusFilter,
+  sectionToSubTab,
+  subTabToSection,
+} from '../sections';
+import {
   useCreateBranchStaffMutation,
   useCreateMenuCategoryMutation,
   useCreateMenuItemMutation,
   useCreateTableMutation,
   useDeleteMenuItemMutation,
   useDeleteTableMutation,
+  useGetBranchQuery,
   useGetBranchStaffQuery,
   useGetMenuCategoriesQuery,
   useGetMenuItemsQuery,
-  useGetRestaurantsQuery,
+  useGetOperatingHoursQuery,
+  useGetRestaurantQuery,
   useGetTablesQuery,
   useRegenerateTableQrMutation,
   useSetOperatingHoursMutation,
@@ -31,16 +39,14 @@ import {
   useUpdateMenuItemMutation,
   useUpdateTableMutation,
 } from '@/redux/features/adminApi';
-import { useOrganizationId } from '@/hooks/useOrganizationId';
 import { getCustomerAppUrl } from '@/redux/api/baseApi';
-import { mapRestaurant, parseBranchAddress } from '@/lib/admin-mappers';
-
-const isValidUUID = (val?: string) =>
-  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+import { mapBranch, parseBranchAddress } from '@/lib/admin-mappers';
+import type { BackendBranch, BackendRestaurant } from '@/redux/features/restaurantApi';
 
 interface UseBranchDashboardProps {
-  initialBranch: BranchItem;
-  onUpdateBranch?: (updated: BranchItem) => void;
+  branchId: string;
+  section: BranchSection;
+  onSectionChange: (section: BranchSection) => void;
 }
 
 function mapTableStatus(serviceStatus?: string, operationalFlag?: string): TableItem['status'] {
@@ -53,29 +59,64 @@ function weekHours(openTime: string, closeTime: string) {
   return Array.from({ length: 7 }, (_, dayOfWeek) => ({ dayOfWeek, openTime, closeTime }));
 }
 
+function unwrapRecord<T extends { id?: string }>(payload: unknown): T | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as T & { data?: T };
+  if (record.id) return record;
+  if (record.data?.id) return record.data;
+  return undefined;
+}
+
+function errorText(error: unknown, fallback: string) {
+  const body = error as { data?: { message?: string }; message?: string } | undefined;
+  return body?.data?.message || body?.message || fallback;
+}
+
+function pickHours(rows: Array<{ dayOfWeek?: number; openTime?: string; closeTime?: string }> | undefined) {
+  if (!rows?.length) return null;
+  const today = new Date().getDay();
+  const slot = rows.find((row) => row.dayOfWeek === today) || rows[0];
+  const openTime = slot?.openTime?.slice(0, 5);
+  const closeTime = slot?.closeTime?.slice(0, 5);
+  if (!openTime || !closeTime) return null;
+  return { openTime, closeTime };
+}
+
 export function useBranchDashboard({
-  initialBranch,
-  onUpdateBranch,
+  branchId,
+  section,
+  onSectionChange,
 }: UseBranchDashboardProps) {
-  const organizationId = useOrganizationId();
-  const [branch, setBranch] = useState<BranchItem>(initialBranch);
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('Overview');
-  const [activeBranchId, setActiveBranchId] = useState<string>(initialBranch.id);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const activeSubTab = sectionToSubTab(section);
+  const setActiveSubTab = (tab: SubTab) => onSectionChange(subTabToSection(tab));
 
-  const { data: restaurantsData } = useGetRestaurantsQuery(
-    { organizationId: organizationId || undefined, page: 1, limit: 100 },
-    { skip: !organizationId },
-  );
-  const restaurants: RestaurantItem[] = useMemo(
-    () => (restaurantsData?.data || []).map((item) => mapRestaurant(item, 0)),
-    [restaurantsData],
-  );
+  const loadTables = section === 'overview' || section === 'tables';
+  const loadMenu = section === 'menu';
+  const loadStaff = section === 'overview' || section === 'staff';
 
-  const { data: tableRows = [] } = useGetTablesQuery({ branchId: branch.id });
-  const { data: categoryRows = [] } = useGetMenuCategoriesQuery(branch.id);
-  const { data: menuRows = [] } = useGetMenuItemsQuery(branch.id);
-  const { data: staffRows = [] } = useGetBranchStaffQuery({ branchId: branch.id });
+  const branchQuery = useGetBranchQuery(branchId, { skip: !branchId });
+  const branchRecord = unwrapRecord<BackendBranch>(branchQuery.data);
+  const restaurantQuery = useGetRestaurantQuery(branchRecord?.restaurantId || '', {
+    skip: !branchRecord?.restaurantId,
+  });
+  const restaurantRecord = unwrapRecord<BackendRestaurant>(restaurantQuery.data);
+  const hoursQuery = useGetOperatingHoursQuery(branchId, { skip: !branchId });
+
+  const tablesQuery = useGetTablesQuery({ branchId }, { skip: !branchId || !loadTables });
+  const categoriesQuery = useGetMenuCategoriesQuery(branchId, { skip: !branchId || !loadMenu });
+  const menuQuery = useGetMenuItemsQuery(branchId, { skip: !branchId || !loadMenu });
+
+  const [staffRoleFilter, setStaffRoleFilter] = useState<string>('ALL');
+  const [staffStatusFilter, setStaffStatusFilter] = useState<StaffStatusFilter>('All');
+
+  const staffQuery = useGetBranchStaffQuery(
+    {
+      branchId,
+      status: 'all',
+      ...(section === 'staff' && staffRoleFilter !== 'ALL' ? { role: staffRoleFilter } : {}),
+    },
+    { skip: !branchId || !loadStaff },
+  );
 
   const [updateBranch] = useUpdateBranchMutation();
   const [setOperatingHours] = useSetOperatingHoursMutation();
@@ -89,6 +130,36 @@ export function useBranchDashboard({
   const [deleteMenuItem] = useDeleteMenuItemMutation();
   const [createStaff] = useCreateBranchStaffMutation();
   const [updateStaff] = useUpdateBranchStaffMutation();
+
+  const branch = useMemo<BranchItem | null>(() => {
+    if (!branchRecord) return null;
+    const hours = pickHours(hoursQuery.data);
+    const mapped = mapBranch(branchRecord, restaurantRecord?.name || '');
+    if (!hours) return mapped;
+    return {
+      ...mapped,
+      openingTime: hours.openTime,
+      closingTime: hours.closeTime,
+      hours: `${hours.openTime} – ${hours.closeTime}`,
+    };
+  }, [branchRecord, restaurantRecord?.name, hoursQuery.data]);
+
+  const restaurants: RestaurantItem[] = useMemo(() => {
+    if (!branch) return [];
+    return [
+      {
+        id: branch.restaurantId,
+        name: branch.restaurantName || 'Current restaurant',
+        branchesCount: 0,
+        status: 'Active',
+      },
+    ];
+  }, [branch]);
+
+  const tableRows = tablesQuery.data || [];
+  const categoryRows = categoriesQuery.data || [];
+  const menuRows = menuQuery.data || [];
+  const staffRows = staffQuery.data || [];
 
   const tables: TableItem[] = useMemo(
     () =>
@@ -127,24 +198,24 @@ export function useBranchDashboard({
         id: row.staffId || row.id,
         name: row.name,
         role: row.role,
-        branch: branch.name,
+        branch: branch?.name || '',
         status: row.isActive === false ? 'Inactive' : 'Active',
         contact: row.email,
       })),
-    [staffRows, branch.name],
+    [staffRows, branch?.name],
   );
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<BranchFormData>({
-    restaurantId: branch.restaurantId,
-    restaurantName: branch.restaurantName,
-    name: branch.name,
-    address: branch.location,
-    contactNumber: branch.contactNumber || '',
-    manager: branch.manager,
-    status: (branch.status as 'Active' | 'Setup' | 'Closed') || 'Active',
-    openingTime: branch.openingTime || '09:00',
-    closingTime: branch.closingTime || '23:00',
+    restaurantId: '',
+    restaurantName: '',
+    name: '',
+    address: '',
+    contactNumber: '',
+    manager: '',
+    status: 'Active',
+    openingTime: '09:00',
+    closingTime: '23:00',
   });
 
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
@@ -170,8 +241,6 @@ export function useBranchDashboard({
     status: 'Active',
   });
 
-  const [staffRoleFilter, setStaffRoleFilter] = useState<string>('All Roles');
-  const [staffBranchFilter, setStaffBranchFilter] = useState<string>('All branches');
   const [isInviteStaffOpen, setIsInviteStaffOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [inviteForm, setInviteForm] = useState<StaffInviteFormData>({
@@ -179,12 +248,12 @@ export function useBranchDashboard({
     email: '',
     password: '',
     role: 'WAITER',
-    branch: branch.name,
+    branch: '',
   });
   const [editStaffForm, setEditStaffForm] = useState<StaffEditFormData>({
     name: '',
     role: 'WAITER',
-    branch: branch.name,
+    branch: '',
     status: 'Active',
   });
 
@@ -199,11 +268,13 @@ export function useBranchDashboard({
   });
 
   const filteredStaff = staffList.filter((staff) => {
-    if (staffRoleFilter !== 'All Roles' && staff.role !== staffRoleFilter) return false;
+    if (staffStatusFilter === 'Active') return staff.status === 'Active';
+    if (staffStatusFilter === 'Inactive') return staff.status === 'Inactive';
     return true;
   });
 
   const handleOpenEdit = () => {
+    if (!branch) return;
     setEditForm({
       restaurantId: branch.restaurantId,
       restaurantName: branch.restaurantName,
@@ -220,13 +291,14 @@ export function useBranchDashboard({
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!branch) return;
     if (!editForm.name.trim()) {
       toast.error('Branch name cannot be empty.');
       return;
     }
     try {
       await updateBranch({
-        id: branch.id,
+        id: branchId,
         body: {
           name: editForm.name.trim(),
           address: parseBranchAddress(editForm.address),
@@ -235,22 +307,10 @@ export function useBranchDashboard({
         },
       }).unwrap();
       await setOperatingHours({
-        branchId: branch.id,
+        branchId,
         hours: weekHours(editForm.openingTime, editForm.closingTime),
       });
-      const updated: BranchItem = {
-        ...branch,
-        name: editForm.name.trim(),
-        location: editForm.address.trim(),
-        contactNumber: editForm.contactNumber,
-        status: editForm.status,
-        openingTime: editForm.openingTime,
-        closingTime: editForm.closingTime,
-        hours: `${editForm.openingTime} – ${editForm.closingTime}`,
-      };
-      setBranch(updated);
-      onUpdateBranch?.(updated);
-      toast.success(`Branch "${updated.name}" updated successfully!`);
+      toast.success(`Branch "${editForm.name.trim()}" updated successfully!`);
       setIsEditOpen(false);
     } catch (err: any) {
       toast.error(err?.data?.message || err?.message || 'Unable to update branch.');
@@ -298,7 +358,7 @@ export function useBranchDashboard({
     }
     try {
       await createTable({
-        branchId: branch.id,
+        branchId,
         label: tableForm.number.trim(),
         capacity: Number(tableForm.capacity) || 4,
       }).unwrap();
@@ -349,7 +409,7 @@ export function useBranchDashboard({
     );
     if (existing) return existing.id;
     const created: any = await createMenuCategory({
-      restaurantId: branch.restaurantId,
+      restaurantId: branch?.restaurantId,
       name: categoryName,
     }).unwrap();
     return created?.data?.id || created?.id;
@@ -376,7 +436,7 @@ export function useBranchDashboard({
     try {
       const categoryId = await resolveCategoryId(menuForm.category);
       await createMenuItem({
-        restaurantId: branch.restaurantId,
+        restaurantId: branch?.restaurantId,
         categoryId,
         name: menuForm.name.trim(),
         basePrice: parsePrice(menuForm.price),
@@ -421,7 +481,7 @@ export function useBranchDashboard({
     try {
       const categoryId = await resolveCategoryId(item.category);
       await createMenuItem({
-        restaurantId: branch.restaurantId,
+        restaurantId: branch?.restaurantId,
         categoryId,
         name: `${item.name} (Copy)`,
         basePrice: parsePrice(item.price),
@@ -462,7 +522,7 @@ export function useBranchDashboard({
       email: '',
       password: '',
       role: 'WAITER',
-      branch: branch.name,
+      branch: branch?.name || '',
     });
     setIsInviteStaffOpen(true);
   };
@@ -475,7 +535,7 @@ export function useBranchDashboard({
     }
     try {
       await createStaff({
-        branchId: branch.id,
+        branchId,
         body: {
           name: inviteForm.name.trim(),
           email: inviteForm.email.trim(),
@@ -495,7 +555,7 @@ export function useBranchDashboard({
     setEditStaffForm({
       name: staff.name,
       role: staff.role,
-      branch: staff.branch,
+      branch: staff.branch || branch?.name || '',
       status: staff.status,
     });
   };
@@ -505,7 +565,7 @@ export function useBranchDashboard({
     if (!editingStaff) return;
     try {
       await updateStaff({
-        branchId: branch.id,
+        branchId,
         staffId: editingStaff.id,
         body: {
           role: editStaffForm.role,
@@ -523,7 +583,7 @@ export function useBranchDashboard({
     const nextStatus = staff.status === 'Active' ? 'Inactive' : 'Active';
     try {
       await updateStaff({
-        branchId: branch.id,
+        branchId,
         staffId: staff.id,
         body: { isActive: nextStatus === 'Active' },
       }).unwrap();
@@ -533,8 +593,18 @@ export function useBranchDashboard({
     }
   };
 
+  const isTabLoading =
+    (loadTables && tablesQuery.isLoading) ||
+    (loadMenu && (categoriesQuery.isLoading || menuQuery.isLoading)) ||
+    (loadStaff && staffQuery.isLoading);
+
   return {
     branch,
+    isBranchLoading: branchQuery.isLoading || branchQuery.isUninitialized,
+    isBranchError: branchQuery.isError || (branchQuery.isSuccess && !branch),
+    branchErrorMessage: errorText(branchQuery.error, 'Unable to load this branch.'),
+    refetchBranch: () => branchQuery.refetch(),
+    isTabLoading,
     activeSubTab,
     setActiveSubTab,
     restaurants,
@@ -585,11 +655,11 @@ export function useBranchDashboard({
     handleDuplicateMenu,
     handleToggleMenuStatus,
     handleConfirmDeleteMenu,
-    staffList: filteredStaff,
+    staffList: section === 'staff' ? filteredStaff : staffList,
     staffRoleFilter,
     setStaffRoleFilter,
-    staffBranchFilter,
-    setStaffBranchFilter,
+    staffStatusFilter,
+    setStaffStatusFilter,
     isInviteStaffOpen,
     setIsInviteStaffOpen,
     editingStaff,

@@ -51,13 +51,17 @@ export const BranchStaffTab: React.FC<BranchStaffTabProps> = ({
               </tr>
             ) : (
               paged.items.map((member) => (
-                <tr key={member.id} className="hover:bg-zinc-900/40 transition-colors">
+                <tr
+                  key={member.id}
+                  data-testid={`staff-row-${member.id}`}
+                  className="hover:bg-zinc-900/40 transition-colors"
+                >
                   <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
                     {member.name}
                   </td>
                   <td className="px-5 py-3">
                     <span className="inline-flex px-3 py-1.5 rounded-md text-sm font-medium font-['Inter'] leading-4 bg-amber-500/10 text-amber-500">
-                      {member.role}
+                      {member.role.replaceAll('_', ' ')}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-neutral-200 text-base font-medium font-['Inter'] leading-4">
@@ -86,6 +90,7 @@ export const BranchStaffTab: React.FC<BranchStaffTabProps> = ({
                       {member.status === 'Active' ? (
                         <button
                           type="button"
+                          data-testid={`staff-deactivate-${member.id}`}
                           onClick={() => onToggleStaffStatus(member)}
                           className="text-red-400 hover:text-red-300 text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
                         >
@@ -94,6 +99,7 @@ export const BranchStaffTab: React.FC<BranchStaffTabProps> = ({
                       ) : (
                         <button
                           type="button"
+                          data-testid={`staff-activate-${member.id}`}
                           onClick={() => onToggleStaffStatus(member)}
                           className="text-green-500 hover:text-green-400 text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
                         >

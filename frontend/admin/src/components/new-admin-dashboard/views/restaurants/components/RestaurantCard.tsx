@@ -27,6 +27,8 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
             <div className="self-stretch flex flex-col justify-start items-start gap-1">
               <div className="self-stretch flex flex-col justify-start items-start gap-0.5">
                 <button
+                  type="button"
+                  data-testid={`restaurant-open-${restaurant.id}`}
                   onClick={() => onSelect(restaurant)}
                   className="text-left group cursor-pointer"
                 >

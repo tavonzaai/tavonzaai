@@ -379,7 +379,11 @@ export class BranchStaffMemberResponseDto {
   @ApiProperty({ example: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'], description: 'Assigned permissions' })
   permissions!: string[];
 
-  @ApiProperty({ example: true, description: 'Active assignment status' })
+  @ApiProperty({
+    example: true,
+    description:
+      'Whether this branch assignment is active. Inactive rows are included when status=all or status=inactive. The default list is active only.',
+  })
   isActive!: boolean;
 
   @ApiProperty({ example: '2026-10-01T12:00:00.000Z', description: 'Assignment date' })

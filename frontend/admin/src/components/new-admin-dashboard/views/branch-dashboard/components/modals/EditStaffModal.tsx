@@ -92,20 +92,12 @@ export const EditStaffModal: React.FC<EditStaffModalProps> = ({
                 <label className="text-white text-sm font-normal font-['Inter'] leading-4">
                   Branch
                 </label>
-                <div className="self-stretch relative">
-                  <select
-                    value={editStaffForm.branch}
-                    onChange={(e) => onChange({ ...editStaffForm, branch: e.target.value })}
-                    className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-['Inter'] appearance-none focus:outline-none focus:border-amber-400 cursor-pointer"
-                  >
-                    <option value="Georgia Flagship">Georgia Flagship</option>
-                    <option value="Florida Flagship">Florida Flagship</option>
-                    <option value="Illinois Flagship">Illinois Flagship</option>
-                    <option value="Texas Flagship">Texas Flagship</option>
-                    <option value="Gulshan Flagship">Gulshan Flagship</option>
-                  </select>
-                  <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
+                <input
+                  type="text"
+                  readOnly
+                  value={editStaffForm.branch || 'Current branch'}
+                  className="w-full h-11 px-3.5 py-3 bg-neutral-950 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-400 text-sm font-normal font-['Inter']"
+                />
               </div>
             </div>
 

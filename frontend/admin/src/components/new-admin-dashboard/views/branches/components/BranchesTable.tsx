@@ -53,6 +53,8 @@ export const BranchesTable: React.FC<BranchesTableProps> = ({
                   {/* Column 1: Branch */}
                   <td className="px-6 py-4">
                     <button
+                      type="button"
+                      data-testid={`branch-open-${branch.id}`}
                       onClick={() => onViewBranch(branch)}
                       className="inline-flex flex-col justify-center items-start text-left group/btn cursor-pointer"
                     >
