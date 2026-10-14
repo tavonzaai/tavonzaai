@@ -8,7 +8,7 @@
     "dev": "pnpm --filter @tavonza/database db:generate && dotenv -e ../../.env -- nest start --watch",
     "db:push": "pnpm --filter @tavonza/database db:push",
     "lint": "tsc --noEmit",
-    "test": "echo 'No tests yet — add jest to devDependencies when writing tests' && exit 0",
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/modules/branches/domain/staff-list-filter.spec.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

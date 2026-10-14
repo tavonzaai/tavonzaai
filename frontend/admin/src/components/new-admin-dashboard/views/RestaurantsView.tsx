@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { RestaurantItem } from '../types';
 import RestaurantBranchesDetailView from './RestaurantBranchesDetailView';
@@ -18,6 +18,7 @@ import {
   useCreateRestaurantMutation,
   useDeleteRestaurantMutation,
   useGetBranchesQuery,
+  useGetRestaurantQuery,
   useGetRestaurantsQuery,
   useUpdateRestaurantMutation,
 } from '@/redux/features/adminApi';
@@ -32,10 +33,10 @@ interface RestaurantsViewProps {
 
 export default function RestaurantsView({ initialRestaurantId }: RestaurantsViewProps = {}) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const organizationId = useOrganizationId();
+  const isDetail = Boolean(initialRestaurantId);
 
-  const { page, limit, setPage } = useListPagination({ enabled: !initialRestaurantId });
+  const { page, limit, setPage } = useListPagination({ enabled: !isDetail });
   const {
     data,
     isLoading,
@@ -44,12 +45,14 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
     refetch,
   } = useGetRestaurantsQuery(
     { organizationId: organizationId || undefined, page, limit },
+    { skip: isDetail },
   );
   useClampPage(page, data?.meta?.totalPages, setPage);
   const { data: branchesData } = useGetBranchesQuery(
     { page: 1, limit: 100 },
-    { skip: !organizationId },
+    { skip: isDetail || !organizationId },
   );
+  const detailQuery = useGetRestaurantQuery(initialRestaurantId || '', { skip: !isDetail });
 
   const [createRestaurant, { isLoading: creating }] = useCreateRestaurantMutation();
   const [updateRestaurant, { isLoading: updating }] = useUpdateRestaurantMutation();
@@ -65,18 +68,17 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
     );
   }, [data, branchesData]);
 
-  const selectedId =
-    initialRestaurantId || searchParams.get('id') || searchParams.get('restaurant') || null;
-  const detailRestaurant = selectedId
-    ? restaurants.find((restaurant) => restaurant.id === selectedId) || null
-    : null;
+  const detailRestaurant = useMemo(() => {
+    if (!detailQuery.data?.id) return null;
+    return mapRestaurant(detailQuery.data, 0);
+  }, [detailQuery.data]);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingRestaurant, setEditingRestaurant] = useState<RestaurantItem | null>(null);
   const [deletingRestaurant, setDeletingRestaurant] = useState<RestaurantItem | null>(null);
 
   const handleSelectRestaurant = (rest: RestaurantItem) => {
-    router.push(`/new-admin-dashboard/restaurants?id=${rest.id}`, { scroll: false });
+    router.push(`/new-admin-dashboard/restaurants/${rest.id}`, { scroll: false });
   };
 
   const handleBackToList = () => {
@@ -138,13 +140,33 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
     }
   };
 
-  if (detailRestaurant) {
+  if (isDetail) {
+    if (detailQuery.isLoading || detailQuery.isUninitialized) {
+      return <LoadingState message="Loading restaurant..." />;
+    }
+    if (detailQuery.isError || !detailRestaurant) {
+      return (
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={handleBackToList}
+            className="text-neutral-400 hover:text-white text-xs font-semibold"
+          >
+            Back to restaurants
+          </button>
+          <ErrorState
+            message={(detailQuery.error as any)?.data?.message || 'Unable to load this restaurant.'}
+            onRetry={() => detailQuery.refetch()}
+          />
+        </div>
+      );
+    }
     return (
       <RestaurantBranchesDetailView
         restaurant={detailRestaurant}
         onBack={handleBackToList}
         onOpenBranchDashboard={(branch) => {
-          router.push(`/new-admin-dashboard/branches?branchId=${branch.id}`);
+          router.push(`/new-admin-dashboard/branches/${branch.id}/overview`);
         }}
       />
     );

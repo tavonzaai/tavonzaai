@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowLeft, Pencil, Plus, ChevronDown } from 'lucide-react';
 import { BranchItem } from '../../../types';
 import { SubTab } from '../types';
+import { STAFF_ROLE_OPTIONS, StaffStatusFilter, subTabToSection } from '../sections';
 
 interface BranchDashboardHeaderProps {
   branch: BranchItem;
@@ -16,8 +17,8 @@ interface BranchDashboardHeaderProps {
   onMenuFilterStatusChange: (status: 'All Items' | 'Active' | 'Disable') => void;
   staffRoleFilter: string;
   onStaffRoleFilterChange: (role: string) => void;
-  staffBranchFilter: string;
-  onStaffBranchFilterChange: (branch: string) => void;
+  staffStatusFilter: StaffStatusFilter;
+  onStaffStatusFilterChange: (status: StaffStatusFilter) => void;
 }
 
 export const BranchDashboardHeader: React.FC<BranchDashboardHeaderProps> = ({
@@ -33,14 +34,16 @@ export const BranchDashboardHeader: React.FC<BranchDashboardHeaderProps> = ({
   onMenuFilterStatusChange,
   staffRoleFilter,
   onStaffRoleFilterChange,
-  staffBranchFilter,
-  onStaffBranchFilterChange,
+  staffStatusFilter,
+  onStaffStatusFilterChange,
 }) => {
   return (
     <div className="space-y-6">
       {/* Top Navigation Row: Back Button */}
       <div className="flex items-center gap-1">
-        <button
+          <button
+          type="button"
+          data-testid="branch-back"
           onClick={onBack}
           className="inline-flex items-center gap-1.5 cursor-pointer group text-neutral-400 hover:text-white transition-colors"
         >
@@ -151,6 +154,8 @@ export const BranchDashboardHeader: React.FC<BranchDashboardHeaderProps> = ({
             return (
               <button
                 key={tab}
+                type="button"
+                data-testid={`branch-section-${subTabToSection(tab)}`}
                 onClick={() => onTabChange(tab)}
                 className={`px-4 py-2 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex justify-start items-center gap-1.5 transition-all cursor-pointer ${
                   isActive
@@ -187,48 +192,45 @@ export const BranchDashboardHeader: React.FC<BranchDashboardHeaderProps> = ({
           </div>
         )}
 
-        {/* Role & Branch Filters on Staff sub-tab matching exact Figma snippet */}
+        {/* Role and status filters for this branch's staff */}
         {activeSubTab === 'Staff' && (
           <div className="flex flex-wrap items-center gap-3.5">
-            {/* Role Filter */}
             <div className="flex items-center gap-3">
               <span className="text-neutral-500 text-lg font-semibold font-['Inter'] leading-4">
                 Role:
               </span>
               <div className="relative">
                 <select
+                  data-testid="staff-role-filter"
                   value={staffRoleFilter}
                   onChange={(e) => onStaffRoleFilterChange(e.target.value)}
                   className="appearance-none px-3.5 py-2.5 bg-neutral-900 hover:bg-neutral-800 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-stone-300 text-base font-medium font-['Inter'] pr-8 focus:outline-none cursor-pointer"
                 >
-                  <option value="All Roles">All Roles</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Branch Manager">Branch Manager</option>
-                  <option value="Waiter">Waiter</option>
-                  <option value="Chef">Chef</option>
-                  <option value="Cashier">Cashier</option>
+                  <option value="ALL">All Roles</option>
+                  {STAFF_ROLE_OPTIONS.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown className="size-4 text-stone-300 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
 
-            {/* Branch Filter */}
             <div className="flex items-center gap-3">
               <span className="text-neutral-500 text-lg font-semibold font-['Inter'] leading-4">
-                Branch:
+                Status:
               </span>
               <div className="relative">
                 <select
-                  value={staffBranchFilter}
-                  onChange={(e) => onStaffBranchFilterChange(e.target.value)}
+                  data-testid="staff-status-filter"
+                  value={staffStatusFilter}
+                  onChange={(e) => onStaffStatusFilterChange(e.target.value as StaffStatusFilter)}
                   className="appearance-none px-3.5 py-2.5 bg-neutral-900 hover:bg-neutral-800 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-stone-300 text-base font-medium font-['Inter'] pr-8 focus:outline-none cursor-pointer"
                 >
-                  <option value="All branches">All branches</option>
-                  <option value="Georgia Flagship">Georgia Flagship</option>
-                  <option value="Florida Flagship">Florida Flagship</option>
-                  <option value="Illinois Flagship">Illinois Flagship</option>
-                  <option value="Texas Flagship">Texas Flagship</option>
-                  <option value="Gulshan Flagship">Gulshan Flagship</option>
+                  <option value="All">All</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
                 </select>
                 <ChevronDown className="size-4 text-stone-300 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>

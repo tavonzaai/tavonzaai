@@ -223,8 +223,14 @@ export class BranchController {
     description: 'Route Guard: Protected by JwtAuthGuard + PermissionsGuard requiring [staff:read]. Lists branch staff members.',
   })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
-  @ApiQuery({ name: 'role', required: false, type: String, description: 'Role filter (e.g. WAITER, KITCHEN, MANAGER, ALL)', example: 'WAITER' })
+  @ApiQuery({ name: 'role', required: false, type: String, description: 'Role filter (e.g. WAITER, KITCHEN_STAFF, BRANCH_MANAGER, ALL)', example: 'WAITER' })
   @ApiQuery({ name: 'search', required: false, type: String, description: 'Search staff by name, email or phone', example: 'Jane' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['all', 'active', 'inactive'],
+    description: 'Assignment status filter. Defaults to active. Use all to include inactive staff.',
+  })
   @ApiOkResponse({ description: 'List of staff members assigned to branch', type: [BranchStaffMemberResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
   async getStaff(
@@ -232,9 +238,10 @@ export class BranchController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Query('role') role?: string,
     @Query('search') search?: string,
+    @Query('status') status?: string,
   ) {
     await this.branchService.assertBranchAccess(user, id);
-    return this.branchService.getStaffByBranch(id, { role, search });
+    return this.branchService.getStaffByBranch(id, { role, search, status });
   }
 
   @Get(':id/staff/:staffId')
