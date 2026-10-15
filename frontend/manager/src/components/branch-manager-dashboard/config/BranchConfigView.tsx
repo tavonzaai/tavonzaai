@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import {
@@ -15,14 +17,21 @@ import {
   Loader2,
   X,
   Calendar,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import AddTableModal, { NewTableData } from './AddTableModal';
+import EditTableModal from '../tables/EditTableModal';
+import { TableItem } from '../types';
 import {
   branchManagerService,
   getActiveBranchId,
   buildTableQrCodeUrl,
+  markTableDeletedLocally,
+  isTableDeletedLocally,
   BranchHolidayItem,
 } from '@/redux/features/branchManagerApi';
+import { confirmDeleteTable, showDeleteSuccess, showDeleteError } from '@/lib/swal';
 
 type ConfigSubTab =
   | 'Branch Info & Hours'
@@ -80,6 +89,8 @@ function BranchConfigContent() {
 
   const [activeSubTab, setActiveSubTab] = useState<ConfigSubTab>(initialSubTab);
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
+  const [editingTable, setEditingTable] = useState<TableItem | null>(null);
+  const [isEditTableOpen, setIsEditTableOpen] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Configuration saved successfully!');
 
@@ -200,19 +211,27 @@ function BranchConfigContent() {
           }
 
           if (tablesRes.status === 'fulfilled' && Array.isArray(tablesRes.value)) {
-            const mappedTables: ConfigTable[] = tablesRes.value.map((t) => {
-              const qrToken = t.qrCodeToken || t.id;
-              const qrUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
-              return {
-                id: t.id,
-                number: t.label || (t as any).number || 'Table',
-                zone: 'Indoor Dining',
-                capacity: `${t.capacity} Guests`,
-                status: t.isActive !== false ? 'Active' : 'Maintenance',
-                qrCodeUrl: qrUrl,
-                qrCodeToken: qrToken,
-              };
-            });
+            const mappedTables: ConfigTable[] = tablesRes.value
+              .filter((t: any) => {
+                if (!t || !t.id) return false;
+                if (isTableDeletedLocally(t.id)) return false;
+                const flag = String(t.operationalFlag || '').toUpperCase();
+                const serv = String(t.serviceStatus || '').toUpperCase();
+                return flag !== 'OUT_OF_SERVICE' && serv !== 'OUT_OF_SERVICE' && !t.isDeleted && t.isActive !== false;
+              })
+              .map((t) => {
+                const qrToken = t.qrCodeToken || t.id;
+                const qrUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
+                return {
+                  id: t.id,
+                  number: t.label || (t as any).number || 'Table',
+                  zone: 'Indoor Dining',
+                  capacity: `${t.capacity} Guests`,
+                  status: t.isActive !== false ? 'Active' : 'Maintenance',
+                  qrCodeUrl: qrUrl,
+                  qrCodeToken: qrToken,
+                };
+              });
             setConfigTables(mappedTables);
           }
 
@@ -264,6 +283,59 @@ function BranchConfigContent() {
           : t
       )
     );
+  };
+
+  const handleOpenEditTable = (table: ConfigTable) => {
+    setEditingTable({
+      id: table.id,
+      number: table.number,
+      label: table.number,
+      capacity: parseInt(table.capacity) || 4,
+      status: table.status === 'Active' ? 'available' : 'need_attention',
+      qrCodeUrl: table.qrCodeUrl,
+      qrCodeToken: table.qrCodeToken,
+      zone: table.zone,
+    });
+    setIsEditTableOpen(true);
+  };
+
+  const handleDeleteTable = async (table: ConfigTable) => {
+    const confirmed = await confirmDeleteTable(table.number || 'this table');
+    if (!confirmed) return;
+    try {
+      markTableDeletedLocally(table.id);
+      await branchManagerService.deleteTable(table.id);
+      setConfigTables((prev) => prev.filter((t) => t.id !== table.id));
+      await showDeleteSuccess(table.number || 'Table');
+    } catch (err: any) {
+      console.error('Failed to delete table:', err);
+      await showDeleteError(err?.message || 'Failed to delete table');
+    }
+  };
+
+  const handleTableUpdated = (updated: TableItem) => {
+    setConfigTables((prev) =>
+      prev.map((t) =>
+        t.id === updated.id
+          ? {
+              ...t,
+              number: updated.number || updated.label || t.number,
+              capacity: `${updated.capacity || 4} Guests`,
+              qrCodeUrl: updated.qrCodeUrl || t.qrCodeUrl,
+            }
+          : t
+      )
+    );
+    triggerSaveToast(`Table "${updated.number || updated.label}" updated successfully.`);
+    setIsEditTableOpen(false);
+    setEditingTable(null);
+  };
+
+  const handleTableDeleted = (deletedId: string) => {
+    setConfigTables((prev) => prev.filter((t) => t.id !== deletedId));
+    triggerSaveToast(`Table removed from floor layout.`);
+    setIsEditTableOpen(false);
+    setEditingTable(null);
   };
 
   const handleToggleStationActive = (stationId: string) => {
@@ -1013,6 +1085,27 @@ function BranchConfigContent() {
                           {isActive ? 'Mark Maintenance' : 'Set Active'}
                         </span>
                       </button>
+
+                      <div className="w-full h-px bg-neutral-800" />
+
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditTable(table)}
+                          className="flex-1 py-1.5 px-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 border border-neutral-700/80 transition cursor-pointer"
+                        >
+                          <Pencil className="w-3 h-3 text-amber-400" />
+                          <span>Edit Table</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTable(table)}
+                          className="py-1.5 px-2.5 bg-neutral-800 hover:bg-red-500/20 text-red-400 hover:text-red-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1 border border-neutral-700/80 hover:border-red-500/40 transition cursor-pointer"
+                          title="Delete Table"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1374,6 +1467,18 @@ function BranchConfigContent() {
           </div>
         </div>
       )}
+
+      {/* Edit Table Modal */}
+      <EditTableModal
+        isOpen={isEditTableOpen}
+        table={editingTable}
+        onClose={() => {
+          setIsEditTableOpen(false);
+          setEditingTable(null);
+        }}
+        onTableUpdated={handleTableUpdated}
+        onTableDeleted={handleTableDeleted}
+      />
     </div>
   );
 }

@@ -361,6 +361,8 @@ export const rtkBaseApi = createApi({
     'RESTAURANT',
     'STAFF',
     'ANALYTICS',
+    'ROLE',
+    'PERMISSION',
   ],
   endpoints: () => ({}),
 });

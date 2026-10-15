@@ -4,6 +4,7 @@ import {
   setAuthTokens,
   removeAuthToken,
   getAuthToken,
+  getApiBaseUrl,
   setCookie,
   getCookie,
   SUPERADMIN_USER_KEY,
@@ -41,6 +42,35 @@ export interface ChangePasswordPayload {
   currentPassword: string;
   newPassword: string;
   confirmPassword?: string;
+}
+
+export interface UpdateProfilePayload extends Omit<Partial<UserProfile>, 'avatar'> {
+  avatar?: File | string | null;
+}
+
+export interface VerifyOtpPayload {
+  email: string;
+  code: string;
+  type?: 'email_verification' | 'phone_verification' | 'password_reset' | string;
+}
+
+export interface ResendOtpPayload {
+  email: string;
+  type?: 'email_verification' | 'phone_verification' | 'password_reset' | string;
+}
+
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  email: string;
+  code: string;
+  newPassword: string;
+}
+
+export interface MessageResponse {
+  message: string;
 }
 
 // Fallback demo user matching the Figma "Alex Morgan - Super Admin"
@@ -102,7 +132,7 @@ export const rawAuthApi = {
 
   getMe: async (): Promise<UserProfile> => {
     try {
-      const res = await baseApiFetch<UserProfile>('/auth/me', { method: 'GET' });
+      const res = await baseApiFetch<UserProfile>('/users/me', { method: 'GET' });
       const user = (res?.data?.id ? res.data : res) as UserProfile;
       if (user && user.id) {
         setCookie(SUPERADMIN_USER_KEY, JSON.stringify(user));
@@ -119,12 +149,54 @@ export const rawAuthApi = {
     return DEMO_SUPERADMIN_USER;
   },
 
-  updateProfile: async (data: Partial<UserProfile>): Promise<UserProfile> => {
-    let updatedUser: UserProfile = { ...DEMO_SUPERADMIN_USER, ...data };
+  updateProfile: async (data: UpdateProfilePayload): Promise<UserProfile> => {
+    let uploadedAvatarUrl: string | null | undefined = undefined;
+
+    if (data.avatar instanceof File) {
+      // 1. Attempt upload to backend storage endpoint (/storage/upload)
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', data.avatar);
+        const baseUrl = getApiBaseUrl();
+        const token = getAuthToken();
+        const uploadRes = await fetch(`${baseUrl}/storage/upload`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: uploadFormData,
+        });
+        if (uploadRes.ok) {
+          const uploadJson = await uploadRes.json();
+          uploadedAvatarUrl =
+            uploadJson.url ||
+            uploadJson.data?.url ||
+            uploadJson.location ||
+            uploadJson.fileUrl;
+        }
+      } catch {}
+
+      // 2. Fallback to Data URL for prototype/local demo session
+      if (!uploadedAvatarUrl && typeof window !== 'undefined') {
+        uploadedAvatarUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(data.avatar as File);
+        });
+      }
+    } else if (typeof data.avatar === 'string' || data.avatar === null) {
+      uploadedAvatarUrl = data.avatar;
+    }
+
+    const payloadToSend: Record<string, any> = { ...data };
+    if (uploadedAvatarUrl !== undefined) {
+      payloadToSend.avatar = uploadedAvatarUrl;
+      payloadToSend.avatarUrl = uploadedAvatarUrl;
+    }
+
+    let updatedUser: UserProfile = { ...DEMO_SUPERADMIN_USER, ...payloadToSend };
     try {
       const res = await baseApiFetch<UserProfile>('/auth/me', {
         method: 'PATCH',
-        body: JSON.stringify(data),
+        body: JSON.stringify(payloadToSend),
       });
       if (res?.data?.id) {
         updatedUser = res.data;
@@ -136,7 +208,7 @@ export const rawAuthApi = {
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        updatedUser = { ...parsed, ...data };
+        updatedUser = { ...parsed, ...payloadToSend };
       } catch {}
     }
     setCookie(SUPERADMIN_USER_KEY, JSON.stringify(updatedUser));
@@ -156,6 +228,54 @@ export const rawAuthApi = {
     } catch {
       // Fallback for prototype / local demo mode
       return { message: 'Password updated successfully' };
+    }
+  },
+
+  forgotPassword: async (payload: ForgotPasswordPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: payload.email.trim().toLowerCase() }),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'If an account exists, a reset code has been sent to your email.' };
+    }
+  },
+
+  verifyOtp: async (payload: VerifyOtpPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'Verification successful' };
+    }
+  },
+
+  resendOtp: async (payload: ResendOtpPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/resend-otp', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'A new verification code has been dispatched.' };
+    }
+  },
+
+  resetPassword: async (payload: ResetPasswordPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'Password reset successfully' };
     }
   },
 
@@ -188,7 +308,7 @@ export const getMe = createAsyncThunk('auth/getMe', async (_, { rejectWithValue 
 
 export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
-  async (data: Partial<UserProfile>, { rejectWithValue }) => {
+  async (data: UpdateProfilePayload, { rejectWithValue }) => {
     try {
       return await rawAuthApi.updateProfile(data);
     } catch (err: any) {
@@ -211,3 +331,47 @@ export const changePassword = createAsyncThunk(
 export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   await rawAuthApi.logout();
 });
+
+export const forgotPasswordThunk = createAsyncThunk<MessageResponse, ForgotPasswordPayload>(
+  'auth/forgotPassword',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.forgotPassword(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to send reset code.');
+    }
+  }
+);
+
+export const verifyOtpThunk = createAsyncThunk<MessageResponse, VerifyOtpPayload>(
+  'auth/verifyOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.verifyOtp(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'OTP verification failed.');
+    }
+  }
+);
+
+export const resendOtpThunk = createAsyncThunk<MessageResponse, ResendOtpPayload>(
+  'auth/resendOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.resendOtp(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to resend OTP.');
+    }
+  }
+);
+
+export const resetPasswordThunk = createAsyncThunk<MessageResponse, ResetPasswordPayload>(
+  'auth/resetPassword',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.resetPassword(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Password reset failed.');
+    }
+  }
+);

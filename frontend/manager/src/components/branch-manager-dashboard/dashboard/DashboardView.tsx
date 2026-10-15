@@ -10,8 +10,11 @@ import {
   Package,
   Sparkles,
   CheckCircle2,
+  Building2,
 } from 'lucide-react';
 import { branchManagerService, getActiveBranchId, LiveOrderItem, TableItem } from '../../../redux/features/branchManagerApi';
+import { useGetMeQuery } from '@/redux/features/authApi';
+import { useAppSelector } from '@/redux/hooks';
 
 interface DashboardViewProps {
   onNavigateToTables: (filter?: string) => void;
@@ -22,6 +25,12 @@ export default function DashboardView({
   onNavigateToTables,
   onSelectTable,
 }: DashboardViewProps) {
+  const { data: user } = useGetMeQuery();
+  const reduxUser = useAppSelector((state) => state.auth.user);
+  const activeUser = user || reduxUser;
+  const branchId = activeUser?.branchId || getActiveBranchId();
+  const branchName = activeUser?.branchName || 'Downtown Flagship HQ';
+
   const [tables, setTables] = useState<TableItem[]>([]);
   const [orders, setOrders] = useState<LiveOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,10 +39,10 @@ export default function DashboardView({
     let isMounted = true;
     const loadDashboardData = async () => {
       try {
-        const branchId = getActiveBranchId();
+        const effectiveBranchId = branchId || getActiveBranchId();
         const [apiTables, apiOrders] = await Promise.all([
-          branchManagerService.getTables(branchId).catch(() => []),
-          branchManagerService.getOrders(branchId).catch(() => []),
+          branchManagerService.getTables(effectiveBranchId).catch(() => []),
+          branchManagerService.getOrders(effectiveBranchId).catch(() => []),
         ]);
         if (isMounted) {
           setTables(Array.isArray(apiTables) ? apiTables : []);
@@ -103,59 +112,34 @@ export default function DashboardView({
     iconBg: string;
   }> = [];
 
-  if (paymentPendingOrders.length > 0) {
-    const firstPending = paymentPendingOrders[0];
-    needsActionItems.push({
-      id: 'action-payment',
-      title: 'Payment Pending',
-      timeHighlight: `$${totalPaymentPendingAmount.toFixed(2)}`,
-      subtext: `${paymentPendingOrders.length} order(s) awaiting checkout`,
-      tableId: firstPending?.tableId || null,
-      icon: ShieldAlert,
-      iconColor: 'text-red-500',
-      iconBg: 'bg-red-500/10 border-red-500/20',
-    });
-  }
-
-  if (delayedOrders.length > 0) {
-    needsActionItems.push({
-      id: 'action-delayed',
-      title: 'Kitchen Station Behind',
-      timeHighlight: null,
-      subtext: `${delayedOrders.length} order(s) delayed >20m`,
-      tableId: delayedOrders[0]?.tableId || null,
-      icon: AlertTriangle,
-      iconColor: 'text-yellow-400',
-      iconBg: 'bg-yellow-400/10 border-yellow-400/20',
-    });
-  }
-
-  if (availableTables === 0 && totalTables > 0) {
-    needsActionItems.push({
-      id: 'action-capacity',
-      title: 'Dining Room At Capacity',
-      timeHighlight: '100%',
-      subtext: '0 walk-in tables available',
-      tableId: null,
-      icon: AlertCircle,
-      iconColor: 'text-amber-400',
-      iconBg: 'bg-amber-400/10 border-amber-400/20',
-    });
-  }
-
+ 
   return (
     <div className="flex-1 p-6 lg:p-8 space-y-8 max-w-7xl animate-in fade-in duration-200">
       {/* 1. Header & Status Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-white text-3xl font-semibold font-['Inter'] tracking-tight">
-            Branch Overview
-          </h1>
-          <div className="flex items-center gap-2 text-sm font-['Inter']">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-white text-3xl font-semibold font-['Inter'] tracking-tight">
+              {branchName} Overview
+            </h1>
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-400/10 border border-amber-400/30 text-amber-400 flex items-center gap-1.5 shadow-sm">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{branchName}</span>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-sm font-['Inter']">
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
               <span className="text-emerald-500 font-medium">Live Connected</span>
             </div>
+            <span className="text-zinc-600">•</span>
+            <span className="text-zinc-400 text-xs font-mono flex items-center gap-1.5">
+              <span>Branch ID:</span>
+              <code className="text-amber-400/90 font-mono text-[11px] bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
+                {branchId}
+              </code>
+            </span>
             <span className="text-zinc-600">•</span>
             <span className="text-zinc-400">
               {totalTables} Registered Tables · {orders.length} Total Orders Today

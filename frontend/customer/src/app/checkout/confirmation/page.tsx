@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Check, Sparkles, Receipt, ThumbsUp } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
+import { getCookie } from '@/redux/api/baseApi';
 
 function ConfirmationContent() {
   const router = useRouter();
@@ -18,7 +19,9 @@ function ConfirmationContent() {
   const orderId =
     searchParams.get('order') ||
     searchParams.get('orderId') ||
-    (typeof window !== 'undefined' ? localStorage.getItem('tavonza_last_submitted_order_id') || '' : '');
+    getCookie('tavonza_last_submitted_order_id') ||
+    getCookie('tavonza_active_order_id') ||
+    '';
 
   const todayDate = new Date().toLocaleDateString('en-US', {
     month: '2-digit',

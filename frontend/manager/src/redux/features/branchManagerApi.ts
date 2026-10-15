@@ -25,24 +25,23 @@ export function getActiveBranchId(): string {
     } catch {}
   }
 
-  if (typeof window !== 'undefined') {
-    const rawLocalUser = localStorage.getItem('tavonza_user');
-    if (rawLocalUser) {
-      try {
-        const parsed = JSON.parse(rawLocalUser);
-        if (parsed?.branchId && isValidUuid(parsed.branchId)) return parsed.branchId;
-        if (parsed?.assignments?.[0]?.branchId && isValidUuid(parsed.assignments[0].branchId)) {
-          return parsed.assignments[0].branchId;
-        }
-        if (parsed?.assignments?.[0]?.branch?.id && isValidUuid(parsed.assignments[0].branch.id)) {
-          return parsed.assignments[0].branch.id;
-        }
-      } catch {}
-    }
-  }
-
   // Fallback to primary seed branch ID (Downtown HQ)
   return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+}
+
+const locallyDeletedTableIds = new Set<string>();
+
+export function markTableDeletedLocally(tableId: string): void {
+  if (tableId) locallyDeletedTableIds.add(String(tableId).toLowerCase());
+}
+
+export function isTableDeletedLocally(tableId: string): boolean {
+  if (!tableId) return false;
+  return locallyDeletedTableIds.has(String(tableId).toLowerCase());
+}
+
+export function clearTableDeletedLocally(tableId: string): void {
+  if (tableId) locallyDeletedTableIds.delete(String(tableId).toLowerCase());
 }
 
 export interface BranchSettings {
@@ -185,10 +184,19 @@ export interface MenuItemResponse {
   name: string;
   description: string;
   price: number;
+  basePrice?: number;
   imageUrl?: string | null;
   categoryName?: string;
+  categoryId?: string;
   isPopular?: boolean;
   isAvailable?: boolean;
+  estimatedPrepTime?: number;
+  prepTime?: number;
+  stockQuantity?: number;
+  isStockTracked?: boolean;
+  stationBadge?: string;
+  station?: string;
+  modifiersCount?: string;
 }
 
 export interface BranchDetail {
@@ -350,14 +358,24 @@ export const branchManagerService = {
     });
     const list = (res as any)?.data || res;
     if (Array.isArray(list)) {
-      return list.map((t) => {
-        const qrToken = t.qrCodeToken || t.id;
-        return {
-          ...t,
-          qrCodeToken: qrToken,
-          qrCodeUrl: t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined),
-        };
-      });
+      return list
+        .filter((t: any) => {
+          if (!t || !t.id) return false;
+          if (isTableDeletedLocally(t.id)) return false;
+          const flag = String(t.operationalFlag || '').toUpperCase();
+          const serv = String(t.serviceStatus || '').toUpperCase();
+          const isDeletedFlag = Boolean(t.isDeleted || t.deletedAt);
+          const isInactive = t.isActive === false;
+          return flag !== 'OUT_OF_SERVICE' && serv !== 'OUT_OF_SERVICE' && !isDeletedFlag && !isInactive;
+        })
+        .map((t) => {
+          const qrToken = t.qrCodeToken || t.id;
+          return {
+            ...t,
+            qrCodeToken: qrToken,
+            qrCodeUrl: t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined),
+          };
+        });
     }
     return list;
   },
@@ -393,6 +411,7 @@ export const branchManagerService = {
   },
 
   deleteTable: async (tableId: string): Promise<{ success: boolean }> => {
+    markTableDeletedLocally(tableId);
     const res = await baseApiFetch<{ success: boolean }>(`/tables/${encodeURIComponent(tableId)}`, {
       method: 'DELETE',
     });
@@ -533,7 +552,7 @@ export const branchManagerService = {
   },
 
   createMenuItem: async (payload: {
-    restaurantId: string;
+    restaurantId?: string;
     categoryId: string;
     name: string;
     description?: string;
@@ -544,9 +563,21 @@ export const branchManagerService = {
     stockQuantity?: number;
     isStockTracked?: boolean;
   }): Promise<any> => {
+    let restaurantId = payload.restaurantId;
+    if (!restaurantId || !isValidUuid(restaurantId)) {
+      try {
+        const branch = await branchManagerService.getBranch(getActiveBranchId());
+        if (branch?.restaurantId && isValidUuid(branch.restaurantId)) {
+          restaurantId = branch.restaurantId;
+        }
+      } catch {}
+    }
+    if (!restaurantId || !isValidUuid(restaurantId)) {
+      restaurantId = getActiveBranchId();
+    }
     const res = await baseApiFetch('/menus/items', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, restaurantId }),
     });
     return (res as any)?.data || res;
   },
@@ -645,7 +676,7 @@ export const branchManagerService = {
     const res = await baseApiFetch<MenuCategoryItem>('/menus/categories', {
       method: 'POST',
       body: JSON.stringify({
-        restaurantId: restaurantId || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        restaurantId: restaurantId || getActiveBranchId(),
         name: payload.name,
         description: payload.description,
         displayOrder: payload.displayOrder ?? 0,
