@@ -139,11 +139,24 @@ export function getCustomerAppUrl(): string {
     (typeof process !== 'undefined' && process.env?.CUSTOMER_APP_URL);
   if (env) return String(env).trim().replace(/\/$/, '');
 
-  const isLocalHost =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  if (isLocalHost || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development')) {
-    return 'http://localhost:3100';
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]') {
+      return 'http://localhost:3100';
+    }
+    if (host.includes('tavonza.com')) {
+      if (host.includes('prod-') || host.startsWith('prod.')) return 'https://prod.tavonza.com';
+      return 'https://tavonza.com';
+    }
+    const parts = host.split('.');
+    if (parts.length > 2) {
+      return `${window.location.protocol}//${parts.slice(1).join('.')}`;
+    }
+    return `${window.location.protocol}//${host}`;
+  }
+
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') {
+    return 'https://tavonza.com';
   }
   return 'http://localhost:3100';
 }

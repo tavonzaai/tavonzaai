@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import {
   buildTableQrCodeUrl,
+  buildCustomerTableUrl,
   branchManagerService,
   getActiveBranchId,
   markTableDeletedLocally,
@@ -149,18 +150,11 @@ export default function TablesView({
   };
 
   const getTableQrUrl = (table: TableItem) => {
-    if (table.qrCodeUrl) return table.qrCodeUrl;
-    const token = table.qrCodeToken || table.id;
-    return buildTableQrCodeUrl(token);
+    return buildTableQrCodeUrl(table.qrCodeToken, table.id);
   };
 
   const getCustomerTableUrl = (table: TableItem) => {
-    const token = table.qrCodeToken || table.id;
-    const base =
-      typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-        ? `${window.location.protocol}//${window.location.hostname}:3100`
-        : 'http://localhost:3100';
-    return `${base}?qr=${encodeURIComponent(token)}`;
+    return buildCustomerTableUrl(table.qrCodeToken, table.id);
   };
 
   const handleCopyLink = (table: TableItem) => {
@@ -183,7 +177,7 @@ export default function TablesView({
       });
 
       const qrToken = created.qrCodeToken || created.id;
-      const qrCodeUrl = created.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
+      const qrCodeUrl = buildTableQrCodeUrl(qrToken, created.id);
       const mappedTable: TableItem = {
         id: created.id,
         number: created.label || data.number,

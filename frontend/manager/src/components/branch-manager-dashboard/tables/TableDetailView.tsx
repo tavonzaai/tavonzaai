@@ -18,7 +18,14 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
-import { branchManagerService, getActiveBranchId, LiveOrderItem, buildTableQrCodeUrl } from '../../../redux/features/branchManagerApi';
+import {
+  branchManagerService,
+  getActiveBranchId,
+  LiveOrderItem,
+  buildTableQrCodeUrl,
+  buildCustomerTableUrl,
+  getCustomerAppBaseUrl,
+} from '../../../redux/features/branchManagerApi';
 import EditTableModal from './EditTableModal';
 import { confirmDeleteTable, showDeleteSuccess, showDeleteError } from '../../../lib/swal';
 
@@ -342,7 +349,7 @@ export default function TableDetailView({
 
             <div className="bg-white p-3 rounded-xl mx-auto w-fit shadow-md">
               <img
-                src={liveTable.qrCodeUrl || buildTableQrCodeUrl(liveTable.qrCodeToken || liveTable.id)}
+                src={buildTableQrCodeUrl(liveTable.qrCodeToken, liveTable.id)}
                 alt={`QR code for ${liveTable.number}`}
                 className="w-36 h-36 object-contain"
               />
@@ -357,12 +364,12 @@ export default function TableDetailView({
               </div>
               <div className="flex justify-between items-center text-neutral-400">
                 <span>Customer Link:</span>
-                <span className="text-amber-400 font-mono truncate max-w-[170px]">
+                <span className="text-amber-400 font-mono truncate max-w-[170px]" title={buildCustomerTableUrl(liveTable.qrCodeToken, liveTable.id)}>
                   ?qr={liveTable.qrCodeToken || liveTable.id}
                 </span>
               </div>
-              <p className="text-[11px] text-neutral-500 pt-1 leading-normal">
-                Customers scan this QR code to visit http://localhost:3100?qr=..., login, and place live dine-in orders.
+              <p className="text-[11px] text-neutral-500 pt-1 leading-normal break-all">
+                Customers scan this QR code to visit <span className="text-neutral-400 font-mono">{getCustomerAppBaseUrl()}?qr=...</span>, login, and place live dine-in orders.
               </p>
             </div>
 
@@ -370,10 +377,7 @@ export default function TableDetailView({
               <button
                 type="button"
                 onClick={() => {
-                  const base = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-                    ? `${window.location.protocol}//${window.location.hostname}:3100`
-                    : 'http://localhost:3100';
-                  const url = `${base}?qr=${encodeURIComponent(liveTable.qrCodeToken || liveTable.id)}`;
+                  const url = buildCustomerTableUrl(liveTable.qrCodeToken, liveTable.id);
                   navigator.clipboard.writeText(url);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
@@ -384,7 +388,7 @@ export default function TableDetailView({
                 <span>{copied ? 'Copied' : 'Copy Link'}</span>
               </button>
               <a
-                href={liveTable.qrCodeUrl || buildTableQrCodeUrl(liveTable.qrCodeToken || liveTable.id)}
+                href={buildTableQrCodeUrl(liveTable.qrCodeToken, liveTable.id)}
                 download={`qr-${liveTable.number}.png`}
                 target="_blank"
                 rel="noreferrer"

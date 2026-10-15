@@ -280,11 +280,70 @@ export interface KitchenTicketItem {
   createdAt?: string;
 }
 
-export function buildTableQrCodeUrl(token: string): string {
-  const customerBase = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? `${window.location.protocol}//${window.location.hostname}:3100`
-    : (process.env.NEXT_PUBLIC_CUSTOMER_APP_URL || 'http://localhost:3100');
-  const targetUrl = `${customerBase}?qr=${encodeURIComponent(token)}`;
+/**
+ * Canonical customer app URL resolver:
+ * - Production cloud: https://tavonza.com (or https://prod.tavonza.com)
+ * - Local dev: http://localhost:3100
+ * - Explicit override: NEXT_PUBLIC_CUSTOMER_APP_URL
+ */
+export function getCustomerAppBaseUrl(): string {
+  const envUrl =
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_CUSTOMER_APP_URL) ||
+    (typeof process !== 'undefined' && process.env?.CUSTOMER_APP_URL);
+  if (envUrl && String(envUrl).trim()) {
+    return String(envUrl).trim().replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname.toLowerCase();
+
+    // 1. Local loopback
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
+      return 'http://localhost:3100';
+    }
+
+    // 2. Local LAN testing (e.g. mobile testing on same Wi-Fi)
+    const isPrivateIp = /^(?:192\.168\.|10\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(hostname);
+    if (isPrivateIp) {
+      return `${window.location.protocol}//${hostname}:3100`;
+    }
+
+    // 3. Tavonza official production & staging domains
+    if (hostname.includes('tavonza.com')) {
+      if (hostname.includes('prod-') || hostname.startsWith('prod.')) {
+        return 'https://prod.tavonza.com';
+      }
+      return 'https://tavonza.com';
+    }
+
+    // 4. Custom multi-tenant domain (e.g. manager.bistro.com -> https://bistro.com)
+    const parts = hostname.split('.');
+    if (parts.length > 2) {
+      const rootDomain = parts.slice(1).join('.');
+      return `${window.location.protocol}//${rootDomain}`;
+    }
+
+    return `${window.location.protocol}//${hostname}`;
+  }
+
+  return 'http://localhost:3100';
+}
+
+/**
+ * Builds the direct customer join URL for a table:
+ * E.g., https://tavonza.com/?qr=<token> or http://localhost:3100/?qr=<token>
+ */
+export function buildCustomerTableUrl(token?: string | null, fallbackId?: string | null): string {
+  const effectiveToken = token || fallbackId || '';
+  const base = getCustomerAppBaseUrl();
+  return `${base}?qr=${encodeURIComponent(effectiveToken)}`;
+}
+
+/**
+ * Builds the QR Code image URL pointing to the customer ordering page
+ */
+export function buildTableQrCodeUrl(token?: string | null, fallbackId?: string | null): string {
+  const targetUrl = buildCustomerTableUrl(token, fallbackId);
   return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetUrl)}`;
 }
 
@@ -373,7 +432,8 @@ export const branchManagerService = {
           return {
             ...t,
             qrCodeToken: qrToken,
-            qrCodeUrl: t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined),
+            qrCodeUrl: t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken, t.id) : undefined),
+            tableUrl: buildCustomerTableUrl(qrToken, t.id),
           };
         });
     }
@@ -386,11 +446,12 @@ export const branchManagerService = {
     });
     const t = (res as any)?.data || res;
     const qrToken = t.qrCodeToken || t.id;
-    const qrCodeUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
+    const qrCodeUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken, t.id) : undefined);
     return {
       ...t,
       qrCodeUrl,
       qrCodeToken: qrToken,
+      tableUrl: buildCustomerTableUrl(qrToken, t.id),
     };
   },
 
@@ -431,8 +492,8 @@ export const branchManagerService = {
       });
       const token = (regen as any)?.qrCodeToken || (regen as any)?.data?.qrCodeToken;
       return {
-        qrCodeUrl: token ? buildTableQrCodeUrl(token) : '',
-        tableUrl: token ? `http://localhost:3100?qr=${encodeURIComponent(token)}` : '',
+        qrCodeUrl: token ? buildTableQrCodeUrl(token, tableId) : '',
+        tableUrl: buildCustomerTableUrl(token, tableId),
       };
     }
   },

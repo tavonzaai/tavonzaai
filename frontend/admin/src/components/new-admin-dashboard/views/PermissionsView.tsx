@@ -72,15 +72,6 @@ const STAFF_PERMISSIONS: PermissionCategory[] = [
   },
 ];
 
-const STAFF_ROLES = [
-  'BRANCH_MANAGER',
-  'HOST',
-  'WAITER',
-  'KITCHEN_STAFF',
-  'BARTENDER',
-  'CASHIER',
-] as const;
-
 const getCategoryIcon = (moduleName: string) => {
   switch (moduleName.toLowerCase()) {
     case 'roles':
@@ -144,6 +135,8 @@ export default function PermissionsView() {
     isError: rolesError,
     refetch: refetchRoles,
   } = useGetRolesQuery();
+
+  console.log('Dynamic Roles from API (useGetRolesQuery):', dbRoles);
   const {
     data: permissionsCatalog,
     isLoading: loadingPerms,
@@ -313,8 +306,19 @@ export default function PermissionsView() {
     name: '',
     email: '',
     password: '',
-    role: 'WAITER',
+    role: '',
   });
+
+  // Automatically select the default role from dynamic dbRoles once loaded
+  useEffect(() => {
+    if (dbRoles.length > 0 && !invite.role) {
+      const defaultRole = dbRoles.find((r) => r.slug === 'waiter') || dbRoles[0];
+      const defaultVal = defaultRole.slug
+        ? defaultRole.slug.toUpperCase().replace(/-/g, '_')
+        : defaultRole.name;
+      setInvite((prev) => ({ ...prev, role: defaultVal }));
+    }
+  }, [dbRoles, invite.role]);
 
   const staffByUserId = useMemo(() => {
     const map = new Map<string, any>();
@@ -393,7 +397,11 @@ export default function PermissionsView() {
         },
       }).unwrap();
       toast.success(`Staff account created for ${invite.name.trim()}.`);
-      setInvite({ name: '', email: '', password: '', role: 'WAITER' });
+      const defaultRole = dbRoles.find((r) => r.slug === 'waiter') || dbRoles[0];
+      const defaultVal = defaultRole
+        ? (defaultRole.slug ? defaultRole.slug.toUpperCase().replace(/-/g, '_') : defaultRole.name)
+        : '';
+      setInvite({ name: '', email: '', password: '', role: defaultVal });
       refetchStaff();
       refetchUsers();
     } catch (err: any) {
@@ -810,13 +818,24 @@ export default function PermissionsView() {
               data-testid="create-staff-role"
               value={invite.role}
               onChange={(e) => setInvite((prev) => ({ ...prev, role: e.target.value }))}
-              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
+              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 cursor-pointer"
             >
-              {STAFF_ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {role.replaceAll('_', ' ')}
-                </option>
-              ))}
+              {loadingRoles ? (
+                <option value="">Loading roles from API...</option>
+              ) : dbRoles.length === 0 ? (
+                <option value="">No roles available</option>
+              ) : (
+                dbRoles.map((role) => {
+                  const roleValue = role.slug
+                    ? role.slug.toUpperCase().replace(/-/g, '_')
+                    : role.name;
+                  return (
+                    <option key={role.id} value={roleValue}>
+                      {role.name}
+                    </option>
+                  );
+                })
+              )}
             </select>
           </div>
 
