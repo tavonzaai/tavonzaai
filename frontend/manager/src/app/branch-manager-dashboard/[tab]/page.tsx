@@ -1,4 +1,6 @@
 import React from 'react';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import BranchManagerDashboard from '@/components/branch-manager-dashboard/BranchManagerDashboard';
 import { routeToNav } from '@/components/branch-manager-dashboard/routes';
 import AuthGuard from '@/components/auth/AuthGuard';
@@ -8,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({
   params,
 }: {
-  params: { tab: string };
+  params: Promise<{ tab: string }>;
 }) {
   const resolvedParams = await params;
   const tabParam = resolvedParams?.tab?.toLowerCase() || '';
@@ -19,13 +21,10 @@ export async function generateMetadata({
   };
 }
 
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-
 export default async function BranchManagerTabPage({
   params,
 }: {
-  params: { tab: string };
+  params: Promise<{ tab: string }>;
 }) {
   const cookieStore = await cookies();
   const token =

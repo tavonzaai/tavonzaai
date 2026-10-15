@@ -15,14 +15,20 @@ import {
   Download,
   Copy,
   Check,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { branchManagerService, getActiveBranchId, LiveOrderItem, buildTableQrCodeUrl } from '../../../redux/features/branchManagerApi';
+import EditTableModal from './EditTableModal';
+import { confirmDeleteTable, showDeleteSuccess, showDeleteError } from '../../../lib/swal';
 
 interface TableDetailViewProps {
   table: TableItem;
   onBack: () => void;
   onOpenReassign: () => void;
   onOpenAskAi: () => void;
+  onTableUpdated?: (table: TableItem) => void;
+  onTableDeleted?: (tableId: string) => void;
 }
 
 export default function TableDetailView({
@@ -30,11 +36,14 @@ export default function TableDetailView({
   onBack,
   onOpenReassign,
   onOpenAskAi,
+  onTableUpdated,
+  onTableDeleted,
 }: TableDetailViewProps) {
   const [liveTable, setLiveTable] = useState<TableItem>(table);
   const [tableOrders, setTableOrders] = useState<LiveOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -95,10 +104,32 @@ export default function TableDetailView({
       }))
     : [];
 
+  const handleDeleteTable = async () => {
+    const confirmed = await confirmDeleteTable(liveTable.number || liveTable.label || 'this table');
+    if (!confirmed) return;
+    try {
+      await branchManagerService.deleteTable(liveTable.id);
+      await showDeleteSuccess(liveTable.number || liveTable.label || 'Table');
+      if (onTableDeleted) onTableDeleted(liveTable.id);
+      onBack();
+    } catch (err: any) {
+      console.error('Failed to delete table:', err);
+      await showDeleteError(err?.message || 'Failed to delete table');
+    }
+  };
+
+  const handleTableUpdated = (updated: TableItem) => {
+    setLiveTable((prev) => ({
+      ...prev,
+      ...updated,
+    }));
+    if (onTableUpdated) onTableUpdated(updated);
+  };
+
   return (
     <div className="flex-1 p-6 lg:p-8 space-y-6 max-w-7xl animate-in fade-in duration-200">
       {/* Top Navigation */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <button
           type="button"
           onClick={onBack}
@@ -108,7 +139,27 @@ export default function TableDetailView({
           <span className="text-xs font-semibold font-['Poppins']">Back to floor</span>
         </button>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsEditModalOpen(true)}
+            className="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-stone-200 text-xs sm:text-sm font-medium rounded-lg border border-neutral-800 flex items-center gap-1.5 transition cursor-pointer"
+            title="Edit Table settings"
+          >
+            <Pencil className="w-3.5 h-3.5 text-amber-400" />
+            <span>Edit Table</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDeleteTable}
+            className="px-3.5 py-2 bg-neutral-900 hover:bg-red-500/10 text-red-400 hover:text-red-300 text-xs sm:text-sm font-medium rounded-lg border border-neutral-800 hover:border-red-500/40 flex items-center gap-1.5 transition cursor-pointer"
+            title="Delete Table from floor"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+            <span>Delete Table</span>
+          </button>
+
           <button
             type="button"
             onClick={onOpenReassign}
@@ -346,6 +397,17 @@ export default function TableDetailView({
           </div>
         </div>
       </div>
+
+      <EditTableModal
+        isOpen={isEditModalOpen}
+        table={liveTable}
+        onClose={() => setIsEditModalOpen(false)}
+        onTableUpdated={handleTableUpdated}
+        onTableDeleted={(id) => {
+          if (onTableDeleted) onTableDeleted(id);
+          onBack();
+        }}
+      />
     </div>
   );
 }

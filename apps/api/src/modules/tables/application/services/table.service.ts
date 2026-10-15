@@ -102,6 +102,17 @@ export class TableService {
       throw new NotFoundException(`Failed to soft-delete table "${id}"`);
     }
 
+    this.realtimeGateway.emitTableStatusChanged({
+      eventType: 'TABLE_STATUS_CHANGED',
+      eventId: updated.id,
+      branchId: updated.branchId,
+      tableId: updated.id,
+      tableLabel: updated.label,
+      serviceStatus: updated.serviceStatus as any,
+      operationalFlag: updated.operationalFlag as any,
+      occurredAt: new Date().toISOString(),
+    });
+
     return this.toTableResponseDto(updated);
   }
 

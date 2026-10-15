@@ -86,7 +86,7 @@ export const SalesReportKPICards: React.FC<SalesReportKPICardsProps> = ({ dateRa
             </div>
             <div className="w-full flex justify-between items-center">
               <div className="text-green-500 text-sm font-normal font-sans leading-4">
-                Average ৳ 1,721
+                Average 1,721
               </div>
             </div>
           </div>

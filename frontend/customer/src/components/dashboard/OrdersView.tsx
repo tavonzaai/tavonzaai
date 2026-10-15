@@ -56,11 +56,8 @@ export default function OrdersView({ onReserveClick, onOpenFeedback }: OrdersVie
         console.warn('getMyOrders error:', e);
       }
 
-      // 2. Also check last submitted order from local storage / cookies if not in list
-      const lastId =
-        typeof window !== 'undefined'
-          ? (localStorage.getItem('tavonza_last_submitted_order_id') || getCookie('tavonza_last_submitted_order_id'))
-          : null;
+      // 2. Also check last submitted order from session cookies if not in list
+      const lastId = getCookie('tavonza_last_submitted_order_id') || getCookie('tavonza_active_order_id');
 
       let combined = [...(myOrdersList || [])];
       if (lastId && !combined.some((o) => o.orderId === lastId || o.id === lastId)) {

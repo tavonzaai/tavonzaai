@@ -35,8 +35,10 @@ export interface TableItem {
   floor?: number;
   label?: string;
   zone?: string;
+  serviceStatus?: string;
+  operationalFlag?: string;
   assignedWaiter?: {
-    waiterId: string;
+    waiterId?: string;
     waiterName?: string;
     sessionStart?: string;
     sessionEnd?: string;
@@ -140,7 +142,7 @@ export interface PaymentSummaryKpi {
 export interface MenuItem {
   id: string;
   name: string;
-  category: 'Starters' | 'Mains - Grill' | 'Mains - Pasta' | 'Desserts' | 'Beverages' | 'Sides';
+  category: string; // Updated to allow any string as per API response
   stationBadge: string;
   stationBadgeColor: string;
   price: string;
@@ -152,4 +154,5 @@ export interface MenuItem {
   estimatedPrepTime?: number;
   stockQuantity?: number;
   isStockTracked?: boolean;
+  imageUrl?: string;
 }

@@ -1,10 +1,46 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight, Search, Settings } from 'lucide-react';
-import { PermissionCategory } from './permissions/types';
-import { PermissionsHeader } from './permissions/components';
+import {
+  ChevronDown,
+  ChevronRight,
+  Search,
+  Settings,
+  Shield,
+  Users as UsersIcon,
+  UserPlus,
+  Building2,
+  UtensilsCrossed,
+  Grid,
+  BookOpen,
+  CreditCard,
+  FileText,
+  Package,
+  Clock,
+  Bell,
+  BarChart3,
+  Briefcase,
+  Layers,
+  UserCheck,
+} from 'lucide-react';
+import {
+  PermissionsHeader,
+  RoleOverviewCards,
+  PermissionsMatrix,
+  DeleteRoleModal,
+  CreateRoleModal,
+  AssignUserRoleModal,
+} from './permissions/components';
+import { PermissionCategory, RoleDefinition } from './permissions/types';
+import {
+  roleApi,
+  useGetRolesQuery,
+  useGetPermissionsQuery,
+  useUpdateRoleMutation,
+  useDeleteRoleMutation,
+} from '@/redux/features/roleApi';
+import { useAppDispatch } from '@/redux/hooks';
 import {
   useGetBranchesQuery,
   useGetBranchStaffQuery,
@@ -45,7 +81,199 @@ const STAFF_ROLES = [
   'CASHIER',
 ] as const;
 
+const getCategoryIcon = (moduleName: string) => {
+  switch (moduleName.toLowerCase()) {
+    case 'roles':
+    case 'permissions':
+      return Shield;
+    case 'users':
+      return UsersIcon;
+    case 'organizations':
+    case 'branches':
+    case 'branch_settings':
+      return Building2;
+    case 'restaurants':
+      return UtensilsCrossed;
+    case 'staff':
+      return Briefcase;
+    case 'orders':
+      return FileText;
+    case 'tables':
+      return Grid;
+    case 'reservations':
+      return Clock;
+    case 'menu':
+      return BookOpen;
+    case 'payments':
+    case 'discounts':
+      return CreditCard;
+    case 'inventory':
+    case 'suppliers':
+      return Package;
+    case 'shifts':
+      return Clock;
+    case 'alerts':
+      return Bell;
+    case 'reports':
+    case 'audit':
+      return BarChart3;
+    case 'settings':
+    case 'integrations':
+      return Settings;
+    default:
+      return Layers;
+  }
+};
+
 export default function PermissionsView() {
+  const [activeTab, setActiveTab] = useState<'matrix' | 'directory' | 'create-staff'>('matrix');
+
+  // Modals state
+  const [isCreateRoleOpen, setIsCreateRoleOpen] = useState(false);
+  const [selectedRoleToDelete, setSelectedRoleToDelete] = useState<RoleDefinition | null>(null);
+  const [selectedUserForRole, setSelectedUserForRole] = useState<{
+    id: string;
+    name: string;
+    email: string;
+  } | null>(null);
+
+  // Dynamic RBAC API Hooks
+  const {
+    data: dbRoles = [],
+    isLoading: loadingRoles,
+    isError: rolesError,
+    refetch: refetchRoles,
+  } = useGetRolesQuery();
+  const {
+    data: permissionsCatalog,
+    isLoading: loadingPerms,
+    isError: permsError,
+    refetch: refetchPerms,
+  } = useGetPermissionsQuery();
+
+  const [updateRole, { isLoading: isUpdatingRole }] = useUpdateRoleMutation();
+  const [deleteRole, { isLoading: isDeletingRole }] = useDeleteRoleMutation();
+
+  const dispatch = useAppDispatch();
+
+  // Role Permissions Draft State (for matrix checkboxes)
+  const [rolePermissionsDraft, setRolePermissionsDraft] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    if (dbRoles.length > 0) {
+      dbRoles.forEach((r) => {
+        // If already loaded in draft, skip
+        if (rolePermissionsDraft[r.id]) return;
+
+        // If backend already included permissions, use them
+        if (Array.isArray(r.permissions)) {
+          setRolePermissionsDraft((prev) => ({
+            ...prev,
+            [r.id]: r.permissions!,
+          }));
+          return;
+        }
+
+        // Fetch individual role details via GET /authorization/roles/:id
+        dispatch(roleApi.endpoints.getRoleById.initiate(r.id))
+          .unwrap()
+          .then((detail) => {
+            if (detail?.permissions) {
+              setRolePermissionsDraft((prev) => ({
+                ...prev,
+                [r.id]: detail.permissions,
+              }));
+            }
+          })
+          .catch(() => {
+            // Ignore error or fallback
+          });
+      });
+    }
+  }, [dbRoles, dispatch]);
+
+  // Transform dbRoles to RoleDefinition[]
+  const roleDefs: RoleDefinition[] = useMemo(() => {
+    return dbRoles.map((r) => ({
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      staffCount: r.userCount,
+      isSystem: r.isSystem,
+      isLocked: r.slug === 'admin' || r.id === 'admin',
+    }));
+  }, [dbRoles]);
+
+  // Transform catalog to PermissionCategory[]
+  const categories: PermissionCategory[] = useMemo(() => {
+    if (!permissionsCatalog?.grouped) return [];
+    return Object.entries(permissionsCatalog.grouped).map(([moduleName, perms]) => ({
+      id: moduleName,
+      title: moduleName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+      icon: getCategoryIcon(moduleName),
+      permissions: perms.map((p) => ({
+        id: p.permissionKey,
+        label: p.description || `${p.moduleName}:${p.action}`,
+        category: moduleName,
+      })),
+    }));
+  }, [permissionsCatalog]);
+
+  const totalPermissionsCount = permissionsCatalog?.total || 0;
+
+  // Matrix handlers
+  const handleToggleRolePermission = (roleId: string, permKey: string) => {
+    setRolePermissionsDraft((prev) => {
+      const current = prev[roleId] || dbRoles.find((r) => r.id === roleId)?.permissions || [];
+      const updated = current.includes(permKey)
+        ? current.filter((k) => k !== permKey)
+        : [...current, permKey];
+      return { ...prev, [roleId]: updated };
+    });
+  };
+
+  const handleToggleRoleCategorySelectAll = (roleId: string, category: PermissionCategory) => {
+    const catPermKeys = category.permissions.map((p) => p.id);
+    setRolePermissionsDraft((prev) => {
+      const current = prev[roleId] || dbRoles.find((r) => r.id === roleId)?.permissions || [];
+      const allSelected = catPermKeys.every((k) => current.includes(k));
+      const updated = allSelected
+        ? current.filter((k) => !catPermKeys.includes(k))
+        : Array.from(new Set([...current, ...catPermKeys]));
+      return { ...prev, [roleId]: updated };
+    });
+  };
+
+  const handleSaveRoleChanges = async () => {
+    try {
+      const updates = Object.entries(rolePermissionsDraft).map(([roleId, permissionKeys]) => {
+        return updateRole({
+          id: roleId,
+          permissionKeys,
+        }).unwrap();
+      });
+
+      await Promise.all(updates);
+      toast.success('Dynamic role permissions saved successfully.');
+      refetchRoles();
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Failed to save role permissions.');
+    }
+  };
+
+  const handleConfirmDeleteRole = async () => {
+    if (!selectedRoleToDelete) return;
+    try {
+      await deleteRole(selectedRoleToDelete.id).unwrap();
+      toast.success(`Role "${selectedRoleToDelete.name}" deleted successfully.`);
+      setSelectedRoleToDelete(null);
+      refetchRoles();
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Failed to delete role.');
+    }
+  };
+
+  // ── Team Directory & Branch Staff State ─────────────────────────────────────
   const { page, limit, setPage, resetPage } = useListPagination();
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
@@ -58,10 +286,14 @@ export default function PermissionsView() {
   const [branchId, setBranchId] = useState<string>('');
   const selectedBranchId = branchId || branches[0]?.id || '';
 
-  const { data: staffRows = [], isLoading, isError, error, refetch } = useGetBranchStaffQuery(
-    { branchId: selectedBranchId },
-    { skip: !selectedBranchId },
-  );
+  const {
+    data: staffRows = [],
+    isLoading: loadingStaff,
+    isError: staffError,
+    error: staffErrorObj,
+    refetch: refetchStaff,
+  } = useGetBranchStaffQuery({ branchId: selectedBranchId }, { skip: !selectedBranchId });
+
   const {
     data: usersData,
     isLoading: loadingUsers,
@@ -76,7 +308,7 @@ export default function PermissionsView() {
   const [updateStaff] = useUpdateBranchStaffMutation();
   const [createStaff, { isLoading: creatingStaff }] = useCreateBranchStaffMutation();
   const [updateUserStatus] = useUpdateUserStatusMutation();
-  const [draft, setDraft] = useState<Record<string, string[]>>({});
+  const [branchDraft, setBranchDraft] = useState<Record<string, string[]>>({});
   const [invite, setInvite] = useState({
     name: '',
     email: '',
@@ -93,28 +325,28 @@ export default function PermissionsView() {
     return map;
   }, [staffRows]);
 
-  const rolePermissions = useMemo(() => {
+  const branchRolePermissions = useMemo(() => {
     const next: Record<string, string[]> = {};
     staffRows.forEach((row: any) => {
       const id = row.staffId || row.id;
-      next[id] = draft[id] ?? (Array.isArray(row.permissions) ? row.permissions : []);
+      next[id] = branchDraft[id] ?? (Array.isArray(row.permissions) ? row.permissions : []);
     });
     return next;
-  }, [staffRows, draft]);
+  }, [staffRows, branchDraft]);
 
-  const handleTogglePermission = (staffId: string, permId: string) => {
-    const current = rolePermissions[staffId] || [];
+  const handleToggleBranchPermission = (staffId: string, permId: string) => {
+    const current = branchRolePermissions[staffId] || [];
     const updated = current.includes(permId)
       ? current.filter((id) => id !== permId)
       : [...current, permId];
-    setDraft((prev) => ({ ...prev, [staffId]: updated }));
+    setBranchDraft((prev) => ({ ...prev, [staffId]: updated }));
   };
 
-  const handleToggleCategorySelectAll = (staffId: string, category: PermissionCategory) => {
+  const handleToggleBranchCategorySelectAll = (staffId: string, category: PermissionCategory) => {
     const catPermIds = category.permissions.map((p) => p.id);
-    const current = rolePermissions[staffId] || [];
+    const current = branchRolePermissions[staffId] || [];
     const allSelected = catPermIds.every((id) => current.includes(id));
-    setDraft((prev) => ({
+    setBranchDraft((prev) => ({
       ...prev,
       [staffId]: allSelected
         ? current.filter((id) => !catPermIds.includes(id))
@@ -122,11 +354,11 @@ export default function PermissionsView() {
     }));
   };
 
-  const handleSaveChanges = async () => {
+  const handleSaveBranchChanges = async () => {
     if (!selectedBranchId) return;
     try {
       await Promise.all(
-        Object.entries(rolePermissions).map(([staffId, permissions]) =>
+        Object.entries(branchRolePermissions).map(([staffId, permissions]) =>
           updateStaff({
             branchId: selectedBranchId,
             staffId,
@@ -134,9 +366,9 @@ export default function PermissionsView() {
           }).unwrap(),
         ),
       );
-      toast.success('Staff permission grants saved.');
+      toast.success('Branch staff permission grants saved.');
     } catch (err: any) {
-      toast.error(err?.data?.message || err?.message || 'Unable to save permissions.');
+      toast.error(err?.data?.message || err?.message || 'Unable to save branch permissions.');
     }
   };
 
@@ -162,7 +394,7 @@ export default function PermissionsView() {
       }).unwrap();
       toast.success(`Staff account created for ${invite.name.trim()}.`);
       setInvite({ name: '', email: '', password: '', role: 'WAITER' });
-      refetch();
+      refetchStaff();
       refetchUsers();
     } catch (err: any) {
       toast.error(err?.data?.message || err?.message || 'Unable to create staff user.');
@@ -181,247 +413,453 @@ export default function PermissionsView() {
   };
 
   const users = usersData?.data || [];
-  const permissionDefs = STAFF_PERMISSIONS[0]?.permissions || [];
+  const branchPermissionDefs = STAFF_PERMISSIONS[0]?.permissions || [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <PermissionsHeader onSaveChanges={handleSaveChanges} />
-      <p className="text-zinc-500 text-sm">
-        Staff roles are fixed. Extra grants are stored per assignment using the platform permission actions.
-      </p>
+      {/* Top Header */}
+      <PermissionsHeader
+        onSaveChanges={activeTab === 'matrix' ? handleSaveRoleChanges : handleSaveBranchChanges}
+        onCreateRole={() => setIsCreateRoleOpen(true)}
+        isSaving={isUpdatingRole}
+      />
 
-      <section className="p-4 bg-neutral-900 rounded-xl border border-neutral-800 space-y-4" data-testid="team-directory">
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+      {/* View Switcher Tabs */}
+      <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('matrix')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'matrix'
+              ? 'bg-amber-400 text-neutral-900 shadow-md font-semibold'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
+          }`}
+        >
+          <Shield className="size-4" />
+          Dynamic Role Matrix
+          {roleDefs.length > 0 && (
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-xs font-mono ${
+                activeTab === 'matrix' ? 'bg-neutral-900 text-amber-400' : 'bg-neutral-800 text-neutral-400'
+              }`}
+            >
+              {roleDefs.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('directory')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'directory'
+              ? 'bg-amber-400 text-neutral-900 shadow-md font-semibold'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
+          }`}
+        >
+          <UsersIcon className="size-4" />
+          Team Directory & Role Assignment
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('create-staff')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all cursor-pointer ${
+            activeTab === 'create-staff'
+              ? 'bg-amber-400 text-neutral-900 shadow-md font-semibold'
+              : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
+          }`}
+        >
+          <UserPlus className="size-4" />
+          Create Staff User
+        </button>
+      </div>
+
+      {/* ── TAB 1: DYNAMIC ROLES & PERMISSIONS MATRIX ───────────────────────── */}
+      {activeTab === 'matrix' && (
+        <div className="space-y-6">
+          {(loadingRoles || loadingPerms) && (
+            <LoadingState message="Loading dynamic roles & system permissions catalog from database..." />
+          )}
+
+          {(rolesError || permsError) && (
+            <ErrorState
+              message="Failed to load roles or permissions catalog from PostgreSQL."
+              onRetry={() => {
+                refetchRoles();
+                refetchPerms();
+              }}
+            />
+          )}
+
+          {!loadingRoles && !loadingPerms && (
+            <>
+              {/* Role Cards Overview */}
+              <RoleOverviewCards
+                roles={roleDefs}
+                rolePermissions={rolePermissionsDraft}
+                totalPermissionsCount={totalPermissionsCount}
+              />
+
+              {/* Main RBAC Permission Matrix */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-white text-lg font-medium font-['Inter']">
+                    Module Capability Matrix
+                  </h2>
+                  <span className="text-xs text-neutral-400 font-['Inter']">
+                    {totalPermissionsCount} atomic system capabilities across {categories.length} modules
+                  </span>
+                </div>
+
+                <PermissionsMatrix
+                  roles={roleDefs}
+                  categories={categories}
+                  rolePermissions={rolePermissionsDraft}
+                  totalPermissionsCount={totalPermissionsCount}
+                  onTogglePermission={handleToggleRolePermission}
+                  onToggleCategorySelectAll={handleToggleRoleCategorySelectAll}
+                  onRequestDeleteRole={(role) => setSelectedRoleToDelete(role)}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 2: TEAM DIRECTORY & USER DYNAMIC ROLE ASSIGNMENT ────────────────── */}
+      {activeTab === 'directory' && (
+        <section
+          className="p-4 bg-neutral-900 rounded-xl border border-neutral-800 space-y-4"
+          data-testid="team-directory"
+        >
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            <div>
+              <h2 className="text-white text-lg font-medium">Team directory</h2>
+              <p className="text-zinc-500 text-sm">
+                Assign single dynamic roles directly to users, or expand a row to manage branch capabilities.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="size-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  data-testid="permissions-user-search"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (page !== 1) resetPage();
+                  }}
+                  placeholder="Search users..."
+                  className="w-full h-11 pl-9 pr-3 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+              <select
+                value={selectedBranchId}
+                onChange={(e) => {
+                  setBranchId(e.target.value);
+                  setBranchDraft({});
+                }}
+                data-testid="permissions-branch"
+                className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm min-w-[180px]"
+              >
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {loadingUsers && <LoadingState message="Loading users..." />}
+          {!loadingUsers && users.length === 0 && (
+            <EmptyState
+              title="No users in this organization"
+              description="Create a staff account or invite team members to assign roles."
+            />
+          )}
+
+          {users.length > 0 && (
+            <div className="space-y-4">
+              <div className="overflow-x-auto rounded-lg border border-zinc-800">
+                <table className="w-full text-sm">
+                  <thead className="bg-zinc-900 text-white text-left">
+                    <tr>
+                      <th className="py-3 px-3 font-semibold w-10" />
+                      <th className="py-3 px-3 font-semibold">Name</th>
+                      <th className="py-3 px-3 font-semibold">Email</th>
+                      <th className="py-3 px-3 font-semibold">Global Role</th>
+                      <th className="py-3 px-3 font-semibold">Dynamic Role</th>
+                      <th className="py-3 px-3 font-semibold">Branch Assignment</th>
+                      <th className="py-3 px-3 font-semibold">Status</th>
+                      <th className="py-3 px-3 font-semibold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user: any) => {
+                      const assignment =
+                        staffByUserId.get(user.id) || staffByUserId.get(user.email);
+                      const staffId = assignment?.staffId || assignment?.id;
+                      const grants = staffId ? branchRolePermissions[staffId] || [] : [];
+                      const expanded = expandedUserId === user.id;
+
+                      return (
+                        <React.Fragment key={user.id}>
+                          <tr className="border-t border-neutral-800 text-stone-200 hover:bg-neutral-800/30 transition-colors">
+                            <td className="py-2.5 px-3">
+                              <button
+                                type="button"
+                                data-testid={`user-expand-${user.id}`}
+                                aria-expanded={expanded}
+                                onClick={() => setExpandedUserId(expanded ? null : user.id)}
+                                className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
+                              >
+                                {expanded ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
+                              </button>
+                            </td>
+                            <td className="py-2.5 px-3 font-medium text-white">{user.name}</td>
+                            <td className="py-2.5 px-3 text-neutral-400 font-mono text-xs">
+                              {user.email}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="px-2 py-0.5 rounded text-xs font-semibold bg-neutral-800 border border-neutral-700 text-amber-400 font-mono">
+                                {user.role}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedUserForRole({
+                                    id: user.id,
+                                    name: user.name,
+                                    email: user.email,
+                                  })
+                                }
+                                className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-amber-400/20 text-neutral-300 hover:text-amber-300 border border-neutral-700 hover:border-amber-400/40 text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <UserCheck className="size-3.5 text-amber-400" />
+                                <span>Assign Dynamic Role</span>
+                              </button>
+                            </td>
+                            <td className="py-2.5 px-3 text-zinc-400 text-xs">
+                              {assignment ? (
+                                <span className="text-emerald-400">Assigned to branch</span>
+                              ) : (
+                                <span className="text-neutral-500">Not assigned here</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  user.status === 'ACTIVE'
+                                    ? 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20'
+                                    : 'bg-zinc-800 text-zinc-400'
+                                }`}
+                              >
+                                {user.status}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <button
+                                type="button"
+                                data-testid={`user-status-${user.id}`}
+                                onClick={() => handleToggleStatus(user)}
+                                className="px-2.5 py-1 rounded-md bg-zinc-800 text-xs text-white hover:bg-zinc-700 cursor-pointer"
+                              >
+                                {user.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                              </button>
+                            </td>
+                          </tr>
+
+                          {/* Expanded Branch Capabilities Accordion */}
+                          {expanded && (
+                            <tr className="border-t border-neutral-800 bg-black/40">
+                              <td colSpan={8} className="p-4">
+                                <div
+                                  data-testid={`user-permissions-${user.id}`}
+                                  className="space-y-3"
+                                >
+                                  {(loadingBranches || loadingStaff) && (
+                                    <LoadingState message="Loading staff assignments..." />
+                                  )}
+                                  {staffError && (
+                                    <ErrorState
+                                      message={
+                                        (staffErrorObj as any)?.data?.message ||
+                                        'Unable to load staff permissions.'
+                                      }
+                                      onRetry={() => refetchStaff()}
+                                    />
+                                  )}
+                                  {!assignment && (
+                                    <p className="text-sm text-zinc-400">
+                                      This user is not assigned to the selected branch. Create a
+                                      staff assignment below to grant branch-specific capabilities.
+                                    </p>
+                                  )}
+                                  {assignment && staffId && (
+                                    <>
+                                      <div className="flex items-center justify-between">
+                                        <p className="text-sm text-zinc-300">
+                                          Extra operational grants for {assignment.role?.replaceAll('_', ' ')} at this branch
+                                        </p>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleToggleBranchCategorySelectAll(
+                                              staffId,
+                                              STAFF_PERMISSIONS[0],
+                                            )
+                                          }
+                                          className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer"
+                                        >
+                                          Toggle all branch capabilities
+                                        </button>
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                                        {branchPermissionDefs.map((perm) => {
+                                          const checked = grants.includes(perm.id);
+                                          return (
+                                            <label
+                                              key={perm.id}
+                                              className="flex items-center gap-2.5 p-3 rounded-lg bg-neutral-900 border border-neutral-800 cursor-pointer hover:border-zinc-700 transition-colors"
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() =>
+                                                  handleToggleBranchPermission(staffId, perm.id)
+                                                }
+                                                className="size-4 accent-amber-400"
+                                              />
+                                              <span className="text-sm text-stone-200">
+                                                {perm.label}
+                                              </span>
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationBar meta={usersData?.meta} onPageChange={setPage} />
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── TAB 3: CREATE STAFF USER FORM ────────────────────────────────────── */}
+      {activeTab === 'create-staff' && (
+        <form
+          onSubmit={handleInviteStaff}
+          className="p-5 bg-neutral-900 rounded-xl border border-neutral-800 space-y-4 max-w-3xl"
+          data-testid="create-staff-form"
+        >
           <div>
-            <h2 className="text-white text-lg font-medium">Team directory</h2>
-            <p className="text-zinc-500 text-sm">
-              Organization users returned by the backend. Expand a row to view branch grants without hiding the list.
+            <h2 className="text-white text-lg font-medium font-['Inter']">Create Staff User</h2>
+            <p className="text-xs text-neutral-400 font-['Inter']">
+              Onboard a new staff member with branch credentials.
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="size-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                data-testid="permissions-user-search"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (page !== 1) resetPage();
-                }}
-                placeholder="Search users..."
-                className="w-full h-11 pl-9 pr-3 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm placeholder-zinc-600 focus:outline-none focus:border-amber-400"
-              />
-            </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              required
+              data-testid="create-staff-name"
+              placeholder="Full name"
+              value={invite.name}
+              onChange={(e) => setInvite((prev) => ({ ...prev, name: e.target.value }))}
+              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
+            />
+            <input
+              required
+              type="email"
+              data-testid="create-staff-email"
+              placeholder="Email address"
+              value={invite.email}
+              onChange={(e) => setInvite((prev) => ({ ...prev, email: e.target.value }))}
+              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
+            />
+            <input
+              required
+              type="password"
+              minLength={8}
+              data-testid="create-staff-password"
+              placeholder="Temporary password (min 8 chars)"
+              value={invite.password}
+              onChange={(e) => setInvite((prev) => ({ ...prev, password: e.target.value }))}
+              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
+            />
             <select
-              value={selectedBranchId}
-              onChange={(e) => {
-                setBranchId(e.target.value);
-                setDraft({});
-              }}
-              data-testid="permissions-branch"
-              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm min-w-[180px]"
+              data-testid="create-staff-role"
+              value={invite.role}
+              onChange={(e) => setInvite((prev) => ({ ...prev, role: e.target.value }))}
+              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
             >
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
+              {STAFF_ROLES.map((role) => (
+                <option key={role} value={role}>
+                  {role.replaceAll('_', ' ')}
                 </option>
               ))}
             </select>
           </div>
-        </div>
 
-        {loadingUsers && <LoadingState message="Loading users..." />}
-        {!loadingUsers && users.length === 0 && (
-          <EmptyState
-            title="No users in this organization"
-            description="Create a staff account below to add the first team member."
-          />
-        )}
-        {users.length > 0 && (
-          <div className="space-y-4">
-            <div className="overflow-x-auto rounded-lg border border-zinc-800">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-900 text-white text-left">
-                  <tr>
-                    <th className="py-3 px-3 font-semibold w-10" />
-                    <th className="py-3 px-3 font-semibold">Name</th>
-                    <th className="py-3 px-3 font-semibold">Email</th>
-                    <th className="py-3 px-3 font-semibold">Role</th>
-                    <th className="py-3 px-3 font-semibold">Branch assignment</th>
-                    <th className="py-3 px-3 font-semibold">Status</th>
-                    <th className="py-3 px-3 font-semibold">Access</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user: any) => {
-                    const assignment = staffByUserId.get(user.id) || staffByUserId.get(user.email);
-                    const staffId = assignment?.staffId || assignment?.id;
-                    const grants = staffId ? rolePermissions[staffId] || [] : [];
-                    const expanded = expandedUserId === user.id;
-                    return (
-                      <React.Fragment key={user.id}>
-                        <tr className="border-t border-neutral-800 text-stone-200">
-                          <td className="py-2 px-3">
-                            <button
-                              type="button"
-                              data-testid={`user-expand-${user.id}`}
-                              aria-expanded={expanded}
-                              onClick={() => setExpandedUserId(expanded ? null : user.id)}
-                              className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800"
-                            >
-                              {expanded ? (
-                                <ChevronDown className="w-4 h-4" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4" />
-                              )}
-                            </button>
-                          </td>
-                          <td className="py-2 px-3">{user.name}</td>
-                          <td className="py-2 px-3">{user.email}</td>
-                          <td className="py-2 px-3">{assignment?.role || user.role}</td>
-                          <td className="py-2 px-3 text-zinc-400">
-                            {assignment ? 'Assigned to selected branch' : 'Not assigned here'}
-                          </td>
-                          <td className="py-2 px-3">{user.status}</td>
-                          <td className="py-2 px-3">
-                            <button
-                              type="button"
-                              data-testid={`user-status-${user.id}`}
-                              onClick={() => handleToggleStatus(user)}
-                              className="px-2.5 py-1 rounded-md bg-zinc-800 text-xs text-white hover:bg-zinc-700"
-                            >
-                              {user.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                            </button>
-                          </td>
-                        </tr>
-                        {expanded && (
-                          <tr className="border-t border-neutral-800 bg-black/40">
-                            <td colSpan={7} className="p-4">
-                              <div data-testid={`user-permissions-${user.id}`} className="space-y-3">
-                                {(loadingBranches || isLoading) && (
-                                  <LoadingState message="Loading staff assignments..." />
-                                )}
-                                {isError && (
-                                  <ErrorState
-                                    message={(error as any)?.data?.message || 'Unable to load staff permissions.'}
-                                    onRetry={() => refetch()}
-                                  />
-                                )}
-                                {!assignment && (
-                                  <p className="text-sm text-zinc-400">
-                                    This user is not assigned to the selected branch. Create a staff
-                                    assignment to grant branch capabilities.
-                                  </p>
-                                )}
-                                {assignment && staffId && (
-                                  <>
-                                    <div className="flex items-center justify-between">
-                                      <p className="text-sm text-zinc-300">
-                                        Extra grants for {assignment.role.replaceAll('_', ' ')} at this branch
-                                      </p>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleToggleCategorySelectAll(staffId, STAFF_PERMISSIONS[0])
-                                        }
-                                        className="text-xs text-amber-400 hover:text-amber-300"
-                                      >
-                                        Toggle all
-                                      </button>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                                      {permissionDefs.map((perm) => {
-                                        const checked = grants.includes(perm.id);
-                                        return (
-                                          <label
-                                            key={perm.id}
-                                            className="flex items-center gap-2.5 p-3 rounded-lg bg-neutral-900 border border-neutral-800 cursor-pointer"
-                                          >
-                                            <input
-                                              type="checkbox"
-                                              checked={checked}
-                                              onChange={() => handleTogglePermission(staffId, perm.id)}
-                                              className="size-4 accent-amber-400"
-                                            />
-                                            <span className="text-sm text-stone-200">{perm.label}</span>
-                                          </label>
-                                        );
-                                      })}
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <PaginationBar meta={usersData?.meta} onPageChange={setPage} />
+          <div className="pt-2 flex justify-end">
+            <button
+              type="submit"
+              disabled={creatingStaff}
+              data-testid="create-staff-submit"
+              className="h-11 px-6 bg-yellow-400 hover:bg-yellow-300 rounded-lg text-neutral-900 text-sm font-semibold disabled:opacity-60 transition-colors cursor-pointer shadow-md"
+            >
+              {creatingStaff ? 'Creating...' : 'Create staff account'}
+            </button>
           </div>
-        )}
-      </section>
+        </form>
+      )}
 
-      <form
-        onSubmit={handleInviteStaff}
-        className="p-4 bg-neutral-900 rounded-xl border border-neutral-800 space-y-3"
-        data-testid="create-staff-form"
-      >
-        <h2 className="text-white text-lg font-medium">Create staff user</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-          <input
-            required
-            data-testid="create-staff-name"
-            placeholder="Full name"
-            value={invite.name}
-            onChange={(e) => setInvite((prev) => ({ ...prev, name: e.target.value }))}
-            className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm"
-          />
-          <input
-            required
-            type="email"
-            data-testid="create-staff-email"
-            placeholder="Email"
-            value={invite.email}
-            onChange={(e) => setInvite((prev) => ({ ...prev, email: e.target.value }))}
-            className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm"
-          />
-          <input
-            required
-            type="password"
-            minLength={8}
-            data-testid="create-staff-password"
-            placeholder="Temporary password"
-            value={invite.password}
-            onChange={(e) => setInvite((prev) => ({ ...prev, password: e.target.value }))}
-            className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm"
-          />
-          <select
-            data-testid="create-staff-role"
-            value={invite.role}
-            onChange={(e) => setInvite((prev) => ({ ...prev, role: e.target.value }))}
-            className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm"
-          >
-            {STAFF_ROLES.map((role) => (
-              <option key={role} value={role}>
-                {role.replaceAll('_', ' ')}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            disabled={creatingStaff}
-            data-testid="create-staff-submit"
-            className="h-11 px-3 bg-yellow-400 hover:bg-yellow-300 rounded-lg text-neutral-800 text-sm font-medium disabled:opacity-60"
-          >
-            {creatingStaff ? 'Creating...' : 'Create user'}
-          </button>
-        </div>
-      </form>
+      {/* ── MODALS ──────────────────────────────────────────────────────────── */}
+
+      {/* Create Dynamic Role Modal */}
+      {isCreateRoleOpen && (
+        <CreateRoleModal
+          onClose={() => setIsCreateRoleOpen(false)}
+          onSuccess={() => refetchRoles()}
+        />
+      )}
+
+      {/* Delete Role Modal */}
+      {selectedRoleToDelete && (
+        <DeleteRoleModal
+          role={selectedRoleToDelete}
+          onClose={() => setSelectedRoleToDelete(null)}
+          onConfirm={handleConfirmDeleteRole}
+        />
+      )}
+
+      {/* Single Dynamic Role Assignment Modal */}
+      {selectedUserForRole && (
+        <AssignUserRoleModal
+          user={selectedUserForRole}
+          onClose={() => setSelectedUserForRole(null)}
+          onSuccess={() => refetchUsers()}
+        />
+      )}
     </div>
   );
 }

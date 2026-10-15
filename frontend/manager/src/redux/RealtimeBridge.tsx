@@ -13,15 +13,15 @@ export function RealtimeBridge({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const token = getAuthToken();
-    const apiUrl = getApiBaseUrl();
+    const socketUrl = (process.env.NEXT_PUBLIC_API_URL || 'https://api.tavonza.com').replace(/\/$/, '');
 
-    const socket = io(apiUrl, {
+    const socket = io(socketUrl, {
       auth: token ? { token } : undefined,
       query: user?.branchId ? { branchId: user.branchId } : undefined,
-      transports: ['websocket', 'polling'],
+      transports: ['polling'],
       reconnection: true,
-      reconnectionAttempts: 20,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
     });
 
     socketRef.current = socket;
@@ -29,6 +29,10 @@ export function RealtimeBridge({ children }: { children: React.ReactNode }) {
     socket.on('connect', () => {
       setIsConnected(true);
       console.log('[Realtime:Manager] Connected to Socket.IO gateway');
+    });
+
+    socket.on('connect_error', () => {
+      setIsConnected(false);
     });
 
     socket.on('disconnect', () => {

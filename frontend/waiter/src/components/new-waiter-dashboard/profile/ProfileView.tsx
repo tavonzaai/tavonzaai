@@ -53,8 +53,8 @@ export default function ProfileView({
   // Dynamic Work Information state
   const [workInfo, setWorkInfo] = useState({
     role: user?.role ? user.role.replace(/_/g, ' ') : 'Waiter',
-    assignedTables: user?.assignments?.map((a: any) => a.tableNumber).join(', ') || '01, 02, 03, 04, 05',
-    branch: user?.assignments?.[0]?.branch?.name || 'Main Branch',
+    assignedTables: user?.assignments?.map((a: any) => a.tableNumber).filter(Boolean).join(', ') || 'All Floor Tables',
+    branch: user?.branchName || user?.assignments?.[0]?.branchName || user?.assignments?.[0]?.branch?.name || 'Main Branch',
   });
 
   // Modal State
@@ -90,7 +90,7 @@ export default function ProfileView({
       setWorkInfo((prev) => ({
         ...prev,
         role: user.role ? user.role.replace(/_/g, ' ') : prev.role,
-        branch: user.assignments?.[0]?.branch?.name || prev.branch,
+        branch: user.branchName || user.assignments?.[0]?.branchName || user.assignments?.[0]?.branch?.name || prev.branch,
       }));
     }
   }, [user]);

@@ -27,11 +27,11 @@ export interface BranchManagerNavItem {
 export const managerNavItems: BranchManagerNavItem[] = [
   { name: 'Dashboard', tabKey: 'Dashboard', icon: LayoutGrid },
   { name: 'Table', tabKey: 'Table', icon: UtensilsCrossed },
-  { name: 'Orders', tabKey: 'Orders', icon: ClipboardList, badge: '7', badgeColor: 'bg-amber-400/20 text-amber-400' },
-  { name: 'Staff', tabKey: 'Staff', icon: Users, badge: '6', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-  { name: 'Kitchen', tabKey: 'Kitchen', icon: ChefHat, badge: 'Live', badgeColor: 'bg-teal-500/20 text-teal-400' },
-  { name: 'Payments', tabKey: 'Payments', icon: CreditCard, badge: '2', badgeColor: 'bg-orange-400/20 text-orange-400' },
-  { name: 'Menu', tabKey: 'Menu', icon: BookOpen, badge: '5', badgeColor: 'bg-yellow-400/20 text-yellow-400' },
+  { name: 'Orders', tabKey: 'Orders', icon: ClipboardList, badgeColor: 'bg-amber-400/20 text-amber-400' },
+  { name: 'Staff', tabKey: 'Staff', icon: Users, badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+  { name: 'Kitchen', tabKey: 'Kitchen', icon: ChefHat, badgeColor: 'bg-teal-500/20 text-teal-400' },
+  { name: 'Payments', tabKey: 'Payments', icon: CreditCard, badgeColor: 'bg-orange-400/20 text-orange-400' },
+  { name: 'Menu', tabKey: 'Menu', icon: BookOpen, badgeColor: 'bg-yellow-400/20 text-yellow-400' },
   { name: 'Reports', tabKey: 'Reports', icon: BarChart3 },
   { name: 'Profile', tabKey: 'Profile', icon: User },
 ];

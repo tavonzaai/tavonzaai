@@ -90,19 +90,6 @@ export function getActiveBranchId(): string {
           if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
         } catch {}
       }
-
-      // 3. localStorage keys
-      for (const key of ['cashier_user', 'tavonza_user', 'user']) {
-        const rawUser = localStorage.getItem(key);
-        if (rawUser) {
-          try {
-            const parsed = JSON.parse(rawUser);
-            if (isUUID(parsed?.branchId)) return parsed.branchId;
-            if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
-            if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
-          } catch {}
-        }
-      }
     } catch {}
   }
   return '';

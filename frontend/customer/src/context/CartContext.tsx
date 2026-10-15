@@ -86,9 +86,7 @@ const syncAddItemToBackend = async (item: CartItem): Promise<string | undefined>
     }
 
     if (draft?.id && draft.status === 'DRAFT') {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('tavonza_active_cart_id', draft.id);
-      }
+      setCookie('tavonza_active_cart_id', draft.id);
       
       const catalog = await fetchBranchMenuCatalog(branchId);
       const validMenuItemId = resolveCatalogMenuItemId(item, catalog);
@@ -180,60 +178,51 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setCookie('tavonza_table', table);
   };
 
-  // Load from localStorage on mount
+  // Load authoritative cart directly from backend database on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedCart = localStorage.getItem('tavonza_customer_cart');
-      if (savedCart) {
-        try {
-          const parsed = JSON.parse(savedCart);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const sanitized = parsed.filter((item: CartItem) => item && (item.dishId || item.id || item.name));
-            setCart(sanitized);
+    const cookieTable = getCookie('tavonza_table') || getCookie('tavonza_table_label');
+    if (cookieTable) {
+      setTableNumber(cookieTable);
+    }
 
-            // Asynchronously resolve & repair any stale or mock IDs in client state/localStorage
-            const branchId = resolveDynamicBranchId();
-            if (branchId) {
-              fetchBranchMenuCatalog(branchId).then((catalog) => {
-                if (catalog && catalog.length > 0) {
-                  setCart((prev) => {
-                    let changed = false;
-                    const repaired = prev.map((item) => {
-                      const realId = resolveCatalogMenuItemId(item, catalog);
-                      if (realId && (item.dishId !== realId || !isUUID(item.id))) {
-                        changed = true;
-                        return { ...item, dishId: realId };
-                      }
-                      return item;
-                    });
-                    if (changed && typeof window !== 'undefined') {
-                      localStorage.setItem('tavonza_customer_cart', JSON.stringify(repaired));
-                    }
-                    return repaired;
-                  });
-                }
-              });
-            }
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+
+    if (branchId && tableId) {
+      Promise.all([
+        orderService
+          .getCartFromSession(branchId, tableId)
+          .catch(() => orderService.getCart(branchId, tableId))
+          .catch(() => null),
+        fetchBranchMenuCatalog(branchId).catch(() => []),
+      ])
+        .then(([draft, catalog]) => {
+          if (draft?.id && Array.isArray(draft.items) && draft.items.length > 0) {
+            setCookie('tavonza_active_cart_id', draft.id);
+            const catalogMap = new Map((catalog || []).map((m: any) => [m.id, m]));
+            const dbItems: CartItem[] = draft.items.map((bi: any) => {
+              const catItem = catalogMap.get(bi.menuItemId);
+              return {
+                id: bi.menuItemId || bi.id,
+                orderItemId: bi.id,
+                dishId: bi.menuItemId,
+                name: catItem?.name || bi.menuItem?.name || bi.name || 'Gourmet Dish',
+                subtitle: bi.specialInstructions || catItem?.description || '',
+                price: Number(bi.unitPrice || catItem?.price || 0),
+                quantity: Number(bi.quantity || 1),
+                image: catItem?.imageUrl || bi.menuItem?.imageUrl || '/images/dish1.jpg',
+                addOns: bi.addOns || [],
+                specialInstructions: bi.specialInstructions,
+              };
+            });
+            setCart(dbItems);
           }
-        } catch {
-          // ignore parsing error
-        }
-      }
-
-      const cookieTable = getCookie('tavonza_table');
-      const savedTable = cookieTable || localStorage.getItem('tavonza_table');
-      if (savedTable) {
-        setTableNumber(savedTable);
-      }
+        })
+        .catch((err) => {
+          console.warn('Database cart hydration warning:', err);
+        });
     }
   }, []);
-
-  // Save to localStorage on change
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('tavonza_customer_cart', JSON.stringify(cart));
-    }
-  }, [cart]);
 
   const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
     const fullItem: CartItem = { ...item, quantity: item.quantity || 1 };
