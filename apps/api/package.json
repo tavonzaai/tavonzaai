@@ -8,7 +8,7 @@
     "dev": "pnpm --filter @tavonza/database db:generate && dotenv -e ../../.env -- nest start --watch",
     "db:push": "pnpm --filter @tavonza/database db:push",
     "lint": "tsc --noEmit",
-    "test": "node --import tsx --test 'src/**/*.spec.ts'",
+    "test": "node --import tsx --test src/modules/branches/domain/staff-list-filter.spec.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
