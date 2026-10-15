@@ -132,7 +132,7 @@ export const rawAuthApi = {
 
   getMe: async (): Promise<UserProfile> => {
     try {
-      const res = await baseApiFetch<UserProfile>('/auth/me', { method: 'GET' });
+      const res = await baseApiFetch<UserProfile>('/users/me', { method: 'GET' });
       const user = (res?.data?.id ? res.data : res) as UserProfile;
       if (user && user.id) {
         setCookie(SUPERADMIN_USER_KEY, JSON.stringify(user));

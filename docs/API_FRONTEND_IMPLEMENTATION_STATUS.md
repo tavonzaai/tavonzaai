@@ -19,8 +19,8 @@
 | **Total Backend REST Endpoints Audited** | **204 Endpoints** | 199 NestJS public/staff REST routes + 5 `/internal/*` AI Gateway routes |
 | **Python AI Microservice Endpoints** | **7 Endpoints** | FastAPI service (`apps/ai/src/main.py`) consumed via Tool Gateway & chat clients |
 | **Total System HTTP Endpoints** | **211 Endpoints** | 204 NestJS routes + 7 Python FastAPI routes |
-| **Frontend Implemented Endpoints** | **171 Endpoints (`[x]`)** | Fully wired in Redux API slices and frontend UI views across all 6 apps |
-| **Pending Frontend Endpoints (Faka / Empty)** | **40 Endpoints (`[ ]`)** | Backend complete & verified; pending frontend UI/Redux wiring |
+| **Frontend Implemented Endpoints** | **181 Endpoints (`[x]`)** | Fully wired in Redux API slices and frontend UI views across all 6 apps |
+| **Pending Frontend Endpoints (Faka / Empty)** | **30 Endpoints (`[ ]`)** | Backend complete & verified; pending frontend UI/Redux wiring |
 | **Realtime WebSocket Channels & Broadcasts** | **9 Broadcast Topics** | Socket.IO Gateway (`apps/api/src/modules/realtime/realtime.gateway.ts`) |
 
 ### Legend
@@ -78,16 +78,16 @@
 
 | HTTP Method & Route | Backend Done | Frontend Done | Current Frontend Location OR Where Needs Implementation | Description |
 | :--- | :---: | :---: | :--- | :--- |
-| `GET /authorization/me` | [x] | [ ] | **Where to implement:** `frontend/*/src/redux/features/authApi.ts` (`getMyRole`) | Get assigned dynamic role and effective permissions for current user |
-| `GET /authorization/permissions` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/authorizationApi.ts` & Permissions Matrix view | Catalog of all system permissions grouped by module |
-| `GET /authorization/roles` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/authorizationApi.ts` (`getRoles`) & `PermissionsView.tsx` | List all roles with user count and permission metrics |
-| `POST /authorization/roles` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/authorizationApi.ts` (`createRole`) & Create Role Modal | Create a new custom role with permission assignments |
-| `GET /authorization/roles/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/authorizationApi.ts` (`getRoleById`) & Matrix drawer | Get role details with checkbox matrix representation |
-| `PATCH /authorization/roles/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/authorizationApi.ts` (`updateRole`) & Matrix editor | Update role metadata and checkbox permission matrix |
-| `DELETE /authorization/roles/:id` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/authorizationApi.ts` (`deleteRole`) & `DeleteRoleModal.tsx` | Delete custom role (blocked if users assigned or system role) |
-| `GET /authorization/users/:userId/role` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/authorizationApi.ts` (`getUserRole`) & Team Directory | Get single assigned dynamic role and permissions for a user |
-| `POST /authorization/users/:userId/role` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/authorizationApi.ts` (`assignUserRole`) & User Role dropdown | Assign or reassign role to user (enforces exactly 1 role per user) |
-| `DELETE /authorization/users/:userId/role` | [x] | [ ] | **Where to implement:** `frontend/admin/src/redux/features/authorizationApi.ts` (`removeUserRole`) | Revoke assigned dynamic role from a user |
+| `GET /authorization/me` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`getMyCapabilities`), `usePermission.ts`, `PermissionGate.tsx` | Get assigned dynamic role and effective permissions for current user |
+| `GET /authorization/permissions` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`getPermissions`) & `PermissionsView.tsx` (Dynamic Matrix) | Catalog of all system permissions grouped by module |
+| `GET /authorization/roles` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`getRoles`) & `RoleOverviewCards.tsx` / `PermissionsView.tsx` | List all roles with user count and permission metrics |
+| `POST /authorization/roles` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`createRole`) & `CreateRoleModal.tsx` | Create a new custom role with permission assignments |
+| `GET /authorization/roles/:id` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`getRoleById`) & `PermissionsMatrix.tsx` | Get role details with checkbox matrix representation |
+| `PATCH /authorization/roles/:id` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`updateRole`) & `PermissionsView.tsx` (`handleSaveRoleChanges`) | Update role metadata and checkbox permission matrix |
+| `DELETE /authorization/roles/:id` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`deleteRole`) & `DeleteRoleModal.tsx` | Delete custom role (blocked if users assigned or system role) |
+| `GET /authorization/users/:userId/role` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`getUserRole`) & `AssignUserRoleModal.tsx` | Get single assigned dynamic role and permissions for a user |
+| `POST /authorization/users/:userId/role` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`assignUserRole`) & `AssignUserRoleModal.tsx` | Assign or reassign role to user (enforces exactly 1 role per user) |
+| `DELETE /authorization/users/:userId/role` | [x] | [x] | `frontend/admin/src/redux/features/roleApi.ts` (`removeUserRole`) & `AssignUserRoleModal.tsx` | Revoke assigned dynamic role from a user |
 
 ---
 
@@ -182,9 +182,9 @@
 | `GET /tables` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`getTables`), waiter, cashier | List tables by branch query param |
 | `GET /tables/branch/:branchId` | [x] | [x] | Alternative path route to `GET /tables?branchId=...` | List tables by branch path param |
 | `GET /tables/:id` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`getTable`) | Single table detail |
-| `PATCH /tables/:id` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`updateTable`) | Update table capacity, label, shape |
+| `PATCH /tables/:id` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`updateTable`), `EditTableModal.tsx` in `TablesView`, `TableDetailView`, `BranchConfigView` | Update table capacity, label, shape, floor, status |
 | `POST /tables/:id/regenerate-qr` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`regenerateQr`) | Rotate opaque QR token for table |
-| `DELETE /tables/:id` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`deleteTable`) | Soft delete table |
+| `DELETE /tables/:id` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`deleteTable`), Delete buttons with confirmation in `TablesView`, `TableDetailView`, `BranchConfigView` | Soft delete table |
 | `POST /tables/reservations` | [x] | [x] | `frontend/customer/src/redux/features/reservationApi.ts` (`createReservation`), `InstantReserveModal.tsx` & `frontend/manager/src/redux/features/branchManagerApi.ts` (`createReservation`), `TablesView.tsx` | Book table reservation |
 | `GET /tables/reservations/branch/:branchId` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`getReservations`) & Manager `TablesView.tsx` (Reservations tab) | List reservations for branch |
 | `GET /tables/reservations/:id` | [x] | [x] | `frontend/manager/src/redux/features/branchManagerApi.ts` (`getReservation`) & Manager `TablesView.tsx` (Reservation detail modal) | View single reservation details |
@@ -515,7 +515,7 @@ To achieve 100% full-stack parity across all features, implement the following 4
 - [x] **Organization Creation & Deletion:** Implemented in `frontend/admin/src/redux/features/restaurantApi.ts` (`createOrganization`, `getOrganizationById`, `deleteOrganization`) & `SettingsView.tsx`.
 - [x] **Soft Delete User:** Implemented in `frontend/admin/src/redux/features/userApi.ts` (`deleteUser`) & `EmployeesView.tsx`.
 - [ ] **Inventory Lookups & Category Update:** Wire up `GET /inventory/suppliers/:id`, `GET /inventory/categories/:id`, and `PATCH /inventory/categories/:id` in `frontend/admin/src/redux/features/inventoryApi.ts`.
-- [ ] **Dynamic RBAC & Roles Matrix:** Wire up `GET /authorization/roles`, `POST /authorization/roles`, `GET /authorization/roles/:id`, `PATCH /authorization/roles/:id`, `DELETE /authorization/roles/:id`, `GET /authorization/permissions`, `GET /authorization/users/:userId/role`, `POST /authorization/users/:userId/role`, and `DELETE /authorization/users/:userId/role` in `frontend/admin/src/redux/features/authorizationApi.ts` and connect `PermissionsMatrix.tsx`, `RoleOverviewCards.tsx`, and `DeleteRoleModal.tsx`.
+- [x] **Dynamic RBAC & Roles Matrix:** Implemented in `frontend/admin/src/redux/features/roleApi.ts` (all 10 endpoints: `getMyCapabilities`, `getPermissions`, `getRoles`, `getRoleById`, `createRole`, `updateRole`, `deleteRole`, `getUserRole`, `assignUserRole`, `removeUserRole`), `usePermission.ts`, `PermissionGate.tsx`, `RequirePermissionPage.tsx`, and wired into `PermissionsView.tsx`, `PermissionsMatrix.tsx`, `RoleOverviewCards.tsx`, `CreateRoleModal.tsx`, `AssignUserRoleModal.tsx`, and `DeleteRoleModal.tsx`.
 - [ ] **Platform Broadcast Notifications:** Wire up `POST /notifications` in `frontend/admin/src/redux/api/baseApi.ts`.
 - [ ] **Media & S3 File Browser:** Wire up `POST /storage/presigned-upload-url`, `POST /storage/presigned-post`, `POST /storage/presigned-download-url`, `GET /storage/file`, `GET /storage/file/info`, `GET /storage/file/exists`, `GET /storage/files`, `DELETE /storage/file`, and `POST /storage/files/delete-batch` in `frontend/admin/src/redux/features/storageApi.ts`.
 - [ ] **Email Diagnostics:** Wire up `POST /mail/test-send`, `POST /mail/test-otp`, and `GET /mail/status` in `frontend/admin/src/app/admin-dashboard/settings/` (Email Diagnostics tab).

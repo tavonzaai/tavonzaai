@@ -21,10 +21,11 @@ export default function AddNewItemModal({
   initialItem,
   isEdit = false,
 }: AddNewItemModalProps) {
-  const [itemName, setItemName] = useState('Grilled Chicken');
+  const [itemName, setItemName] = useState('');
   const [category, setCategory] = useState<string>('Starters');
-  const [price, setPrice] = useState('$ 10');
+  const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [station, setStation] = useState('Grill');
   const [itemEnabled, setItemEnabled] = useState(true);
   const [stockState, setStockState] = useState<'In Stock' | 'Low Stock' | 'Out of Stock'>('In Stock');
@@ -34,6 +35,7 @@ export default function AddNewItemModal({
   const [modifierGroups, setModifierGroups] = useState<string[]>([]);
   const [showAddModifierInput, setShowAddModifierInput] = useState(false);
   const [newModifierName, setNewModifierName] = useState('');
+  const [variants, setVariants] = useState<Array<{ id: string; name: string; size: string; price: string }>>([]);
 
   // Dropdown visibility states
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -46,6 +48,7 @@ export default function AddNewItemModal({
       setCategory(initialItem.category);
       setPrice(initialItem.price);
       setDescription(initialItem.description);
+      setImageUrl(initialItem.imageUrl || '');
       setStation(initialItem.stationBadge);
       setItemEnabled(initialItem.enabled);
       setEstimatedPrepTime(initialItem.estimatedPrepTime ?? 15);
@@ -59,10 +62,12 @@ export default function AddNewItemModal({
           : 'In Stock'
       );
     } else {
-      setItemName('Grilled Chicken');
-      setCategory(categories[0] || 'Starters');
-      setPrice('$ 10');
+      setItemName('');
+      const validCats = categories.filter((c) => c !== 'All Categories');
+      setCategory(validCats[0] || 'Starters');
+      setPrice('');
       setDescription('');
+      setImageUrl('');
       setStation('Grill');
       setItemEnabled(true);
       setEstimatedPrepTime(15);
@@ -127,6 +132,7 @@ export default function AddNewItemModal({
       estimatedPrepTime: Math.max(0, Number(estimatedPrepTime) || 0),
       stockQuantity: isStockTracked ? cleanStock : undefined,
       isStockTracked,
+      imageUrl: imageUrl.trim() || initialItem?.imageUrl || undefined,
     };
 
     onItemCreated(newItem);
@@ -251,6 +257,22 @@ export default function AddNewItemModal({
                   placeholder="Ingredients, prep style, allergens..."
                   className="w-full px-3.5 py-2.5 bg-neutral-950 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-stone-300 text-sm font-normal font-['Inter'] placeholder-neutral-500 focus:outline-none focus:outline-neutral-500 resize-none"
                 />
+              </div>
+
+              {/* Image URL */}
+              <div className="flex flex-col gap-2">
+                <label className="text-white text-xs font-normal font-['Inter'] leading-4">
+                  Image URL (Optional)
+                </label>
+                <div className="w-full px-3.5 py-2.5 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 flex items-center">
+                  <input
+                    type="url"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                    className="w-full bg-transparent text-white text-sm font-normal font-['Inter'] focus:outline-none"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -479,6 +501,88 @@ export default function AddNewItemModal({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Section 5: VARIANTS matching Figma */}
+          <div className="w-full flex flex-col gap-2.5">
+            <span className="text-white text-base font-medium font-['Poppins'] leading-5">
+              Variants
+            </span>
+
+            {variants.map((v, idx) => (
+              <div key={v.id || idx} className="w-full flex items-center gap-3">
+                <div className="flex-1 flex flex-col gap-1.5">
+                  <label className="text-white text-xs font-normal font-['Inter']">Name</label>
+                  <input
+                    type="text"
+                    value={v.name}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setVariants((prev) =>
+                        prev.map((item, i) => (i === idx ? { ...item, name: val } : item))
+                      );
+                    }}
+                    placeholder="e.g. Pizza / Regular"
+                    className="w-full px-3.5 py-2.5 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm focus:outline-yellow-400"
+                  />
+                </div>
+
+                <div className="w-32 flex flex-col gap-1.5">
+                  <label className="text-white text-xs font-normal font-['Inter']">Size</label>
+                  <input
+                    type="text"
+                    value={v.size}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setVariants((prev) =>
+                        prev.map((item, i) => (i === idx ? { ...item, size: val } : item))
+                      );
+                    }}
+                    placeholder="12 inch"
+                    className="w-full px-3.5 py-2.5 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm focus:outline-yellow-400"
+                  />
+                </div>
+
+                <div className="w-32 flex flex-col gap-1.5">
+                  <label className="text-white text-xs font-normal font-['Inter']">Price</label>
+                  <input
+                    type="text"
+                    value={v.price}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setVariants((prev) =>
+                        prev.map((item, i) => (i === idx ? { ...item, price: val } : item))
+                      );
+                    }}
+                    placeholder="$ 15"
+                    className="w-full px-3.5 py-2.5 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm focus:outline-yellow-400"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setVariants((prev) => prev.filter((_, i) => i !== idx))}
+                  className="mt-5 p-2 text-neutral-400 hover:text-red-400 transition"
+                  title="Remove variant"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={() =>
+                setVariants((prev) => [
+                  ...prev,
+                  { id: `var-${Date.now()}`, name: '', size: '12 inch', price: '$ 10' },
+                ])
+              }
+              className="w-full py-2.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex justify-center items-center gap-1.5 text-white text-sm font-medium font-['Inter'] transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-orange-50" />
+              <span>Add New Variant</span>
+            </button>
           </div>
 
           {/* Footer Actions matching Figma */}

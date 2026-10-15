@@ -25,7 +25,12 @@ import { TableItem } from './types';
 import { navToRoute, routeToNav } from './routes';
 import { Sparkles, CheckCircle2, X } from 'lucide-react';
 import DraggableAiButton from '../common/DraggableAiButton';
-import { branchManagerService, getActiveBranchId } from '../../redux/features/branchManagerApi';
+import {
+  branchManagerService,
+  getActiveBranchId,
+  markTableDeletedLocally,
+  isTableDeletedLocally,
+} from '../../redux/features/branchManagerApi';
 import { useAppDispatch } from '../../redux/hooks';
 import { getMe } from '../../redux/features/authApi';
 
@@ -67,7 +72,17 @@ export default function BranchManagerDashboard({
       const branchId = getActiveBranchId();
       const apiTables = await branchManagerService.getTables(branchId);
       if (apiTables) {
-        const mappedTables: TableItem[] = apiTables.map((t: any, idx: number) => {
+        const mappedTables: TableItem[] = apiTables
+          .filter((t: any) => {
+            if (!t || !t.id) return false;
+            if (isTableDeletedLocally(t.id)) return false;
+            const flag = String(t.operationalFlag || '').toUpperCase();
+            const serv = String(t.serviceStatus || '').toUpperCase();
+            const isDeletedFlag = Boolean(t.isDeleted || t.deletedAt);
+            const isInactive = t.isActive === false;
+            return flag !== 'OUT_OF_SERVICE' && serv !== 'OUT_OF_SERVICE' && !isDeletedFlag && !isInactive;
+          })
+          .map((t: any, idx: number) => {
           let status: any = 'available';
           const serv = String(t.serviceStatus || '').toUpperCase();
           if (serv === 'PREPARING') status = 'preparing';
@@ -255,6 +270,19 @@ export default function BranchManagerDashboard({
                 onBack={() => setSelectedTableId(null)}
                 onOpenReassign={() => setIsReassignModalOpen(true)}
                 onOpenAskAi={() => setIsAskAiOpen(true)}
+                onTableUpdated={async () => {
+                  showToast('Table updated successfully!');
+                  await loadLiveTables();
+                }}
+                onTableDeleted={async (deletedId?: string) => {
+                  showToast('Table deleted successfully!');
+                  if (deletedId) {
+                    markTableDeletedLocally(deletedId);
+                    setTables((prev) => prev.filter((t) => t.id !== deletedId));
+                  }
+                  setSelectedTableId(null);
+                  await loadLiveTables();
+                }}
               />
             ) : (
               <TablesView

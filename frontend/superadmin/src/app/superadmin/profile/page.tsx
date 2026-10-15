@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SuperAdminLayout } from '@/components/layout/SuperAdminLayout';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { updateProfile, changePassword } from '@/redux/features/authApi';
+import { updateProfile, changePassword, getMe } from '@/redux/features/authApi';
 import {
   Shield,
   User,
@@ -30,6 +30,10 @@ import { toast } from 'sonner';
 export default function SuperAdminProfilePage() {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
+
+  useEffect(() => {
+    dispatch(getMe());
+  }, [dispatch]);
 
   // Profile Form State
   const [firstName, setFirstName] = useState('');

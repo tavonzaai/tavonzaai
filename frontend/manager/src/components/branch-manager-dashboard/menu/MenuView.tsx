@@ -25,34 +25,71 @@ import {
   MenuCategoryItem,
 } from '../../../redux/features/branchManagerApi';
 
+function getStationBadgeColor(station?: string): string {
+  const s = station?.toLowerCase() || '';
+  if (s.includes('grill')) {
+    return 'bg-pink-400/10 text-pink-400 border border-pink-400/20';
+  }
+  if (s.includes('oven')) {
+    return 'bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20';
+  }
+  if (s.includes('fryer')) {
+    return 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20';
+  }
+  if (s.includes('bar') || s.includes('beverage')) {
+    return 'bg-blue-400/10 text-blue-400 border border-blue-400/20';
+  }
+  if (s.includes('dessert')) {
+    return 'bg-pink-400/10 text-pink-400 border border-pink-400/20';
+  }
+  return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+}
+
 export default function MenuView() {
   const [items, setItems] = useState<MenuItem[]>([]);
-  const [categories, setCategories] = useState<string[]>(['All Categories']);
+  const [categories, setCategories] = useState<string[]>([]);
   const [categoryObjects, setCategoryObjects] = useState<MenuCategoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
     async function loadMenu() {
+      setIsLoading(true);
       try {
         const branchId = getActiveBranchId();
         const [apiCategories, apiItems] = await Promise.all([
-          branchManagerService.getCategories(branchId).catch(() => []),
-          branchManagerService.getMenuItems(branchId).catch(() => []),
+          branchManagerService.getCategories(branchId).catch((err) => {
+            console.warn('Failed to load categories:', err);
+            return [] as MenuCategoryItem[];
+          }),
+          branchManagerService.getMenuItems(branchId).catch((err) => {
+            console.warn('Failed to load items:', err);
+            return [] as any[];
+          }),
         ]);
 
         if (isMounted) {
-          if (apiCategories && apiCategories.length > 0) {
+          const categoryMap = new Map<string, string>();
+          if (Array.isArray(apiCategories) && apiCategories.length > 0) {
             setCategoryObjects(apiCategories);
-            const catNames = apiCategories.map((c: any) => c.name);
-            setCategories([ ...catNames]);
+            const catNames: string[] = [];
+            apiCategories.forEach((c: any) => {
+              if (c?.id && c?.name) {
+                categoryMap.set(c.id, c.name);
+                if (!catNames.includes(c.name)) {
+                  catNames.push(c.name);
+                }
+              }
+            });
+            setCategories(catNames);
           } else {
             setCategoryObjects([]);
             setCategories([]);
           }
 
-          if (apiItems && apiItems.length > 0) {
+          if (Array.isArray(apiItems) && apiItems.length > 0) {
             const mapped: MenuItem[] = apiItems.map((item: any) => {
               const isStockTracked = Boolean(item.isStockTracked);
               const stock = item.stockQuantity;
@@ -65,21 +102,31 @@ export default function MenuView() {
                 else availStr = 'In stock';
               }
 
+              // Dynamic lookup of category name from categoryId or categoryName
+              const resolvedCategory =
+                (item.categoryId && categoryMap.get(item.categoryId)) ||
+                (item.categoryName && item.categoryName.trim()) ||
+                item.category ||
+                'Uncategorized';
+
+              const station = item.stationBadge || item.station || 'Kitchen';
+
               return {
                 id: item.id,
                 name: item.name,
-                category: (item.categoryName as any) || 'Mains',
-                stationBadge: 'Kitchen',
-                stationBadgeColor: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
-                price: `$${Number(item.price).toFixed(2)}`,
+                category: resolvedCategory,
+                stationBadge: station,
+                stationBadgeColor: getStationBadgeColor(station),
+                price: `$${Number(item.price ?? item.basePrice ?? 0).toFixed(2)}`,
                 description: item.description || '',
                 status: item.isAvailable !== false ? 'Available' : 'Disabled',
                 availability: availStr,
-                modifiersCount: 'Standard',
+                modifiersCount: item.modifiersCount || '0 group(s)',
                 enabled: item.isAvailable !== false,
                 estimatedPrepTime: item.estimatedPrepTime ?? item.prepTime ?? 15,
                 stockQuantity: stock ?? (isStockTracked ? 0 : undefined),
                 isStockTracked,
+                imageUrl: item.imageUrl || item.image || item.photoUrl,
               };
             });
 
@@ -89,7 +136,11 @@ export default function MenuView() {
           }
         }
       } catch (err) {
-        console.warn('Could not load live menu:', err);
+        console.warn('Could not load live menu from database:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
@@ -98,6 +149,7 @@ export default function MenuView() {
       isMounted = false;
     };
   }, []);
+
   const [activeCategory, setActiveCategory] = useState<string>('All Categories');
   const [stationFilter, setStationFilter] = useState('All Stations');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
@@ -327,7 +379,7 @@ export default function MenuView() {
           </div>
         </div>
 
-        {/* Counts Pill & Add New Item Button */}
+        {/* Counts Pill, Manage Category & Add New Item Buttons */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="h-10 px-4 py-2 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-zinc-800 flex items-center gap-3 text-sm font-['Poppins']">
             <div>
@@ -343,6 +395,15 @@ export default function MenuView() {
               <span className="text-white font-medium">{disabledCount}</span>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsManageCatOpen(true)}
+            className="px-3.5 py-2.5 bg-black hover:bg-neutral-800 text-stone-300 hover:text-white text-base font-medium font-['Inter'] rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+          >
+            <Plus className="w-4 h-4 text-stone-300 stroke-[2]" />
+            <span>Manage Category</span>
+          </button>
 
           <button
             type="button"
@@ -511,163 +572,236 @@ export default function MenuView() {
       </div>
 
       {/* Menu Items Grid matching Figma */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredItems.map((item) => (
-          <div
-            key={item.id}
-            className="p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col justify-start items-start gap-3.5 hover:outline-neutral-700 hover:shadow-lg transition"
-          >
-            {/* Header: Category, Station Badge, Title & Price */}
-            <div className="w-full flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <div className="px-2 py-1.5 bg-stone-900 rounded-md outline outline-1 outline-offset-[-0.50px] outline-zinc-800 flex items-center">
-                  <span className="text-white text-sm font-normal font-['Poppins']">
-                    {item.category}
-                  </span>
-                </div>
-                <div className={`px-2 py-1.5 rounded-md flex items-center ${item.stationBadgeColor}`}>
-                  <span className="text-xs font-medium font-['Inter'] tracking-wide">
-                    {item.stationBadge}
-                  </span>
-                </div>
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[1, 2, 3, 4, 5, 6].map((idx) => (
+            <div
+              key={idx}
+              className="p-4 bg-neutral-900 rounded-xl border border-neutral-800 flex flex-col gap-3.5 animate-pulse"
+            >
+              <div className="w-full h-44 bg-neutral-800 rounded-lg" />
+              <div className="flex justify-between items-center">
+                <div className="h-6 w-28 bg-neutral-800 rounded" />
+                <div className="h-6 w-16 bg-neutral-800 rounded" />
               </div>
-
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-white text-lg font-medium font-['Poppins'] leading-5 truncate">
-                  {item.name}
-                </span>
-                <span className="text-amber-400 text-base font-semibold font-['Inter'] leading-6 shrink-0">
-                  {item.price}
-                </span>
+              <div className="h-4 w-3/4 bg-neutral-800 rounded" />
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div className="h-10 bg-neutral-800 rounded" />
+                <div className="h-10 bg-neutral-800 rounded" />
               </div>
             </div>
+          ))}
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="py-16 flex flex-col items-center justify-center text-center p-8 bg-neutral-900/60 rounded-xl border border-neutral-800">
+          <Info className="w-10 h-10 text-neutral-600 mb-3" />
+          <h3 className="text-white text-lg font-medium">No menu items found</h3>
+          <p className="text-neutral-400 text-sm max-w-sm mt-1">
+            {searchQuery || activeCategory !== 'All Categories' || stationFilter !== 'All Stations'
+              ? 'Try adjusting your search query or filters to find what you are looking for.'
+              : 'There are currently no items configured for this branch in the database.'}
+          </p>
+          <div className="flex items-center gap-3 mt-4">
+            {(searchQuery || activeCategory !== 'All Categories' || stationFilter !== 'All Stations' || statusFilter !== 'All Statuses') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setActiveCategory('All Categories');
+                  setStationFilter('All Stations');
+                  setStatusFilter('All Statuses');
+                }}
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded-lg transition cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setEditingItem(null);
+                setIsAddItemOpen(true);
+              }}
+              className="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-neutral-900 text-sm font-medium rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-black" />
+              <span>Add First Item</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredItems.map((item) => (
+            <div
+              key={item.id}
+              className="p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col justify-start items-start gap-3.5 hover:outline-neutral-700 hover:shadow-lg transition"
+            >
+              {item.imageUrl && (
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  className="w-full h-44 object-cover rounded-lg"
+                />
+              )}
+              {/* Header: Category, Station Badge, Title & Price */}
+              <div className="w-full flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="px-2 py-1.5 bg-stone-900 rounded-md outline outline-1 outline-offset-[-0.50px] outline-zinc-800 flex items-center">
+                    <span className="text-white text-sm font-normal font-['Poppins']">
+                      {item.category}
+                    </span>
+                  </div>
+                  <div className={`px-2 py-1.5 rounded-md flex items-center ${item.stationBadgeColor}`}>
+                    <span className="text-xs font-medium font-['Inter'] tracking-wide">
+                      {item.stationBadge}
+                    </span>
+                  </div>
+                </div>
 
-            <div className="w-full h-px bg-neutral-800" />
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-white text-lg font-medium font-['Poppins'] leading-5 truncate">
+                    {item.name}
+                  </span>
+                  <span className="text-amber-400 text-base font-semibold font-['Inter'] leading-6 shrink-0">
+                    {item.price}
+                  </span>
+                </div>
+              </div>
 
-            {/* Description */}
-            <p className="text-neutral-400 text-xs font-normal font-['Inter'] leading-4 line-clamp-2 min-h-[32px]">
-              {item.description}
-            </p>
+              <div className="w-full h-px bg-neutral-800" />
 
-            {/* Status & Availability Badges matching Figma */}
-            <div className="w-full flex items-center gap-2">
-              <div className="flex-1 px-3 py-2 bg-stone-950 rounded-md outline outline-1 outline-offset-[-1px] outline-zinc-800 flex flex-col gap-1">
-                <span className="text-neutral-500 text-xs font-normal font-['Poppins']">Status</span>
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      item.status === 'Available' ? 'bg-green-500' : 'bg-red-400'
-                    }`}
-                  />
+              {/* Description */}
+              <p className="text-neutral-400 text-xs font-normal font-['Inter'] leading-4 line-clamp-2 min-h-[32px]">
+                {item.description}
+              </p>
+
+              {/* Status & Availability Badges matching Figma */}
+              <div className="w-full flex items-center gap-2">
+                <div className="flex-1 px-3 py-2 bg-stone-950 rounded-md outline outline-1 outline-offset-[-1px] outline-zinc-800 flex flex-col gap-1">
+                  <span className="text-neutral-500 text-xs font-normal font-['Poppins']">Status</span>
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        item.status === 'Available' ? 'bg-green-500' : 'bg-red-400'
+                      }`}
+                    />
+                    <span
+                      className={`text-xs font-medium font-['Inter'] ${
+                        item.status === 'Available' ? 'text-green-500' : 'text-red-400'
+                      }`}
+                    >
+                      {item.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex-1 px-3 py-2 bg-stone-950 rounded-md outline outline-1 outline-offset-[-1px] outline-zinc-800 flex flex-col gap-1">
+                  <span className="text-neutral-500 text-xs font-normal font-['Poppins']">
+                    Availability
+                  </span>
                   <span
                     className={`text-xs font-medium font-['Inter'] ${
-                      item.status === 'Available' ? 'text-green-500' : 'text-red-400'
+                      item.availability === 'In stock'
+                        ? 'text-green-500'
+                        : item.availability.includes('Low Stock')
+                        ? 'text-orange-400'
+                        : 'text-red-400'
                     }`}
                   >
-                    {item.status}
+                    {item.availability}
                   </span>
                 </div>
               </div>
 
-              <div className="flex-1 px-3 py-2 bg-stone-950 rounded-md outline outline-1 outline-offset-[-1px] outline-zinc-800 flex flex-col gap-1">
-                <span className="text-neutral-500 text-xs font-normal font-['Poppins']">
-                  Availability
+              {/* Preparation Time & Stock Info Pill Row */}
+              <div className="w-full flex items-center justify-between text-xs px-2.5 py-1.5 bg-neutral-950/80 rounded-lg border border-neutral-800/80">
+                <span className="text-neutral-400 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-yellow-400" />
+                  <span>{item.estimatedPrepTime ?? 15} min prep</span>
                 </span>
-                <span
-                  className={`text-xs font-medium font-['Inter'] ${
-                    item.availability === 'In stock'
-                      ? 'text-green-500'
-                      : item.availability.includes('Low Stock')
-                      ? 'text-orange-400'
-                      : 'text-red-400'
-                  }`}
-                >
-                  {item.availability}
+                <span className="text-neutral-400 flex items-center gap-1.5">
+                  <PackageCheck className="w-3.5 h-3.5 text-yellow-400" />
+                  <span className={item.isStockTracked && (item.stockQuantity ?? 0) <= 5 ? 'text-amber-400 font-medium' : ''}>
+                    {item.isStockTracked
+                      ? `Stock: ${item.stockQuantity ?? 0}`
+                      : 'Unlimited Stock'}
+                  </span>
                 </span>
               </div>
-            </div>
 
-            {/* Preparation Time & Stock Info Pill Row */}
-            <div className="w-full flex items-center justify-between text-xs px-2.5 py-1.5 bg-neutral-950/80 rounded-lg border border-neutral-800/80">
-              <span className="text-neutral-400 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-yellow-400" />
-                <span>{item.estimatedPrepTime ?? 15} min prep</span>
-              </span>
-              <span className="text-neutral-400 flex items-center gap-1.5">
-                <PackageCheck className="w-3.5 h-3.5 text-yellow-400" />
-                <span className={item.isStockTracked && (item.stockQuantity ?? 0) <= 5 ? 'text-amber-400 font-medium' : ''}>
-                  {item.isStockTracked
-                    ? `Stock: ${item.stockQuantity ?? 0}`
-                    : 'Unlimited Stock'}
-                </span>
-              </span>
-            </div>
+              <div className="w-full h-px bg-neutral-800" />
 
-            <div className="w-full h-px bg-neutral-800" />
+              {/* Modifiers Count */}
+              <div className="w-full flex justify-between items-center text-sm font-normal font-['Inter'] text-neutral-400">
+                <span>Modifiers</span>
+                <span className="text-xs">{item.modifiersCount}</span>
+              </div>
 
-            {/* Modifiers Count */}
-            <div className="w-full flex justify-between items-center text-sm font-normal font-['Inter'] text-neutral-400">
-              <span>Modifiers</span>
-              <span className="text-xs">{item.modifiersCount}</span>
-            </div>
+              <div className="w-full h-px bg-neutral-800" />
 
-            <div className="w-full h-px bg-neutral-800" />
-
-            {/* Toggle Switch and Edit Item Action */}
-            <div className="w-full flex justify-between items-center pt-1">
-              <div
-                onClick={() => toggleItemEnabled(item.id)}
-                className="flex items-center gap-2 cursor-pointer select-none"
-              >
+              {/* Toggle Switch and Edit Item Action */}
+              <div className="w-full flex justify-between items-center pt-1">
                 <div
-                  className={`w-8 h-4 rounded-full transition-colors relative flex items-center p-0.5 ${
-                    item.enabled ? 'bg-yellow-400 justify-end' : 'bg-zinc-700 justify-start'
-                  }`}
+                  onClick={() => toggleItemEnabled(item.id)}
+                  className="flex items-center gap-2 cursor-pointer select-none"
                 >
-                  <div className="w-3.5 h-3.5 bg-white rounded-full shadow-sm" />
+                  <div
+                    className={`w-8 h-4 rounded-full transition-colors relative flex items-center p-0.5 ${
+                      item.enabled ? 'bg-yellow-400 justify-end' : 'bg-zinc-700 justify-start'
+                    }`}
+                  >
+                    <div className="w-3.5 h-3.5 bg-white rounded-full shadow-sm" />
+                  </div>
+                  <span className="text-neutral-400 text-xs font-normal font-['Inter']">
+                    {item.enabled ? 'Enabled' : 'Disabled'}
+                  </span>
                 </div>
-                <span className="text-neutral-400 text-xs font-normal font-['Inter']">
-                  {item.enabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingItem(item);
-                    setIsAddItemOpen(true);
-                  }}
-                  className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center gap-1.5 transition text-gray-200 text-sm font-medium font-['Inter'] cursor-pointer"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Item</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingItem(item);
+                      setIsAddItemOpen(true);
+                    }}
+                    className="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center gap-1.5 transition text-gray-200 text-sm font-medium font-['Inter'] cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Item</span>
+                  </button>
 
-                <button
-                  type="button"
-                  disabled={deletingItemId === item.id}
-                  onClick={() => handleDeleteItem(item.id, item.name)}
-                  className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-lg border border-red-500/30 flex items-center justify-center transition cursor-pointer disabled:opacity-50"
-                  title="Delete menu item"
-                >
-                  {deletingItemId === item.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4" />
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    disabled={deletingItemId === item.id}
+                    onClick={() => handleDeleteItem(item.id, item.name)}
+                    className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-lg border border-red-500/30 flex items-center justify-center transition cursor-pointer disabled:opacity-50"
+                    title="Delete menu item"
+                  >
+                    {deletingItemId === item.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Manage Categories Modal */}
       <ManageCategoriesModal
         isOpen={isManageCatOpen}
         onClose={() => setIsManageCatOpen(false)}
-        categories={categoryObjects.length > 0 ? categoryObjects : categories}
+        categories={
+          categoryObjects.length > 0
+            ? categoryObjects.map((cat) => ({
+                ...cat,
+                itemCount: items.filter((i) => i.category === cat.name).length,
+              }))
+            : categories
+        }
         onAddCategory={handleAddCategory}
         onDeleteCategory={handleDeleteCategory}
         onUpdateCategory={handleUpdateCategory}

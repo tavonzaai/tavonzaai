@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, ne } from 'drizzle-orm';
 import { DrizzleQueryBuilder } from '../../../../common/database';
 import { randomBytes } from 'crypto';
 import {
@@ -121,13 +121,19 @@ export class DrizzleTableRepository {
       floor?: number;
     },
   ): Promise<Table[]> {
-    return DrizzleQueryBuilder.from(this.db, tables)
+    const qb = DrizzleQueryBuilder.from(this.db, tables)
       .filterExact({
         branchId,
         serviceStatus: options?.serviceStatus,
         operationalFlag: options?.operationalFlag,
         floor: options?.floor,
-      })
+      });
+
+    if (!options?.operationalFlag) {
+      qb.andWhere(ne(tables.operationalFlag, 'OUT_OF_SERVICE'));
+    }
+
+    return qb
       .search(options?.search, [tables.label])
       .sort(tables.label, 'asc')
       .executePlain((r) => this.mapTable(r));

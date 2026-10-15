@@ -1114,7 +1114,7 @@ export default function CashierDashboardView({
                     <div className="divide-y divide-neutral-800/80">
                       {(activeOrder.items && activeOrder.items.length > 0
                         ? activeOrder.items
-                        : [{ id: "def-1", name: "Crispy Calamari", price: activeOrder.subtotal, quantity: 1 }]
+                        : [{ id: "", name: "", price: activeOrder.subtotal, quantity: 1 }]
                       ).map((it, idx) => (
                         <div key={it.id || idx} className="py-3.5 flex items-center justify-between">
                           <div className="flex items-center gap-3">

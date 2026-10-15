@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TableItem, TableStatus } from '../types';
 import {
   Clock,
@@ -19,15 +19,20 @@ import {
   Trash2,
   Phone,
   Users,
+  Pencil,
 } from 'lucide-react';
 import {
   buildTableQrCodeUrl,
   branchManagerService,
   getActiveBranchId,
+  markTableDeletedLocally,
+  isTableDeletedLocally,
   ReservationItem,
   BranchSessionItem,
 } from '../../../redux/features/branchManagerApi';
 import AddTableModal, { NewTableData } from '../config/AddTableModal';
+import EditTableModal from './EditTableModal';
+import { confirmDeleteTable, showDeleteSuccess, showDeleteError } from '../../../lib/swal';
 
 interface TablesViewProps {
   initialFilter?: string;
@@ -48,6 +53,8 @@ export default function TablesView({
   const [selectedQrTable, setSelectedQrTable] = useState<TableItem | null>(null);
   const [copied, setCopied] = useState(false);
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
+  const [editingTable, setEditingTable] = useState<TableItem | null>(null);
+  const [isEditTableOpen, setIsEditTableOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -81,7 +88,19 @@ export default function TablesView({
     { id: 'payment', label: 'Payment Pending' },
   ];
 
-  const filteredTables = tablesData.filter((table) => {
+  const activeTables = useMemo(() => {
+    return tablesData.filter((table) => {
+      if (!table || !table.id) return false;
+      if (isTableDeletedLocally(table.id)) return false;
+      const flag = String(table.operationalFlag || '').toUpperCase();
+      const serv = String(table.serviceStatus || '').toUpperCase();
+      const isDeletedFlag = Boolean((table as any).isDeleted || (table as any).deletedAt);
+      const isInactive = (table as any).isActive === false;
+      return flag !== 'OUT_OF_SERVICE' && serv !== 'OUT_OF_SERVICE' && !isDeletedFlag && !isInactive;
+    });
+  }, [tablesData]);
+
+  const filteredTables = activeTables.filter((table) => {
     if (filter === 'all') return true;
     return table.status === filter;
   });
@@ -189,6 +208,49 @@ export default function TablesView({
       return mappedTable;
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleOpenEdit = (table: TableItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTable(table);
+    setIsEditTableOpen(true);
+  };
+
+  const handleUpdateTable = async (updated: TableItem) => {
+    setToastMessage(`Table "${updated.number || updated.label}" updated successfully!`);
+    setTimeout(() => setToastMessage(null), 5000);
+    setIsEditTableOpen(false);
+    setEditingTable(null);
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
+
+  const handleDeleteTable = async (tableId: string) => {
+    markTableDeletedLocally(tableId);
+    setIsEditTableOpen(false);
+    setEditingTable(null);
+    await showDeleteSuccess('Table');
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
+
+  const handleDeleteTableDirect = async (table: TableItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const confirmed = await confirmDeleteTable(table.number || table.label || 'this table');
+    if (!confirmed) return;
+    try {
+      markTableDeletedLocally(table.id);
+      await branchManagerService.deleteTable(table.id);
+      await showDeleteSuccess(table.number || table.label || 'Table');
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err: any) {
+      console.error('Failed to delete table:', err);
+      await showDeleteError(err?.message || 'Failed to delete table.');
     }
   };
 
@@ -387,7 +449,7 @@ export default function TablesView({
           </h1>
           <p className="text-xs sm:text-sm text-neutral-400 font-['Inter'] mt-0.5">
             {activeSubTab === 'tables'
-              ? `Live table monitoring, QR contactless ordering & floor layout (${tablesData.length} tables total)`
+              ? `Live table monitoring, QR contactless ordering & floor layout (${activeTables.length} tables total)`
               : `Bookings, guest arrivals, seating states & cancellations (${reservations.length} reservations total)`}
           </p>
         </div>
@@ -443,7 +505,7 @@ export default function TablesView({
           }`}
         >
           <LayoutGrid className="w-3.5 h-3.5" />
-          <span>Floor Tables ({tablesData.length})</span>
+          <span>Floor Tables ({activeTables.length})</span>
         </button>
 
         <button
@@ -474,8 +536,8 @@ export default function TablesView({
               const isActive = filter === tab.id;
               const count =
                 tab.id === 'all'
-                  ? tablesData.length
-                  : tablesData.filter((t) => t.status === tab.id).length;
+                  ? activeTables.length
+                  : activeTables.filter((t) => t.status === tab.id).length;
 
               return (
                 <button
@@ -543,7 +605,7 @@ export default function TablesView({
                       <span className="text-white font-semibold text-lg font-['Inter']">
                         {table.number}
                       </span>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
                           title="View Table QR Code"
@@ -554,6 +616,22 @@ export default function TablesView({
                           className="p-1 rounded-md bg-neutral-800 hover:bg-amber-400 hover:text-neutral-950 text-amber-400 border border-neutral-700 transition flex items-center justify-center cursor-pointer"
                         >
                           <QrCode className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Edit Table Details"
+                          onClick={(e) => handleOpenEdit(table, e)}
+                          className="p-1 rounded-md bg-neutral-800 hover:bg-amber-400 hover:text-neutral-950 text-neutral-300 border border-neutral-700 transition flex items-center justify-center cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Delete Table"
+                          onClick={(e) => handleDeleteTableDirect(table, e)}
+                          className="p-1 rounded-md bg-neutral-800 hover:bg-red-500 hover:text-white text-neutral-400 hover:border-red-500 border border-neutral-700 transition flex items-center justify-center cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                         {getStatusBadge(table.status)}
                       </div>
@@ -580,14 +658,22 @@ export default function TablesView({
 
                     <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between text-xs text-neutral-500 font-['Inter']">
                       <span>Capacity: {table.capacity}p</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={(e) => handleOpenEdit(table, e)}
+                          className="text-[11px] text-neutral-300 hover:text-amber-400 font-medium flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Pencil className="w-3 h-3 text-amber-400" />
+                          <span>Edit</span>
+                        </button>
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedQrTable(table);
                           }}
-                          className="text-[11px] text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 transition"
+                          className="text-[11px] text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 transition cursor-pointer"
                         >
                           <QrCode className="w-3.5 h-3.5" />
                           <span>View QR</span>
@@ -1108,6 +1194,18 @@ export default function TablesView({
         onClose={() => setIsAddTableOpen(false)}
         onSaveTable={handleSaveNewTable}
         isLoading={isCreating}
+      />
+
+      {/* Edit Table Modal */}
+      <EditTableModal
+        isOpen={isEditTableOpen}
+        table={editingTable}
+        onClose={() => {
+          setIsEditTableOpen(false);
+          setEditingTable(null);
+        }}
+        onTableUpdated={handleUpdateTable}
+        onTableDeleted={handleDeleteTable}
       />
     </div>
   );
