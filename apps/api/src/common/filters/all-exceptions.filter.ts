@@ -4,7 +4,13 @@ import {
   ArgumentsHost,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { AppLogger } from '@tavonza/observability';
+import {
+  AppLogger,
+  formatBytes,
+  getClientIp,
+  getRequestHeaderSize,
+  getRequestPayloadSize,
+} from '@tavonza/observability';
 import { type ApiErrorResponse } from '@tavonza/contracts';
 import { normalizeError } from '../errors/normalize-error';
 
@@ -37,6 +43,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const isProduction = process.env.NODE_ENV === 'production';
 
+    const clientIp = getClientIp(req);
+    const reqHeaderBytes = getRequestHeaderSize(req);
+    const reqPayloadBytes = getRequestPayloadSize(req);
+
+    // Set x-request-id on response header if not already sent
+    if (!res.headersSent) {
+      res.setHeader('x-request-id', requestId);
+    }
+
     // Structured logging payload
     const logMeta: Record<string, unknown> = {
       statusCode: normalized.status,
@@ -44,7 +59,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       method: req.method,
       path: req.originalUrl,
       requestId,
-      clientIp: req.ip,
+      clientIp,
+      requestHeaderBytes: reqHeaderBytes,
+      requestHeaderSize: formatBytes(reqHeaderBytes),
+      requestPayloadBytes: reqPayloadBytes,
+      requestPayloadSize: formatBytes(reqPayloadBytes),
+      userAgent: req.headers['user-agent'],
       ...(normalized.details || {}),
       ...(normalized.diagnostics || {}),
     };
