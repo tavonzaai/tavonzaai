@@ -25,22 +25,6 @@ export function getActiveBranchId(): string {
     } catch {}
   }
 
-  if (typeof window !== 'undefined') {
-    const rawLocalUser = localStorage.getItem('tavonza_user');
-    if (rawLocalUser) {
-      try {
-        const parsed = JSON.parse(rawLocalUser);
-        if (parsed?.branchId && isValidUuid(parsed.branchId)) return parsed.branchId;
-        if (parsed?.assignments?.[0]?.branchId && isValidUuid(parsed.assignments[0].branchId)) {
-          return parsed.assignments[0].branchId;
-        }
-        if (parsed?.assignments?.[0]?.branch?.id && isValidUuid(parsed.assignments[0].branch.id)) {
-          return parsed.assignments[0].branch.id;
-        }
-      } catch {}
-    }
-  }
-
   // Fallback to primary seed branch ID (Downtown HQ)
   return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
 }

@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
+import { baseApiFetch, getCookie } from '@/redux/api/baseApi';
+import { isUUID } from '@/redux/features/orderApi';
+import { toast } from 'sonner';
 
 // Authentic Dynamic QR Code SVG matching Figma styling
 function DynamicQrCodeSvg({ code }: { code: string }) {
@@ -179,8 +182,51 @@ function ShareQrContent() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleGenerateNewCode = () => {
+  // Connect with database session to fetch active join code and seated guests
+  useEffect(() => {
+    const activeSessionId = searchParams.get('session') || getCookie('tavonza_table_session_id') || getCookie('tavonza_session_id');
+    if (activeSessionId && isUUID(activeSessionId)) {
+      baseApiFetch<any>(`/sessions/${encodeURIComponent(activeSessionId)}`, { method: 'GET' })
+        .then((session) => {
+          if (session?.joinCode) {
+            setSessionCode(session.joinCode);
+          }
+          if (Array.isArray(session?.guestSessions) && session.guestSessions.length > 0) {
+            const mappedGuests: FriendSlot[] = session.guestSessions.map((g: any, idx: number) => ({
+              id: idx + 1,
+              name: g.displayName || (idx === 0 ? 'You (Host)' : `Guest ${idx}`),
+              role: idx === 0 ? 'Host' : `Guest ${idx}`,
+              status: 'connected',
+              orderStatus: 'ready',
+              avatar: idx === 0 ? '👑' : idx % 2 === 0 ? '🙋‍♂️' : '🙋‍♀️',
+              itemsCount: 1,
+              total: 20.0,
+            }));
+            setFriends(mappedGuests);
+          }
+        })
+        .catch(() => null);
+    }
+  }, [searchParams]);
+
+  const handleGenerateNewCode = async () => {
     setIsSpinning(true);
+    const activeSessionId = searchParams.get('session') || getCookie('tavonza_table_session_id') || getCookie('tavonza_session_id');
+    if (activeSessionId && isUUID(activeSessionId)) {
+      try {
+        const res = await baseApiFetch<{ code: string }>(`/sessions/${encodeURIComponent(activeSessionId)}/share-code`, {
+          method: 'POST',
+        });
+        if (res?.code) {
+          setSessionCode(res.code);
+          setSecondsRemaining(30);
+          setIsSpinning(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Backend share-code generation warning:', err);
+      }
+    }
     const randomHex = Math.floor(1000 + Math.random() * 9000);
     setSessionCode(`TVZ-${randomHex}-GRP`);
     setSecondsRemaining(30);
@@ -247,7 +293,11 @@ function ShareQrContent() {
   };
 
   const handleProceedIndividualOrder = () => {
-    const lastId = typeof window !== 'undefined' ? (localStorage.getItem('tavonza_last_submitted_order_id') || '') : '';
+    const lastId = getCookie('tavonza_last_submitted_order_id') || getCookie('tavonza_active_order_id') || '';
+    if (!lastId && cart.length === 0) {
+      toast.error('No items found in your order. Please add dishes to your cart first.');
+      return;
+    }
     const orderParam = lastId ? `&order=${encodeURIComponent(lastId)}` : '';
     router.push(
       `/orders/waiting?table=${encodeURIComponent(

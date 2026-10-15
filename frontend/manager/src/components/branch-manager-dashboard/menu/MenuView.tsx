@@ -46,10 +46,10 @@ export default function MenuView() {
           if (apiCategories && apiCategories.length > 0) {
             setCategoryObjects(apiCategories);
             const catNames = apiCategories.map((c: any) => c.name);
-            setCategories(['All Categories', ...catNames]);
+            setCategories([ ...catNames]);
           } else {
             setCategoryObjects([]);
-            setCategories(['All Categories']);
+            setCategories([]);
           }
 
           if (apiItems && apiItems.length > 0) {

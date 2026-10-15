@@ -23,6 +23,7 @@ import {
   isUUID,
 } from '@/redux/features/orderApi';
 import { getCookie, setCookie, getApiBaseUrl } from '@/redux/api/baseApi';
+import { toast } from 'sonner';
 
 function CartContent() {
   const router = useRouter();
@@ -134,14 +135,10 @@ function CartContent() {
         throw new Error('Order submission returned empty response.');
       }
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
-        setCookie('tavonza_last_submitted_order_id', submittedId);
-        localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(submitted));
-        if (submitted?.orderNumber) {
-          localStorage.setItem('tavonza_last_submitted_order_number', submitted.orderNumber);
-          setCookie('tavonza_last_submitted_order_number', submitted.orderNumber);
-        }
+      setCookie('tavonza_last_submitted_order_id', submittedId);
+      setCookie('tavonza_active_order_id', submittedId);
+      if (submitted?.orderNumber) {
+        setCookie('tavonza_last_submitted_order_number', submitted.orderNumber);
       }
 
       clearCart();
@@ -153,7 +150,7 @@ function CartContent() {
       console.error('Real backend cart submit failed:', err);
       const msg = err?.data?.message || err?.message || 'Failed to submit order. Please check network connection.';
       setErrorMessage(msg);
-      alert(`Order placement failed: ${msg}`);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }

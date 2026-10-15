@@ -2,6 +2,8 @@
 
 
 
+import { toast } from 'sonner';
+
 /**
  * 🍪 Generic Cookie Helpers
  */
@@ -110,9 +112,13 @@ export class ApiError extends Error {
   }
 }
 
+export interface BaseApiFetchOptions extends RequestInit {
+  skipToast?: boolean;
+}
+
 export async function baseApiFetch<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: BaseApiFetchOptions = {}
 ): Promise<ApiResponse<T> & T> {
   const token = getAuthToken();
   const headers: Record<string, string> = {
@@ -151,17 +157,25 @@ export async function baseApiFetch<T = any>(
     });
   } catch (netErr: any) {
     clearTimeout(timeoutId);
+    let errorMsg = 'Network error: Unable to reach the Tavonza server.';
+    let status = 0;
     if (netErr?.name === 'AbortError' || String(netErr?.message || '').toLowerCase().includes('abort')) {
-      throw new ApiError(
-        'Server took too long to respond (504 Gateway Timeout). The server may be processing your request or sending email verification. If you registered, please try logging in.',
-        504
-      );
+      errorMsg = 'Server took too long to respond (504 Gateway Timeout). Please try again.';
+      status = 504;
+    } else if (String(netErr?.message || '').includes('504')) {
+      errorMsg = 'The server gateway timed out (504). Please try again.';
+      status = 504;
+    } else if (netErr?.message) {
+      errorMsg = netErr.message;
     }
-    const is504 = String(netErr?.message || '').includes('504');
-    const msg = is504
-      ? 'The server gateway timed out (504). Please try again or log in if your account is already created.'
-      : (netErr?.message || 'Network error: Unable to reach the Tavonza server.');
-    throw new ApiError(msg, is504 ? 504 : 0);
+
+    if (!options.skipToast && typeof window !== 'undefined') {
+      try {
+        toast.error(errorMsg);
+      } catch {}
+    }
+
+    throw new ApiError(errorMsg, status);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -189,6 +203,13 @@ export async function baseApiFetch<T = any>(
     } else if (response.statusText) {
       errorMsg = response.statusText;
     }
+
+    if (!options.skipToast && typeof window !== 'undefined') {
+      try {
+        toast.error(errorMsg);
+      } catch {}
+    }
+
     throw new ApiError(errorMsg, response.status, rawJson);
   }
 

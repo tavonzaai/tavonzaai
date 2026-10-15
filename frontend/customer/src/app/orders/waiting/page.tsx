@@ -18,7 +18,7 @@ import {
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
 import { orderService, OrderTrackingResponse } from '@/redux/features/orderApi';
-import { getCookie } from '@/redux/api/baseApi';
+import { getCookie, setCookie } from '@/redux/api/baseApi';
 
 function WaitingContent() {
   const router = useRouter();
@@ -30,32 +30,10 @@ function WaitingContent() {
   const [orderId, setOrderId] = useState<string>(() => {
     const fromParam = (searchParams.get('order') || searchParams.get('id') || '').trim();
     if (fromParam) return fromParam;
-    if (typeof window !== 'undefined') {
-      return (
-        localStorage.getItem('tavonza_last_submitted_order_id') ||
-        getCookie('tavonza_last_submitted_order_id') ||
-        ''
-      ).trim();
-    }
-    return '';
+    return (getCookie('tavonza_last_submitted_order_id') || getCookie('tavonza_active_order_id') || '').trim();
   });
 
-  const [orderData, setOrderData] = useState<OrderTrackingResponse | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('tavonza_last_submitted_order_data');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed && (parsed.id || parsed.orderId || parsed.orderNumber)) {
-            return parsed;
-          }
-        }
-      } catch {
-        // ignore parse error
-      }
-    }
-    return null;
-  });
+  const [orderData, setOrderData] = useState<OrderTrackingResponse | null>(null);
 
   const [secondsElapsed, setSecondsElapsed] = useState(0);
 
@@ -64,9 +42,7 @@ function WaitingContent() {
     const fromParam = (searchParams.get('order') || searchParams.get('id') || '').trim();
     if (fromParam) {
       setOrderId(fromParam);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('tavonza_last_submitted_order_id', fromParam);
-      }
+      setCookie('tavonza_last_submitted_order_id', fromParam);
     }
   }, [searchParams]);
 
@@ -95,11 +71,8 @@ function WaitingContent() {
               ...order,
               items: (order.items && order.items.length > 0) ? order.items : (prev?.items || []),
             };
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(merged));
-              if (merged.orderNumber) {
-                localStorage.setItem('tavonza_last_submitted_order_number', merged.orderNumber);
-              }
+            if (merged.orderNumber) {
+              setCookie('tavonza_last_submitted_order_number', merged.orderNumber);
             }
             return merged;
           });
@@ -145,7 +118,7 @@ function WaitingContent() {
 
   const displayOrderNum =
     orderData?.orderNumber ||
-    (typeof window !== 'undefined' ? localStorage.getItem('tavonza_last_submitted_order_number') : null) ||
+    getCookie('tavonza_last_submitted_order_number') ||
     (orderId ? (orderId.startsWith('#') ? orderId : `#${orderId.slice(0, 8)}`) : 'Queued');
 
   const itemsList = orderData?.items || [];
