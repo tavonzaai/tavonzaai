@@ -35,6 +35,7 @@ export interface BranchFormData {
   address: string;
   contactNumber: string;
   manager: string;
+  managerId?: string;
   status: 'Active' | 'Setup' | 'Closed';
   openingTime: string;
   closingTime: string;
