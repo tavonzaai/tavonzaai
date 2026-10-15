@@ -28,12 +28,25 @@ export function formatBytes(bytes: number): string {
 export const RESET = '\x1b[0m';
 export const DIM = '\x1b[2m';
 export const BOLD = '\x1b[1m';
+export const GREEN = '\x1b[32m';
+export const YELLOW = '\x1b[33m';
+export const RED = '\x1b[31m';
+export const CYAN = '\x1b[36m';
 
 export function levelColour(level: LogLevel): string {
   switch (level) {
-    case 'debug': return '\x1b[36m'; // cyan
-    case 'info':  return '\x1b[32m'; // green
-    case 'warn':  return '\x1b[33m'; // yellow
-    case 'error': return '\x1b[31m'; // red
+    case 'debug': return CYAN;
+    case 'info':  return GREEN;
+    case 'warn':  return YELLOW;
+    case 'error': return RED;
   }
+}
+
+export function statusColour(status?: number): string {
+  if (!status) return RESET;
+  if (status >= 500) return RED;
+  if (status >= 400) return YELLOW;
+  if (status >= 300) return CYAN;
+  if (status >= 200) return GREEN;
+  return RESET;
 }

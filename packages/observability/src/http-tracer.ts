@@ -262,8 +262,13 @@ export function formatHttpTraceSummary<TUser = unknown>(
   const totalReq = meta.requestHeaderBytes + meta.requestPayloadBytes;
   const totalRes = (meta.responseHeaderBytes || 0) + (meta.responsePayloadBytes || 0);
 
-  const reqStr = `Req: ${formatBytes(totalReq)} (H: ${meta.requestHeaderSize}, B: ${meta.requestPayloadSize})`;
-  const resStr = `Res: ${formatBytes(totalRes)} (H: ${meta.responseHeaderSize || '0 B'}, B: ${meta.responsePayloadSize || '0 B'})`;
+  const reqStr = meta.requestPayloadBytes > 0
+    ? `Req: ${formatBytes(totalReq)} (Body: ${meta.requestPayloadSize})`
+    : `Req: ${formatBytes(totalReq)}`;
+
+  const resStr = meta.responsePayloadBytes && meta.responsePayloadBytes > 0
+    ? `Res: ${formatBytes(totalRes)} (Body: ${meta.responsePayloadSize})`
+    : `Res: ${formatBytes(totalRes)}`;
 
   let userLabel: string | undefined;
   if (meta.user !== undefined && meta.user !== null) {

@@ -69,12 +69,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       ...(normalized.diagnostics || {}),
     };
 
+    const errSummary = `${req.method} ${req.originalUrl} ${normalized.status} [${normalized.errorCode}] - ${normalized.message} | IP: ${clientIp}`;
+
     if (normalized.status >= 500) {
       const stack = (exception as any)?.stack || (normalized.cause as any)?.stack;
       logMeta.stack = stack;
-      this.logger.error(`[${normalized.errorCode}] ${normalized.message}`, logMeta);
+      this.logger.error(errSummary, logMeta);
     } else {
-      this.logger.warn(`[${normalized.errorCode}] ${normalized.message}`, logMeta);
+      this.logger.warn(errSummary, logMeta);
     }
 
     const responsePayload: ApiErrorResponse = {
