@@ -19,6 +19,7 @@ import { EditMenuModal } from './modals/EditMenuModal';
 import { DeleteMenuModal } from './modals/DeleteMenuModal';
 import { InviteStaffModal } from './modals/InviteStaffModal';
 import { EditStaffModal } from './modals/EditStaffModal';
+import { DeleteStaffModal } from './modals/DeleteStaffModal';
 import { EditBranchModal } from './modals/EditBranchModal';
 
 interface BranchModalsProps {
@@ -74,6 +75,11 @@ interface BranchModalsProps {
   setEditStaffForm: React.Dispatch<React.SetStateAction<StaffEditFormData>>;
   onSaveEditStaff: (e: React.FormEvent) => void;
 
+  deletingStaff: StaffMember | null;
+  onCloseDeleteStaff: () => void;
+  onConfirmDeleteStaff: () => void;
+  isDeletingStaff?: boolean;
+
   // Branch Modal
   isEditBranchOpen: boolean;
   onCloseEditBranch: () => void;
@@ -122,6 +128,10 @@ export const BranchModals: React.FC<BranchModalsProps> = ({
   editStaffForm,
   setEditStaffForm,
   onSaveEditStaff,
+  deletingStaff,
+  onCloseDeleteStaff,
+  onConfirmDeleteStaff,
+  isDeletingStaff = false,
   isEditBranchOpen,
   onCloseEditBranch,
   editBranchForm,
@@ -202,6 +212,13 @@ export const BranchModals: React.FC<BranchModalsProps> = ({
         onChange={setEditStaffForm}
         onClose={onCloseEditStaff}
         onSubmit={onSaveEditStaff}
+      />
+
+      <DeleteStaffModal
+        staff={deletingStaff}
+        onClose={onCloseDeleteStaff}
+        onConfirm={onConfirmDeleteStaff}
+        isDeleting={isDeletingStaff}
       />
 
       <EditBranchModal

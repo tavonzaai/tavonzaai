@@ -23,6 +23,8 @@ import {
   Briefcase,
   Layers,
   UserCheck,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import {
   PermissionsHeader,
@@ -31,6 +33,10 @@ import {
   DeleteRoleModal,
   CreateRoleModal,
   AssignUserRoleModal,
+  EditTeamStaffModal,
+  DeleteTeamStaffModal,
+  type EditTeamStaffMember,
+  type DeleteTeamStaffMember,
 } from './permissions/components';
 import { PermissionCategory, RoleDefinition } from './permissions/types';
 import {
@@ -48,6 +54,8 @@ import {
   useCreateBranchStaffMutation,
   useGetUsersQuery,
   useUpdateUserStatusMutation,
+  useDeleteBranchStaffMutation,
+  useDeleteUserMutation,
 } from '@/redux/features/adminApi';
 import { EmptyState, ErrorState, LoadingState, PaginationBar } from '@/components/common';
 import { useClampPage, useListPagination } from '@/hooks/useListPagination';
@@ -127,6 +135,8 @@ export default function PermissionsView() {
     name: string;
     email: string;
   } | null>(null);
+  const [selectedStaffToEdit, setSelectedStaffToEdit] = useState<EditTeamStaffMember | null>(null);
+  const [selectedStaffToDelete, setSelectedStaffToDelete] = useState<DeleteTeamStaffMember | null>(null);
 
   // Dynamic RBAC API Hooks
   const {
@@ -675,14 +685,57 @@ export default function PermissionsView() {
                               </span>
                             </td>
                             <td className="py-2.5 px-3 text-right">
-                              <button
-                                type="button"
-                                data-testid={`user-status-${user.id}`}
-                                onClick={() => handleToggleStatus(user)}
-                                className="px-2.5 py-1 rounded-md bg-zinc-800 text-xs text-white hover:bg-zinc-700 cursor-pointer"
-                              >
-                                {user.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                              </button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  data-testid={`staff-edit-${user.id}`}
+                                  onClick={() => {
+                                    const currentBranch = branches.find((b) => b.id === selectedBranchId);
+                                    setSelectedStaffToEdit({
+                                      userId: user.id,
+                                      staffId: assignment?.staffId || assignment?.id,
+                                      name: user.name,
+                                      email: user.email,
+                                      role: assignment?.role || user.role,
+                                      status: user.status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE',
+                                      branchId: selectedBranchId,
+                                      branchName: currentBranch?.name,
+                                    });
+                                  }}
+                                  className="px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 hover:text-white transition-colors cursor-pointer border border-neutral-700 flex items-center gap-1"
+                                >
+                                  <Edit2 className="size-3 text-amber-400" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  data-testid={`user-status-${user.id}`}
+                                  onClick={() => handleToggleStatus(user)}
+                                  className="px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer border border-neutral-700/60"
+                                >
+                                  {user.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                </button>
+                                <button
+                                  type="button"
+                                  data-testid={`staff-delete-${user.id}`}
+                                  onClick={() => {
+                                    const currentBranch = branches.find((b) => b.id === selectedBranchId);
+                                    setSelectedStaffToDelete({
+                                      userId: user.id,
+                                      staffId: assignment?.staffId || assignment?.id,
+                                      name: user.name,
+                                      email: user.email,
+                                      role: assignment?.role || user.role,
+                                      branchId: selectedBranchId,
+                                      branchName: currentBranch?.name,
+                                    });
+                                  }}
+                                  className="px-2 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer border border-red-500/30 flex items-center gap-1"
+                                >
+                                  <Trash2 className="size-3" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
 
@@ -877,6 +930,30 @@ export default function PermissionsView() {
           user={selectedUserForRole}
           onClose={() => setSelectedUserForRole(null)}
           onSuccess={() => refetchUsers()}
+        />
+      )}
+
+      {/* Edit Staff Modal */}
+      {selectedStaffToEdit && (
+        <EditTeamStaffModal
+          member={selectedStaffToEdit}
+          onClose={() => setSelectedStaffToEdit(null)}
+          onSuccess={() => {
+            refetchStaff();
+            refetchUsers();
+          }}
+        />
+      )}
+
+      {/* Delete Staff Modal */}
+      {selectedStaffToDelete && (
+        <DeleteTeamStaffModal
+          member={selectedStaffToDelete}
+          onClose={() => setSelectedStaffToDelete(null)}
+          onSuccess={() => {
+            refetchStaff();
+            refetchUsers();
+          }}
         />
       )}
     </div>

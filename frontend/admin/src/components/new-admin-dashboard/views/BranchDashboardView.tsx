@@ -114,6 +114,7 @@ export default function BranchDashboardView({
               staffList={d.staffList}
               onOpenEditStaff={d.handleOpenEditStaff}
               onToggleStaffStatus={d.handleToggleStaffStatus}
+              onDeleteStaff={(member) => d.setDeletingStaff(member)}
             />
           )}
         </>
@@ -159,6 +160,10 @@ export default function BranchDashboardView({
         editStaffForm={d.editStaffForm}
         setEditStaffForm={d.setEditStaffForm}
         onSaveEditStaff={d.handleSaveEditStaff}
+        deletingStaff={d.deletingStaff}
+        onCloseDeleteStaff={() => d.setDeletingStaff(null)}
+        onConfirmDeleteStaff={d.handleConfirmDeleteStaff}
+        isDeletingStaff={d.isDeletingStaff}
         isEditBranchOpen={d.isEditOpen}
         onCloseEditBranch={() => d.setIsEditOpen(false)}
         editBranchForm={d.editForm}

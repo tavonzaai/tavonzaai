@@ -226,6 +226,13 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       }),
       invalidatesTags: ['USER', 'STAFF'],
     }),
+    deleteUser: builder.mutation<any, string>({
+      query: (id) => ({
+        url: `/users/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['USER', 'STAFF'],
+    }),
   }),
 });
 
@@ -267,4 +274,5 @@ export const {
   useRefundPaymentMutation,
   useGetUsersQuery,
   useUpdateUserStatusMutation,
+  useDeleteUserMutation,
 } = adminApi;

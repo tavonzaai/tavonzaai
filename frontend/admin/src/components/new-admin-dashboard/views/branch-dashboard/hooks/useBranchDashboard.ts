@@ -23,6 +23,7 @@ import {
   useCreateMenuCategoryMutation,
   useCreateMenuItemMutation,
   useCreateTableMutation,
+  useDeleteBranchStaffMutation,
   useDeleteMenuItemMutation,
   useDeleteTableMutation,
   useGetBranchQuery,
@@ -130,6 +131,7 @@ export function useBranchDashboard({
   const [deleteMenuItem] = useDeleteMenuItemMutation();
   const [createStaff] = useCreateBranchStaffMutation();
   const [updateStaff] = useUpdateBranchStaffMutation();
+  const [deleteBranchStaff, { isLoading: isDeletingStaff }] = useDeleteBranchStaffMutation();
 
   const branch = useMemo<BranchItem | null>(() => {
     if (!branchRecord) return null;
@@ -256,6 +258,7 @@ export function useBranchDashboard({
     branch: '',
     status: 'Active',
   });
+  const [deletingStaff, setDeletingStaff] = useState<StaffMember | null>(null);
 
   const totalTables = tables.length;
   const availableTables = tables.filter((t) => t.status === 'Available').length;
@@ -579,6 +582,20 @@ export function useBranchDashboard({
     }
   };
 
+  const handleConfirmDeleteStaff = async () => {
+    if (!deletingStaff) return;
+    try {
+      await deleteBranchStaff({
+        branchId,
+        staffId: deletingStaff.id,
+      }).unwrap();
+      toast.success(`Staff member "${deletingStaff.name}" removed from branch.`);
+      setDeletingStaff(null);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Unable to delete staff.');
+    }
+  };
+
   const handleToggleStaffStatus = async (staff: StaffMember) => {
     const nextStatus = staff.status === 'Active' ? 'Inactive' : 'Active';
     try {
@@ -673,5 +690,9 @@ export function useBranchDashboard({
     handleOpenEditStaff,
     handleSaveEditStaff,
     handleToggleStaffStatus,
+    deletingStaff,
+    setDeletingStaff,
+    handleConfirmDeleteStaff,
+    isDeletingStaff,
   };
 }

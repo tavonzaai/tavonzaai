@@ -18,4 +18,5 @@ export { EditMenuModal } from './modals/EditMenuModal';
 export { DeleteMenuModal } from './modals/DeleteMenuModal';
 export { InviteStaffModal } from './modals/InviteStaffModal';
 export { EditStaffModal } from './modals/EditStaffModal';
+export { DeleteStaffModal } from './modals/DeleteStaffModal';
 export { EditBranchModal } from './modals/EditBranchModal';
