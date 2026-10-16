@@ -128,6 +128,17 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       }),
       invalidatesTags: ['STAFF', 'ANALYTICS'],
     }),
+    assignBranchStaff: builder.mutation<
+      any,
+      { branchId: string; body: { staffId: string; role: string; permissions?: string[] } }
+    >({
+      query: ({ branchId, body }) => ({
+        url: `/branches/${branchId}/staff/assign`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['STAFF', 'ANALYTICS'],
+    }),
     getTables: builder.query<any[], { branchId: string }>({
       query: ({ branchId }) => ({ url: '/tables', params: { branchId } }),
       transformResponse: (response: unknown) => unwrapList<any>(response),
@@ -255,6 +266,7 @@ export const {
   useUpdateBranchSettingsMutation,
   useGetBranchStaffQuery,
   useCreateBranchStaffMutation,
+  useAssignBranchStaffMutation,
   useUpdateBranchStaffMutation,
   useDeleteBranchStaffMutation,
   useGetTablesQuery,

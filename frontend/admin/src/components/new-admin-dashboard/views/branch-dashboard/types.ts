@@ -57,6 +57,7 @@ export interface MenuFormData {
 export interface StaffInviteFormData {
   name: string;
   email: string;
+  phone?: string;
   password: string;
   role: string;
   branch: string;

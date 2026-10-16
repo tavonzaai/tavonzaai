@@ -248,6 +248,7 @@ export function useBranchDashboard({
   const [inviteForm, setInviteForm] = useState<StaffInviteFormData>({
     name: '',
     email: '',
+    phone: '',
     password: '',
     role: 'WAITER',
     branch: '',
@@ -523,6 +524,7 @@ export function useBranchDashboard({
     setInviteForm({
       name: '',
       email: '',
+      phone: '',
       password: '',
       role: 'WAITER',
       branch: branch?.name || '',
@@ -542,6 +544,7 @@ export function useBranchDashboard({
         body: {
           name: inviteForm.name.trim(),
           email: inviteForm.email.trim(),
+          phone: inviteForm.phone?.trim() || undefined,
           password: inviteForm.password,
           role: inviteForm.role,
         },

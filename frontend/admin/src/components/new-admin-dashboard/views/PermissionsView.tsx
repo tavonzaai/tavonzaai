@@ -60,26 +60,6 @@ import {
 import { EmptyState, ErrorState, LoadingState, PaginationBar } from '@/components/common';
 import { useClampPage, useListPagination } from '@/hooks/useListPagination';
 
-const STAFF_PERMISSIONS: PermissionCategory[] = [
-  {
-    id: 'operations',
-    title: 'Branch capabilities',
-    icon: Settings,
-    permissions: [
-      { id: 'MANAGE_MENU', label: 'Manage menu', category: 'operations' },
-      { id: 'MANAGE_TABLES', label: 'Manage tables', category: 'operations' },
-      { id: 'MANAGE_STAFF', label: 'Manage staff', category: 'operations' },
-      { id: 'MANAGE_RESERVATIONS', label: 'Manage reservations', category: 'operations' },
-      { id: 'VIEW_ORDERS', label: 'View orders', category: 'operations' },
-      { id: 'UPDATE_ORDER_STATUS', label: 'Update order status', category: 'operations' },
-      { id: 'MANAGE_PAYMENTS', label: 'Manage payments', category: 'operations' },
-      { id: 'APPLY_DISCOUNTS', label: 'Apply discounts', category: 'operations' },
-      { id: 'VIEW_REPORTS', label: 'View reports', category: 'operations' },
-      { id: 'MANAGE_BRANCH_SETTINGS', label: 'Manage branch settings', category: 'operations' },
-    ],
-  },
-];
-
 const getCategoryIcon = (moduleName: string) => {
   switch (moduleName.toLowerCase()) {
     case 'roles':
@@ -313,22 +293,44 @@ export default function PermissionsView() {
   const [updateUserStatus] = useUpdateUserStatusMutation();
   const [branchDraft, setBranchDraft] = useState<Record<string, string[]>>({});
   const [invite, setInvite] = useState({
+    branchId: '',
     name: '',
     email: '',
+    phone: '',
     password: '',
     role: '',
   });
 
-  // Automatically select the default role from dynamic dbRoles once loaded
+  // Dynamically derive assignable staff roles from roles loaded from PostgreSQL database (dbRoles)
+  const dynamicStaffRoles = useMemo(() => {
+    if (!dbRoles || dbRoles.length === 0) return [];
+    return dbRoles
+      .filter((r) => {
+        const slug = r.slug?.toLowerCase();
+        return slug !== 'super-admin' && slug !== 'admin' && slug !== 'customer';
+      })
+      .map((r) => {
+        const value = r.slug
+          ? r.slug.toUpperCase().replace(/-/g, '_')
+          : r.name.toUpperCase().replace(/\s+/g, '_');
+        return {
+          id: r.id,
+          name: r.name,
+          value,
+        };
+      });
+  }, [dbRoles]);
+
+  // Set default role dynamically once dynamicStaffRoles are loaded from database
   useEffect(() => {
-    if (dbRoles.length > 0 && !invite.role) {
-      const defaultRole = dbRoles.find((r) => r.slug === 'waiter') || dbRoles[0];
-      const defaultVal = defaultRole.slug
-        ? defaultRole.slug.toUpperCase().replace(/-/g, '_')
-        : defaultRole.name;
-      setInvite((prev) => ({ ...prev, role: defaultVal }));
+    if (dynamicStaffRoles.length > 0 && !invite.role) {
+      const defaultRole =
+        dynamicStaffRoles.find((r) => r.value === 'WAITER') || dynamicStaffRoles[0];
+      if (defaultRole) {
+        setInvite((prev) => ({ ...prev, role: defaultRole.value }));
+      }
     }
-  }, [dbRoles, invite.role]);
+  }, [dynamicStaffRoles, invite.role]);
 
   const staffByUserId = useMemo(() => {
     const map = new Map<string, any>();
@@ -388,8 +390,8 @@ export default function PermissionsView() {
 
   const handleInviteStaff = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedBranchId) {
-      toast.error('Select a branch before creating a staff account.');
+    if (!invite.branchId) {
+      toast.error('Please select a branch before creating a staff account.');
       return;
     }
     if (invite.password.length < 8) {
@@ -398,20 +400,28 @@ export default function PermissionsView() {
     }
     try {
       await createStaff({
-        branchId: selectedBranchId,
+        branchId: invite.branchId,
         body: {
           name: invite.name.trim(),
           email: invite.email.trim(),
+          phone: invite.phone.trim() || undefined,
           password: invite.password,
           role: invite.role,
         },
       }).unwrap();
       toast.success(`Staff account created for ${invite.name.trim()}.`);
-      const defaultRole = dbRoles.find((r) => r.slug === 'waiter') || dbRoles[0];
-      const defaultVal = defaultRole
-        ? (defaultRole.slug ? defaultRole.slug.toUpperCase().replace(/-/g, '_') : defaultRole.name)
-        : '';
-      setInvite({ name: '', email: '', password: '', role: defaultVal });
+      // Update selected branch in directory so Tab 2 focuses on this branch and displays the new assignment
+      setBranchId(invite.branchId);
+      const defaultRole =
+        dynamicStaffRoles.find((r) => r.value === 'WAITER') || dynamicStaffRoles[0];
+      setInvite({
+        branchId: '',
+        name: '',
+        email: '',
+        phone: '',
+        password: '',
+        role: defaultRole?.value || '',
+      });
       refetchStaff();
       refetchUsers();
     } catch (err: any) {
@@ -431,7 +441,16 @@ export default function PermissionsView() {
   };
 
   const users = usersData?.data || [];
-  const branchPermissionDefs = STAFF_PERMISSIONS[0]?.permissions || [];
+  const branchCapabilitiesCategory: PermissionCategory = useMemo(() => {
+    const allPerms = categories.flatMap((c) => c.permissions);
+    return {
+      id: 'branch_capabilities',
+      title: 'Branch capabilities',
+      icon: Settings,
+      permissions: allPerms,
+    };
+  }, [categories]);
+  const branchPermissionDefs = branchCapabilitiesCategory.permissions;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -776,7 +795,7 @@ export default function PermissionsView() {
                                           onClick={() =>
                                             handleToggleBranchCategorySelectAll(
                                               staffId,
-                                              STAFF_PERMISSIONS[0],
+                                              branchCapabilitiesCategory,
                                             )
                                           }
                                           className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer"
@@ -839,65 +858,124 @@ export default function PermissionsView() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input
-              required
-              data-testid="create-staff-name"
-              placeholder="Full name"
-              value={invite.name}
-              onChange={(e) => setInvite((prev) => ({ ...prev, name: e.target.value }))}
-              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
-            />
-            <input
-              required
-              type="email"
-              data-testid="create-staff-email"
-              placeholder="Email address"
-              value={invite.email}
-              onChange={(e) => setInvite((prev) => ({ ...prev, email: e.target.value }))}
-              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
-            />
-            <input
-              required
-              type="password"
-              minLength={8}
-              data-testid="create-staff-password"
-              placeholder="Temporary password (min 8 chars)"
-              value={invite.password}
-              onChange={(e) => setInvite((prev) => ({ ...prev, password: e.target.value }))}
-              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
-            />
-            <select
-              data-testid="create-staff-role"
-              value={invite.role}
-              onChange={(e) => setInvite((prev) => ({ ...prev, role: e.target.value }))}
-              className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 cursor-pointer"
-            >
-              {loadingRoles ? (
-                <option value="">Loading roles from API...</option>
-              ) : dbRoles.length === 0 ? (
-                <option value="">No roles available</option>
-              ) : (
-                dbRoles.map((role) => {
-                  const roleValue = role.slug
-                    ? role.slug.toUpperCase().replace(/-/g, '_')
-                    : role.name;
-                  return (
-                    <option key={role.id} value={roleValue}>
-                      {role.name}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Branch Selector (Required - No auto selection) */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">
+                Branch <span className="text-amber-400">*</span>
+              </label>
+              <select
+                required
+                data-testid="create-staff-branch"
+                value={invite.branchId}
+                onChange={(e) => setInvite((prev) => ({ ...prev, branchId: e.target.value }))}
+                className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 cursor-pointer"
+              >
+                <option value="">-- Select Branch --</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Staff Role Selector (Dynamically populated from PostgreSQL dbRoles) */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">
+                Staff Role <span className="text-amber-400">*</span>
+              </label>
+              <select
+                required
+                data-testid="create-staff-role"
+                value={invite.role}
+                onChange={(e) => setInvite((prev) => ({ ...prev, role: e.target.value }))}
+                className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 cursor-pointer"
+              >
+                {loadingRoles ? (
+                  <option value="">Loading roles from database...</option>
+                ) : dynamicStaffRoles.length === 0 ? (
+                  <option value="">No roles available in database</option>
+                ) : (
+                  dynamicStaffRoles.map((r) => (
+                    <option key={r.id} value={r.value}>
+                      {r.name}
                     </option>
-                  );
-                })
-              )}
-            </select>
+                  ))
+                )}
+              </select>
+            </div>
+
+            {/* Full Name */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">
+                Full Name <span className="text-amber-400">*</span>
+              </label>
+              <input
+                required
+                data-testid="create-staff-name"
+                placeholder="Full name"
+                value={invite.name}
+                onChange={(e) => setInvite((prev) => ({ ...prev, name: e.target.value }))}
+                className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            {/* Email Address */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">
+                Email Address <span className="text-amber-400">*</span>
+              </label>
+              <input
+                required
+                type="email"
+                data-testid="create-staff-email"
+                placeholder="Email address"
+                value={invite.email}
+                onChange={(e) => setInvite((prev) => ({ ...prev, email: e.target.value }))}
+                className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            {/* Temporary Password */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">
+                Temporary Password <span className="text-amber-400">*</span>
+              </label>
+              <input
+                required
+                type="password"
+                minLength={8}
+                data-testid="create-staff-password"
+                placeholder="Temporary password (min 8 chars)"
+                value={invite.password}
+                onChange={(e) => setInvite((prev) => ({ ...prev, password: e.target.value }))}
+                className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            {/* Phone (Optional backend payload field) */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-stone-300">
+                Phone Number <span className="text-neutral-500 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="tel"
+                data-testid="create-staff-phone"
+                placeholder="Phone number (optional)"
+                value={invite.phone}
+                onChange={(e) => setInvite((prev) => ({ ...prev, phone: e.target.value }))}
+                className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
+              />
+            </div>
           </div>
 
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              disabled={creatingStaff}
+              disabled={creatingStaff || !invite.branchId}
               data-testid="create-staff-submit"
-              className="h-11 px-6 bg-yellow-400 hover:bg-yellow-300 rounded-lg text-neutral-900 text-sm font-semibold disabled:opacity-60 transition-colors cursor-pointer shadow-md"
+              className="h-11 px-6 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 disabled:hover:bg-yellow-400 rounded-lg text-neutral-900 text-sm font-semibold transition-colors cursor-pointer shadow-md disabled:cursor-not-allowed"
             >
               {creatingStaff ? 'Creating...' : 'Create staff account'}
             </button>

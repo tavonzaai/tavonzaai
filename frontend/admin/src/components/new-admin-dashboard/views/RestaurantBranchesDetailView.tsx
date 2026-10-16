@@ -19,7 +19,7 @@ import {
   useGetBranchesQuery,
   useSetOperatingHoursMutation,
   useUpdateBranchMutation,
-  useCreateBranchStaffMutation,
+  useAssignBranchStaffMutation,
 } from '@/redux/features/adminApi';
 import { mapBranch, parseBranchAddress } from '@/lib/admin-mappers';
 import { EmptyState, ErrorState, LoadingState, PaginationBar } from '@/components/common';
@@ -57,7 +57,7 @@ export default function RestaurantBranchesDetailView({
   const [updateBranch] = useUpdateBranchMutation();
   const [deleteBranch] = useDeleteBranchMutation();
   const [setOperatingHours] = useSetOperatingHoursMutation();
-  const [createBranchStaff] = useCreateBranchStaffMutation();
+  const [assignBranchStaff] = useAssignBranchStaffMutation();
 
   const branches: BranchItem[] = useMemo(
     () => (data?.data || []).map((branch) => mapBranch(branch, restaurant.name)),
@@ -88,10 +88,10 @@ export default function RestaurantBranchesDetailView({
       // Auto-assign chosen dynamic manager to the created branch if selected
       if (form.managerId) {
         try {
-          await createBranchStaff({
+          await assignBranchStaff({
             branchId: created.id,
             body: {
-              userId: form.managerId,
+              staffId: form.managerId,
               role: 'BRANCH_MANAGER',
             },
           }).unwrap();
@@ -131,10 +131,10 @@ export default function RestaurantBranchesDetailView({
       // Auto-assign chosen dynamic manager to the edited branch if selected
       if (form.managerId) {
         try {
-          await createBranchStaff({
+          await assignBranchStaff({
             branchId: editingBranch.id,
             body: {
-              userId: form.managerId,
+              staffId: form.managerId,
               role: 'BRANCH_MANAGER',
             },
           }).unwrap();

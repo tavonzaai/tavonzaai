@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetRolesQuery } from '@/redux/features/roleApi';
@@ -36,6 +36,19 @@ export const EditTeamStaffModal: React.FC<EditTeamStaffModalProps> = ({
   const { data: dbRoles = [], isLoading: loadingRoles } = useGetRolesQuery();
   const [updateBranchStaff, { isLoading: isUpdatingStaff }] = useUpdateBranchStaffMutation();
   const [updateUserStatus, { isLoading: isUpdatingStatus }] = useUpdateUserStatusMutation();
+
+  const staffRoles = useMemo(() => {
+    return dbRoles
+      .filter((r) => {
+        const slug = r.slug?.toLowerCase();
+        return slug !== 'super-admin' && slug !== 'admin' && slug !== 'customer';
+      })
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        value: r.slug ? r.slug.toUpperCase().replace(/-/g, '_') : r.name.toUpperCase().replace(/\s+/g, '_'),
+      }));
+  }, [dbRoles]);
 
   const isSubmitting = isUpdatingStaff || isUpdatingStatus;
 
@@ -137,24 +150,14 @@ export const EditTeamStaffModal: React.FC<EditTeamStaffModalProps> = ({
                 >
                   {loadingRoles ? (
                     <option value="">Loading roles...</option>
-                  ) : dbRoles.length > 0 ? (
-                    dbRoles.map((r) => {
-                      const val = r.slug ? r.slug.toUpperCase().replace(/-/g, '_') : r.name;
-                      return (
-                        <option key={r.id} value={val}>
-                          {r.name}
-                        </option>
-                      );
-                    })
+                  ) : staffRoles.length > 0 ? (
+                    staffRoles.map((r) => (
+                      <option key={r.id} value={r.value}>
+                        {r.name}
+                      </option>
+                    ))
                   ) : (
-                    <>
-                      <option value="BRANCH_MANAGER">Branch Manager</option>
-                      <option value="HOST">Host</option>
-                      <option value="WAITER">Waiter</option>
-                      <option value="KITCHEN_STAFF">Kitchen Staff</option>
-                      <option value="BARTENDER">Bartender</option>
-                      <option value="CASHIER">Cashier</option>
-                    </>
+                    <option value="">No roles available</option>
                   )}
                 </select>
                 <ChevronDown className="size-4 text-stone-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
