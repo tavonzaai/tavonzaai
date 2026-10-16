@@ -13,9 +13,11 @@ export function getCookie(name: string): string | null {
   return match && match[1] ? decodeURIComponent(match[1]) : null;
 }
 
-export function setCookie(name: string, value: string,) {
+export function setCookie(name: string, value: string, days = 7) {
   if (typeof document !== 'undefined') {
-    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; SameSite=Lax`;
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    const maxAge = days * 24 * 60 * 60;
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; max-age=${maxAge}; path=/; SameSite=Lax`;
   }
 }
 
@@ -51,8 +53,7 @@ export function setAuthToken(token: string) {
 }
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
-  setCookie('access_token', tokens.accessToken);
-  setCookie('customer_session', tokens.accessToken);
+  setAuthToken(tokens.accessToken);
   if (tokens.refreshToken) {
     setCookie('refresh_token', tokens.refreshToken);
   }
@@ -63,6 +64,58 @@ export function removeAuthToken() {
   removeCookie('refresh_token');
   removeCookie('customer_session');
   removeCookie('tavonza_customer_session_id');
+  removeCookie('tavonza_last_submitted_order_id');
+  removeCookie('tavonza_last_submitted_order_number');
+  removeCookie('tavonza_active_order_id');
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+export async function refreshAuthSession(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        removeAuthToken();
+        return false;
+      }
+
+      const json = await res.json().catch(() => null);
+      const data = json?.data || json;
+      const newAccessToken = data?.accessToken || data?.access_token;
+      const newRefreshToken = data?.refreshToken || data?.refresh_token || refreshToken;
+
+      if (newAccessToken) {
+        setAuthTokens({
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
+        });
+        return true;
+      }
+
+      removeAuthToken();
+      return false;
+    } catch {
+      removeAuthToken();
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export function getApiBaseUrl(): string {
@@ -114,6 +167,7 @@ export class ApiError extends Error {
 
 export interface BaseApiFetchOptions extends RequestInit {
   skipToast?: boolean;
+  _isRetry?: boolean;
 }
 
 export async function baseApiFetch<T = any>(
@@ -183,7 +237,26 @@ export async function baseApiFetch<T = any>(
   const rawJson = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (
+      response.status === 401 &&
+      !cleanEndpoint.includes('/auth/login') &&
+      !cleanEndpoint.includes('/auth/refresh') &&
+      !options?._isRetry
+    ) {
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        return baseApiFetch<T>(endpoint, {
+          ...options,
+          _isRetry: true,
+        });
+      }
+      removeAuthToken();
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        if (window.location.pathname.startsWith('/profile') || window.location.pathname.startsWith('/account')) {
+          window.location.href = '/login';
+        }
+      }
+    } else if (response.status === 401) {
       removeAuthToken();
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         if (window.location.pathname.startsWith('/profile') || window.location.pathname.startsWith('/account')) {
@@ -191,6 +264,7 @@ export async function baseApiFetch<T = any>(
         }
       }
     }
+
     let errorMsg = 'Request failed';
     if (rawJson?.message) {
       errorMsg = Array.isArray(rawJson.message) ? rawJson.message.join('. ') : rawJson.message;
@@ -204,7 +278,7 @@ export async function baseApiFetch<T = any>(
       errorMsg = response.statusText;
     }
 
-    if (!options.skipToast && typeof window !== 'undefined') {
+    if (!options.skipToast && response.status !== 401 && typeof window !== 'undefined') {
       try {
         toast.error(errorMsg);
       } catch {}

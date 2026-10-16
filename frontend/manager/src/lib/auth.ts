@@ -20,15 +20,39 @@ export interface BranchManagerUser {
   }>;
 }
 
+export function isRoleAllowedForManager(user: any): boolean {
+  if (!user) return false;
+  const role = String(user.role || user.globalRole || '').toLowerCase();
+  const allowedRoles = [
+    'manager',
+    'branch_manager',
+    'branchmanager',
+    'admin',
+    'super_admin',
+    'superadmin',
+    'owner',
+    'staff',
+  ];
+  if (allowedRoles.includes(role)) {
+    return true;
+  }
+  if (Array.isArray(user.assignments)) {
+    return user.assignments.some((a: any) => {
+      const r = String(a?.role || '').toLowerCase();
+      return r.includes('manager') || allowedRoles.includes(r);
+    });
+  }
+  return false;
+}
+
 export function isManagerAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
 
   const managerToken = getCookie(BRANCH_MANAGER_TOKEN_KEY);
   const accessToken = getCookie('access_token');
-  const rawUser = getCookie(BRANCH_MANAGER_USER_KEY);
-
-  const token = managerToken || accessToken;
-  return !!(token && token.trim().length > 0 && rawUser);
+  const cashierToken = getCookie('cashier_token');
+  const token = managerToken || accessToken || cashierToken;
+  return Boolean(token && token.trim().length > 0);
 }
 
 /**

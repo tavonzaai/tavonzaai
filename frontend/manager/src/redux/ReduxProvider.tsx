@@ -5,8 +5,9 @@ import { Provider } from 'react-redux';
 import { store } from './store';
 import { useAppDispatch } from './hooks';
 import { getMe } from './features/authApi';
-import { getAuthToken, getCookie } from './api/baseApi';
+import { getAuthToken, getCookie, removeAuthToken } from './api/baseApi';
 import { setInitialized, setUser } from './slices/authSlice';
+import { isRoleAllowedForManager } from '../lib/auth';
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useAppDispatch();
@@ -18,27 +19,21 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
     const token = getAuthToken();
     if (!token) {
-      // Check if active branch manager session exists in cookies (Strictly Cookies Only)
-      const raw = getCookie('branch_manager_user') || getCookie('cashier_user');
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          const role = String(parsed?.role || '').toUpperCase();
-          if (
-            role.includes('MANAGER') ||
-            role === 'ADMIN' ||
-            role === 'OWNER' ||
-            parsed?.assignments?.some((a: any) => String(a.role || '').toUpperCase().includes('MANAGER'))
-          ) {
-            dispatch(setUser(parsed));
-            dispatch(setInitialized(true));
-            return;
-          }
-        } catch {}
-      }
+      removeAuthToken();
       dispatch(setUser(null));
       dispatch(setInitialized(true));
       return;
+    }
+
+    // Instantly restore cached session from cookie for zero-delay UI rendering
+    const stored = getCookie('branch_manager_user') || getCookie('cashier_user');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (isRoleAllowedForManager(parsed)) {
+          dispatch(setUser(parsed));
+        }
+      } catch {}
     }
 
     // Verify session with backend getMe API (Authenticated via cookies)
@@ -46,30 +41,15 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       .unwrap()
       .then((userProfile: any) => {
         const userObj = userProfile?.user || userProfile;
-        const role = String(userObj?.role || '').toUpperCase();
-        const isManager =
-          role.includes('MANAGER') ||
-          role === 'ADMIN' ||
-          role === 'OWNER' ||
-          userObj?.assignments?.some((a: any) => String(a.role || '').toUpperCase().includes('MANAGER'));
-
-        if (isManager) {
+        if (isRoleAllowedForManager(userObj)) {
           dispatch(setUser(userObj));
         } else {
-          // If logged in as another role, still retain user profile
-          dispatch(setUser(userObj));
+          removeAuthToken();
+          dispatch(setUser(null));
         }
       })
       .catch(() => {
-        // Fallback to cookie user if offline or network failure
-        const raw = getCookie('branch_manager_user') || getCookie('cashier_user');
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            dispatch(setUser(parsed));
-            return;
-          } catch {}
-        }
+        removeAuthToken();
         dispatch(setUser(null));
       })
       .finally(() => {

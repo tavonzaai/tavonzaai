@@ -1,6 +1,4 @@
-import React from 'react';
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import React, { Suspense } from 'react';
 import BranchManagerDashboard from '@/components/branch-manager-dashboard/BranchManagerDashboard';
 import { routeToNav } from '@/components/branch-manager-dashboard/routes';
 import AuthGuard from '@/components/auth/AuthGuard';
@@ -26,23 +24,16 @@ export default async function BranchManagerTabPage({
 }: {
   params: Promise<{ tab: string }>;
 }) {
-  const cookieStore = await cookies();
-  const token =
-    cookieStore.get('branch_manager_token')?.value ||
-    cookieStore.get('access_token')?.value;
-  const user = cookieStore.get('branch_manager_user')?.value;
-
-  if (!token || !user) {
-    redirect('/login');
-  }
-
   const resolvedParams = await params;
   const tabParam = resolvedParams?.tab?.toLowerCase() || '';
   const tabName = routeToNav[tabParam] || 'Dashboard';
 
   return (
     <AuthGuard>
-      <BranchManagerDashboard initialNav={tabName} />
+      <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-zinc-500">Loading console...</div>}>
+        <BranchManagerDashboard initialNav={tabName} />
+      </Suspense>
     </AuthGuard>
   );
 }
+
