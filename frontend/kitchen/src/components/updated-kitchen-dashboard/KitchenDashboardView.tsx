@@ -4,13 +4,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/auth/AuthGuard";
-import { useAppSelector } from "@/redux/store";
+import { useAppSelector, useAppDispatch } from "@/redux/store";
+import { getMe } from "@/redux/features/authApi";
 import { getStoredKitchenUser } from "@/lib/auth";
 import { TavonzaLogoIcon } from "../TavonzaLogo";
 import KitchenAIModal from "./KitchenAIModal";
 import DraggableAiButton from "../common/DraggableAiButton";
-import Sidebar, { updatedKitchenNavItems } from "./Sidebar";
-import ProfileView from "./ProfileView";
 import {
   ChefHat,
   Clock,
@@ -42,6 +41,7 @@ export interface KitchenDashboardViewProps {
 
 export default function KitchenDashboardView({ initialNav = "Dashboard" }: KitchenDashboardViewProps) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const activeUser = user || (typeof document !== "undefined" ? getStoredKitchenUser() : null);
   const displayName = activeUser?.name || "Kitchen Staff";
@@ -49,10 +49,26 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     (activeUser as any)?.branchName ||
     (activeUser as any)?.assignments?.[0]?.branch?.name ||
     "Branch 4 ( Downtown )";
-  const avatarUrl = (activeUser as any)?.avatarUrl || (activeUser as any)?.avatar || null;
+  const userAvatar = (activeUser as any)?.avatarUrl || (activeUser as any)?.avatar || null;
+  const cleanName = displayName?.trim() || "Chef";
+  const fallbackAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}`;
+  const userInitials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((n: string) => n[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase() || "KS";
+
+  useEffect(() => {
+    try {
+      dispatch(getMe());
+    } catch {
+      // Ignore if session is unauthenticated
+    }
+  }, [dispatch]);
 
   const [activeNav, setActiveNav] = useState<string>(initialNav);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [orders, setOrders] = useState<KitchenOrder[]>([]);
   const [selectedStation, setSelectedStation] = useState<string>("Grill Station");
   const [activeTabFilter, setActiveTabFilter] = useState<string>("ALL");
@@ -456,17 +472,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
   return (
     <AuthGuard allowedRoles={["KITCHEN"]}>
       <div className="min-h-screen w-full bg-black text-white font-sans flex flex-col selection:bg-yellow-400 selection:text-black overflow-x-hidden relative">
-        
-        {/* Optional Slide-over Sidebar (hidden by default for pure KDS view) */}
-        <Sidebar
-          activeNav={activeNav}
-          setActiveNav={(tab) => {
-            setActiveNav(tab);
-            setSidebarOpen(false);
-          }}
-          sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
-        />
 
         {/* TOP NAVIGATION BAR MATCHING USER IMAGE */}
         <header className="w-full bg-black border-b border-zinc-900 px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4 z-30 shrink-0">
@@ -674,26 +679,34 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
 
             <div className="h-8 w-px bg-zinc-800 hidden sm:block" />
 
-            {/* Profile Avatar Button */}
+            {/* Profile Avatar Button — Redirects cleanly to /profile */}
             <button
               type="button"
               onClick={() => router.push('/profile')}
               className="flex items-center gap-2.5 p-1 rounded-xl bg-[#18181b] border border-zinc-800 hover:border-yellow-400 transition group cursor-pointer shrink-0"
-              title="My Kitchen Profile"
+              title={`Staff: ${displayName} - View & Edit Profile`}
             >
-              <div className="w-9 h-9 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700/60 relative flex items-center justify-center shrink-0">
-                {avatarUrl ? (
-                  <Image
-                    src={avatarUrl}
-                    alt={displayName}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-yellow-500/20 to-amber-500/10 flex items-center justify-center">
-                    <ChefHat className="w-4 h-4 text-yellow-400" />
-                  </div>
-                )}
+              <div className="w-9 h-9 rounded-lg overflow-hidden bg-gradient-to-br from-yellow-500/20 to-amber-500/10 border border-zinc-700/60 relative flex items-center justify-center shrink-0">
+                {/* Fallback Initials badge in case image is loading or offline */}
+                <span className="text-yellow-400 font-bold text-xs select-none">
+                  {userInitials}
+                </span>
+
+                {/* Profile Avatar Image (Custom uploaded photo or personalized user avatar) */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={userAvatar || fallbackAvatar}
+                  alt={displayName}
+                  className="absolute inset-0 w-full h-full object-cover rounded-lg"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.src !== fallbackAvatar) {
+                      target.src = fallbackAvatar;
+                    } else {
+                      target.style.display = "none";
+                    }
+                  }}
+                />
               </div>
               <div className="hidden xl:flex flex-col text-left pr-2">
                 <span className="text-xs font-semibold text-white group-hover:text-yellow-400 transition font-['Inter'] line-clamp-1 max-w-[120px]">
@@ -722,12 +735,9 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
           </div>
         )}
 
-        {/* MAIN KDS TICKETS WORKSPACE MATCHING USER SCREENSHOT */}
+        {/* MAIN KDS TICKETS WORKSPACE */}
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
-          {activeNav === "Profile" ? (
-            <ProfileView onBack={() => setActiveNav("Dashboard")} />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
             {filteredOrders.map((order, idx) => {
               const isReady = order.status === "READY";
               const isOverdue = !isReady && (order.status === "OVERDUE" || !!order.flaggedIssue);
@@ -913,7 +923,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
               );
             })}
           </div>
-          )}
         </main>
 
 
