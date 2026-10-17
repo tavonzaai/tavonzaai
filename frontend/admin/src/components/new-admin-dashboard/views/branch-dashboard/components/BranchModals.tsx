@@ -7,6 +7,7 @@ import {
   BranchFormData,
   TableFormData,
   MenuFormData,
+  CategoryItem,
   StaffInviteFormData,
   StaffEditFormData,
 } from '../types';
@@ -17,6 +18,7 @@ import { ViewQrModal } from './modals/ViewQrModal';
 import { AddMenuModal } from './modals/AddMenuModal';
 import { EditMenuModal } from './modals/EditMenuModal';
 import { DeleteMenuModal } from './modals/DeleteMenuModal';
+import { ManageCategoriesModal } from './modals/ManageCategoriesModal';
 import { InviteStaffModal } from './modals/InviteStaffModal';
 import { EditStaffModal } from './modals/EditStaffModal';
 import { DeleteStaffModal } from './modals/DeleteStaffModal';
@@ -48,6 +50,7 @@ interface BranchModalsProps {
   onCloseViewingQr: () => void;
 
   // Menu Modals
+  categories: CategoryItem[];
   isAddMenuOpen: boolean;
   onCloseAddMenu: () => void;
   menuForm: MenuFormData;
@@ -61,6 +64,13 @@ interface BranchModalsProps {
   deletingMenuItem: MenuItem | null;
   onCloseDeleteMenu: () => void;
   onConfirmDeleteMenu: () => void;
+
+  isManageCategoriesOpen: boolean;
+  onCloseManageCategories: () => void;
+  onOpenManageCategories: () => void;
+  onAddCategory: (categoryName: string) => Promise<void> | void;
+  onUpdateCategory: (id: string, newName: string) => Promise<void> | void;
+  onDeleteCategory: (id: string) => Promise<void> | void;
 
   // Staff Modals
   isInviteStaffOpen: boolean;
@@ -107,6 +117,7 @@ export const BranchModals: React.FC<BranchModalsProps> = ({
   onConfirmDeleteTable,
   viewingQrTable,
   onCloseViewingQr,
+  categories,
   isAddMenuOpen,
   onCloseAddMenu,
   menuForm,
@@ -118,6 +129,12 @@ export const BranchModals: React.FC<BranchModalsProps> = ({
   deletingMenuItem,
   onCloseDeleteMenu,
   onConfirmDeleteMenu,
+  isManageCategoriesOpen,
+  onCloseManageCategories,
+  onOpenManageCategories,
+  onAddCategory,
+  onUpdateCategory,
+  onDeleteCategory,
   isInviteStaffOpen,
   onCloseInviteStaff,
   inviteForm,
@@ -177,14 +194,17 @@ export const BranchModals: React.FC<BranchModalsProps> = ({
       <AddMenuModal
         isOpen={isAddMenuOpen}
         branchName={branch.name}
+        categories={categories}
         menuForm={menuForm}
         onChange={setMenuForm}
         onClose={onCloseAddMenu}
         onSubmit={onSaveAddMenu}
+        onOpenManageCategories={onOpenManageCategories}
       />
 
       <EditMenuModal
         isOpen={Boolean(editingMenuItem)}
+        categories={categories}
         menuForm={menuForm}
         onChange={setMenuForm}
         onClose={onCloseEditMenu}
@@ -195,6 +215,16 @@ export const BranchModals: React.FC<BranchModalsProps> = ({
         item={deletingMenuItem}
         onClose={onCloseDeleteMenu}
         onConfirm={onConfirmDeleteMenu}
+      />
+
+      <ManageCategoriesModal
+        isOpen={isManageCategoriesOpen}
+        branchName={branch.name}
+        categories={categories}
+        onClose={onCloseManageCategories}
+        onAddCategory={onAddCategory}
+        onUpdateCategory={onUpdateCategory}
+        onDeleteCategory={onDeleteCategory}
       />
 
       <InviteStaffModal

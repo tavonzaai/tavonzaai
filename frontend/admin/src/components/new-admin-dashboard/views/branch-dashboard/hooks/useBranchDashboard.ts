@@ -5,6 +5,7 @@ import {
   SubTab,
   TableItem,
   MenuItem,
+  CategoryItem,
   StaffMember,
   BranchFormData,
   TableFormData,
@@ -21,6 +22,8 @@ import {
 import {
   useCreateBranchStaffMutation,
   useCreateMenuCategoryMutation,
+  useUpdateMenuCategoryMutation,
+  useDeleteMenuCategoryMutation,
   useCreateMenuItemMutation,
   useCreateTableMutation,
   useDeleteBranchStaffMutation,
@@ -126,6 +129,8 @@ export function useBranchDashboard({
   const [deleteTable] = useDeleteTableMutation();
   const [regenerateQr] = useRegenerateTableQrMutation();
   const [createMenuCategory] = useCreateMenuCategoryMutation();
+  const [updateMenuCategory] = useUpdateMenuCategoryMutation();
+  const [deleteMenuCategory] = useDeleteMenuCategoryMutation();
   const [createMenuItem] = useCreateMenuItemMutation();
   const [updateMenuItem] = useUpdateMenuItemMutation();
   const [deleteMenuItem] = useDeleteMenuItemMutation();
@@ -163,6 +168,15 @@ export function useBranchDashboard({
   const menuRows = menuQuery.data || [];
   const staffRows = staffQuery.data || [];
 
+  const categories: CategoryItem[] = useMemo(() => {
+    return categoryRows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      itemCount: row.itemCount,
+    }));
+  }, [categoryRows]);
+
   const tables: TableItem[] = useMemo(
     () =>
       tableRows.map((row: any) => {
@@ -182,17 +196,27 @@ export function useBranchDashboard({
     [tableRows],
   );
 
-  const menuItems: MenuItem[] = useMemo(
-    () =>
-      menuRows.map((row: any) => ({
+  const menuItems: MenuItem[] = useMemo(() => {
+    const catMap = new Map<string, string>();
+    categoryRows.forEach((c: any) => {
+      if (c?.id && c?.name) catMap.set(c.id, c.name);
+    });
+    return menuRows.map((row: any) => {
+      const resolvedCategory =
+        (row.categoryId && catMap.get(row.categoryId)) ||
+        row.categoryName ||
+        row.category ||
+        'Uncategorized';
+      return {
         id: row.id,
         name: row.name,
-        category: row.categoryName || row.category || 'General',
+        category: resolvedCategory,
+        categoryId: row.categoryId,
         price: typeof row.basePrice === 'number' ? `$${row.basePrice.toFixed(2)}` : String(row.price || row.basePrice || '$0.00'),
         status: row.isAvailable === false || row.isActive === false ? 'Disable' : 'Active',
-      })),
-    [menuRows],
-  );
+      };
+    });
+  }, [menuRows, categoryRows]);
 
   const staffList: StaffMember[] = useMemo(
     () =>
@@ -233,12 +257,15 @@ export function useBranchDashboard({
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   const [menuFilterStatus, setMenuFilterStatus] = useState<'All Items' | 'Active' | 'Disable'>('All Items');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All Categories');
+  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
   const [deletingMenuItem, setDeletingMenuItem] = useState<MenuItem | null>(null);
   const [menuForm, setMenuForm] = useState<MenuFormData>({
     name: '',
-    category: 'Main Course',
+    category: '',
+    categoryId: '',
     price: '12.20',
     status: 'Active',
   });
@@ -267,8 +294,15 @@ export function useBranchDashboard({
   const totalCapacity = tables.reduce((acc, t) => acc + t.capacity, 0);
 
   const filteredMenuItems = menuItems.filter((item) => {
-    if (menuFilterStatus === 'All Items') return true;
-    return item.status === menuFilterStatus;
+    if (menuFilterStatus !== 'All Items' && item.status !== menuFilterStatus) {
+      return false;
+    }
+    if (selectedCategory !== 'All Categories') {
+      const matchName = item.category.toLowerCase() === selectedCategory.toLowerCase();
+      const matchId = item.categoryId === selectedCategory;
+      if (!matchName && !matchId) return false;
+    }
+    return true;
   });
 
   const filteredStaff = staffList.filter((staff) => {
@@ -407,24 +441,66 @@ export function useBranchDashboard({
     }
   };
 
-  const resolveCategoryId = async (categoryName: string) => {
-    const existing = categoryRows.find(
-      (category: any) => String(category.name).toLowerCase() === categoryName.toLowerCase(),
-    );
-    if (existing) return existing.id;
-    const created: any = await createMenuCategory({
-      restaurantId: branch?.restaurantId,
-      name: categoryName,
-    }).unwrap();
-    return created?.data?.id || created?.id;
+  const handleOpenManageCategories = () => {
+    setIsManageCategoriesOpen(true);
+  };
+
+  const handleAddCategory = async (name: string) => {
+    if (!branch?.restaurantId) {
+      toast.error('Restaurant not identified for this branch.');
+      return;
+    }
+    try {
+      await createMenuCategory({
+        restaurantId: branch.restaurantId,
+        name,
+      }).unwrap();
+      toast.success(`Category "${name}" created!`);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Failed to create category.');
+      throw err;
+    }
+  };
+
+  const handleUpdateCategory = async (id: string, name: string) => {
+    try {
+      await updateMenuCategory({
+        id,
+        body: { name },
+      }).unwrap();
+      toast.success(`Category renamed to "${name}"!`);
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Failed to update category.');
+      throw err;
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      await deleteMenuCategory(id).unwrap();
+      toast.success('Category removed.');
+      if (selectedCategory === id) {
+        setSelectedCategory('All Categories');
+      }
+    } catch (err: any) {
+      toast.error(err?.data?.message || err?.message || 'Failed to delete category.');
+      throw err;
+    }
   };
 
   const parsePrice = (value: string) => Number(String(value).replace(/[^0-9.]/g, '')) || 0;
 
   const handleOpenAddMenu = () => {
+    if (categoryRows.length === 0) {
+      toast.warning('Please create at least one category before adding menu items.');
+      setIsManageCategoriesOpen(true);
+      return;
+    }
+    const defaultCat = categoryRows[0];
     setMenuForm({
       name: '',
-      category: categoryRows[0]?.name || 'Main Course',
+      categoryId: defaultCat?.id || '',
+      category: defaultCat?.name || '',
       price: '12.20',
       status: 'Active',
     });
@@ -437,11 +513,19 @@ export function useBranchDashboard({
       toast.error('Please enter menu item name.');
       return;
     }
+    if (!menuForm.categoryId) {
+      toast.error('Please select an existing category.');
+      return;
+    }
+    const catExists = categoryRows.some((c: any) => c.id === menuForm.categoryId);
+    if (!catExists) {
+      toast.error('Selected category is not valid. Please choose a valid category.');
+      return;
+    }
     try {
-      const categoryId = await resolveCategoryId(menuForm.category);
       await createMenuItem({
         restaurantId: branch?.restaurantId,
-        categoryId,
+        categoryId: menuForm.categoryId,
         name: menuForm.name.trim(),
         basePrice: parsePrice(menuForm.price),
       }).unwrap();
@@ -454,9 +538,13 @@ export function useBranchDashboard({
 
   const handleOpenEditMenu = (item: MenuItem) => {
     setEditingMenuItem(item);
+    const matched = categoryRows.find(
+      (c: any) => c.id === item.categoryId || String(c.name).toLowerCase() === String(item.category).toLowerCase(),
+    );
     setMenuForm({
       name: item.name,
-      category: item.category,
+      categoryId: matched?.id || item.categoryId || categoryRows[0]?.id || '',
+      category: matched?.name || item.category,
       price: item.price,
       status: item.status,
     });
@@ -471,6 +559,7 @@ export function useBranchDashboard({
         body: {
           name: menuForm.name.trim(),
           basePrice: parsePrice(menuForm.price),
+          categoryId: menuForm.categoryId || undefined,
           isAvailable: menuForm.status === 'Active',
         },
       }).unwrap();
@@ -482,11 +571,18 @@ export function useBranchDashboard({
   };
 
   const handleDuplicateMenu = async (item: MenuItem) => {
+    const matched = categoryRows.find(
+      (c: any) => c.id === item.categoryId || String(c.name).toLowerCase() === String(item.category).toLowerCase(),
+    );
+    const catId = matched?.id || item.categoryId;
+    if (!catId) {
+      toast.error('Cannot duplicate: item does not have a valid category.');
+      return;
+    }
     try {
-      const categoryId = await resolveCategoryId(item.category);
       await createMenuItem({
         restaurantId: branch?.restaurantId,
-        categoryId,
+        categoryId: catId,
         name: `${item.name} (Copy)`,
         basePrice: parsePrice(item.price),
       }).unwrap();
@@ -658,6 +754,15 @@ export function useBranchDashboard({
     handleSaveEditTable,
     handleConfirmDeleteTable,
     menuItems: filteredMenuItems,
+    categories,
+    selectedCategory,
+    setSelectedCategory,
+    isManageCategoriesOpen,
+    setIsManageCategoriesOpen,
+    handleOpenManageCategories,
+    handleAddCategory,
+    handleUpdateCategory,
+    handleDeleteCategory,
     menuFilterStatus,
     setMenuFilterStatus,
     isAddMenuOpen,

@@ -174,6 +174,14 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       query: (body) => ({ url: '/menus/categories', method: 'POST', body }),
       invalidatesTags: ['MENU'],
     }),
+    updateMenuCategory: builder.mutation<any, { id: string; body: Record<string, unknown> }>({
+      query: ({ id, body }) => ({ url: `/menus/categories/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['MENU'],
+    }),
+    deleteMenuCategory: builder.mutation<any, string>({
+      query: (id) => ({ url: `/menus/categories/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['MENU'],
+    }),
     createMenuItem: builder.mutation<any, Record<string, unknown>>({
       query: (body) => ({ url: '/menus/items', method: 'POST', body }),
       invalidatesTags: ['MENU'],
@@ -277,6 +285,8 @@ export const {
   useGetMenuCategoriesQuery,
   useGetMenuItemsQuery,
   useCreateMenuCategoryMutation,
+  useUpdateMenuCategoryMutation,
+  useDeleteMenuCategoryMutation,
   useCreateMenuItemMutation,
   useUpdateMenuItemMutation,
   useDeleteMenuItemMutation,

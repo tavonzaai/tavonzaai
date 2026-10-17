@@ -12,6 +12,7 @@ interface BranchDashboardHeaderProps {
   onOpenEditBranch: () => void;
   onOpenAddTable: () => void;
   onOpenAddMenu: () => void;
+  onOpenManageCategories: () => void;
   onOpenInviteStaff: () => void;
   menuFilterStatus: 'All Items' | 'Active' | 'Disable';
   onMenuFilterStatusChange: (status: 'All Items' | 'Active' | 'Disable') => void;
@@ -29,6 +30,7 @@ export const BranchDashboardHeader: React.FC<BranchDashboardHeaderProps> = ({
   onOpenEditBranch,
   onOpenAddTable,
   onOpenAddMenu,
+  onOpenManageCategories,
   onOpenInviteStaff,
   menuFilterStatus,
   onMenuFilterStatusChange,
@@ -124,13 +126,24 @@ export const BranchDashboardHeader: React.FC<BranchDashboardHeaderProps> = ({
           )}
 
           {activeSubTab === 'Menu' && (
-            <button
-              onClick={onOpenAddMenu}
-              className="px-3 py-2.5 bg-yellow-400 hover:bg-yellow-300 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex justify-start items-center gap-1.5 transition-all text-neutral-800 text-base font-medium font-['Inter'] leading-5 shadow-sm cursor-pointer"
-            >
-              <Plus className="size-4 stroke-[3] text-neutral-900" />
-              <span>Add Menu Item</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onOpenManageCategories}
+                className="px-3 py-2.5 bg-neutral-900 hover:bg-neutral-800 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex justify-start items-center gap-1.5 transition-all text-stone-300 hover:text-white text-base font-medium font-['Inter'] leading-5 shadow-sm cursor-pointer"
+              >
+                <Plus className="size-4 stroke-[2.5] text-stone-300" />
+                <span>Category</span>
+              </button>
+              <button
+                type="button"
+                onClick={onOpenAddMenu}
+                className="px-3 py-2.5 bg-yellow-400 hover:bg-yellow-300 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex justify-start items-center gap-1.5 transition-all text-neutral-800 text-base font-medium font-['Inter'] leading-5 shadow-sm cursor-pointer"
+              >
+                <Plus className="size-4 stroke-[3] text-neutral-900" />
+                <span>Add Menu Item</span>
+              </button>
+            </div>
           )}
 
           {activeSubTab === 'Staff' && (
