@@ -10,19 +10,10 @@ import {
   Trash2,
   ShoppingBag,
 } from 'lucide-react';
-import {
-  useCart,
-  resolveDynamicBranchId,
-  resolveDynamicTableId,
-} from '@/context/CartContext';
+import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
-import {
-  orderService,
-  fetchBranchMenuCatalog,
-  resolveCatalogMenuItemId,
-  isUUID,
-} from '@/redux/features/orderApi';
-import { getCookie, setCookie, getApiBaseUrl } from '@/redux/api/baseApi';
+import { orderService } from '@/redux/features/orderApi';
+import { getCookie, setCookie } from '@/redux/api/baseApi';
 
 function CartContent() {
   const router = useRouter();
@@ -31,7 +22,7 @@ function CartContent() {
     cart,
     updateQuantity,
     removeFromCart,
-    clearCart,
+    refreshCart,
     totalCount,
     subtotal,
     serviceCharge,
@@ -47,25 +38,9 @@ function CartContent() {
 
   const activeTable = searchParams.get('table') || tableNumber || '';
 
-  // Automatically fetch & sync backend cart on page load
   React.useEffect(() => {
-    async function loadBackendCart() {
-      try {
-        const branchId = resolveDynamicBranchId();
-        const tableId = resolveDynamicTableId();
-        if (!branchId || !tableId) return;
-
-        try {
-          await orderService.getCartFromSession(branchId, tableId);
-        } catch {
-          await orderService.getCart(branchId, tableId);
-        }
-      } catch (err) {
-        console.warn('Initial cart fetch on mount warning:', err);
-      }
-    }
-    loadBackendCart();
-  }, [activeTable]);
+    void refreshCart();
+  }, [activeTable, refreshCart]);
 
   const handleOrderPreferenceClick = () => {
     setShowPreferenceModal(true);
@@ -75,76 +50,24 @@ function CartContent() {
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
-      const branchId = resolveDynamicBranchId();
-      const tableId = resolveDynamicTableId();
-      if (!branchId || !tableId) {
-        throw new Error('Please scan your table QR code or select a valid table before placing an order.');
-      }
-
       if (!cart || cart.length === 0) {
         throw new Error('Your cart is empty. Please add delicious dishes before placing an order.');
       }
 
-      // Pre-fetch catalog from backend to resolve real database menu item IDs
-      const catalogItems = await fetchBranchMenuCatalog(branchId);
-      if (!catalogItems || catalogItems.length === 0) {
-        throw new Error('Restaurant menu catalog is currently unavailable. Please try again.');
-      }
-
-      // Get or create draft cart for table
-      let draft = await orderService.getCart(branchId, tableId);
-      if (!draft?.id || draft.status !== 'DRAFT') {
-        draft = await orderService.getCartFromSession(branchId, tableId);
-      }
-      if (!draft?.id) {
-        throw new Error('Unable to create or retrieve cart for this table.');
-      }
-
-      // Identify items already present in backend draft
-      const existingBackendMenuIds = new Set(
-        (draft.items || []).map((bi: any) => bi.menuItemId)
-      );
-
-      // Add each cart item to the backend draft if not already added
-      for (const item of cart) {
-        const validMenuItemId = resolveCatalogMenuItemId(item, catalogItems);
-        if (!validMenuItemId) {
-          throw new Error(`Item "${item.name}" could not be verified in the restaurant menu catalog.`);
-        }
-
-        if (!existingBackendMenuIds.has(validMenuItemId)) {
-          const addRes = await orderService.addItem({
-            orderId: draft.id,
-            menuItemId: validMenuItemId,
-            quantity: item.quantity || 1,
-            specialInstructions: item.specialInstructions,
-            addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
-          });
-          existingBackendMenuIds.add(validMenuItemId);
-          if (addRes?.items) {
-            draft.items = addRes.items;
-          }
-        }
-      }
-
-      // Submit the draft order
-      const submitted = await orderService.submitOrder(draft.id);
+      const qrToken = getCookie('tavonza_qr_token') || undefined;
+      const submitted = await orderService.placeOrder({ qrToken });
       const submittedId = submitted?.id || submitted?.orderId || submitted?.orderNumber;
       if (!submittedId) {
         throw new Error('Order submission returned empty response.');
       }
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
-        setCookie('tavonza_last_submitted_order_id', submittedId);
-        localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(submitted));
-        if (submitted?.orderNumber) {
-          localStorage.setItem('tavonza_last_submitted_order_number', submitted.orderNumber);
-          setCookie('tavonza_last_submitted_order_number', submitted.orderNumber);
-        }
+      setCookie('tavonza_last_submitted_order_id', submittedId);
+      setCookie('tavonza_active_order_id', submittedId);
+      if (submitted?.orderNumber) {
+        setCookie('tavonza_last_submitted_order_number', submitted.orderNumber);
       }
 
-      clearCart();
+      await refreshCart();
       setShowPreferenceModal(false);
       router.push(
         `/orders/waiting?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(submittedId)}&mode=individual`
@@ -153,7 +76,7 @@ function CartContent() {
       console.error('Real backend cart submit failed:', err);
       const msg = err?.data?.message || err?.message || 'Failed to submit order. Please check network connection.';
       setErrorMessage(msg);
-      alert(`Order placement failed: ${msg}`);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }

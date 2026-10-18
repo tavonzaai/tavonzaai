@@ -23,6 +23,8 @@ export const tables = pgTable('tables', {
   qrCodeToken: varchar('qr_code_token', { length: 255 }).unique(),
   shape: shapeEnum('shape').default('SQUARE'),
   floor: integer('floor').default(1),
+  isActive: boolean('is_active').default(true).notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({

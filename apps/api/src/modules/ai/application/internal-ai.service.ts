@@ -79,6 +79,13 @@ export class InternalAiService {
       throw new UnauthorizedException('Invalid or expired token');
     }
 
+    if (payload?.typ === 'refresh') {
+      throw new UnauthorizedException('Refresh tokens cannot be used for AI actor resolution');
+    }
+    if (payload?.typ && payload.typ !== 'access' && payload.typ !== 'guest') {
+      throw new UnauthorizedException('Invalid token type');
+    }
+
     const userId = payload.sub;
     const [user] = await this.db
       .select()
@@ -586,7 +593,7 @@ export class InternalAiService {
       };
     }
 
-    const bill = await this.paymentService.calculateTableBill(activeSession.id);
+    const bill = await this.paymentService.calculateTableBillInternal(activeSession.id);
 
     // Fetch line items for this session
     const sessionOrders = await this.db

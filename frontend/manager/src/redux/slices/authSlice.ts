@@ -21,6 +21,7 @@ export interface AuthState {
   error: string | null;
   successMessage: string | null;
   forgotEmail: string | null;
+  pendingEmail?: string | null;
   otpCode: string | null;
 }
 
@@ -32,6 +33,7 @@ const initialState: AuthState = {
   error: null,
   successMessage: null,
   forgotEmail: null,
+  pendingEmail: null,
   otpCode: null,
 };
 
@@ -58,6 +60,11 @@ const authSlice = createSlice({
       state.successMessage = null;
     },
     setForgotEmail: (state, action: PayloadAction<string | null>) => {
+      state.forgotEmail = action.payload;
+      state.pendingEmail = action.payload;
+    },
+    setPendingEmail: (state, action: PayloadAction<string | null>) => {
+      state.pendingEmail = action.payload;
       state.forgotEmail = action.payload;
     },
     setOtpCode: (state, action: PayloadAction<string | null>) => {
@@ -227,6 +234,7 @@ export const {
   clearAuthError,
   clearSuccessMessage,
   setForgotEmail,
+  setPendingEmail,
   setOtpCode,
   logoutLocally,
 } = authSlice.actions;

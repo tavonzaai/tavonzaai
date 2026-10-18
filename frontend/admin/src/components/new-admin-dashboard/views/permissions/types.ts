@@ -3,7 +3,9 @@ import React from 'react';
 export interface RoleDefinition {
   id: string;
   name: string;
+  slug?: string;
   staffCount: number;
+  isSystem?: boolean;
   isLocked?: boolean;
 }
 

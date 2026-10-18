@@ -4,12 +4,9 @@
 // Orchestrates order use cases from both customer and waiter flows.
 //
 // CUSTOMER FLOW:
-//   - getOrCreateCart()     → Get/create the customer's DRAFT order
-//   - addToCart()           → Add item to cart (from item detail screen)
-//   - updateCartItem()      → Change quantity in cart
-//   - removeCartItem()      → Remove item from cart
-//   - submitOrder()         → Place order (DRAFT → SUBMITTED)
-//   - getOrderStatus()      → Track order status (timeline screen)
+//   - Cart lifecycle lives in CartService; checkout in CheckoutService.
+//   - announceSubmittedOrder() → Waiter-approval / auto-accept workflow
+//   - getOrderStatus()         → Track order status (timeline screen)
 //
 // WAITER FLOW:
 //   - getOrdersByBranch()   → Orders list / table detail screen
@@ -27,7 +24,6 @@ import {
 import {
   ORDER_REPOSITORY,
   type IOrderRepository,
-  type AddOrderItemInput,
 } from '../../domain/interfaces/order-repository.interface';
 import { Order } from '../../domain/entities/order.entity';
 import type { OrderStatus } from '../../domain/enums/order-status.enum';
@@ -45,6 +41,10 @@ import { and, eq, or, sql } from 'drizzle-orm';
 
 import { RealtimeGateway } from '../../../realtime/realtime.gateway';
 import { NotificationService } from '../../../notifications/application/services/notification.service';
+import { BranchAccessService } from '../../../authorization/application/services/branch-access.service';
+import type { CustomerPrincipal } from '../../../identity/application/services/customer-principal.service';
+import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
+import { isOrderOwnedBy } from '../../domain/order-access';
 
 @Injectable()
 export class OrderService {
@@ -56,6 +56,7 @@ export class OrderService {
     private readonly outboxService: OutboxService,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly notificationService: NotificationService,
+    private readonly branchAccess: BranchAccessService,
   ) {}
 
   // ══════════════════════════════════════════════════════════════════════
@@ -63,156 +64,13 @@ export class OrderService {
   // ══════════════════════════════════════════════════════════════════════
 
   /**
-   * Get or create the customer's cart (DRAFT order) for a table or guest session.
-   * Only one active DRAFT order per guest/table at a time.
-   */
-  async getOrCreateCart(
-    branchId: string,
-    tableId: string,
-    guestSessionId?: string,
-    tableSessionId?: string,
-  ): Promise<Order> {
-    const existing = await this.orderRepository.findDraftByTable(
-      branchId,
-      tableId,
-      guestSessionId,
-    );
-    if (existing) return existing;
-    return this.orderRepository.create({
-      branchId,
-      tableId,
-      tableSessionId,
-      customerSessionId: guestSessionId,
-    });
-  }
-
-  /**
-   * Add a menu item to the cart.
-   * Figma: "Add To Cart" button on item detail screen
-   */
-  async addToCart(input: AddOrderItemInput): Promise<Order> {
-    const order = await this.findOrderOrFail(input.orderId);
-    if (!order.isEditable) {
-      throw new BadRequestException(
-        'Cannot add items to an order that has already been submitted',
-      );
-    }
-    return this.orderRepository.addItem(input);
-  }
-
-  /**
-   * Update a cart item's quantity or special instructions.
-   * Figma: Quantity +/- buttons on Order Summary screen
-   */
-  async updateCartItem(
-    orderId: string,
-    itemId: string,
-    input: { quantity?: number; specialInstructions?: string },
-  ): Promise<Order> {
-    const order = await this.findOrderOrFail(orderId);
-    if (!order.isEditable) {
-      throw new BadRequestException(
-        'Cannot modify items on a submitted order',
-      );
-    }
-    return this.orderRepository.updateItem(itemId, input);
-  }
-
-  /**
-   * Remove an item from the cart.
-   * Figma: Swipe-to-delete on Order Summary screen
-   */
-  async removeCartItem(orderId: string, itemId: string): Promise<Order> {
-    const order = await this.findOrderOrFail(orderId);
-    if (!order.isEditable) {
-      throw new BadRequestException(
-        'Cannot remove items from a submitted order',
-      );
-    }
-    return this.orderRepository.removeItem(itemId);
-  }
-
-  /**
-   * Submit the cart as a real order (DRAFT → SUBMITTED).
+   * Runs the post-submission workflow for a freshly persisted SUBMITTED order.
    * Checks branchSettings.orderAcceptanceMode:
    * - If AUTO_ACCEPT: immediately transitions to ACCEPTED (CONFIRMED), updates table to PREPARING, emits OrderAccepted.
-   * - Else: sets table to ORDERING, emits OrderSubmitted.
+   * - Else: sets table to ORDERING, notifies waiters for approval, emits OrderSubmitted.
    */
-  async submitOrder(orderId: string): Promise<Order> {
-    const order = await this.findOrderOrFail(orderId);
-
-    if (!order.canTransitionTo('SUBMITTED')) {
-      throw new BadRequestException(
-        `Cannot submit order in ${order.status} status`,
-      );
-    }
-
-    if (order.items.length === 0) {
-      throw new BadRequestException('Cannot submit an empty order');
-    }
-
-    // Atomic stock validation and deduction + prep time calculation
-    let calculatedPrepTime = 15;
-    await this.db.transaction(async (tx) => {
-      let maxItemPrepTime = 0;
-      for (const item of order.items) {
-        const [menuItem] = await tx
-          .select()
-          .from(menuItems)
-          .where(eq(menuItems.id, item.menuItemId));
-
-        if (!menuItem) {
-          throw new BadRequestException(`Item "${item.name}" no longer exists`);
-        }
-        if (!menuItem.isAvailable) {
-          throw new BadRequestException(`Item "${menuItem.name}" is no longer available`);
-        }
-
-        const itemPrep = menuItem.estimatedPrepTime ?? 15;
-        if (itemPrep > maxItemPrepTime) {
-          maxItemPrepTime = itemPrep;
-        }
-
-        if (menuItem.isStockTracked) {
-          const updated = await tx
-            .update(menuItems)
-            .set({
-              stockQuantity: sql`${menuItems.stockQuantity} - ${item.quantity}`,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(menuItems.id, item.menuItemId),
-                eq(menuItems.isStockTracked, true),
-                sql`${menuItems.stockQuantity} >= ${item.quantity}`,
-              ),
-            )
-            .returning({ id: menuItems.id, stockQuantity: menuItems.stockQuantity });
-
-          if (updated.length === 0) {
-            throw new BadRequestException(
-              `Insufficient stock for "${menuItem.name}". Only ${menuItem.stockQuantity ?? 0} available.`,
-            );
-          }
-        }
-      }
-
-      calculatedPrepTime = maxItemPrepTime > 0 ? maxItemPrepTime : 15;
-
-      await tx
-        .update(orders)
-        .set({
-          estimatedPrepTime: calculatedPrepTime,
-          inventoryDeducted: true,
-          updatedAt: new Date(),
-        })
-        .where(eq(orders.id, orderId));
-    });
-
-    const updatedOrder = await this.orderRepository.updateStatus(
-      orderId,
-      'SUBMITTED',
-    );
+  async announceSubmittedOrder(updatedOrder: Order): Promise<Order> {
+    const orderId = updatedOrder.id;
 
     // Check branch order acceptance mode
     const [settings] = await this.db
@@ -401,6 +259,32 @@ export class OrderService {
    */
   async getOrderStatus(orderId: string): Promise<Order> {
     return this.findOrderOrFail(orderId);
+  }
+
+  /** Reads an order on behalf of a diner; orders they did not place are reported as missing. */
+  async getOrderForCustomer(principal: CustomerPrincipal, orderId: string): Promise<Order> {
+    const order = await this.findOrderOrFail(orderId);
+    if (!isOrderOwnedBy(order, principal)) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+    return order;
+  }
+
+  async getOrdersForCustomer(
+    principal: CustomerPrincipal,
+    filters?: { status?: OrderStatus; search?: string; branchId?: string },
+  ): Promise<Order[]> {
+    return this.orderRepository.findByOwner(
+      { customerId: principal.customerId, guestSessionId: principal.guestSessionId },
+      filters,
+    );
+  }
+
+  /** Reads an order for staff after checking the order's branch is within their tenant scope. */
+  async getOrderForStaff(user: JwtPayload, orderId: string): Promise<Order> {
+    const order = await this.findOrderOrFail(orderId);
+    await this.branchAccess.assertAccess(user, order.branchId);
+    return order;
   }
 
   // ══════════════════════════════════════════════════════════════════════

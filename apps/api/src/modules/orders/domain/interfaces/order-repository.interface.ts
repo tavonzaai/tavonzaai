@@ -63,6 +63,17 @@ export interface IOrderRepository {
     },
   ): Promise<Order[]>;
 
+  /** Orders placed by one diner (registered customer and/or guest session), newest first. */
+  findByOwner(
+    owner: { customerId?: string | null; guestSessionId?: string | null },
+    filters?: { status?: OrderStatus; search?: string; branchId?: string },
+  ): Promise<Order[]>;
+
+  /** Order id + owner for an idempotency key, if one was already used. */
+  findByIdempotencyKey(
+    key: string,
+  ): Promise<{ id: string; customerId: string | null; guestSessionId: string | null } | null>;
+
   // ── Items ───────────────────────────────────────────────────────────
 
   /** Add an item to an order and recalculate totals. */

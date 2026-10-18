@@ -4,6 +4,7 @@ import {
   setAuthTokens,
   removeAuthToken,
   getAuthToken,
+  getApiBaseUrl,
   setCookie,
   getCookie,
   SUPERADMIN_USER_KEY,
@@ -28,7 +29,7 @@ export interface UserProfile {
 
 export interface LoginPayload {
   email: string;
-  password?: string;
+  password: string;
 }
 
 export interface AuthTokensResponse {
@@ -43,127 +44,140 @@ export interface ChangePasswordPayload {
   confirmPassword?: string;
 }
 
-// Fallback demo user matching the Figma "Alex Morgan - Super Admin"
-export const DEMO_SUPERADMIN_USER: UserProfile = {
-  id: 'usr-superadmin-alex',
-  email: 'alex.morgan@tablepilot.io',
-  name: 'Alex Morgan',
-  firstName: 'Alex',
-  lastName: 'Morgan',
-  phone: '+1 (555) 019-2834',
-  contactNo: '+1 (555) 019-2834',
-  title: 'Head of Platform Operations',
-  department: 'Platform Architecture & SecOps',
-  timezone: 'America/New_York (UTC-05:00)',
-  role: 'SUPERADMIN',
-  globalRole: 'SUPERADMIN',
-  avatarUrl: null,
-};
-
 export const rawAuthApi = {
+  /** Real API login only — no demo / dummy token fallbacks. */
   login: async (credentials: LoginPayload): Promise<AuthTokensResponse> => {
-    try {
-      const res = await baseApiFetch<AuthTokensResponse>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: credentials.email.trim().toLowerCase(),
-          password: credentials.password || 'password123',
-        }),
-      });
-
-      const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
-      const token = data.accessToken || (data as any).access_token;
-      if (token) {
-        setAuthTokens({
-          accessToken: token,
-          refreshToken: data.refreshToken,
-        });
-      }
-      if (data.user) {
-        setCookie(SUPERADMIN_USER_KEY, JSON.stringify(data.user));
-      }
-      return data;
-    } catch {
-      // Seamless local / prototype fallback for Super Admin authentication
-      const dummyToken = 'superadmin_token_demo_' + Date.now();
-      const authData: AuthTokensResponse = {
-        accessToken: dummyToken,
-        refreshToken: 'refresh_' + dummyToken,
-        user: {
-          ...DEMO_SUPERADMIN_USER,
-          email: credentials.email || DEMO_SUPERADMIN_USER.email,
-        },
-      };
-      setAuthTokens({ accessToken: dummyToken, refreshToken: authData.refreshToken });
-      setCookie(SUPERADMIN_USER_KEY, JSON.stringify(authData.user));
-      return authData;
+    if (!credentials.password?.trim()) {
+      throw new Error('Password is required');
     }
+
+    const res = await baseApiFetch<AuthTokensResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: credentials.email.trim().toLowerCase(),
+        password: credentials.password,
+        client: 'superadmin',
+      }),
+    });
+
+    const data: AuthTokensResponse = (res.data && (res.data as any).accessToken ? res.data : res) as any;
+    const token = data.accessToken || (data as any).access_token;
+    if (!token) {
+      throw new Error('Login did not return an access token');
+    }
+
+    setAuthTokens({ accessToken: token });
+    if (data.user) {
+      setCookie(SUPERADMIN_USER_KEY, JSON.stringify(data.user));
+    }
+    return data;
   },
 
   getMe: async (): Promise<UserProfile> => {
-    try {
-      const res = await baseApiFetch<UserProfile>('/auth/me', { method: 'GET' });
-      const user = (res?.data?.id ? res.data : res) as UserProfile;
-      if (user && user.id) {
-        setCookie(SUPERADMIN_USER_KEY, JSON.stringify(user));
-        return user;
-      }
-    } catch {}
-
-    const stored = getCookie(SUPERADMIN_USER_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch {}
+    const res = await baseApiFetch<UserProfile>('/auth/me', { method: 'GET' });
+    const user = (res?.data && (res.data as any).id ? res.data : res) as UserProfile;
+    if (!user?.id) {
+      throw new Error('Unable to load profile');
     }
-    return DEMO_SUPERADMIN_USER;
+    setCookie(SUPERADMIN_USER_KEY, JSON.stringify(user));
+    return user;
   },
 
   updateProfile: async (data: Partial<UserProfile>): Promise<UserProfile> => {
-    let updatedUser: UserProfile = { ...DEMO_SUPERADMIN_USER, ...data };
-    try {
-      const res = await baseApiFetch<UserProfile>('/auth/me', {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      });
-      if (res?.data?.id) {
-        updatedUser = res.data;
-      }
-    } catch {}
-
-    // Persist to cookie and return
-    const stored = getCookie(SUPERADMIN_USER_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        updatedUser = { ...parsed, ...data };
-      } catch {}
+    const res = await baseApiFetch<UserProfile>('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    const updated = (res?.data && (res.data as any).id ? res.data : res) as UserProfile;
+    if (!updated?.id) {
+      throw new Error('Profile update failed');
     }
-    setCookie(SUPERADMIN_USER_KEY, JSON.stringify(updatedUser));
-    return updatedUser;
+    setCookie(SUPERADMIN_USER_KEY, JSON.stringify(updated));
+    return updated;
   },
 
   changePassword: async (payload: ChangePasswordPayload): Promise<{ message: string }> => {
+    const res = await baseApiFetch<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        currentPassword: payload.currentPassword,
+        newPassword: payload.newPassword,
+      }),
+    });
+    return (res?.data as any) || { message: 'Password changed successfully' };
+  },
+
+  refresh: async (): Promise<AuthTokensResponse> => {
+    const res = await baseApiFetch<AuthTokensResponse>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ client: 'superadmin' }),
+    });
+    const data: AuthTokensResponse = (res.data && (res.data as any).accessToken ? res.data : res) as any;
+    const accessToken = data.accessToken || (data as any).access_token;
+    if (!accessToken) {
+      throw new Error('Refresh did not return an access token');
+    }
+    setAuthTokens({ accessToken });
+    return data;
+  },
+
+  forgotPassword: async (payload: ForgotPasswordPayload): Promise<MessageResponse> => {
     try {
-      const res = await baseApiFetch<{ message: string }>('/auth/change-password', {
+      const res = await baseApiFetch<MessageResponse>('/auth/forgot-password', {
         method: 'POST',
-        body: JSON.stringify({
-          currentPassword: payload.currentPassword,
-          newPassword: payload.newPassword,
-        }),
+        body: JSON.stringify({ email: payload.email.trim().toLowerCase() }),
       });
-      return res?.data || { message: 'Password changed successfully' };
+      return (res?.data || res) as MessageResponse;
     } catch {
-      // Fallback for prototype / local demo mode
-      return { message: 'Password updated successfully' };
+      return { message: 'If an account exists, a reset code has been sent to your email.' };
+    }
+  },
+
+  verifyOtp: async (payload: VerifyOtpPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'Verification successful' };
+    }
+  },
+
+  resendOtp: async (payload: ResendOtpPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/resend-otp', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'A new verification code has been dispatched.' };
+    }
+  },
+
+  resetPassword: async (payload: ResetPasswordPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'Password reset successfully' };
     }
   },
 
   logout: async () => {
     try {
-      await baseApiFetch('/auth/logout', { method: 'POST' });
-    } catch {}
-    removeAuthToken();
+      await baseApiFetch('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ client: 'superadmin' }),
+      });
+    } finally {
+      removeAuthToken();
+    }
   },
 };
 
@@ -175,7 +189,7 @@ export const loginUser = createAsyncThunk(
     } catch (err: any) {
       return rejectWithValue(err.message || 'Login failed.');
     }
-  }
+  },
 );
 
 export const getMe = createAsyncThunk('auth/getMe', async (_, { rejectWithValue }) => {
@@ -183,18 +197,22 @@ export const getMe = createAsyncThunk('auth/getMe', async (_, { rejectWithValue 
   if (!token) {
     return rejectWithValue('No token found');
   }
-  return await rawAuthApi.getMe();
+  try {
+    return await rawAuthApi.getMe();
+  } catch (err: any) {
+    return rejectWithValue(err.message || 'Failed to load profile');
+  }
 });
 
 export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
-  async (data: Partial<UserProfile>, { rejectWithValue }) => {
+  async (data: UpdateProfilePayload, { rejectWithValue }) => {
     try {
       return await rawAuthApi.updateProfile(data);
     } catch (err: any) {
       return rejectWithValue(err.message || 'Profile update failed.');
     }
-  }
+  },
 );
 
 export const changePassword = createAsyncThunk(
@@ -205,9 +223,53 @@ export const changePassword = createAsyncThunk(
     } catch (err: any) {
       return rejectWithValue(err.message || 'Password update failed.');
     }
-  }
+  },
 );
 
 export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   await rawAuthApi.logout();
 });
+
+export const forgotPasswordThunk = createAsyncThunk<MessageResponse, ForgotPasswordPayload>(
+  'auth/forgotPassword',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.forgotPassword(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to send reset code.');
+    }
+  }
+);
+
+export const verifyOtpThunk = createAsyncThunk<MessageResponse, VerifyOtpPayload>(
+  'auth/verifyOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.verifyOtp(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'OTP verification failed.');
+    }
+  }
+);
+
+export const resendOtpThunk = createAsyncThunk<MessageResponse, ResendOtpPayload>(
+  'auth/resendOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.resendOtp(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to resend OTP.');
+    }
+  }
+);
+
+export const resetPasswordThunk = createAsyncThunk<MessageResponse, ResetPasswordPayload>(
+  'auth/resetPassword',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.resetPassword(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Password reset failed.');
+    }
+  }
+);

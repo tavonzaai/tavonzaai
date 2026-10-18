@@ -20,10 +20,15 @@ import {
   Get,
   Patch,
   Body,
+  Req,
+  Res,
   UseGuards,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { isProduction } from '@tavonza/config';
 import {
   ApiTags,
   ApiOperation,
@@ -50,9 +55,46 @@ import { UpdateUserProfileDto } from './dto/user-request.dto';
 import { AuthTokensDto, UserProfileDto, MessageResponseDto, RegisterResponseDto } from './dto/auth-response.dto';
 import { UserDetailResponseDto } from './dto/user-response.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../infrastructure/adapters/jwt.strategy';
 import { ApiStandardErrors } from '../../../../common/swagger';
+import {
+  type AuthClient,
+  REFRESH_COOKIE_PATH,
+  readCookie,
+  refreshCookieName,
+  refreshCookieOptions,
+} from '../../domain/token-policy';
+
+function isSecureRequest(req: Request): boolean {
+  return isProduction() || req.secure || req.headers['x-forwarded-proto'] === 'https';
+}
+
+function setRefreshCookie(req: Request, res: Response, client: AuthClient, token: string): void {
+  res.cookie(refreshCookieName(client), token, refreshCookieOptions(isSecureRequest(req)));
+}
+
+function clearRefreshCookie(req: Request, res: Response, client: AuthClient): void {
+  const { maxAge: _maxAge, ...options } = refreshCookieOptions(isSecureRequest(req));
+  res.clearCookie(refreshCookieName(client), { ...options, path: REFRESH_COOKIE_PATH });
+}
+
+/**
+ * Cookie-authenticated calls must be JSON so cross-site forms cannot replay
+ * them; a JSON content type forces a CORS preflight that our origin list blocks.
+ */
+function assertJsonRequest(req: Request): void {
+  if (!req.is('application/json')) {
+    throw new UnauthorizedException('Unsupported request');
+  }
+}
+
+/** Browser apps keep the refresh token in an HttpOnly cookie, never in the body. */
+function withoutRefreshToken(tokens: AuthTokensDto): AuthTokensDto {
+  const { refreshToken: _refreshToken, ...rest } = tokens;
+  return rest;
+}
 
 @ApiTags('Identity | Authentication')
 @ApiStandardErrors(400, 401, 500)
@@ -88,24 +130,49 @@ export class AuthController {
   @ApiOperation({ summary: '[Customer] Login with email and password' })
   @ApiOkResponse({ type: AuthTokensDto })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
-  async login(@Body() dto: LoginDto): Promise<AuthTokensDto> {
-    return this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthTokensDto> {
+    const tokens = await this.authService.login(
+      { email: dto.email, password: dto.password },
+      { client: dto.client, userAgent: req.headers['user-agent'] ?? null, ipAddress: req.ip ?? null },
+    );
+    if (!dto.client) return tokens;
+    setRefreshCookie(req, res, dto.client, tokens.refreshToken!);
+    return withoutRefreshToken(tokens);
   }
 
   /**
    * POST /auth/refresh
-   * Rotate access + refresh tokens
+   * Rotates the refresh token (single use) and issues a new access token.
+   * Browser apps send `{ client }` and the HttpOnly cookie; other clients send `{ refreshToken }`.
    */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiOperation({ summary: 'Rotate refresh token and issue a new access token' })
   @ApiOkResponse({ type: AuthTokensDto })
-  @ApiUnauthorizedResponse({ description: 'Invalid or expired refresh token' })
+  @ApiUnauthorizedResponse({ description: 'Invalid, expired, reused or revoked refresh token' })
   async refresh(
-    @CurrentUser() user: JwtPayload | undefined,
     @Body() dto: RefreshTokenDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<AuthTokensDto> {
-    return this.authService.refreshTokens(user?.sub, dto.refreshToken);
+    if (!dto.client) {
+      return this.authService.refreshTokens(dto.refreshToken);
+    }
+
+    assertJsonRequest(req);
+    const presented = readCookie(req.headers.cookie, refreshCookieName(dto.client));
+    try {
+      const tokens = await this.authService.refreshTokens(presented);
+      setRefreshCookie(req, res, dto.client, tokens.refreshToken!);
+      return withoutRefreshToken(tokens);
+    } catch (error) {
+      clearRefreshCookie(req, res, dto.client);
+      throw error;
+    }
   }
 
   /**
@@ -123,21 +190,39 @@ export class AuthController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: ChangePasswordDto,
   ): Promise<MessageResponseDto> {
-    await this.authService.changePassword(user.sub, dto);
+    await this.authService.changePassword(user.sub, dto, user.sid);
     return { message: 'Password changed successfully' };
   }
 
   /**
    * POST /auth/logout
+   * Revokes the current session: its refresh token can no longer rotate and
+   * its access tokens are rejected immediately. Works with an expired access
+   * token as long as the refresh cookie/token is presented.
    */
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: '[Customer] Logout and invalidate refresh token' })
+  @ApiOperation({ summary: 'Logout and revoke the current session' })
   @ApiOkResponse({ type: MessageResponseDto })
-  async logout(@CurrentUser() user: JwtPayload): Promise<MessageResponseDto> {
-    await this.authService.logout(user.sub);
+  async logout(
+    @CurrentUser() user: JwtPayload | null,
+    @Body() dto: RefreshTokenDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<MessageResponseDto> {
+    let refreshToken = dto.refreshToken;
+    if (dto.client) {
+      assertJsonRequest(req);
+      refreshToken = readCookie(req.headers.cookie, refreshCookieName(dto.client));
+      clearRefreshCookie(req, res, dto.client);
+    }
+    await this.authService.logout({
+      refreshToken,
+      sessionId: user?.sid,
+      userId: user?.sub,
+    });
     return { message: 'Logged out successfully' };
   }
 

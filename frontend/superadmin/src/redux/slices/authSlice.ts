@@ -5,8 +5,11 @@ import {
   logoutUser,
   updateProfile,
   changePassword,
+  forgotPasswordThunk,
+  verifyOtpThunk,
+  resendOtpThunk,
+  resetPasswordThunk,
   UserProfile,
-  DEMO_SUPERADMIN_USER,
 } from '../features/authApi';
 
 export interface AuthState {
@@ -15,14 +18,22 @@ export interface AuthState {
   loading: boolean;
   isInitialized: boolean;
   error: string | null;
+  successMessage: string | null;
+  forgotEmail: string | null;
+  pendingEmail: string | null;
+  otpCode: string | null;
 }
 
 const initialState: AuthState = {
-  user: DEMO_SUPERADMIN_USER,
-  isAuthenticated: true,
+  user: null,
+  isAuthenticated: false,
   loading: false,
   isInitialized: false,
   error: null,
+  successMessage: null,
+  forgotEmail: null,
+  pendingEmail: null,
+  otpCode: null,
 };
 
 const authSlice = createSlice({
@@ -37,6 +48,23 @@ const authSlice = createSlice({
     setInitialized: (state, action: PayloadAction<boolean>) => {
       state.isInitialized = action.payload;
     },
+    setForgotEmail: (state, action: PayloadAction<string | null>) => {
+      state.forgotEmail = action.payload;
+      state.pendingEmail = action.payload;
+    },
+    setPendingEmail: (state, action: PayloadAction<string | null>) => {
+      state.pendingEmail = action.payload;
+      state.forgotEmail = action.payload;
+    },
+    setOtpCode: (state, action: PayloadAction<string | null>) => {
+      state.otpCode = action.payload;
+    },
+    clearAuthError: (state) => {
+      state.error = null;
+    },
+    clearSuccessMessage: (state) => {
+      state.successMessage = null;
+    },
     logout: (state) => {
       state.user = null;
       state.isAuthenticated = false;
@@ -47,7 +75,6 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Login
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -63,8 +90,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = (action.payload as string) || 'Authentication failed.';
       })
-
-      // Get Me Profile
       .addCase(getMe.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload;
@@ -73,10 +98,10 @@ const authSlice = createSlice({
       })
       .addCase(getMe.rejected, (state) => {
         state.loading = false;
+        state.user = null;
+        state.isAuthenticated = false;
         state.isInitialized = true;
       })
-
-      // Update Profile
       .addCase(updateProfile.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -89,8 +114,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = (action.payload as string) || 'Profile update failed.';
       })
-
-      // Change Password
       .addCase(changePassword.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -102,15 +125,82 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = (action.payload as string) || 'Password change failed.';
       })
-
-      // Logout
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
         state.isAuthenticated = false;
         state.isInitialized = true;
+      })
+
+      // Forgot Password
+      .addCase(forgotPasswordThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(forgotPasswordThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+        state.successMessage = action.payload.message || 'Reset code sent to your email!';
+      })
+      .addCase(forgotPasswordThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+
+      // Verify OTP
+      .addCase(verifyOtpThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(verifyOtpThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+        state.successMessage = action.payload.message || 'OTP verified!';
+      })
+      .addCase(verifyOtpThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+
+      // Resend OTP
+      .addCase(resendOtpThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(resendOtpThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+        state.successMessage = action.payload.message || 'OTP resent!';
+      })
+      .addCase(resendOtpThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+
+      // Reset Password
+      .addCase(resetPasswordThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(resetPasswordThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+        state.successMessage = action.payload.message || 'Password reset successfully!';
+      })
+      .addCase(resetPasswordThunk.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
       });
   },
 });
 
-export const { setUser, setInitialized, logout } = authSlice.actions;
+export const {
+  setUser,
+  setInitialized,
+  setForgotEmail,
+  setPendingEmail,
+  setOtpCode,
+  clearAuthError,
+  clearSuccessMessage,
+  logout,
+} = authSlice.actions;
 export default authSlice.reducer;

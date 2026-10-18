@@ -10,12 +10,11 @@ interface AddStaffModalProps {
   onStaffCreated: () => void;
 }
 
+/** Branch managers may only create these roles in their own branch (backend-enforced). */
 const AVAILABLE_ROLES = [
   { value: 'WAITER', label: 'Waiter / Server', defaultPerms: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS', 'MANAGE_TABLES'] },
   { value: 'KITCHEN_STAFF', label: 'Kitchen / Line Cook', defaultPerms: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'] },
   { value: 'CASHIER', label: 'Cashier / POS Operator', defaultPerms: ['MANAGE_PAYMENTS', 'VIEW_ORDERS', 'APPLY_DISCOUNTS'] },
-  { value: 'BARTENDER', label: 'Bartender', defaultPerms: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'] },
-  { value: 'BRANCH_MANAGER', label: 'Assistant Branch Manager', defaultPerms: ['MANAGE_MENU', 'MANAGE_TABLES', 'MANAGE_STAFF', 'VIEW_ORDERS', 'UPDATE_ORDER_STATUS', 'MANAGE_PAYMENTS', 'VIEW_REPORTS'] },
 ];
 
 const ALL_PERMISSIONS = [

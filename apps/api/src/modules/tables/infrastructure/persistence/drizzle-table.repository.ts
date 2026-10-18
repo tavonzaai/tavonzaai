@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { DrizzleQueryBuilder } from '../../../../common/database';
 import { randomBytes } from 'crypto';
 import {
@@ -10,6 +10,9 @@ import {
   waiterTableAssignments,
   staff,
   users,
+  branches,
+  tableSessions,
+  orders,
 } from '@tavonza/database';
 import type {
   Table,
@@ -97,19 +100,24 @@ export class DrizzleTableRepository {
     return mapped;
   }
 
+  /** Opaque QR token only — never resolve by table UUID. Soft-deleted / inactive / out-of-service tables are invisible. */
   async findByQrToken(qrCodeToken: string): Promise<Table | null> {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(qrCodeToken);
     const [row] = await this.db
-      .select()
+      .select({ table: tables })
       .from(tables)
+      .innerJoin(branches, eq(branches.id, tables.branchId))
       .where(
-        isUuid
-          ? or(eq(tables.qrCodeToken, qrCodeToken), eq(tables.id, qrCodeToken))
-          : eq(tables.qrCodeToken, qrCodeToken),
+        and(
+          eq(tables.qrCodeToken, qrCodeToken),
+          eq(tables.isActive, true),
+          isNull(tables.deletedAt),
+          ne(tables.operationalFlag, 'OUT_OF_SERVICE'),
+          eq(branches.isActive, true),
+        ),
       )
       .limit(1);
 
-    return row ? this.mapTable(row) : null;
+    return row ? this.mapTable(row.table) : null;
   }
 
   async findTablesByBranch(
@@ -121,22 +129,101 @@ export class DrizzleTableRepository {
       floor?: number;
     },
   ): Promise<Table[]> {
-    return DrizzleQueryBuilder.from(this.db, tables)
+    const qb = DrizzleQueryBuilder.from(this.db, tables)
       .filterExact({
         branchId,
         serviceStatus: options?.serviceStatus,
         operationalFlag: options?.operationalFlag,
         floor: options?.floor,
+        isActive: true,
       })
+      .filterNull(tables.deletedAt, true);
+
+    if (!options?.operationalFlag) {
+      qb.andWhere(ne(tables.operationalFlag, 'OUT_OF_SERVICE'));
+    }
+
+    const rows = await qb
       .search(options?.search, [tables.label])
       .sort(tables.label, 'asc')
-      .executePlain((r) => this.mapTable(r));
+      .executePlain();
+
+    return rows.map((r) => this.mapTable(r));
+  }
+
+  /** Reasons a table cannot be soft-deleted (active dining / unpaid work / waiter coverage). */
+  async findDeleteBlockers(tableId: string): Promise<string[]> {
+    const blockers: string[] = [];
+
+    const [openSession] = await this.db
+      .select({ id: tableSessions.id })
+      .from(tableSessions)
+      .where(
+        and(
+          eq(tableSessions.tableId, tableId),
+          inArray(tableSessions.status, ['ACTIVE', 'BILL_REQUESTED']),
+        ),
+      )
+      .limit(1);
+    if (openSession) {
+      blockers.push('An active table session is still open for this table');
+    }
+
+    const [openOrder] = await this.db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.tableId, tableId),
+          ne(orders.status, 'CANCELLED'),
+          ne(orders.status, 'REJECTED'),
+          ne(orders.status, 'COMPLETED'),
+          or(
+            eq(orders.paymentStatus, 'UNPAID'),
+            eq(orders.paymentStatus, 'PARTIALLY_PAID'),
+            inArray(orders.status, ['DRAFT', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED']),
+          ),
+        ),
+      )
+      .limit(1);
+    if (openOrder) {
+      blockers.push('This table still has unfinished or unpaid orders');
+    }
+
+    const now = new Date();
+    const [assignment] = await this.db
+      .select({ id: waiterTableAssignments.id })
+      .from(waiterTableAssignments)
+      .where(
+        and(
+          eq(waiterTableAssignments.tableId, tableId),
+          eq(waiterTableAssignments.isActive, true),
+          sql`${waiterTableAssignments.sessionEnd} > ${now}`,
+        ),
+      )
+      .limit(1);
+    if (assignment) {
+      blockers.push('A waiter is still assigned to this table');
+    }
+
+    return blockers;
   }
 
   async softDeleteTable(id: string): Promise<Table | null> {
-    return this.updateTable(id, {
-      operationalFlag: 'OUT_OF_SERVICE',
-    });
+    const [updated] = await this.db
+      .update(tables)
+      .set({
+        isActive: false,
+        deletedAt: new Date(),
+        qrCodeToken: null,
+        operationalFlag: 'OUT_OF_SERVICE',
+        serviceStatus: 'AVAILABLE',
+        updatedAt: new Date(),
+      })
+      .where(and(eq(tables.id, id), isNull(tables.deletedAt)))
+      .returning();
+
+    return updated ? this.mapTable(updated) : null;
   }
 
   async updateTable(
@@ -281,6 +368,8 @@ export class DrizzleTableRepository {
       qrCodeToken: row.qrCodeToken,
       shape: row.shape,
       floor: row.floor,
+      isActive: row.isActive !== false,
+      deletedAt: row.deletedAt ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

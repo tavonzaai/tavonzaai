@@ -9,24 +9,47 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuthService } from './application/services/auth.service';
 import { UserService } from './application/services/user.service';
+import { CustomerPrincipalService } from './application/services/customer-principal.service';
 import { DrizzleUserRepository } from './infrastructure/persistence/drizzle-user.repository';
+import { DrizzleAuthSessionRepository } from './infrastructure/persistence/drizzle-auth-session.repository';
+import { DrizzleGuestPrincipalRepository } from './infrastructure/persistence/drizzle-guest-principal.repository';
 import { JwtStrategy } from './infrastructure/adapters/jwt.strategy';
 import { AuthController } from './presentation/http/auth.controller';
 import { UserController } from './presentation/http/user.controller';
 import { MeController } from './presentation/http/me.controller';
+import { ACCESS_TOKEN_TTL_SECONDS, accessTokenSecret } from './domain/token-policy';
 
 @Module({
   imports: [
     NotificationsModule,
     OrganizationsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev-secret-change-in-prod',
-      signOptions: { expiresIn: '15m' as unknown as number },
+    JwtModule.registerAsync({
+      useFactory: () => ({
+        secret: accessTokenSecret(),
+        signOptions: { expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+      }),
     }),
   ],
   controllers: [AuthController, UserController, MeController],
-  providers: [AuthService, UserService, DrizzleUserRepository, JwtStrategy],
-  exports: [AuthService, UserService, DrizzleUserRepository, JwtModule, PassportModule],
+  providers: [
+    AuthService,
+    UserService,
+    CustomerPrincipalService,
+    DrizzleUserRepository,
+    DrizzleAuthSessionRepository,
+    DrizzleGuestPrincipalRepository,
+    JwtStrategy,
+  ],
+  exports: [
+    AuthService,
+    UserService,
+    CustomerPrincipalService,
+    DrizzleUserRepository,
+    DrizzleAuthSessionRepository,
+    DrizzleGuestPrincipalRepository,
+    JwtModule,
+    PassportModule,
+  ],
 })
 export class IdentityModule {}

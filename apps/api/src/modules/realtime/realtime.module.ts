@@ -1,13 +1,16 @@
 import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { RealtimeGateway } from './realtime.gateway';
+import { ACCESS_TOKEN_TTL_SECONDS, accessTokenSecret } from '../identity/domain/token-policy';
 
 @Global()
 @Module({
   imports: [
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'dev-secret-change-in-prod',
-      signOptions: { expiresIn: '15m' as unknown as number },
+    JwtModule.registerAsync({
+      useFactory: () => ({
+        secret: accessTokenSecret(),
+        signOptions: { expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+      }),
     }),
   ],
   providers: [RealtimeGateway],

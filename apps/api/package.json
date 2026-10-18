@@ -8,7 +8,7 @@
     "dev": "pnpm --filter @tavonza/database db:generate && dotenv -e ../../.env -- nest start --watch",
     "db:push": "pnpm --filter @tavonza/database db:push",
     "lint": "tsc --noEmit",
-    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/modules/branches/domain/staff-list-filter.spec.ts",
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/modules/branches/domain/staff-list-filter.spec.ts src/modules/orders/domain/cart-rules.spec.ts src/modules/orders/domain/order-access.spec.ts src/modules/identity/domain/token-policy.spec.ts src/modules/authorization/application/branch-access.policy.spec.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -50,6 +50,7 @@
     "@types/node": "^20.12.7",
     "@types/passport-jwt": "^4.0.1",
     "dotenv-cli": "^11.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.4.5"
   }
 }

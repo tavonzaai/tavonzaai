@@ -34,6 +34,7 @@ export interface AuthenticatedSocketUser {
   tableSessionId?: string | null;
   guestSessionId?: string | null;
   tableId?: string | null;
+  typ?: string;
 }
 
 @WebSocketGateway({
@@ -69,79 +70,76 @@ export class RealtimeGateway
 
       if (token) {
         try {
-          user = this.jwtService.verify<AuthenticatedSocketUser>(token, {
+          const verified = this.jwtService.verify<AuthenticatedSocketUser & { typ?: string }>(token, {
             secret: process.env.JWT_SECRET || 'dev-secret-change-in-prod',
           });
-          client.data.user = user;
+          if (verified.typ === 'refresh') {
+            this.logger.warn(`Refresh token rejected on socket: ${client.id}`);
+          } else if (verified.typ && verified.typ !== 'access' && verified.typ !== 'guest') {
+            this.logger.warn(`Invalid token typ on socket: ${client.id}`);
+          } else {
+            user = verified;
+            client.data.user = user;
+          }
         } catch {
           this.logger.warn(`Invalid JWT token on socket connection: ${client.id}`);
         }
       }
 
-      if (user) {
-        // 1. User direct room
-        if (user.sub) {
-          const userRoom = RealtimeChannels.user(user.sub);
-          client.join(userRoom);
-        }
-
-        // 2. Branch rooms
-        if (user.branchId) {
-          const branchRoom = RealtimeChannels.branch(user.branchId);
-          client.join(branchRoom);
-
-          const role = user.role?.toUpperCase();
-          if (role === 'WAITER' || role === 'HOST') {
-            client.join(RealtimeChannels.waiter(user.branchId));
-          } else if (role === 'KITCHEN_STAFF') {
-            client.join(RealtimeChannels.kitchenStation(user.branchId, 'KITCHEN'));
-            client.join(`branch:${user.branchId}:kitchen`);
-          } else if (role === 'BARTENDER') {
-            client.join(RealtimeChannels.kitchenStation(user.branchId, 'BAR'));
-            client.join(`branch:${user.branchId}:kitchen`);
-          } else if (role === 'CASHIER') {
-            client.join(RealtimeChannels.cashier(user.branchId));
-          } else if (
-            role === 'BRANCH_MANAGER' ||
-            role === 'ORGANIZATION_ADMIN' ||
-            role === 'SUPER_ADMIN'
-          ) {
-            client.join(RealtimeChannels.manager(user.branchId));
-            client.join(RealtimeChannels.waiter(user.branchId));
-            client.join(RealtimeChannels.cashier(user.branchId));
-            client.join(`branch:${user.branchId}:kitchen`);
-            client.join(RealtimeChannels.kitchenStation(user.branchId, 'KITCHEN'));
-            client.join(RealtimeChannels.kitchenStation(user.branchId, 'BAR'));
-          }
-        }
-
-        // 3. Customer Session / Table rooms
-        if (user.tableSessionId) {
-          client.join(RealtimeChannels.session(user.tableSessionId));
-        }
-        if (user.tableId) {
-          client.join(RealtimeChannels.table(user.tableId));
-        }
-
-        this.logger.info(`Client connected (auth): ${client.id} (user: ${user.sub}, role: ${user.role})`);
-      } else {
-        // Query params fallback for customer QR browsing before auth
-        const branchId = client.handshake.query?.branchId as string;
-        const tableSessionId = client.handshake.query?.tableSessionId as string;
-        const tableId = client.handshake.query?.tableId as string;
-
-        if (branchId) {
-          client.join(RealtimeChannels.branch(branchId));
-        }
-        if (tableSessionId) {
-          client.join(RealtimeChannels.session(tableSessionId));
-        }
-        if (tableId) {
-          client.join(RealtimeChannels.table(tableId));
-        }
-
-        this.logger.info(`Client connected (guest/unauth): ${client.id}`);
+      if (!user) {
+        client.disconnect(true);
+        return;
       }
+
+      const role = user.role?.toUpperCase();
+      const isCustomer = role === 'CUSTOMER' || user.typ === 'guest';
+
+      // 1. User direct room (account tokens only)
+      if (user.sub && !isCustomer) {
+        client.join(RealtimeChannels.user(user.sub));
+      } else if (user.sub && isCustomer) {
+        client.join(RealtimeChannels.user(user.sub));
+      }
+
+      // 2. Branch / staff rooms — never for customers
+      if (user.branchId && !isCustomer) {
+        const branchRoom = RealtimeChannels.branch(user.branchId);
+        client.join(branchRoom);
+
+        if (role === 'WAITER' || role === 'HOST') {
+          client.join(RealtimeChannels.waiter(user.branchId));
+        } else if (role === 'KITCHEN_STAFF') {
+          client.join(RealtimeChannels.kitchenStation(user.branchId, 'KITCHEN'));
+          client.join(`branch:${user.branchId}:kitchen`);
+        } else if (role === 'BARTENDER') {
+          client.join(RealtimeChannels.kitchenStation(user.branchId, 'BAR'));
+          client.join(`branch:${user.branchId}:kitchen`);
+        } else if (role === 'CASHIER') {
+          client.join(RealtimeChannels.cashier(user.branchId));
+        } else if (
+          role === 'BRANCH_MANAGER' ||
+          role === 'ORGANIZATION_ADMIN' ||
+          role === 'SUPER_ADMIN' ||
+          role === 'ADMIN'
+        ) {
+          client.join(RealtimeChannels.manager(user.branchId));
+          client.join(RealtimeChannels.waiter(user.branchId));
+          client.join(RealtimeChannels.cashier(user.branchId));
+          client.join(`branch:${user.branchId}:kitchen`);
+          client.join(RealtimeChannels.kitchenStation(user.branchId, 'KITCHEN'));
+          client.join(RealtimeChannels.kitchenStation(user.branchId, 'BAR'));
+        }
+      }
+
+      // 3. Customer session / table rooms — only the diner's own claims
+      if (user.tableSessionId) {
+        client.join(RealtimeChannels.session(user.tableSessionId));
+      }
+      if (user.tableId) {
+        client.join(RealtimeChannels.table(user.tableId));
+      }
+
+      this.logger.info(`Client connected (auth): ${client.id} (user: ${user.sub}, role: ${user.role})`);
     } catch (error: any) {
       this.logger.error(`Error during socket connection: ${error?.message}`);
     }
@@ -187,48 +185,34 @@ export class RealtimeGateway
   private isRoomAccessAllowed(
     room: string,
     user: AuthenticatedSocketUser | undefined,
-    client: Socket,
+    _client: Socket,
   ): boolean {
-    if (!room) return false;
+    if (!room || !user) return false;
 
-    // Allow joining table session rooms if they match or if client is authorized
+    const role = user.role?.toUpperCase();
+    const isCustomer = role === 'CUSTOMER' || (user as { typ?: string }).typ === 'guest';
+
     if (room.startsWith('session:')) {
-      const sessionId = room.replace('session:', '');
-      return (
-        user?.tableSessionId === sessionId ||
-        !!user?.branchId ||
-        client.handshake.query?.tableSessionId === sessionId
-      );
+      return user.tableSessionId === room.replace('session:', '');
     }
 
-    // Allow table rooms
     if (room.startsWith('table:')) {
-      const tableId = room.replace('table:', '');
-      return (
-        user?.tableId === tableId ||
-        !!user?.branchId ||
-        client.handshake.query?.tableId === tableId
-      );
+      return user.tableId === room.replace('table:', '') || (!isCustomer && !!user.branchId);
     }
 
-    // Allow order rooms
+    // Order rooms: staff with branch scope, or the diner who owns the order join via their session room instead.
     if (room.startsWith('order:')) {
-      return true;
+      return !isCustomer && !!user.branchId;
     }
 
-    // Staff rooms require branchId match
     if (room.startsWith('branch:')) {
-      const parts = room.split(':');
-      const branchId = parts[1];
-      if (!user?.branchId || user.branchId !== branchId) {
-        return false;
-      }
-      return true;
+      if (isCustomer) return false;
+      const branchId = room.split(':')[1];
+      return !!user.branchId && user.branchId === branchId;
     }
 
-    // Personal user room
     if (room.startsWith('user:')) {
-      return user?.sub === room.replace('user:', '');
+      return user.sub === room.replace('user:', '');
     }
 
     return false;

@@ -14,6 +14,7 @@ import * as argon2 from 'argon2';
 import { StorageService, generateKey } from '@tavonza/storage';
 import { actorHoldsPermission, isPrivilegedGlobalRole } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
+import { DrizzleAuthSessionRepository } from '../../infrastructure/persistence/drizzle-auth-session.repository';
 import { DrizzleOrganizationRepository } from '../../../organizations/infrastructure/persistence/drizzle-organization.repository';
 import { isSuperAdmin } from '../../../../common/auth/actor.util';
 import type { JwtPayload } from '../../infrastructure/adapters/jwt.strategy';
@@ -34,6 +35,7 @@ export class UserService {
   constructor(
     private readonly userRepo: DrizzleUserRepository,
     private readonly orgRepo: DrizzleOrganizationRepository,
+    private readonly sessionRepo: DrizzleAuthSessionRepository,
     @Optional() private readonly storageService?: StorageService,
   ) {}
 
@@ -199,6 +201,9 @@ export class UserService {
     }
 
     await this.userRepo.updateStatus(targetId, status);
+    if (status && status !== 'ACTIVE') {
+      await this.sessionRepo.revokeAllForUser(targetId, 'ACCOUNT_DISABLED');
+    }
     const updated = await this.userRepo.findByIdWithRelations(targetId);
     return UserDetailResponseDto.fromRecord(updated, updated.customer, updated.assignments);
   }

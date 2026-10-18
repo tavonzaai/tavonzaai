@@ -123,16 +123,14 @@ export const rawAuthApi = {
       body: JSON.stringify({
         email: credentials.email.trim().toLowerCase(),
         password: credentials.password,
+        client: 'kitchen',
       }),
     });
 
     const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
     const token = data.accessToken || (data as any).access_token;
     if (token) {
-      setAuthTokens({
-        accessToken: token,
-        refreshToken: data.refreshToken,
-      });
+      setAuthTokens({ accessToken: token });
     }
 
     if (data.user) {
@@ -265,22 +263,15 @@ export const rawAuthApi = {
 
 
   /** POST /auth/refresh — Refresh access token */
-  refresh: async (refreshTokenOverride?: string): Promise<AuthTokensResponse> => {
-    const token = refreshTokenOverride || getRefreshToken();
-    if (!token) throw new Error('No refresh token available');
-
+  refresh: async (): Promise<AuthTokensResponse> => {
     const res = await baseApiFetch<AuthTokensResponse>('/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ refreshToken: token }),
+      body: JSON.stringify({ client: 'kitchen' }),
     });
-
-    const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
+    const data: AuthTokensResponse = (res.data && (res.data as any).accessToken ? res.data : res) as any;
     const accessToken = data.accessToken || (data as any).access_token;
     if (accessToken) {
-      setAuthTokens({
-        accessToken,
-        refreshToken: data.refreshToken,
-      });
+      setAuthTokens({ accessToken });
     }
     return data;
   },
@@ -290,8 +281,9 @@ export const rawAuthApi = {
     try {
       const res = await baseApiFetch<MessageResponse>('/auth/logout', {
         method: 'POST',
+        body: JSON.stringify({ client: 'kitchen' }),
       });
-      return res.data || res;
+      return (res as any).data || res;
     } finally {
       removeAuthToken();
     }
@@ -407,16 +399,8 @@ export const getMe = createAsyncThunk(
       return rejectWithValue('No authentication token found in cookies.');
     }
 
-    // If active demo token (Chef Marco), resolve instantly from verified cookie
     if (token.startsWith('ktc_tok_')) {
-      const { getCookie } = await import('../api/baseApi');
-      const rawUser = getCookie('kitchen_user');
-      if (rawUser) {
-        try {
-          const parsed = JSON.parse(rawUser);
-          return parsed;
-        } catch {}
-      }
+      return rejectWithValue('Invalid session. Please sign in again.');
     }
 
     try {

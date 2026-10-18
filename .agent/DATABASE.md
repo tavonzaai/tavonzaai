@@ -346,6 +346,31 @@ export interface Address {
 - *Constraints*: `UNIQUE(staffId, branchId)`
 - *Indexes*: `(branchId)`
 
+#### `auth_sessions`
+- `id` (UUID, PK, default gen_random_uuid())
+- `userId` (UUID, NOT NULL, FK -> users.id, ON DELETE CASCADE)
+- `client` (VARCHAR(32), NOT NULL) // e.g. customer, admin, waiter, kitchen, cashier, manager, superadmin
+- `userAgent` (TEXT)
+- `ipAddress` (VARCHAR(64))
+- `expiresAt` (TIMESTAMPTZ, NOT NULL)
+- `lastRotatedAt` (TIMESTAMPTZ)
+- `revokedAt` (TIMESTAMPTZ)
+- `revokedReason` (VARCHAR(32))
+- `createdAt` (TIMESTAMPTZ, default now())
+- *Indexes*: `(userId)`
+- *Invariant*: Access JWTs carry `sid` = this id. Revoking the session invalidates access + refresh for that device/app.
+
+#### `refresh_tokens`
+- `id` (UUID, PK) // client-facing token id (not the raw secret)
+- `sessionId` (UUID, NOT NULL, FK -> auth_sessions.id, ON DELETE CASCADE)
+- `tokenHash` (VARCHAR(64), NOT NULL) // SHA-256 of the opaque refresh secret; raw token never stored
+- `expiresAt` (TIMESTAMPTZ, NOT NULL)
+- `rotatedAt` (TIMESTAMPTZ)
+- `replacedById` (UUID) // next refresh token id after rotation
+- `createdAt` (TIMESTAMPTZ, default now())
+- *Indexes*: `(sessionId)`
+- *Invariant*: Single-use rotation. Reuse of a rotated token revokes the whole `auth_sessions` row (theft detection). Delivered to browsers as HttpOnly cookie `tvz_rt_<client>`.
+
 ---
 
 ### 5.3 Menu & Catalog
@@ -403,9 +428,11 @@ export interface Address {
 - `capacity` (INTEGER, NOT NULL)
 - `serviceStatus` (table_service_status, default 'AVAILABLE')
 - `operationalFlag` (table_operational_flag, default 'NORMAL')
-- `qrCodeToken` (VARCHAR(255), UNIQUE)
+- `qrCodeToken` (VARCHAR(255), UNIQUE) // opaque seating token only; never encode localhost or PII
 - `shape` (table_shape, default 'SQUARE')
 - `floor` (INTEGER, default 1)
+- `isActive` (BOOLEAN, NOT NULL, default true)
+- `deletedAt` (TIMESTAMPTZ) // soft-delete; QR nulled on delete; hard-delete blocked while active sessions/orders/assignments exist
 - `createdAt` (TIMESTAMPTZ, default now())
 - `updatedAt` (TIMESTAMPTZ, default now())
 - *Indexes*: `(branchId)`, `(branchId, serviceStatus)`
@@ -477,7 +504,30 @@ export interface Address {
 
 ---
 
-### 5.6 Orders & Line Items
+### 5.6 Carts, Orders & Line Items
+
+#### `carts`
+- `id` (UUID, PK, default gen_random_uuid())
+- `customerId` (UUID, UNIQUE, FK -> customers.id, ON DELETE CASCADE)
+- `guestSessionId` (UUID, UNIQUE, FK -> guest_sessions.id, ON DELETE CASCADE)
+- `branchId` (UUID, FK -> branches.id, ON DELETE SET NULL) // set by first item; cleared when empty
+- `createdAt` (TIMESTAMPTZ, default now())
+- `updatedAt` (TIMESTAMPTZ, default now())
+- *Constraints*: exactly one of `customerId` / `guestSessionId` is non-null (`carts_single_owner` check)
+- *Invariant*: Server-owned basket. Cleared only after checkout order row persists (same transaction).
+
+#### `cart_items`
+- `id` (UUID, PK, default gen_random_uuid())
+- `cartId` (UUID, NOT NULL, FK -> carts.id, ON DELETE CASCADE)
+- `menuItemId` (UUID, NOT NULL, FK -> menu_items.id, ON DELETE CASCADE)
+- `lineKey` (VARCHAR(64), NOT NULL) // deterministic hash of item + sorted modifiers + instructions
+- `quantity` (INTEGER, NOT NULL, CHECK > 0)
+- `modifierIds` (UUID[], NOT NULL, default '{}')
+- `specialInstructions` (TEXT)
+- `createdAt` (TIMESTAMPTZ, default now())
+- `updatedAt` (TIMESTAMPTZ, default now())
+- *Constraints*: `UNIQUE(cartId, lineKey)`
+- *Indexes*: `(cartId)`
 
 #### `orders`
 - `id` (UUID, PK, default gen_random_uuid())
@@ -515,6 +565,7 @@ export interface Address {
 - `guestPhone` (VARCHAR(50))
 - `deliveryAddress` (JSONB)
 - `pickupAt` (TIMESTAMPTZ)
+- `idempotencyKey` (VARCHAR(100), UNIQUE) // client Idempotency-Key on POST /orders; replay returns original order
 - `createdAt` (TIMESTAMPTZ, default now())
 - `updatedAt` (TIMESTAMPTZ, default now())
 - *Indexes*: `(branchId, status)`, `(tableId)`, `(customerId)`, `(tableSessionId)`, `(guestSessionId)`, `(createdAt)`
@@ -765,10 +816,17 @@ export interface Address {
 4. **Order Status Progression**:
    - `PENDING -> CONFIRMED -> PREPARING -> READY -> SERVED -> COMPLETED`.
    - Rejection is only valid from `PENDING` and must record `rejectionReasonCode` and `rejectedById`.
-5. **Kitchen Station Routing**:
+5. **Auth sessions & refresh rotation**:
+   - Access tokens are bound to `auth_sessions.id` (`sid`). Logout / user disable revokes the session.
+   - Refresh tokens are hashed-at-rest, single-use, and rotated on every `/auth/refresh`. Cookie name is `tvz_rt_<client>`.
+6. **Server cart ownership**:
+   - A cart belongs to exactly one customer account or one guest session. Checkout uses `Idempotency-Key` → `orders.idempotencyKey`; cart lines clear only after the order row commits.
+7. **Table soft-delete**:
+   - Soft-deleted tables (`isActive=false`, `deletedAt` set, `qrCodeToken` null) cannot seat new diners. Hard blockers: open sessions, unpaid/open orders, active waiter assignments.
+8. **Kitchen Station Routing**:
    - `OrderItem.stationType` (`KITCHEN` or `BAR`) allows kitchen screens to filter and update line items independently without modifying the entire order.
-6. **Outbox Pattern for Events**:
+9. **Outbox Pattern for Events**:
    - Database transactions publishing events must commit an `outbox` record in the same transaction to guarantee reliable delivery.
-7. **Persistent Notifications & Multi-Cast Targeting**:
-   - Notifications are persisted to the database and can be targeted either directly to a `userId` or multi-cast to an operational staff role (`targetRole`) within a branch (`branchId`). Unread notifications are queryable via REST and updated in real time via Socket.IO.
+10. **Persistent Notifications & Multi-Cast Targeting**:
+   - Notifications are persisted to the database and can be targeted either directly to a `userId` or multi-cast to an operational staff role (`targetRole`) within a branch (`branchId`). Unread notifications are queryable via REST and updated in real time via Socket.IO. Customers only see rows addressed to their `userId`.
 

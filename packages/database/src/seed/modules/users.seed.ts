@@ -226,6 +226,12 @@ export async function seedUsers(db: DrizzleDatabase) {
     throw new Error('Failed to initialize staff/customer persona entities');
   }
 
+  // Empty server-side carts for registered customers (checkout ownership).
+  await db.insert(schema.carts).values([
+    { customerId: customerEntity1.id },
+    { customerId: customerEntity2.id },
+  ]);
+
   return {
     users: {
       superAdmin,

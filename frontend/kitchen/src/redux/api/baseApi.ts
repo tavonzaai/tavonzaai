@@ -37,15 +37,56 @@ export function setAuthToken(token: string) {
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
   setAuthToken(tokens.accessToken);
-  if (tokens.refreshToken) {
-    setCookie('kitchen_refresh_token', tokens.refreshToken);
-  }
+  // Refresh tokens live in HttpOnly cookie tvz_rt_kitchen — never store in JS-readable cookies.
+    removeCookie('kitchen_refresh_token');
+  removeCookie('refresh_token');
 }
 
 export function removeAuthToken() {
   removeCookie('kitchen_token');
   removeCookie('kitchen_refresh_token');
   removeCookie('kitchen_user');
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+export async function refreshAuthSession(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  const priorAccess = getAuthToken();
+
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client: 'kitchen' }),
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const current = getAuthToken();
+        if (current && current !== priorAccess) return true;
+        removeAuthToken();
+        return false;
+      }
+      const json = await res.json().catch(() => null);
+      const data = json?.data || json;
+      const newAccess = data?.accessToken || data?.access_token;
+      if (newAccess) {
+        setAuthTokens({ accessToken: newAccess });
+        return true;
+      }
+      removeAuthToken();
+      return false;
+    } catch {
+      removeAuthToken();
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export function getApiBaseUrl(): string {
@@ -156,8 +197,12 @@ export async function baseApiFetch<T = any>(
   const rawJson: any = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401) {
-      removeAuthToken();
+    if (response.status === 401 && !String(endpoint).includes('/auth/') && !(options as any).__authRetried) {
+    const refreshed = await refreshAuthSession();
+    if (refreshed) {
+      return baseApiFetch<T>(endpoint, { ...options, __authRetried: true } as any);
+    }
+    removeAuthToken();
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
       }

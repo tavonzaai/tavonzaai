@@ -115,22 +115,21 @@ export const rawAuthApi = {
     return res.data || res;
   },
 
-  /** POST /auth/login — Authenticate customer */
+  /** POST /auth/login — Authenticate customer (refresh token stored in HttpOnly cookie). */
   login: async (credentials: LoginPayload): Promise<AuthTokensResponse> => {
     const res = await baseApiFetch<AuthTokensResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({
         email: credentials.email.trim().toLowerCase(),
         password: credentials.password,
+        client: 'customer',
       }),
     });
 
     const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
     if (data.accessToken) {
-      setAuthTokens({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-      });
+      // Refresh token is HttpOnly (`tvz_rt_customer`); never store it in JS-readable cookies.
+      setAuthTokens({ accessToken: data.accessToken });
     }
 
     if (data.user) {
@@ -227,31 +226,26 @@ export const rawAuthApi = {
     return user;
   },
 
-  /** POST /auth/refresh — Refresh access token */
-  refresh: async (refreshTokenOverride?: string): Promise<AuthTokensResponse> => {
-    const token = refreshTokenOverride || getRefreshToken();
-    if (!token) throw new Error('No refresh token available');
-
+  /** POST /auth/refresh — cookie-based refresh for client=customer */
+  refresh: async (): Promise<AuthTokensResponse> => {
     const res = await baseApiFetch<AuthTokensResponse>('/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ refreshToken: token }),
+      body: JSON.stringify({ client: 'customer' }),
     });
 
     const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
     if (data.accessToken) {
-      setAuthTokens({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-      });
+      setAuthTokens({ accessToken: data.accessToken });
     }
     return data;
   },
 
-  /** POST /auth/logout — Invalidate session */
+  /** POST /auth/logout — Invalidate session and clear HttpOnly refresh cookie */
   logout: async (): Promise<MessageResponse> => {
     try {
       const res = await baseApiFetch<MessageResponse>('/auth/logout', {
         method: 'POST',
+        body: JSON.stringify({ client: 'customer' }),
       });
       return res.data || res;
     } finally {

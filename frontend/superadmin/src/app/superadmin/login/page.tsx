@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { loginUser } from '@/redux/features/authApi';
 import { removeCookie } from '@/redux/api/baseApi';
-import { Shield, Lock, Mail, ArrowRight, Loader2, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { Shield, Lock, Mail, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function SuperAdminLoginPage() {
@@ -13,8 +13,8 @@ export default function SuperAdminLoginPage() {
   const dispatch = useAppDispatch();
   const { isAuthenticated, loading, isInitialized } = useAppSelector((state) => state.auth);
 
-  const [email, setEmail] = useState('alex.morgan@tablepilot.io');
-  const [password, setPassword] = useState('superadmin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -41,26 +41,6 @@ export default function SuperAdminLoginPage() {
       router.push('/superadmin/dashboard');
     } catch (err: any) {
       toast.error(typeof err === 'string' ? err : 'Authentication failed. Please verify your credentials.');
-    }
-  };
-
-  const handleDemoLogin = async () => {
-    const demoEmail = 'alex.morgan@tablepilot.io';
-    setEmail(demoEmail);
-    setPassword('superadmin123');
-
-    try {
-      removeCookie('superadmin_logged_out');
-      await dispatch(
-        loginUser({
-          email: demoEmail,
-          password: 'superadmin123',
-        })
-      ).unwrap();
-      toast.success('Signed in as Alex Morgan (Global Super Admin)');
-      router.push('/superadmin/dashboard');
-    } catch (err: any) {
-      toast.error('Demo authentication failed.');
     }
   };
 
@@ -106,9 +86,18 @@ export default function SuperAdminLoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-300 pb-1.5">
-              Security Key / Password
-            </label>
+            <div className="flex justify-between items-center pb-1.5">
+              <label className="block text-xs font-medium text-zinc-300">
+                Security Key / Password
+              </label>
+              <button
+                type="button"
+                onClick={() => router.push('/superadmin/forgot-password')}
+                className="text-[11px] text-yellow-400/80 hover:text-yellow-400 cursor-pointer font-medium transition"
+              >
+                Forgot?
+              </button>
+            </div>
             <div className="relative">
               <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
@@ -146,18 +135,6 @@ export default function SuperAdminLoginPage() {
           </button>
         </form>
 
-        {/* Quick Demo Access */}
-        <div className="mt-6 pt-5 border-t border-zinc-800/80 text-center">
-          <p className="text-[11px] text-zinc-500 mb-2">Development Demo Session</p>
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            className="w-full py-2 px-3 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-yellow-500/40 text-zinc-300 hover:text-yellow-300 rounded-xl text-xs font-medium transition flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-            <span>Instant Demo: Alex Morgan (Super Admin)</span>
-          </button>
-        </div>
       </div>
     </div>
   );

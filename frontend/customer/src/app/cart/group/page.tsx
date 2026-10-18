@@ -10,6 +10,8 @@ import {
   fetchBranchMenuCatalog,
   resolveCatalogMenuItemId,
 } from '@/redux/features/orderApi';
+import { getCookie, setCookie } from '@/redux/api/baseApi';
+import { toast } from 'sonner';
 
 interface GuestItem {
   id: string;
@@ -49,62 +51,27 @@ function GroupCartContent() {
 
   const handlePlaceOrder = async () => {
     try {
-      const branchId = resolveDynamicBranchId();
-      const tableId = resolveDynamicTableId(null, activeTable);
-      if (!branchId || !tableId) return;
-
-      const catalogItems = await fetchBranchMenuCatalog(branchId);
-
-      let draft = await orderService.getCart(branchId, tableId);
-      if (!draft?.id || draft.status !== 'DRAFT') {
-        draft = await orderService.getCartFromSession(branchId, tableId);
-      }
-
-      if (draft?.id) {
-        const existingBackendMenuIds = new Set(
-          (draft.items || []).map((bi: any) => bi.menuItemId)
-        );
-
-        if (cart && cart.length > 0) {
-          for (const item of cart) {
-            const validMenuItemId = resolveCatalogMenuItemId(item, catalogItems);
-            if (validMenuItemId && !existingBackendMenuIds.has(validMenuItemId)) {
-              const addRes = await orderService.addItem({
-                orderId: draft.id,
-                menuItemId: validMenuItemId,
-                quantity: item.quantity || 1,
-                specialInstructions: item.specialInstructions,
-                addOns: item.addOns?.map((a) => ({ name: a.name, price: a.price })),
-              });
-              existingBackendMenuIds.add(validMenuItemId);
-              if (addRes?.items) {
-                draft.items = addRes.items;
-              }
-            }
-          }
+      const { getCookie } = await import('@/redux/api/baseApi');
+      const qrToken = getCookie('tavonza_qr_token') || undefined;
+      const submitted = await orderService.placeOrder({ qrToken });
+      const submittedId = submitted?.id || submitted?.orderId || submitted?.orderNumber;
+      if (submittedId && typeof window !== 'undefined') {
+        localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
+        localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(submitted));
+        if (submitted?.orderNumber) {
+          localStorage.setItem('tavonza_last_submitted_order_number', submitted.orderNumber);
         }
-
-        const submitted = await orderService.submitOrder(draft.id);
-        const submittedId = submitted?.id || submitted?.orderId || submitted?.orderNumber;
-        if (submittedId && typeof window !== 'undefined') {
-          localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
-          localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(submitted));
-          if (submitted?.orderNumber) {
-            localStorage.setItem('tavonza_last_submitted_order_number', submitted.orderNumber);
-          }
-        }
-        clearCart();
-        router.push(
-          `/orders/waiting?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(submittedId || '')}&mode=together`
-        );
-        return;
       }
+      clearCart();
+      router.push(
+        `/orders/waiting?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(submittedId || '')}&mode=together`
+      );
+      return;
     } catch (e) {
       console.warn('Place group order error:', e);
+      toast.error(e?.message || 'Failed to place group order. Please check your items.');
+      // STOP user in place. Do NOT navigate next on error!
     }
-    const lastId = typeof window !== 'undefined' ? (localStorage.getItem('tavonza_last_submitted_order_id') || '') : '';
-    const orderParam = lastId ? `&order=${encodeURIComponent(lastId)}` : '';
-    router.push(`/orders/waiting?table=${encodeURIComponent(activeTable)}&mode=together${orderParam}`);
   };
 
   return (

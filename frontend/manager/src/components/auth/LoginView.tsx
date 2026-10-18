@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAppDispatch } from '../../redux/hooks';
 import { loginUser } from '../../redux/features/authApi';
@@ -10,9 +11,11 @@ import { removeAuthToken } from '../../redux/api/baseApi';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
+  onForgotPassword?: () => void;
 }
 
-export default function LoginView({ onLoginSuccess }: LoginViewProps) {
+export default function LoginView({ onLoginSuccess, onForgotPassword }: LoginViewProps) {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const [email, setEmail] = useState('manager@tavonza.ai');
   const [password, setPassword] = useState('Manager@1234');
@@ -136,9 +139,19 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         <div className="flex flex-col gap-1.5">
           <div className="flex justify-between items-center">
             <label className="text-xs font-medium text-neutral-300">Password</label>
-            <span className="text-[11px] text-yellow-400/80 hover:text-yellow-400 cursor-pointer">
+            <button
+              type="button"
+              onClick={() => {
+                if (onForgotPassword) {
+                  onForgotPassword();
+                } else {
+                  router.push('/forgot-password');
+                }
+              }}
+              className="text-[11px] text-yellow-400/80 hover:text-yellow-400 cursor-pointer font-medium transition"
+            >
               Forgot?
-            </span>
+            </button>
           </div>
           <div className="relative">
             <input
@@ -180,10 +193,10 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       </form>
 
       {/* Credentials Hint */}
-      <div className="mt-6 pt-4 border-t border-neutral-800/80 flex flex-col items-center gap-1.5 text-center">
+      {/* <div className="mt-6 pt-4 border-t border-neutral-800/80 flex flex-col items-center gap-1.5 text-center">
         <span className="text-[11px] text-neutral-500 font-mono">Restricted Terminal · Authorized Personnel Only</span>
         <span className="text-[11px] text-neutral-400">Default Manager: manager@tavonza.ai / Manager@1234</span>
-      </div>
+      </div> */}
     </div>
   );
 }

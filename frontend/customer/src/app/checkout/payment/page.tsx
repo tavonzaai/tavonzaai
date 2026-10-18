@@ -20,6 +20,8 @@ import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
 import { paymentService, StripePaymentIntentResponse } from '@/redux/features/paymentApi';
 import { orderService, OrderTrackingResponse } from '@/redux/features/orderApi';
 import { sessionService } from '@/redux/features/sessionApi';
+import { getCookie } from '@/redux/api/baseApi';
+import { toast } from 'sonner';
 
 function PaymentContent() {
   const router = useRouter();
@@ -31,10 +33,7 @@ function PaymentContent() {
 
   const [orderId, setOrderId] = useState<string>(() => {
     if (urlOrderId) return urlOrderId;
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('tavonza_last_submitted_order_id') || '').trim();
-    }
-    return '';
+    return (getCookie('tavonza_last_submitted_order_id') || getCookie('tavonza_active_order_id') || '').trim();
   });
 
   const [orderData, setOrderData] = useState<OrderTrackingResponse | null>(null);
@@ -246,7 +245,9 @@ function PaymentContent() {
       });
 
       if (result.error) {
-        setErrorMessage(result.error.message || 'Payment processing was declined by Stripe.');
+        const msg = result.error.message || 'Payment processing was declined by Stripe.';
+        setErrorMessage(msg);
+        toast.error(msg);
         setIsProcessing(false);
         return;
       }
@@ -256,18 +257,23 @@ function PaymentContent() {
         const verification = await paymentService.verifyStripePayment(paymentIntentId);
         if (verification.status === 'PAID') {
           clearCart();
+          toast.success('Payment settled successfully!');
           router.push(
             `/checkout/confirmation?amount=${totalDue.toFixed(2)}&ref=${encodeURIComponent(
               paymentIntentId
             )}&table=${encodeURIComponent(activeTable)}&holder=Cardholder`
           );
         } else {
-          setErrorMessage('Payment received by gateway, awaiting final ledger settlement.');
+          const msg = 'Payment received by gateway, awaiting final ledger settlement.';
+          setErrorMessage(msg);
+          toast.error(msg);
         }
       }
     } catch (err: any) {
       console.error('Payment verification failed:', err);
-      setErrorMessage(err.message || 'An error occurred during payment verification.');
+      const msg = err.message || 'An error occurred during payment verification.';
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setIsProcessing(false);
     }
@@ -276,7 +282,9 @@ function PaymentContent() {
   // 5. Handle Offline Cash Request
   const handleCashRequest = async () => {
     if (!orderId) {
-      setErrorMessage('No active order ID available to request cash payment.');
+      const msg = 'No active order ID available to request cash payment.';
+      setErrorMessage(msg);
+      toast.error(msg);
       return;
     }
 
@@ -293,9 +301,12 @@ function PaymentContent() {
 
       setCashRequestPending(true);
       setCashRequestRef(res.transactionRef || 'REQ-CASH');
+      toast.success('Cash payment request dispatched to the cashier!');
     } catch (err: any) {
       console.error('Failed to request cash payment:', err);
-      setErrorMessage(err.message || 'Could not submit cash payment request to the cashier.');
+      const msg = err.message || 'Could not submit cash payment request to the cashier.';
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setIsProcessing(false);
     }

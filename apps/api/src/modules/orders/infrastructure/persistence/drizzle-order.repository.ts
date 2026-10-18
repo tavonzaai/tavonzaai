@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Inject, Injectable, BadRequestException } from '@nestjs/common';
-import { and, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -181,6 +181,42 @@ export class DrizzleOrderRepository implements IOrderRepository {
       );
     }
 
+    return this.findWhere(conditions);
+  }
+
+  async findByOwner(
+    owner: { customerId?: string | null; guestSessionId?: string | null },
+    filters?: { status?: OrderStatus; search?: string; branchId?: string },
+  ): Promise<Order[]> {
+    const ownerConditions = [
+      owner.customerId ? eq(orders.customerId, owner.customerId) : undefined,
+      owner.guestSessionId ? eq(orders.guestSessionId, owner.guestSessionId) : undefined,
+    ].filter((condition): condition is NonNullable<typeof condition> => Boolean(condition));
+    if (ownerConditions.length === 0) return [];
+
+    const conditions = [or(...ownerConditions)!, sql`${orders.status} <> 'DRAFT'`];
+    if (filters?.status) {
+      conditions.push(eq(orders.status, this.toDbStatus(filters.status)));
+    }
+    if (filters?.branchId) {
+      conditions.push(eq(orders.branchId, filters.branchId));
+    }
+    if (filters?.search) {
+      conditions.push(sql`${orders.orderNumber} ILIKE ${'%' + filters.search + '%'}`);
+    }
+    return this.findWhere(conditions);
+  }
+
+  async findByIdempotencyKey(key: string) {
+    const [row] = await this.db
+      .select({ id: orders.id, customerId: orders.customerId, guestSessionId: orders.guestSessionId })
+      .from(orders)
+      .where(eq(orders.idempotencyKey, key))
+      .limit(1);
+    return row ?? null;
+  }
+
+  private async findWhere(conditions: SQL[]): Promise<Order[]> {
     const orderRows = await this.db
       .select({
         order: orders,
@@ -503,6 +539,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
       tableNumber: record.tableLabel ?? null,
       tableSessionId: record.tableSessionId,
       customerSessionId: record.guestSessionId,
+      customerId: record.customerId ?? null,
       status: this.fromDbStatus(record.status),
       subtotal: Number(record.subtotal),
       serviceChargeRate: 0.05,

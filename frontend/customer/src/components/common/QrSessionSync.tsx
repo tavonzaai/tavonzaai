@@ -22,9 +22,6 @@ export default function QrSessionSync() {
     // Persist QR token if present in query
     if (qrParam) {
       setCookie(QR_COOKIE_NAME, qrParam);
-      try {
-        localStorage.setItem(QR_COOKIE_NAME, qrParam);
-      } catch {}
 
       // Resolve table & branch from backend if not resolved yet
       if (resolvedRef.current !== qrParam) {
@@ -72,7 +69,7 @@ export default function QrSessionSync() {
       const href = target.getAttribute('href');
       if (!href || href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('#')) return;
 
-      const cookieQr = getCookie(QR_COOKIE_NAME) || (typeof window !== 'undefined' ? localStorage.getItem(QR_COOKIE_NAME) : null);
+      const cookieQr = getCookie(QR_COOKIE_NAME);
       if (!cookieQr) return;
 
       // If internal link doesn't already have ?qr=, intercept and append it

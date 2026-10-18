@@ -5,9 +5,21 @@ import {
   removeAuthToken,
   setCookie,
   getCookie,
+  rtkBaseApi,
 } from '../api/baseApi';
 
 // ─── Types & Payloads ──────────────────────────────────────────────────────────
+
+export interface UserAssignment {
+  id?: string;
+  staffId?: string;
+  branchId?: string;
+  branchName?: string;
+  role: string;
+  permissions?: string[];
+  isActive?: boolean;
+  branch?: { id: string; name: string };
+}
 
 export interface UserProfile {
   id: string;
@@ -18,6 +30,8 @@ export interface UserProfile {
   phone?: string | null;
   contactNo?: string | null;
   role: string;
+  globalRole?: string;
+  status?: string;
   branchId?: string | null;
   branchName?: string | null;
   permissions?: string[];
@@ -26,7 +40,9 @@ export interface UserProfile {
   isEmailVerified?: boolean;
   isPhoneVerified?: boolean;
   createdAt?: string;
-  assignments?: any[];
+  updatedAt?: string;
+  customer?: any;
+  assignments?: UserAssignment[];
   staffId?: string | null;
   avatar?: string | null;
 }
@@ -83,16 +99,14 @@ export const rawAuthApi = {
       body: JSON.stringify({
         email: credentials.email.trim().toLowerCase(),
         password: credentials.password,
+        client: 'manager',
       }),
     });
 
     const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
     const token = data.accessToken || (data as any).access_token;
     if (token) {
-      setAuthTokens({
-        accessToken: token,
-        refreshToken: data.refreshToken,
-      });
+      setAuthTokens({ accessToken: token });
     }
 
     if (data.user) {
@@ -110,33 +124,49 @@ export const rawAuthApi = {
     return data;
   },
 
-  /** GET /auth/me or /users/me — Fetch current authenticated user */
+  /** GET /users/me — Fetch current authenticated user profile */
   getMe: async (): Promise<UserProfile> => {
-    let res: any;
-    try {
-      res = await baseApiFetch<UserProfile>('/auth/me');
-    } catch {
-      res = await baseApiFetch<UserProfile>('/users/me');
-    }
-
-    const user: UserProfile = (res.data || res.user || res) as any;
+    const res = await baseApiFetch<UserProfile>('/users/me');
+    const user: UserProfile = (res.data || (res as any).user || res) as any;
     if (user) {
       user.name =
         user.name ||
         `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
         user.email;
       setCookie('branch_manager_user', JSON.stringify(user));
+      if (user.branchId) {
+        setCookie('tavonza_branch_id', user.branchId);
+        setCookie('branch_id', user.branchId);
+      }
     }
     return user;
+  },
+
+  /** POST /auth/refresh — cookie-based refresh for client=manager */
+  refresh: async (): Promise<AuthTokensResponse> => {
+    const res = await baseApiFetch<AuthTokensResponse>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ client: 'manager' }),
+    });
+    const data: AuthTokensResponse = (res.data && (res.data as any).accessToken ? res.data : res) as any;
+    const accessToken = data.accessToken || (data as any).access_token;
+    if (accessToken) {
+      setAuthTokens({ accessToken });
+    }
+    return data;
   },
 
   /** POST /auth/logout — Invalidate backend session */
   logout: async (): Promise<MessageResponse> => {
     try {
-      await baseApiFetch('/auth/logout', { method: 'POST' });
-    } catch {}
-    removeAuthToken();
-    return { message: 'Logged out successfully' };
+      const res = await baseApiFetch<MessageResponse>('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ client: 'manager' }),
+      });
+      return (res as any).data || res;
+    } finally {
+      removeAuthToken();
+    }
   },
 
   /** POST /auth/verify-otp */
@@ -305,3 +335,15 @@ export const changePasswordThunk = createAsyncThunk(
 );
 
 export const changePassword = changePasswordThunk;
+
+export const authRtkApi = rtkBaseApi.injectEndpoints({
+  endpoints: (builder) => ({
+    getMe: builder.query<UserProfile, void>({
+      query: () => '/users/me',
+      transformResponse: (response: any) => (response?.data || response?.user || response) as UserProfile,
+      providesTags: ['USER'],
+    }),
+  }),
+});
+
+export const { useGetMeQuery } = authRtkApi;

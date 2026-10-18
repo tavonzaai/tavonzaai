@@ -11,7 +11,6 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
-  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,6 +27,7 @@ import { CurrentUser } from '../../../../common/decorators/current-user.decorato
 import { RequirePermissions } from '../../../../common/decorators/require-permissions.decorator';
 import { Permission } from '@tavonza/authorization';
 import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
+import { BranchAccessService } from '../../../authorization/application/services/branch-access.service';
 import { TableService } from '../../application/services/table.service';
 import {
   CreateTableDto,
@@ -42,26 +42,10 @@ import { ApiStandardErrors } from '../../../../common/swagger';
 @ApiTags('Operations | Tables & Areas')
 @Controller('tables')
 export class TableController {
-  constructor(private readonly tableService: TableService) {}
-
-  private assertBranchAccess(user: JwtPayload, branchId: string): void {
-    const isGlobalAdmin =
-      user.role === 'SUPER_ADMIN' ||
-      user.globalRole === 'SUPER_ADMIN' ||
-      user.role === 'ADMIN' ||
-      user.globalRole === 'ADMIN' ||
-      user.role === 'RESTAURANT_OWNER';
-
-    if (isGlobalAdmin) {
-      return;
-    }
-
-    if (user.branchId && user.branchId !== branchId) {
-      throw new ForbiddenException(
-        'Cross-branch access forbidden. You cannot access tables belonging to another branch.',
-      );
-    }
-  }
+  constructor(
+    private readonly tableService: TableService,
+    private readonly branchAccess: BranchAccessService,
+  ) {}
 
   // ── Public QR Code Resolution ─────────────────────────────────────────
 
@@ -86,7 +70,11 @@ export class TableController {
   @ApiOperation({ summary: 'Create a new table in a branch' })
   @ApiCreatedResponse({ description: 'Table created successfully', type: TableResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
-  async create(@Body() dto: CreateTableDto): Promise<TableResponseDto> {
+  async create(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateTableDto,
+  ): Promise<TableResponseDto> {
+    await this.branchAccess.assertAccess(user, dto.branchId);
     return this.tableService.create(dto);
   }
 
@@ -102,7 +90,7 @@ export class TableController {
     @CurrentUser() user: JwtPayload,
     @Query('branchId', new ParseUUIDPipe()) branchId: string,
   ): Promise<TableResponseDto[]> {
-    this.assertBranchAccess(user, branchId);
+    await this.branchAccess.assertAccess(user, branchId);
     return this.tableService.findByBranch(branchId);
   }
 
@@ -118,39 +106,48 @@ export class TableController {
     @CurrentUser() user: JwtPayload,
     @Param('branchId', new ParseUUIDPipe()) branchId: string,
   ): Promise<TableResponseDto[]> {
-    this.assertBranchAccess(user, branchId);
+    await this.branchAccess.assertAccess(user, branchId);
     return this.tableService.findByBranch(branchId);
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TABLES_READ)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get table details by ID' })
   @ApiParam({ name: 'id', description: 'Table UUID', example: 'e7b1a2c3-d4e5-6789-0123-456789abcdef' })
   @ApiOkResponse({ description: 'Table details', type: TableResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async getById(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<TableResponseDto> {
-    return this.tableService.findById(id);
+    const table = await this.tableService.findById(id);
+    await this.branchAccess.assertAccess(user, table.branchId);
+    return table;
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TABLES_UPDATE)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update table properties or service status' })
   @ApiParam({ name: 'id', description: 'Table UUID', example: 'e7b1a2c3-d4e5-6789-0123-456789abcdef' })
   @ApiOkResponse({ description: 'Table updated successfully', type: TableResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async update(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateTableDto,
   ): Promise<TableResponseDto> {
+    const existing = await this.tableService.findById(id);
+    await this.branchAccess.assertAccess(user, existing.branchId);
     return this.tableService.update(id, dto);
   }
 
   @Post(':id/regenerate-qr')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TABLES_UPDATE)
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate and regenerate the opaque QR token for a table' })
@@ -158,21 +155,28 @@ export class TableController {
   @ApiOkResponse({ description: 'Table updated with regenerated QR token', type: TableResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async regenerateQr(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<TableResponseDto> {
+    const existing = await this.tableService.findById(id);
+    await this.branchAccess.assertAccess(user, existing.branchId);
     return this.tableService.regenerateQr(id);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TABLES_UPDATE)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Soft delete / take table out of service' })
+  @ApiOperation({ summary: 'Soft delete a table (revokes QR; blocked while in use)' })
   @ApiParam({ name: 'id', description: 'Table UUID', example: 'e7b1a2c3-d4e5-6789-0123-456789abcdef' })
-  @ApiOkResponse({ description: 'Table taken out of service', type: TableResponseDto })
-  @ApiStandardErrors(401, 403, 404, 500)
+  @ApiOkResponse({ description: 'Table soft-deleted', type: TableResponseDto })
+  @ApiStandardErrors(401, 403, 404, 409, 500)
   async delete(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<TableResponseDto> {
+    const existing = await this.tableService.findById(id);
+    await this.branchAccess.assertAccess(user, existing.branchId);
     return this.tableService.softDelete(id);
   }
 

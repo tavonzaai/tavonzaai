@@ -2,6 +2,8 @@
 
 
 
+import { toast } from 'sonner';
+
 /**
  * 🍪 Generic Cookie Helpers
  */
@@ -49,11 +51,26 @@ export function setAuthToken(token: string) {
 }
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
-  setCookie('access_token', tokens.accessToken);
-  setCookie('customer_session', tokens.accessToken);
-  if (tokens.refreshToken) {
-    setCookie('refresh_token', tokens.refreshToken);
+  // Prefer max-age from the JWT exp claim when present.
+  let maxAge: number | undefined;
+  try {
+    const parts = tokens.accessToken.split('.');
+    if (parts[1]) {
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (typeof payload.exp === 'number') {
+        maxAge = Math.max(0, payload.exp - Math.floor(Date.now() / 1000));
+      }
+    }
+  } catch {
+    // ignore decode errors
   }
+  if (typeof document !== 'undefined') {
+    const age = maxAge !== undefined ? `; max-age=${maxAge}` : '';
+    document.cookie = `access_token=${encodeURIComponent(tokens.accessToken)}; path=/; SameSite=Lax${age}`;
+    document.cookie = `customer_session=${encodeURIComponent(tokens.accessToken)}; path=/; SameSite=Lax${age}`;
+  }
+  // Refresh tokens are HttpOnly (tvz_rt_customer) — never store them in JS cookies.
+  removeCookie('refresh_token');
 }
 
 export function removeAuthToken() {
@@ -61,6 +78,49 @@ export function removeAuthToken() {
   removeCookie('refresh_token');
   removeCookie('customer_session');
   removeCookie('tavonza_customer_session_id');
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+/** Cookie-based refresh with single-flight dedupe. On failure, clears auth. */
+export async function refreshAuthSession(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  const priorAccess = getAuthToken();
+
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client: 'customer' }),
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        // Another tab may have refreshed already — reuse the newer access cookie.
+        const current = getAuthToken();
+        if (current && current !== priorAccess) return true;
+        removeAuthToken();
+        return false;
+      }
+      const json = await res.json().catch(() => null);
+      const data = json?.data || json;
+      const newAccess = data?.accessToken || data?.access_token;
+      if (newAccess) {
+        setAuthTokens({ accessToken: newAccess });
+        return true;
+      }
+      removeAuthToken();
+      return false;
+    } catch {
+      removeAuthToken();
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export function getApiBaseUrl(): string {
@@ -110,9 +170,13 @@ export class ApiError extends Error {
   }
 }
 
+export interface BaseApiFetchOptions extends RequestInit {
+  skipToast?: boolean;
+}
+
 export async function baseApiFetch<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { __authRetried?: boolean } = {}
 ): Promise<ApiResponse<T> & T> {
   const token = getAuthToken();
   const headers: Record<string, string> = {
@@ -151,17 +215,25 @@ export async function baseApiFetch<T = any>(
     });
   } catch (netErr: any) {
     clearTimeout(timeoutId);
+    let errorMsg = 'Network error: Unable to reach the Tavonza server.';
+    let status = 0;
     if (netErr?.name === 'AbortError' || String(netErr?.message || '').toLowerCase().includes('abort')) {
-      throw new ApiError(
-        'Server took too long to respond (504 Gateway Timeout). The server may be processing your request or sending email verification. If you registered, please try logging in.',
-        504
-      );
+      errorMsg = 'Server took too long to respond (504 Gateway Timeout). Please try again.';
+      status = 504;
+    } else if (String(netErr?.message || '').includes('504')) {
+      errorMsg = 'The server gateway timed out (504). Please try again.';
+      status = 504;
+    } else if (netErr?.message) {
+      errorMsg = netErr.message;
     }
-    const is504 = String(netErr?.message || '').includes('504');
-    const msg = is504
-      ? 'The server gateway timed out (504). Please try again or log in if your account is already created.'
-      : (netErr?.message || 'Network error: Unable to reach the Tavonza server.');
-    throw new ApiError(msg, is504 ? 504 : 0);
+
+    if (!options.skipToast && typeof window !== 'undefined') {
+      try {
+        toast.error(errorMsg);
+      } catch {}
+    }
+
+    throw new ApiError(errorMsg, status);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -169,12 +241,13 @@ export async function baseApiFetch<T = any>(
   const rawJson = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401) {
-      removeAuthToken();
+    if (response.status === 401 && !cleanEndpoint.startsWith('/auth/') && !options.__authRetried) {
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        return baseApiFetch<T>(endpoint, { ...options, __authRetried: true });
+      }
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        if (window.location.pathname.startsWith('/profile') || window.location.pathname.startsWith('/account')) {
-          window.location.href = '/login';
-        }
+        window.location.href = '/login';
       }
     }
     let errorMsg = 'Request failed';
@@ -189,6 +262,13 @@ export async function baseApiFetch<T = any>(
     } else if (response.statusText) {
       errorMsg = response.statusText;
     }
+
+    if (!options.skipToast && typeof window !== 'undefined') {
+      try {
+        toast.error(errorMsg);
+      } catch {}
+    }
+
     throw new ApiError(errorMsg, response.status, rawJson);
   }
 
