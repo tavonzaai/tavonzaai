@@ -3,6 +3,7 @@ import {
   Inject,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { eq, inArray, and, desc, sql, or, ilike } from 'drizzle-orm';
@@ -17,10 +18,17 @@ import {
   restaurants,
   branchSettings,
   staff,
+  guestSessions,
   OutboxService,
 } from '@tavonza/database';
 import type { JwtPayload } from '../../identity/infrastructure/adapters/jwt.strategy';
 import { isSuperAdmin } from '../../../common/auth/actor.util';
+import { BranchAccessService } from '../../authorization/application/services/branch-access.service';
+import {
+  CustomerPrincipalService,
+  isCustomerPayload,
+} from '../../identity/application/services/customer-principal.service';
+import { isPaymentOrderOwnedBy, isStaffPaymentActor } from '../domain/payment-access';
 import { DrizzlePaymentRepository } from '../infrastructure/persistence/drizzle-payment.repository';
 import { StripeAdapter } from '../infrastructure/adapters/stripe.adapter';
 import type {
@@ -61,7 +69,123 @@ export class PaymentService {
     private readonly outboxService: OutboxService,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly notificationService: NotificationService,
+    private readonly branchAccess: BranchAccessService,
+    private readonly principals: CustomerPrincipalService,
   ) {}
+
+  /**
+   * Customer/guest may act on an order they own or a table session they are seated in.
+   * Staff may act when they hold live branch access. Guests never get staff privileges.
+   */
+  async assertPayableAccess(
+    user: JwtPayload,
+    opts: { orderId?: string | null; tableSessionId?: string | null; paymentId?: string | null },
+  ): Promise<{ branchId: string }> {
+    let orderId: string | null = opts.orderId ?? null;
+    let tableSessionId: string | null = opts.tableSessionId ?? null;
+
+    if (opts.paymentId) {
+      const payment = await this.paymentRepo.findById(opts.paymentId);
+      if (!payment) throw new NotFoundException('Payment not found');
+      orderId = orderId ?? payment.orderId ?? null;
+      tableSessionId = tableSessionId ?? payment.tableSessionId ?? null;
+    }
+
+    if (orderId) {
+      const [order] = await this.db
+        .select({
+          id: orders.id,
+          branchId: orders.branchId,
+          customerId: orders.customerId,
+          guestSessionId: orders.guestSessionId,
+          tableSessionId: orders.tableSessionId,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .limit(1);
+      if (!order) throw new NotFoundException('Order not found');
+      tableSessionId = tableSessionId ?? order.tableSessionId;
+
+      if (isStaffPaymentActor(user)) {
+        await this.branchAccess.assertAccess(user, order.branchId);
+        return { branchId: order.branchId };
+      }
+
+      if (isCustomerPayload(user) || user.typ === 'guest') {
+        const principal = await this.principals.resolve(user);
+        const ownsOrder = isPaymentOrderOwnedBy(
+          { customerId: order.customerId, customerSessionId: order.guestSessionId },
+          { customerId: principal.customerId, guestSessionId: principal.guestSessionId },
+        );
+        if (ownsOrder) return { branchId: order.branchId };
+        if (order.tableSessionId) {
+          await this.assertSessionParticipant(user, order.tableSessionId);
+          return { branchId: order.branchId };
+        }
+        throw new ForbiddenException('You do not have access to this order payment');
+      }
+
+      throw new ForbiddenException('You do not have access to this payment');
+    }
+
+    if (tableSessionId) {
+      const [session] = await this.db
+        .select({ id: tableSessions.id, branchId: tableSessions.branchId })
+        .from(tableSessions)
+        .where(eq(tableSessions.id, tableSessionId))
+        .limit(1);
+      if (!session) throw new NotFoundException('Table session not found');
+
+      if (isStaffPaymentActor(user)) {
+        await this.branchAccess.assertAccess(user, session.branchId);
+        return { branchId: session.branchId };
+      }
+
+      await this.assertSessionParticipant(user, tableSessionId);
+      return { branchId: session.branchId };
+    }
+
+    throw new BadRequestException('Either orderId, tableSessionId, or paymentId is required');
+  }
+
+  private async assertSessionParticipant(user: JwtPayload, tableSessionId: string): Promise<void> {
+    const principal =
+      isCustomerPayload(user) || user.typ === 'guest'
+        ? await this.principals.resolve(user)
+        : null;
+
+    if (principal?.tableSessionId === tableSessionId) return;
+
+    if (principal?.guestSessionId) {
+      const [guest] = await this.db
+        .select({ id: guestSessions.id })
+        .from(guestSessions)
+        .where(
+          and(
+            eq(guestSessions.id, principal.guestSessionId),
+            eq(guestSessions.tableSessionId, tableSessionId),
+          ),
+        )
+        .limit(1);
+      if (guest) return;
+    }
+
+    if (principal?.customerId) {
+      const [guest] = await this.db
+        .select({ id: guestSessions.id })
+        .from(guestSessions)
+        .where(
+          and(
+            eq(guestSessions.customerId, principal.customerId),
+            eq(guestSessions.tableSessionId, tableSessionId),
+          ),
+        )
+        .limit(1);
+      if (guest) return;
+    }
+
+    throw new ForbiddenException('You do not have access to this table session payment');
+  }
 
   /**
    * Get available payment methods and gateway configurations
@@ -99,11 +223,16 @@ export class PaymentService {
    * 1. Create or retrieve Stripe PaymentIntent for confirmed order or table session
    */
   async createStripePaymentIntent(
+    user: JwtPayload,
     dto: CreateStripePaymentIntentDto,
   ): Promise<StripePaymentIntentResponseDto> {
     if (!dto.orderId && !dto.tableSessionId) {
       throw new BadRequestException('Either orderId or tableSessionId must be provided');
     }
+    await this.assertPayableAccess(user, {
+      orderId: dto.orderId,
+      tableSessionId: dto.tableSessionId,
+    });
 
     const {
       authoritativeAmount,
@@ -308,10 +437,17 @@ export class PaymentService {
   /**
    * 1. Customer or Waiter submits an Offline Payment Request
    */
-  async requestOfflinePayment(dto: RequestOfflinePaymentDto): Promise<PaymentEntity> {
+  async requestOfflinePayment(
+    user: JwtPayload,
+    dto: RequestOfflinePaymentDto,
+  ): Promise<PaymentEntity> {
     if (!dto.orderId && !dto.tableSessionId) {
       throw new BadRequestException('Either orderId or tableSessionId must be provided');
     }
+    await this.assertPayableAccess(user, {
+      orderId: dto.orderId,
+      tableSessionId: dto.tableSessionId,
+    });
 
     const {
       authoritativeAmount,
@@ -410,8 +546,13 @@ export class PaymentService {
   /**
    * 2. Cashier views all active offline payment requests
    */
-  async getOfflinePaymentRequests(branchId?: string): Promise<OfflinePaymentRequestItemDto[]> {
-    if (!branchId) return [];
+  async getOfflinePaymentRequests(
+    user: JwtPayload,
+    branchId?: string,
+  ): Promise<OfflinePaymentRequestItemDto[]> {
+    const targetBranchId = branchId || user.branchId || undefined;
+    if (!targetBranchId) return [];
+    await this.branchAccess.assertAccess(user, targetBranchId);
 
     const rows = await this.db
       .select({
@@ -441,7 +582,7 @@ export class PaymentService {
         and(
           eq(payments.status, 'UNPAID'),
           inArray(payments.method, ['CASH', 'CARD']),
-          sql`(${orders.branchId} = ${branchId} OR ${tableSessions.branchId} = ${branchId})`
+          sql`(${orders.branchId} = ${targetBranchId} OR ${tableSessions.branchId} = ${targetBranchId})`
         )
       )
       .orderBy(desc(payments.createdAt));
@@ -469,10 +610,12 @@ export class PaymentService {
    * 3. Cashier Confirms Payment Received
    */
   async confirmOfflinePayment(
+    user: JwtPayload,
     paymentId: string,
     staffUserId: string,
     dto: ConfirmOfflinePaymentDto,
   ): Promise<PaymentEntity> {
+    await this.assertPayableAccess(user, { paymentId });
     const payment = await this.paymentRepo.findById(paymentId);
     if (!payment) {
       throw new NotFoundException(`Payment request ${paymentId} not found`);
@@ -514,10 +657,12 @@ export class PaymentService {
    * 4. Cashier Rejects or Cancels an Offline Payment Request
    */
   async rejectOfflinePayment(
+    user: JwtPayload,
     paymentId: string,
     staffUserId: string,
     dto: RejectOfflinePaymentDto,
   ): Promise<PaymentEntity> {
+    await this.assertPayableAccess(user, { paymentId });
     const payment = await this.paymentRepo.findById(paymentId);
     if (!payment) {
       throw new NotFoundException(`Payment request ${paymentId} not found`);
@@ -586,10 +731,14 @@ export class PaymentService {
   /**
    * Legacy createPayment for POS direct settlement with authoritative validations
    */
-  async createPayment(dto: CreatePaymentDto): Promise<PaymentEntity> {
+  async createPayment(user: JwtPayload, dto: CreatePaymentDto): Promise<PaymentEntity> {
     if (!dto.orderId && !dto.tableSessionId) {
       throw new BadRequestException('Either orderId or tableSessionId must be provided');
     }
+    await this.assertPayableAccess(user, {
+      orderId: dto.orderId,
+      tableSessionId: dto.tableSessionId,
+    });
 
     const {
       authoritativeAmount,
@@ -629,13 +778,17 @@ export class PaymentService {
   /**
    * Process a split payment with item or guest allocations
    */
-  async createSplitPayment(dto: CreateSplitPaymentDto): Promise<{
+  async createSplitPayment(user: JwtPayload, dto: CreateSplitPaymentDto): Promise<{
     payment: PaymentEntity;
     allocations: PaymentAllocationEntity[];
   }> {
     if (!dto.allocations || dto.allocations.length === 0) {
       throw new BadRequestException('At least one allocation is required for split payment');
     }
+    await this.assertPayableAccess(user, {
+      orderId: dto.orderId,
+      tableSessionId: dto.tableSessionId,
+    });
 
     const totalAllocated = dto.allocations.reduce((acc, curr) => acc + curr.amount, 0);
     const transactionRef = dto.transactionRef ?? generateTransactionRef('SPLIT');
@@ -721,7 +874,15 @@ export class PaymentService {
   /**
    * Refund an existing payment
    */
-  async refundPayment(paymentId: string, dto: RefundPaymentDto): Promise<PaymentEntity> {
+  async refundPayment(
+    user: JwtPayload,
+    paymentId: string,
+    dto: RefundPaymentDto,
+  ): Promise<PaymentEntity> {
+    await this.assertPayableAccess(user, { paymentId });
+    if (!isStaffPaymentActor(user)) {
+      throw new ForbiddenException('Only staff can refund payments');
+    }
     const payment = await this.paymentRepo.findById(paymentId);
     if (!payment) throw new NotFoundException('Payment not found');
 
@@ -765,7 +926,11 @@ export class PaymentService {
   /**
    * Get payment receipt by ID
    */
-  async getPayment(paymentId: string): Promise<PaymentEntity & { allocations: PaymentAllocationEntity[] }> {
+  async getPayment(
+    user: JwtPayload,
+    paymentId: string,
+  ): Promise<PaymentEntity & { allocations: PaymentAllocationEntity[] }> {
+    await this.assertPayableAccess(user, { paymentId });
     const payment = await this.paymentRepo.findById(paymentId);
     if (!payment) throw new NotFoundException('Payment not found');
 
@@ -776,14 +941,29 @@ export class PaymentService {
   /**
    * Get payments by Order ID
    */
-  async getPaymentsByOrder(orderId: string): Promise<PaymentEntity[]> {
+  async getPaymentsByOrder(user: JwtPayload, orderId: string): Promise<PaymentEntity[]> {
+    await this.assertPayableAccess(user, { orderId });
     return this.paymentRepo.findByOrderId(orderId);
   }
 
   /**
    * Calculate Table Bill
    */
-  async calculateTableBill(tableSessionId: string) {
+  /** Authenticated bill calculation (customer participant or staff with branch access). */
+  async calculateTableBill(user: JwtPayload, tableSessionId: string) {
+    await this.assertPayableAccess(user, { tableSessionId });
+    return this.computeTableBill(tableSessionId);
+  }
+
+  /**
+   * Trusted internal callers (AI tool gateway after its own authz) — no JWT ownership check.
+   * Do not expose on HTTP controllers.
+   */
+  async calculateTableBillInternal(tableSessionId: string) {
+    return this.computeTableBill(tableSessionId);
+  }
+
+  private async computeTableBill(tableSessionId: string) {
     const sessionOrders = await this.db
       .select()
       .from(orders)
@@ -904,7 +1084,7 @@ export class PaymentService {
       branchId = session.branchId;
       tableId = session.tableId;
 
-      const bill = await this.calculateTableBill(params.tableSessionId);
+      const bill = await this.computeTableBill(params.tableSessionId);
       if (bill.confirmedOrdersCount === 0) {
         throw new BadRequestException(
           'No confirmed orders available for payment. Wait for the waiter to confirm at least one order.'

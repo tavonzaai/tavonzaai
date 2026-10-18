@@ -41,19 +41,8 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Demo session token
+    // Reject legacy fake waiter tokens — only real API JWTs are accepted.
     if (token.startsWith('wtr_tok_')) {
-      const raw = getCookie('waiter_user');
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (isRoleAllowedForWaiter(parsed)) {
-            dispatch(setUser(parsed));
-            dispatch(setInitialized(true));
-            return;
-          }
-        } catch {}
-      }
       removeAuthToken();
       dispatch(setUser(null));
       dispatch(setInitialized(true));

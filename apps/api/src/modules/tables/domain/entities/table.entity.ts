@@ -48,6 +48,8 @@ export interface Table {
   qrCodeToken?: string | null;
   shape: TableShape;
   floor: number;
+  isActive?: boolean;
+  deletedAt?: Date | null;
   assignedWaiter?: AssignedWaiterInfo | null;
   createdAt: Date;
   updatedAt: Date;

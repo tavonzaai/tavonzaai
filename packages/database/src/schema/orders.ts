@@ -68,6 +68,8 @@ export const orders = pgTable('orders', {
   servedAt: timestamp('served_at', { withTimezone: true }),
   inventoryDeducted: boolean('inventory_deducted').default(false),
   inventoryRestored: boolean('inventory_restored').default(false),
+  /** Client-generated key for customer cart checkout; replays return the original order. */
+  idempotencyKey: varchar('idempotency_key', { length: 100 }).unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({

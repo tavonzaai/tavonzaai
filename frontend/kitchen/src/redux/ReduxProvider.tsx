@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { Provider } from 'react-redux';
 import { store, useAppDispatch } from './store';
 import { getMe } from './features/authApi';
-import { getAuthToken, getCookie, removeAuthToken } from './api/baseApi';
+import { getAuthToken, removeAuthToken } from './api/baseApi';
 import { setInitialized, setUser } from './slices/authSlice';
 
 export function isRoleAllowedForKitchen(user: any): boolean {
@@ -33,27 +33,8 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
     const token = getAuthToken(); // Checks kitchen_token strictly
 
-    if (!token) {
-      // No kitchen token: completely unauthenticated
-      removeAuthToken();
-      dispatch(setUser(null));
-      dispatch(setInitialized(true));
-      return;
-    }
-
-    // Demo session token
-    if (token.startsWith('ktc_tok_')) {
-      const raw = getCookie('kitchen_user');
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (isRoleAllowedForKitchen(parsed)) {
-            dispatch(setUser(parsed));
-            dispatch(setInitialized(true));
-            return;
-          }
-        } catch {}
-      }
+    if (!token || token.startsWith('ktc_tok_')) {
+      // No token or legacy synthetic token — require real /auth/login JWT
       removeAuthToken();
       dispatch(setUser(null));
       dispatch(setInitialized(true));

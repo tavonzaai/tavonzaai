@@ -50,6 +50,20 @@
       "when": 1791873773484,
       "tag": "0006_luxuriant_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792303583961,
+      "tag": "0007_auth_sessions_carts_table_softdelete",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792303597082,
+      "tag": "0008_backfill_customer_carts",
+      "breakpoints": true
     }
   ]
 }

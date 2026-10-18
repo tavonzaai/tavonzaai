@@ -58,8 +58,7 @@ export function resolveCatalogMenuItemId(
     return item.id;
   }
 
-  // 5. Fallback to first available catalog item (which is guaranteed to exist in PostgreSQL)
-  return catalogItems[0]?.id || null;
+  return null;
 }
 
 export interface CartItemDto {
@@ -67,30 +66,38 @@ export interface CartItemDto {
   orderId?: string;
   menuItemId: string;
   name: string;
+  imageUrl?: string | null;
+  basePrice?: number;
   unitPrice: number;
   quantity: number;
   specialInstructions?: string | null;
+  modifierIds?: string[];
+  modifiers?: Array<{ id: string; name: string; price: number }>;
   addOns?: Array<{ name: string; price: number }>;
   addOnsTotal?: number;
   lineTotal: number;
+  available?: boolean;
+  issue?: string | null;
 }
 
 export interface CartResponse {
   id: string;
-  orderId: string;
-  orderNumber: string;
-  branchId: string;
-  tableId: string;
-  status: string;
+  /** @deprecated DRAFT-order carts are gone; kept for transitional UI reads. */
+  orderId?: string;
+  orderNumber?: string;
+  branchId: string | null;
+  tableId?: string;
+  status?: string;
   subtotal: number;
   serviceChargeRate?: number;
   serviceCharge: number;
   taxRate?: number;
   tax?: number;
-  taxAmount: number;
+  taxAmount?: number;
   total?: number;
-  totalAmount: number;
+  totalAmount?: number;
   itemCount?: number;
+  canCheckout?: boolean;
   items: CartItemDto[];
 }
 
@@ -164,50 +171,59 @@ export interface OrderDetailResponse {
 }
 
 export interface AddItemToCartPayload {
-  orderId: string;
   menuItemId: string;
   quantity: number;
   specialInstructions?: string;
+  modifierIds?: string[];
+  branchId?: string;
+  /** @deprecated ignored — cart ownership comes from the JWT */
+  orderId?: string;
   addOns?: Array<{ name: string; price: number }>;
 }
 
 export interface UpdateCartItemPayload {
-  orderId: string;
   itemId: string;
   quantity?: number;
   specialInstructions?: string;
+  /** @deprecated ignored */
+  orderId?: string;
 }
 
 export interface RemoveCartItemPayload {
-  orderId: string;
   itemId: string;
+  /** @deprecated ignored */
+  orderId?: string;
+}
+
+function unwrapCart(res: any): CartResponse {
+  const data = res?.data || res;
+  return {
+    ...data,
+    taxAmount: data.taxAmount ?? data.tax ?? 0,
+    totalAmount: data.totalAmount ?? data.total ?? 0,
+    items: (data.items || []).map((item: any) => ({
+      ...item,
+      addOns: item.modifiers?.map((m: any) => ({ name: m.name, price: m.price })) ?? item.addOns ?? [],
+    })),
+  };
+}
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `ord_${crypto.randomUUID().replace(/-/g, '')}`;
+  }
+  return `ord_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
 export const orderService = {
-  // GET /orders/cart?branchId=...&tableId=...
-  getCartFromSession: async (branchId?: string, tableId?: string): Promise<CartResponse> => {
-    const params = new URLSearchParams();
-    if (branchId) params.append('branchId', branchId);
-    if (tableId) params.append('tableId', tableId);
-    const queryString = params.toString() ? `?${params.toString()}` : '';
-
-    const res = await baseApiFetch<CartResponse>(`/orders/cart${queryString}`, {
-      method: 'GET',
-    });
-    return (res as any)?.data || res;
+  /** GET /cart — server-side cart for the authenticated diner. */
+  getCart: async (_branchId?: string, _tableId?: string): Promise<CartResponse> => {
+    const res = await baseApiFetch<CartResponse>('/cart', { method: 'GET' });
+    return unwrapCart(res);
   },
 
-  // GET /orders/cart/:branchId/:tableId (with fallback to GET /orders/cart)
-  getCart: async (branchId: string, tableId: string): Promise<CartResponse> => {
-    try {
-      const res = await baseApiFetch<CartResponse>(
-        `/orders/cart/${encodeURIComponent(branchId)}/${encodeURIComponent(tableId)}`,
-        { method: 'GET' }
-      );
-      return (res as any)?.data || res;
-    } catch {
-      return await orderService.getCartFromSession(branchId, tableId);
-    }
+  getCartFromSession: async (_branchId?: string, _tableId?: string): Promise<CartResponse> => {
+    return orderService.getCart();
   },
 
   // GET /orders/me
@@ -219,7 +235,6 @@ export const orderService = {
   }): Promise<OrderListResponse[]> => {
     const params = new URLSearchParams();
     if (filters?.branchId) params.append('branchId', filters.branchId);
-    if (filters?.tableId) params.append('tableId', filters.tableId);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.search) params.append('search', filters.search);
     const queryString = params.toString() ? `?${params.toString()}` : '';
@@ -231,54 +246,73 @@ export const orderService = {
     return Array.isArray(data) ? data : [];
   },
 
-  // POST /orders/cart/:orderId/items
+  // POST /cart/items
   addItem: async (payload: AddItemToCartPayload): Promise<CartResponse> => {
-    const orderId = (payload.orderId || '').trim();
-    if (!orderId) throw new Error('orderId is required to add items to cart');
-    const { orderId: _, ...body } = payload;
-    const res = await baseApiFetch<CartResponse>(`/orders/cart/${encodeURIComponent(orderId)}/items`, {
+    const body = {
+      menuItemId: payload.menuItemId,
+      quantity: payload.quantity,
+      specialInstructions: payload.specialInstructions,
+      modifierIds: payload.modifierIds,
+      branchId: payload.branchId,
+    };
+    const res = await baseApiFetch<CartResponse>('/cart/items', {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    return (res as any)?.data || res;
+    return unwrapCart(res);
   },
 
-  // PATCH /orders/cart/:orderId/items/:itemId
+  // PATCH /cart/items/:itemId
   updateItem: async (payload: UpdateCartItemPayload): Promise<CartResponse> => {
-    const orderId = (payload.orderId || '').trim();
     const itemId = (payload.itemId || '').trim();
-    if (!orderId || !itemId) throw new Error('orderId and itemId are required to update cart item');
-    const { orderId: _, itemId: __, ...body } = payload;
-    const res = await baseApiFetch<CartResponse>(
-      `/orders/cart/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }
-    );
-    return (res as any)?.data || res;
+    if (!itemId) throw new Error('itemId is required to update cart item');
+    const res = await baseApiFetch<CartResponse>(`/cart/items/${encodeURIComponent(itemId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        quantity: payload.quantity,
+        specialInstructions: payload.specialInstructions,
+      }),
+    });
+    return unwrapCart(res);
   },
 
-  // DELETE /orders/cart/:orderId/items/:itemId
+  // DELETE /cart/items/:itemId
   removeItem: async (payload: RemoveCartItemPayload): Promise<CartResponse> => {
-    const orderId = (payload.orderId || '').trim();
     const itemId = (payload.itemId || '').trim();
-    if (!orderId || !itemId) throw new Error('orderId and itemId are required to remove cart item');
-    const res = await baseApiFetch<CartResponse>(
-      `/orders/cart/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}`,
-      { method: 'DELETE' }
-    );
-    return (res as any)?.data || res;
+    if (!itemId) throw new Error('itemId is required to remove cart item');
+    const res = await baseApiFetch<CartResponse>(`/cart/items/${encodeURIComponent(itemId)}`, {
+      method: 'DELETE',
+    });
+    return unwrapCart(res);
   },
 
-  // POST /orders/:orderId/submit
-  submitOrder: async (orderId: string): Promise<OrderTrackingResponse> => {
-    const cleanId = (orderId || '').trim();
-    if (!cleanId) throw new Error('orderId is required to submit order');
-    const res = await baseApiFetch<OrderTrackingResponse>(`/orders/${encodeURIComponent(cleanId)}/submit`, {
+  clearCart: async (): Promise<CartResponse> => {
+    const res = await baseApiFetch<CartResponse>('/cart', { method: 'DELETE' });
+    return unwrapCart(res);
+  },
+
+  /**
+   * POST /orders — place order from the server cart.
+   * Cart is cleared by the API only after the order persists.
+   */
+  placeOrder: async (options?: {
+    qrToken?: string;
+    idempotencyKey?: string;
+  }): Promise<OrderTrackingResponse> => {
+    const key = options?.idempotencyKey || newIdempotencyKey();
+    const res = await baseApiFetch<OrderTrackingResponse>('/orders', {
       method: 'POST',
+      headers: { 'Idempotency-Key': key },
+      body: JSON.stringify({ qrToken: options?.qrToken }),
     });
     return (res as any)?.data || res;
+  },
+
+  /** @deprecated use placeOrder — DRAFT-order submit was removed. */
+  submitOrder: async (_orderId?: string): Promise<OrderTrackingResponse> => {
+    const { getCookie } = await import('../api/baseApi');
+    const qrToken = getCookie('tavonza_qr_token') || undefined;
+    return orderService.placeOrder({ qrToken });
   },
 
   // GET /orders/:orderId/track

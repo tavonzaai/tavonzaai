@@ -70,11 +70,14 @@ export class UserProfileDto {
 // ─── Auth Tokens ──────────────────────────────────────────────────────
 
 export class AuthTokensDto {
-  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmMGUxZDJjMy0...z', description: 'Short-lived JWT access token (15m expiry)' })
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmMGUxZDJjMy0...z', description: 'JWT access token (7 day expiry, see `exp`)' })
   accessToken!: string;
 
-  @ApiProperty({ example: 'd7a1c9e8-b2f3-4567-8901-234567abcdef', description: 'Long-lived refresh token (7d expiry)' })
-  refreshToken!: string;
+  @ApiPropertyOptional({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'Single-use refresh token (90 day expiry). Omitted for browser apps, which receive it as an HttpOnly cookie.',
+  })
+  refreshToken?: string;
 
   @ApiProperty({ type: UserProfileDto, description: 'Authenticated user profile' })
   user!: UserProfileDto;

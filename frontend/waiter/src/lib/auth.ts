@@ -49,10 +49,10 @@ export function getWaiterProfile(): WaiterUser | null {
  */
 export function loginWaiterSession(customUser?: Partial<WaiterUser>): WaiterUser {
   const existingToken = getCookie(WAITER_TOKEN_KEY);
-  // Keep existing JWT access token if set by rawAuthApi.login, otherwise generate demo token
-  const token = (existingToken && !existingToken.startsWith('wtr_tok_'))
-    ? existingToken
-    : `wtr_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  // Profile cache only — authentication requires a real access JWT from /auth/login.
+  if (!existingToken || existingToken.startsWith('wtr_tok_')) {
+    throw new Error('Waiter login requires a valid API access token. Sign in through /auth/login.');
+  }
 
   const user: WaiterUser = {
     id: customUser?.id || '',
@@ -65,10 +65,7 @@ export function loginWaiterSession(customUser?: Partial<WaiterUser>): WaiterUser
     ...customUser,
   };
 
-  // Store strictly in Cookies (NO LOCALSTORAGE)
-  setCookie(WAITER_TOKEN_KEY, token);
   setCookie(WAITER_USER_KEY, JSON.stringify(user));
-
   return user;
 }
 

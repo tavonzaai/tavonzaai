@@ -43,6 +43,20 @@ export class DrizzleUserRepository {
     return result[0] ?? null;
   }
 
+  /** Returns the customer profile id, creating it for legacy accounts that predate auto-provisioning. */
+  async ensureCustomerProfile(userId: string): Promise<string> {
+    await this.db
+      .insert(schema.customers)
+      .values({ userId })
+      .onConflictDoNothing({ target: schema.customers.userId });
+    const [row] = await this.db
+      .select({ id: schema.customers.id })
+      .from(schema.customers)
+      .where(eq(schema.customers.userId, userId))
+      .limit(1);
+    return row.id;
+  }
+
   async findByIdWithRelations(id: string) {
     const user = await this.findById(id);
     if (!user) return null;
@@ -76,26 +90,33 @@ export class DrizzleUserRepository {
     role?: any;
     avatar?: string;
   }) {
-    const result = await this.db
-      .insert(schema.users)
-      .values({
-        email: data.email,
-        password: data.passwordHash,
-        name: data.name,
-        contactNo: data.contactNo ?? null,
-        avatar: data.avatar ?? null,
-        role: data.role ?? 'CUSTOMER',
-      })
-      .returning();
-    
-    // Auto-create customer profile
-    if (data.role === 'CUSTOMER' || !data.role) {
-      await this.db.insert(schema.customers).values({
-        userId: result[0].id,
-      });
-    }
+    return this.db.transaction(async (tx: DrizzleDb) => {
+      const [user] = await tx
+        .insert(schema.users)
+        .values({
+          email: data.email,
+          password: data.passwordHash,
+          name: data.name,
+          contactNo: data.contactNo ?? null,
+          avatar: data.avatar ?? null,
+          role: data.role ?? 'CUSTOMER',
+        })
+        .returning();
 
-    return result[0];
+      // Customers get their profile and their single cart with the account
+      if (data.role === 'CUSTOMER' || !data.role) {
+        const [customer] = await tx
+          .insert(schema.customers)
+          .values({ userId: user!.id })
+          .returning({ id: schema.customers.id });
+        await tx
+          .insert(schema.carts)
+          .values({ customerId: customer!.id })
+          .onConflictDoNothing({ target: schema.carts.customerId });
+      }
+
+      return user!;
+    });
   }
 
   async updateProfile(userId: string, data: {

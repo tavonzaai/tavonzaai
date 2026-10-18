@@ -51,9 +51,11 @@ export function setAuthToken(token: string) {
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
   setAuthToken(tokens.accessToken);
-  if (tokens.refreshToken) {
-    setCookie(SUPERADMIN_REFRESH_TOKEN_KEY, tokens.refreshToken);
-  }
+  // Refresh tokens live in HttpOnly cookie tvz_rt_superadmin — never store in JS-readable cookies.
+    removeCookie('superadmin_refresh_token');
+  removeCookie('admin_refresh_token');
+  removeCookie('tavonza_refresh_token');
+  removeCookie('refresh_token');
 }
 
 export function removeAuthToken() {
@@ -68,10 +70,8 @@ export function removeAuthToken() {
 let refreshPromise: Promise<boolean> | null = null;
 
 export async function refreshAuthSession(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-
   if (refreshPromise) return refreshPromise;
+  const priorAccess = getAuthToken();
 
   refreshPromise = (async () => {
     try {
@@ -79,28 +79,22 @@ export async function refreshAuthSession(): Promise<boolean> {
       const res = await fetch(`${baseUrl}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ client: 'superadmin' }),
         credentials: 'include',
       });
-
       if (!res.ok) {
+        const current = getAuthToken();
+        if (current && current !== priorAccess) return true;
         removeAuthToken();
         return false;
       }
-
       const json = await res.json().catch(() => null);
       const data = json?.data || json;
-      const newAccessToken = data?.accessToken || data?.access_token;
-      const newRefreshToken = data?.refreshToken || data?.refresh_token || refreshToken;
-
-      if (newAccessToken) {
-        setAuthTokens({
-          accessToken: newAccessToken,
-          refreshToken: newRefreshToken,
-        });
+      const newAccess = data?.accessToken || data?.access_token;
+      if (newAccess) {
+        setAuthTokens({ accessToken: newAccess });
         return true;
       }
-
       removeAuthToken();
       return false;
     } catch {
@@ -168,7 +162,7 @@ export class ApiError extends Error {
 
 export async function baseApiFetch<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { __authRetried?: boolean } = {}
 ): Promise<ApiResponse<T> & T> {
   const token = getAuthToken();
   const headers: Record<string, string> = {
@@ -208,7 +202,22 @@ export async function baseApiFetch<T = any>(
   const rawJson: any = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 401 && !cleanEndpoint.startsWith('/auth/') && !options.__authRetried) {
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        return baseApiFetch<T>(endpoint, { ...options, __authRetried: true });
+      }
+      removeAuthToken();
+      if (
+        typeof window !== 'undefined' &&
+        !window.location.pathname.startsWith('/login') &&
+        !window.location.pathname.startsWith('/superadmin/login')
+      ) {
+        window.location.href = '/superadmin/login';
+      }
+    }
     let errorMsg = rawJson?.message || rawJson?.error || response.statusText || 'Request failed';
+    if (Array.isArray(errorMsg)) errorMsg = errorMsg.join('. ');
     throw new ApiError(errorMsg, response.status, rawJson);
   }
 

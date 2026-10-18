@@ -9,10 +9,20 @@ import {
   Optional,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { randomInt } from 'node:crypto';
+import { createHash, randomInt, randomUUID } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { GlobalRole, resolvePermissions, type Scope } from '@tavonza/authorization';
 import { DrizzleUserRepository } from '../../infrastructure/persistence/drizzle-user.repository';
+import { DrizzleAuthSessionRepository } from '../../infrastructure/persistence/drizzle-auth-session.repository';
+import {
+  ACCESS_TOKEN_TTL_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS,
+  TOKEN_TYPE,
+  API_CLIENT,
+  accessTokenSecret,
+  refreshTokenSecret,
+  evaluateRefreshToken,
+} from '../../domain/token-policy';
 import { DrizzleRbacRepository } from '../../../authorization/infrastructure/persistence/drizzle-rbac.repository';
 import { DrizzleOrganizationRepository } from '../../../organizations/infrastructure/persistence/drizzle-organization.repository';
 import { MailService } from '../../../notifications/application/mail.service';
@@ -32,6 +42,23 @@ import type {
 
 const OTP_EXPIRY_MINUTES = 10;
 
+export interface SessionContext {
+  client?: string;
+  userAgent?: string | null;
+  ipAddress?: string | null;
+}
+
+interface RefreshTokenClaims {
+  sub: string;
+  sid: string;
+  jti: string;
+  typ: string;
+}
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -41,6 +68,7 @@ export class AuthService {
     private readonly orgRepo: DrizzleOrganizationRepository,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly sessionRepo: DrizzleAuthSessionRepository,
     @Optional() private readonly rbacRepo?: DrizzleRbacRepository,
   ) {}
 
@@ -80,7 +108,7 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto): Promise<AuthTokensDto> {
+  async login(dto: LoginDto, context: SessionContext = {}): Promise<AuthTokensDto> {
     const user = await this.userRepo.findByEmailOrPhone(dto.email);
     if (!user || user.status !== 'ACTIVE' || !user.password) {
       throw new UnauthorizedException('Invalid email or password');
@@ -91,35 +119,91 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    return this.issueTokens(user);
+    const sessionId = randomUUID();
+    const refreshTokenId = randomUUID();
+    const refreshToken = this.signRefreshToken(user.id, sessionId, refreshTokenId);
+    await this.sessionRepo.createSessionWithToken({
+      sessionId,
+      userId: user.id,
+      client: context.client ?? API_CLIENT,
+      userAgent: context.userAgent,
+      ipAddress: context.ipAddress,
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000),
+      refreshTokenId,
+      tokenHash: hashToken(refreshToken),
+    });
+
+    return this.buildTokens(user, sessionId, refreshToken);
   }
 
-  async refreshTokens(userId?: string, refreshToken?: string): Promise<AuthTokensDto> {
-    let resolvedUserId = userId;
-    if (!resolvedUserId && refreshToken) {
+  /**
+   * Validates and rotates a refresh token. Replaying a rotated token outside
+   * the grace window revokes the whole session (token theft).
+   */
+  async refreshTokens(refreshToken: string | undefined): Promise<AuthTokensDto> {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token is required');
+    }
+
+    const claims = this.verifyRefreshToken(refreshToken);
+    const found = await this.sessionRepo.findRefreshToken(claims.jti);
+    const decision = evaluateRefreshToken({
+      record: found?.token ?? null,
+      session: found?.session ?? null,
+      subject: claims.sub,
+      presentedHash: hashToken(refreshToken),
+      now: new Date(),
+    });
+
+    if (decision.outcome === 'reuse') {
+      await this.sessionRepo.revokeSession(claims.sid, 'REUSE_DETECTED');
+      this.logger.warn(`Refresh token reuse detected; session ${claims.sid} revoked`);
+      throw new UnauthorizedException('Session has been revoked. Please sign in again.');
+    }
+    if (decision.outcome === 'reject') {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const user = await this.userRepo.findById(claims.sub);
+    if (!user || user.status !== 'ACTIVE') {
+      await this.sessionRepo.revokeSession(claims.sid, 'ACCOUNT_DISABLED');
+      throw new UnauthorizedException('Account is inactive or no longer valid');
+    }
+
+    const newId = randomUUID();
+    const nextRefreshToken = this.signRefreshToken(user.id, claims.sid, newId);
+    const rotated = await this.sessionRepo.rotate({
+      oldId: claims.jti,
+      sessionId: claims.sid,
+      newId,
+      newHash: hashToken(nextRefreshToken),
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000),
+    });
+    if (!rotated) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    return this.buildTokens(user, claims.sid, nextRefreshToken);
+  }
+
+  /** Revokes the session identified by the refresh token or the access token's `sid`. */
+  async logout(input: { refreshToken?: string; sessionId?: string; userId?: string }): Promise<void> {
+    let sessionId = input.sessionId;
+    if (!sessionId && input.refreshToken) {
       try {
-        const payload: any = this.jwtService.verify(refreshToken, {
-          secret: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET,
-        });
-        resolvedUserId = payload?.sub;
+        sessionId = this.verifyRefreshToken(input.refreshToken, { ignoreExpiration: true }).sid;
       } catch {
-        throw new UnauthorizedException('Invalid or expired refresh token');
+        sessionId = undefined;
       }
     }
+    if (!sessionId) return;
 
-    if (!resolvedUserId) {
-      throw new UnauthorizedException('Access denied');
-    }
-
-    const user = await this.userRepo.findById(resolvedUserId);
-    if (!user || user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Access denied');
-    }
-
-    return this.issueTokens(user);
+    const session = await this.sessionRepo.findSession(sessionId);
+    if (!session || (input.userId && session.userId !== input.userId)) return;
+    await this.sessionRepo.revokeSession(sessionId, 'LOGOUT');
   }
 
-  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+  async changePassword(userId: string, dto: ChangePasswordDto, currentSessionId?: string): Promise<void> {
     const user = await this.userRepo.findById(userId);
     if (!user || !user.password) {
       throw new BadRequestException('User account not found or has no local password');
@@ -138,10 +222,7 @@ export class AuthService {
     this.validatePassword(dto.newPassword);
     const newHash = await argon2.hash(dto.newPassword);
     await this.userRepo.updatePassword(user.id, newHash);
-  }
-
-  async logout(_userId: string): Promise<void> {
-    // Stateless JWT logout implies client drops token.
+    await this.sessionRepo.revokeAllForUser(user.id, 'PASSWORD_CHANGED', currentSessionId);
   }
 
   async getMe(userId: string): Promise<UserProfileDto> {
@@ -217,6 +298,7 @@ export class AuthService {
     );
     if (!consumed) throw new BadRequestException('OTP code is invalid or has expired');
     await this.userRepo.updatePassword(user.id, newHash);
+    await this.sessionRepo.revokeAllForUser(user.id, 'PASSWORD_CHANGED');
   }
 
   async resendOtp(
@@ -236,7 +318,37 @@ export class AuthService {
     );
   }
 
-  private async issueTokens(user: any): Promise<AuthTokensDto> {
+  private signRefreshToken(userId: string, sessionId: string, tokenId: string): string {
+    return this.jwtService.sign(
+      { sub: userId, sid: sessionId, typ: TOKEN_TYPE.REFRESH },
+      {
+        jwtid: tokenId,
+        expiresIn: REFRESH_TOKEN_TTL_SECONDS,
+        secret: refreshTokenSecret(),
+      },
+    );
+  }
+
+  private verifyRefreshToken(
+    token: string,
+    options: { ignoreExpiration?: boolean } = {},
+  ): RefreshTokenClaims {
+    let claims: Partial<RefreshTokenClaims>;
+    try {
+      claims = this.jwtService.verify(token, {
+        secret: refreshTokenSecret(),
+        ignoreExpiration: options.ignoreExpiration ?? false,
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+    if (claims.typ !== TOKEN_TYPE.REFRESH || !claims.sub || !claims.sid || !claims.jti) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+    return claims as RefreshTokenClaims;
+  }
+
+  private async buildTokens(user: any, sessionId: string, refreshToken: string): Promise<AuthTokensDto> {
     let effectiveRole = user.role;
     let effectivePermissions: string[] = [];
 
@@ -285,6 +397,8 @@ export class AuthService {
 
     const payload = {
       sub: user.id,
+      sid: sessionId,
+      typ: TOKEN_TYPE.ACCESS,
       email: user.email,
       role: effectiveRole,
       globalRole: user.role,
@@ -295,12 +409,8 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: (process.env.JWT_EXPIRATION ?? '15m') as unknown as number,
-    });
-
-    const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: (process.env.REFRESH_TOKEN_EXPIRATION ?? '7d') as unknown as number,
-      secret: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET,
+      expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+      secret: accessTokenSecret(),
     });
 
     return {

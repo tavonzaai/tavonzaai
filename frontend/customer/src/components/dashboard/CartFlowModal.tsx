@@ -80,17 +80,15 @@ export default function CartFlowModal({
             ? rawTableId
             : null;
 
-        if (branchId && activeTableId) {
-          const draft = await orderService.getCart(branchId, activeTableId);
-          if (draft?.id) {
-            const res = await orderService.submitOrder(draft.id);
-            setSubmittedOrderData(res);
-            setSubmittedOrderId(res.orderNumber || res.id);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(res));
-              if (res.id) localStorage.setItem('tavonza_last_submitted_order_id', res.id);
-              if (res.orderNumber) localStorage.setItem('tavonza_last_submitted_order_number', res.orderNumber);
-            }
+        const qrToken = getCookie('tavonza_qr_token') || undefined;
+        if (branchId || qrToken) {
+          const res = await orderService.placeOrder({ qrToken });
+          setSubmittedOrderData(res);
+          setSubmittedOrderId(res.orderNumber || res.id);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(res));
+            if (res.id) localStorage.setItem('tavonza_last_submitted_order_id', res.id);
+            if (res.orderNumber) localStorage.setItem('tavonza_last_submitted_order_number', res.orderNumber);
           }
         }
       } catch (err) {

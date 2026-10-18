@@ -21,12 +21,10 @@ export interface CashierUser {
 
 export function isCashierAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
-
   const cashierToken = getCookie(CASHIER_TOKEN_KEY);
-  const accessToken = getCookie('access_token');
-  const sessionToken = getCookie('customer_session');
-
-  return !!(cashierToken || accessToken || sessionToken);
+  if (!cashierToken || !cashierToken.trim()) return false;
+  if (cashierToken.startsWith('csh_tok_')) return false;
+  return true;
 }
 
 /**
@@ -41,18 +39,18 @@ export function getCashierProfile(): CashierUser | null {
       console.error('Failed to parse cashier user session cookie', err);
     }
   }
-
   return null;
 }
 
 /**
- * Log in the cashier, establishing strictly Cookies session (NO LOCALSTORAGE)
+ * Cache cashier profile after a successful /auth/login.
+ * Requires a real access JWT already stored in cashier_token.
  */
 export function loginCashierSession(customUser?: Partial<CashierUser>): CashierUser {
-  const existingToken = getCookie(CASHIER_TOKEN_KEY) || getCookie('access_token');
-  const token = (existingToken && !existingToken.startsWith('csh_tok_'))
-    ? existingToken
-    : `csh_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const existingToken = getCookie(CASHIER_TOKEN_KEY);
+  if (!existingToken || existingToken.startsWith('csh_tok_')) {
+    throw new Error('Cashier login requires a valid API access token. Sign in through /auth/login.');
+  }
 
   const user: CashierUser = {
     id: customUser?.id || '',
@@ -65,11 +63,7 @@ export function loginCashierSession(customUser?: Partial<CashierUser>): CashierU
     ...customUser,
   };
 
-  // Store strictly in Cookies (NO LOCALSTORAGE)
-  setCookie(CASHIER_TOKEN_KEY, token);
-  setCookie('access_token', token);
   setCookie(CASHIER_USER_KEY, JSON.stringify(user));
-
   return user;
 }
 

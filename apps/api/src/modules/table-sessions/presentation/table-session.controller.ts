@@ -25,6 +25,7 @@ import {
 } from '@nestjs/swagger';
 import { TableSessionService } from '../application/services/table-session.service';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../identity/infrastructure/adapters/jwt.strategy';
 import {
@@ -91,6 +92,8 @@ export class TableSessionController {
    * Figma: QR Scan Screen → Splash Screen
    */
   @Post('scan')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer] Scan table QR code — creates or joins a table session',
     description: 'Direct QR code scan handler. Automatically allocates a host guest session if table is free, or attaches guest if active.',
@@ -114,6 +117,8 @@ export class TableSessionController {
    * GET /sessions/branch/:branchId
    */
   @Get('branch/:branchId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Staff] Get table sessions for branch',
     description: 'Returns active table sessions in the branch with seating and occupancy states.',
@@ -135,18 +140,21 @@ export class TableSessionController {
     type: [TableSessionRecordDto],
     description: 'List of table sessions in branch',
   })
-  @ApiStandardErrors(400, 500)
+  @ApiStandardErrors(400, 401, 403, 500)
   async getBranchSessions(
+    @CurrentUser() user: JwtPayload,
     @Param('branchId') branchId: string,
     @Query('status') status?: string,
   ) {
-    return this.sessionService.findSessionsByBranch(branchId, status);
+    return this.sessionService.findSessionsByBranch(user, branchId, status);
   }
 
   /**
    * GET /sessions/:sessionId
    */
   @Get(':sessionId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer] Get table session with guests list',
     description: 'Returns session details and list of all guests seated at this dining table.',
@@ -161,9 +169,12 @@ export class TableSessionController {
     type: SessionDetailResponseDto,
     description: 'Active session detail and guests list',
   })
-  @ApiStandardErrors(400, 404, 500)
-  async getSession(@Param('sessionId') sessionId: string): Promise<any> {
-    return this.sessionService.getSession(sessionId);
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async getSession(
+    @CurrentUser() user: JwtPayload,
+    @Param('sessionId') sessionId: string,
+  ): Promise<any> {
+    return this.sessionService.getSession(sessionId, user);
   }
 
   /**
@@ -187,9 +198,12 @@ export class TableSessionController {
     type: ShareCodeResponseDto,
     description: 'Generated join code and URL',
   })
-  @ApiStandardErrors(400, 401, 404, 500)
-  async generateShareCode(@Param('sessionId') sessionId: string): Promise<any> {
-    return this.sessionService.generateShareCode(sessionId);
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async generateShareCode(
+    @CurrentUser() user: JwtPayload,
+    @Param('sessionId') sessionId: string,
+  ): Promise<any> {
+    return this.sessionService.generateShareCode(sessionId, user);
   }
 
   /**
@@ -197,6 +211,8 @@ export class TableSessionController {
    */
   @Post('join')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer] Join a table session using host share code',
     description: 'Allows dining companion to join an active table session using the 6-character join code.',
@@ -212,6 +228,7 @@ export class TableSessionController {
   ): Promise<any> {
     return this.sessionService.joinByCode({
       code: dto.code,
+      displayName: dto.displayName,
       userId: user?.sub,
     });
   }
@@ -221,6 +238,8 @@ export class TableSessionController {
    */
   @Patch('order-mode')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer] Set order mode: individual or together with guests',
     description: 'Updates whether customer wishes to order and bill independently or consolidate into a shared group bill.',
@@ -229,9 +248,12 @@ export class TableSessionController {
     type: SessionActionResponseDto,
     description: 'Order mode updated successfully',
   })
-  @ApiStandardErrors(400, 404, 500)
-  async setOrderMode(@Body() dto: OrderModeDto): Promise<any> {
-    return this.sessionService.setOrderMode(dto.customerSessionId, dto.orderMode);
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async setOrderMode(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: OrderModeDto,
+  ): Promise<any> {
+    return this.sessionService.setOrderMode(user, dto.customerSessionId, dto.orderMode);
   }
 
   /**
@@ -239,6 +261,8 @@ export class TableSessionController {
    */
   @Post(':sessionId/request-bill')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer] Request bill for table session',
     description: 'Notifies floor staff and cashier that guests are ready to settle the bill.',
@@ -253,9 +277,12 @@ export class TableSessionController {
     type: SessionActionResponseDto,
     description: 'Bill request dispatched to floor staff',
   })
-  @ApiStandardErrors(400, 404, 500)
-  async requestBill(@Param('sessionId') sessionId: string): Promise<any> {
-    return this.sessionService.requestBill(sessionId);
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async requestBill(
+    @CurrentUser() user: JwtPayload,
+    @Param('sessionId') sessionId: string,
+  ): Promise<any> {
+    return this.sessionService.requestBill(sessionId, user);
   }
 
   /**
@@ -263,6 +290,8 @@ export class TableSessionController {
    */
   @Post(':sessionId/call-waiter')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer] Call waiter to table',
     description: 'Sends real-time high-priority assistance alert to assigned table waiter and floor staff.',
@@ -277,12 +306,13 @@ export class TableSessionController {
     type: SessionActionResponseDto,
     description: 'Waiter call acknowledged',
   })
-  @ApiStandardErrors(400, 404, 500)
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async callWaiter(
+    @CurrentUser() user: JwtPayload,
     @Param('sessionId') sessionId: string,
     @Body('reason') reason?: string,
   ): Promise<any> {
-    return this.sessionService.callWaiter(sessionId, reason);
+    return this.sessionService.callWaiter(sessionId, user, reason);
   }
 
   /**
@@ -306,9 +336,12 @@ export class TableSessionController {
     type: SessionActionResponseDto,
     description: 'Table session closed and table released to AVAILABLE',
   })
-  @ApiStandardErrors(400, 401, 404, 409, 500)
-  async closeSession(@Param('sessionId') sessionId: string): Promise<any> {
-    await this.sessionService.closeSession(sessionId);
+  @ApiStandardErrors(400, 401, 403, 404, 409, 500)
+  async closeSession(
+    @CurrentUser() user: JwtPayload,
+    @Param('sessionId') sessionId: string,
+  ): Promise<any> {
+    await this.sessionService.closeSession(sessionId, user);
     return { success: true, message: 'Session closed' };
   }
 }

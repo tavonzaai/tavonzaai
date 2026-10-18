@@ -43,15 +43,55 @@ export function setAuthToken(token: string) {
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
   setAuthToken(tokens.accessToken);
-  if (tokens.refreshToken) {
-    setCookie(WAITER_REFRESH_TOKEN_KEY, tokens.refreshToken);
-  }
+  // Refresh tokens are HttpOnly (tvz_rt_waiter) — do not store in JS-readable cookies.
+  removeCookie(WAITER_REFRESH_TOKEN_KEY);
 }
 
 export function removeAuthToken() {
   removeCookie(WAITER_TOKEN_KEY);
   removeCookie(WAITER_REFRESH_TOKEN_KEY);
   removeCookie(WAITER_USER_KEY);
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+export async function refreshAuthSession(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  const priorAccess = getAuthToken();
+
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client: 'waiter' }),
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const current = getAuthToken();
+        if (current && current !== priorAccess) return true;
+        removeAuthToken();
+        return false;
+      }
+      const json = await res.json().catch(() => null);
+      const data = json?.data || json;
+      const newAccess = data?.accessToken || data?.access_token;
+      if (newAccess) {
+        setAuthTokens({ accessToken: newAccess });
+        return true;
+      }
+      removeAuthToken();
+      return false;
+    } catch {
+      removeAuthToken();
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export function getApiBaseUrl(): string {
@@ -105,7 +145,7 @@ export class ApiError extends Error {
 
 export async function baseApiFetch<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { __authRetried?: boolean } = {}
 ): Promise<ApiResponse<T> & T> {
   const token = getAuthToken();
   const headers: Record<string, string> = {
@@ -162,8 +202,11 @@ export async function baseApiFetch<T = any>(
   const rawJson: any = await response.json().catch(() => null);
 
   if (!response.ok) {
-    if (response.status === 401) {
-      removeAuthToken();
+    if (response.status === 401 && !cleanEndpoint.startsWith('/auth/') && !options.__authRetried) {
+      const refreshed = await refreshAuthSession();
+      if (refreshed) {
+        return baseApiFetch<T>(endpoint, { ...options, __authRetried: true });
+      }
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
       }

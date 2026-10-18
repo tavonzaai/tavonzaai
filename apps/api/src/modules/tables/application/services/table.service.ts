@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { isProduction } from '@tavonza/config';
 import { OutboxService } from '@tavonza/database';
 import { DrizzleTableRepository } from '../../infrastructure/persistence/drizzle-table.repository';
 import type {
@@ -12,6 +13,7 @@ import type {
   ReservationResponseDto,
 } from '../../presentation/http/dto/table.dto';
 import type { Table, Reservation, ReservationStatus, TableServiceStatus } from '../../domain/entities/table.entity';
+import { ResourceConflictException } from '../../../../common/errors/app.exception';
 
 import { RealtimeGateway } from '../../../realtime/realtime.gateway';
 
@@ -93,14 +95,46 @@ export class TableService {
 
   async softDelete(id: string): Promise<TableResponseDto> {
     const table = await this.tableRepo.findTableById(id);
-    if (!table) {
+    if (!table || table.deletedAt) {
       throw new NotFoundException(`Table with ID "${id}" not found`);
+    }
+
+    const blockers = await this.tableRepo.findDeleteBlockers(id);
+    if (blockers.length > 0) {
+      throw new ResourceConflictException(
+        `Cannot delete this table: ${blockers.join('; ')}.`,
+        { details: { blockers } },
+      );
     }
 
     const updated = await this.tableRepo.softDeleteTable(id);
     if (!updated) {
       throw new NotFoundException(`Failed to soft-delete table "${id}"`);
     }
+
+    this.realtimeGateway.emitTableStatusChanged({
+      eventType: 'TABLE_STATUS_CHANGED',
+      eventId: updated.id,
+      branchId: updated.branchId,
+      tableId: updated.id,
+      tableLabel: updated.label,
+      serviceStatus: updated.serviceStatus as any,
+      operationalFlag: 'OUT_OF_SERVICE',
+      occurredAt: new Date().toISOString(),
+    });
+
+    await this.outboxService.publishEvent({
+      aggregateType: 'TABLE',
+      aggregateId: updated.id,
+      eventType: 'TableDeleted',
+      branchId: updated.branchId,
+      payload: {
+        tableId: updated.id,
+        tableLabel: updated.label,
+        branchId: updated.branchId,
+        deletedAt: updated.deletedAt?.toISOString() ?? new Date().toISOString(),
+      },
+    });
 
     return this.toTableResponseDto(updated);
   }
@@ -209,6 +243,21 @@ export class TableService {
 
   // ── Mappers ───────────────────────────────────────────────────────────
 
+  private customerAppBaseUrl(): string {
+    const configured = (
+      process.env.CUSTOMER_APP_URL ||
+      process.env.NEXT_PUBLIC_CUSTOMER_APP_URL ||
+      ''
+    )
+      .trim()
+      .replace(/\/$/, '');
+    if (configured) return configured;
+    if (isProduction()) {
+      throw new Error('CUSTOMER_APP_URL must be set in production for table QR join links');
+    }
+    return 'http://localhost:3100';
+  }
+
   private toTableResponseDto(table: Table): TableResponseDto {
     return {
       id: table.id,
@@ -219,7 +268,7 @@ export class TableService {
       operationalFlag: table.operationalFlag,
       qrCodeToken: table.qrCodeToken,
       qrJoinUrl: table.qrCodeToken
-        ? `${(process.env.CUSTOMER_APP_URL || process.env.NEXT_PUBLIC_CUSTOMER_APP_URL || 'http://localhost:3100').replace(/\/$/, '')}/t/${table.qrCodeToken}`
+        ? `${this.customerAppBaseUrl()}/t/${table.qrCodeToken}`
         : null,
       shape: table.shape,
       floor: table.floor,

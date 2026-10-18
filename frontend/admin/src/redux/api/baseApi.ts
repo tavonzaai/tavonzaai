@@ -65,22 +65,24 @@ export function removeAuthToken() {
 let refreshPromise: Promise<boolean> | null = null;
 
 export async function refreshAuthSession(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-
   if (refreshPromise) return refreshPromise;
+  const priorAccess = getAuthToken();
 
   refreshPromise = (async () => {
     try {
       const baseUrl = getApiBaseUrl();
+      // Prefer HttpOnly cookie refresh (`client: admin`); fall back to body token for legacy sessions.
+      const refreshToken = getRefreshToken();
       const res = await fetch(`${baseUrl}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify(refreshToken ? { client: 'admin', refreshToken } : { client: 'admin' }),
         credentials: 'include',
       });
 
       if (!res.ok) {
+        const current = getAuthToken();
+        if (current && current !== priorAccess) return true;
         removeAuthToken();
         return false;
       }
@@ -88,13 +90,13 @@ export async function refreshAuthSession(): Promise<boolean> {
       const json = await res.json().catch(() => null);
       const data = json?.data || json;
       const newAccessToken = data?.accessToken || data?.access_token;
-      const newRefreshToken = data?.refreshToken || data?.refresh_token || refreshToken;
 
       if (newAccessToken) {
-        setAuthTokens({
-          accessToken: newAccessToken,
-          refreshToken: newRefreshToken,
-        });
+        setAuthTokens({ accessToken: newAccessToken });
+        removeCookie(ADMIN_REFRESH_TOKEN_KEY);
+        removeCookie('admin_refresh_token');
+        removeCookie('tavonza_refresh_token');
+        removeCookie('refresh_token');
         return true;
       }
 

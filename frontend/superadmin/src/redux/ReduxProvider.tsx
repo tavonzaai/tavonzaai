@@ -3,8 +3,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Provider } from 'react-redux';
 import { store, useAppDispatch } from './store';
-import { getMe, DEMO_SUPERADMIN_USER } from './features/authApi';
-import { getAuthToken, getCookie, setAuthTokens, setCookie, SUPERADMIN_USER_KEY } from './api/baseApi';
+import { getMe } from './features/authApi';
+import { getAuthToken, getCookie, SUPERADMIN_USER_KEY, removeAuthToken } from './api/baseApi';
 import { setUser, setInitialized } from './slices/authSlice';
 import { RealtimeBridge } from './RealtimeBridge';
 
@@ -17,34 +17,25 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
     initRef.current = true;
 
     const token = getAuthToken();
-    const stored = getCookie(SUPERADMIN_USER_KEY) || getCookie('admin_user');
+    if (!token || token.startsWith('superadmin_token_demo')) {
+      if (token?.startsWith('superadmin_token_demo')) {
+        removeAuthToken();
+      }
+      dispatch(setUser(null));
+      dispatch(setInitialized(true));
+      return;
+    }
 
+    const stored = getCookie(SUPERADMIN_USER_KEY) || getCookie('admin_user');
     if (stored) {
       try {
-        const parsed = JSON.parse(stored);
-        dispatch(setUser(parsed));
+        dispatch(setUser(JSON.parse(stored)));
       } catch {
-        dispatch(setUser(DEMO_SUPERADMIN_USER));
+        // ignore corrupt cache; getMe will refresh
       }
-    } else if (token) {
-      dispatch(setUser(DEMO_SUPERADMIN_USER));
     }
 
-    if (token) {
-      dispatch(getMe());
-    } else {
-      // In development / prototype, initialize demo user so session is active unless explicitly signed out
-      const isLoggedOut = getCookie('superadmin_logged_out') === 'true';
-      if (!isLoggedOut) {
-        const demoToken = 'superadmin_token_demo';
-        setAuthTokens({ accessToken: demoToken, refreshToken: 'refresh_' + demoToken });
-        setCookie(SUPERADMIN_USER_KEY, JSON.stringify(DEMO_SUPERADMIN_USER));
-        dispatch(setUser(DEMO_SUPERADMIN_USER));
-      } else {
-        dispatch(setUser(null));
-      }
-      dispatch(setInitialized(true));
-    }
+    dispatch(getMe());
   }, [dispatch]);
 
   return <>{children}</>;

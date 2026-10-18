@@ -6,7 +6,6 @@ import {
   updateProfile,
   changePassword,
   UserProfile,
-  DEMO_SUPERADMIN_USER,
 } from '../features/authApi';
 
 export interface AuthState {
@@ -18,8 +17,8 @@ export interface AuthState {
 }
 
 const initialState: AuthState = {
-  user: DEMO_SUPERADMIN_USER,
-  isAuthenticated: true,
+  user: null,
+  isAuthenticated: false,
   loading: false,
   isInitialized: false,
   error: null,
@@ -47,7 +46,6 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Login
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -63,8 +61,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = (action.payload as string) || 'Authentication failed.';
       })
-
-      // Get Me Profile
       .addCase(getMe.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload;
@@ -73,10 +69,10 @@ const authSlice = createSlice({
       })
       .addCase(getMe.rejected, (state) => {
         state.loading = false;
+        state.user = null;
+        state.isAuthenticated = false;
         state.isInitialized = true;
       })
-
-      // Update Profile
       .addCase(updateProfile.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -89,8 +85,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = (action.payload as string) || 'Profile update failed.';
       })
-
-      // Change Password
       .addCase(changePassword.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -102,8 +96,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = (action.payload as string) || 'Password change failed.';
       })
-
-      // Logout
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
         state.isAuthenticated = false;

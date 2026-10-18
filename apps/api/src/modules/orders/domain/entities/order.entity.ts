@@ -43,6 +43,7 @@ export interface OrderProps {
   tableNumber?: string | null;
   tableSessionId: string | null;
   customerSessionId: string | null;
+  customerId?: string | null;
   status: OrderStatus;
   subtotal: number;
   serviceChargeRate: number;
@@ -72,6 +73,7 @@ export class Order {
   readonly tableNumber: string | null;
   readonly tableSessionId: string | null;
   readonly customerSessionId: string | null;
+  readonly customerId: string | null;
   readonly status: OrderStatus;
   readonly subtotal: number;
   readonly serviceChargeRate: number;
@@ -100,6 +102,7 @@ export class Order {
     this.tableNumber = props.tableNumber ?? props.tableLabel ?? null;
     this.tableSessionId = props.tableSessionId;
     this.customerSessionId = props.customerSessionId;
+    this.customerId = props.customerId ?? null;
     this.status = props.status;
     this.subtotal = props.subtotal;
     this.serviceChargeRate = props.serviceChargeRate;
