@@ -20,6 +20,8 @@ export async function purgeDatabase(db: DrizzleDatabase): Promise<void> {
   await db.delete(schema.payments);
   await db.delete(schema.orderItems);
   await db.delete(schema.orders);
+  await db.delete(schema.cartItems);
+  await db.delete(schema.carts);
   await db.delete(schema.discounts);
   await db.delete(schema.passwordResetOtps);
   await db.delete(schema.tableAuthOtps);
@@ -36,6 +38,8 @@ export async function purgeDatabase(db: DrizzleDatabase): Promise<void> {
   await db.delete(schema.customers);
   await db.delete(schema.owners);
   await db.delete(schema.admins);
+  await db.delete(schema.refreshTokens);
+  await db.delete(schema.authSessions);
   await db.delete(schema.modifiers);
   await db.delete(schema.modifierGroups);
   await db.delete(schema.menuItems);

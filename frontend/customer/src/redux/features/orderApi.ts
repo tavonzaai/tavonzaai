@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { baseApiFetch } from '../api/baseApi';
+import { baseApiFetch, getCookie } from '../api/baseApi';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -403,13 +403,10 @@ export async function getActiveCustomerOrder(
     );
     if (active) return active;
 
-    // Check last submitted order ID from local storage
-    if (typeof window !== 'undefined') {
-      const lastId =
-        localStorage.getItem('tavonza_last_submitted_order_id') ||
-        sessionStorage.getItem('tavonza_last_submitted_order_id');
-      if (lastId) {
-        const tracked = await orderService.trackOrder(lastId);
+    // Check last submitted order ID from session cookie or params
+    const lastId = getCookie('tavonza_last_submitted_order_id') || getCookie('tavonza_active_order_id');
+    if (lastId && isUUID(lastId)) {
+      const tracked = await orderService.trackOrder(lastId);
         if (
           tracked &&
           ['SUBMITTED', 'ACCEPTED', 'CONFIRMED', 'IN_PREPARATION', 'PREPARING', 'READY'].includes(
@@ -432,7 +429,6 @@ export async function getActiveCustomerOrder(
           };
         }
       }
-    }
     return null;
   } catch {
     return null;

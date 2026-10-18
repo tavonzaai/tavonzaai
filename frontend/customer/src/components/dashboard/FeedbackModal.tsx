@@ -5,6 +5,7 @@ import { ChevronLeft, Star, CheckCircle2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { feedbackService, FeedbackRecord } from '@/redux/features/feedbackApi';
 import { getActiveCustomerOrder, orderService } from '@/redux/features/orderApi';
+import { getCookie } from '@/redux/api/baseApi';
 
 interface FeedbackModalProps {
   onClose: () => void;
@@ -29,13 +30,10 @@ export default function FeedbackModal({ onClose, onGoHome, orderId: propOrderId 
       try {
         let currentOrderId = propOrderId || orderId;
 
-        if (!currentOrderId && typeof window !== 'undefined') {
-          const lastSubmitted =
-            localStorage.getItem('tavonza_last_submitted_order_id') ||
-            sessionStorage.getItem('tavonza_last_submitted_order_id') ||
-            '';
-          if (lastSubmitted) {
-            currentOrderId = lastSubmitted.trim();
+        if (!currentOrderId) {
+          const cookieOrderId = getCookie('tavonza_last_submitted_order_id') || getCookie('tavonza_active_order_id');
+          if (cookieOrderId) {
+            currentOrderId = cookieOrderId.trim();
           }
         }
 

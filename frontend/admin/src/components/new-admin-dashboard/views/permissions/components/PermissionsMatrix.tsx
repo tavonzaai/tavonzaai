@@ -51,8 +51,8 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
                     </span>
                   </div>
 
-                  {/* Delete icon button for non-locked roles (matching Figma red trash icon) */}
-                  {!role.isLocked && (
+                  {/* Delete icon button for non-system roles */}
+                  {!role.isLocked && !role.isSystem && (
                     <button
                       type="button"
                       onClick={() => onRequestDeleteRole(role)}
@@ -92,7 +92,8 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
 
                   {/* Category Action per Role */}
                   {roles.map((role) => {
-                    if (role.id === 'admin') {
+                    const isRoleLocked = role.isLocked || role.slug === 'admin' || role.id === 'admin';
+                    if (isRoleLocked) {
                       return (
                         <td
                           key={role.id}
@@ -152,7 +153,8 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
 
                     {/* Role Checkboxes */}
                     {roles.map((role) => {
-                      const isGranted = (rolePermissions[role.id] || []).includes(perm.id);
+                      const isRoleLocked = role.isLocked || role.slug === 'admin' || role.id === 'admin';
+                      const isGranted = isRoleLocked || (rolePermissions[role.id] || []).includes(perm.id);
 
                       return (
                         <td
@@ -161,10 +163,10 @@ export const PermissionsMatrix: React.FC<PermissionsMatrixProps> = ({
                         >
                           <button
                             type="button"
-                            disabled={role.isLocked}
+                            disabled={isRoleLocked}
                             onClick={() => onTogglePermission(role.id, perm.id)}
                             className={`size-5 rounded mx-auto flex items-center justify-center transition-all ${
-                              role.isLocked
+                              isRoleLocked
                                 ? 'cursor-not-allowed bg-yellow-400 text-neutral-900'
                                 : isGranted
                                 ? 'bg-yellow-400 text-neutral-900 hover:bg-yellow-300 cursor-pointer shadow-sm'

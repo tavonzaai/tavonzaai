@@ -32,14 +32,7 @@ function TrackContent() {
   const [orderId, setOrderId] = useState<string>(() => {
     const fromParam = (searchParams.get('order') || searchParams.get('id') || '').trim();
     if (fromParam) return fromParam;
-    if (typeof window !== 'undefined') {
-      return (
-        localStorage.getItem('tavonza_last_submitted_order_id') ||
-        getCookie('tavonza_last_submitted_order_id') ||
-        ''
-      ).trim();
-    }
-    return '';
+    return (getCookie('tavonza_last_submitted_order_id') || getCookie('tavonza_active_order_id') || '').trim();
   });
 
   useEffect(() => {
@@ -93,11 +86,9 @@ function TrackContent() {
         String(err?.message || '').toLowerCase().includes('not found');
 
       if (is404) {
-        // Order does not exist in database. Clear stale storage and stop polling
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('tavonza_last_submitted_order_id');
-          document.cookie = 'tavonza_last_submitted_order_id=; path=/; max-age=0';
-        }
+        // Order does not exist in database. Clear stale cookies and stop polling
+        document.cookie = 'tavonza_last_submitted_order_id=; path=/; max-age=0';
+        document.cookie = 'tavonza_active_order_id=; path=/; max-age=0';
         setIsNotFound(true);
         setError('Order not found in database. It may have been completed, cancelled, or from an earlier session.');
         setOrderTracking(null);
@@ -606,7 +597,7 @@ function TrackContent() {
                 <span>Proceed to Payment</span>
               </button>
 
-              <button
+              {/* <button
                 type="button"
                 onClick={() =>
                   router.push(
@@ -621,7 +612,7 @@ function TrackContent() {
                     ? `View Your Feedback (Rated ${existingFeedback.rating}★)`
                     : 'Rate Your Experience & Leave Feedback'}
                 </span>
-              </button>
+              </button> */}
 
               {/* Toast banner for staff alert */}
               {toastNotification && (
@@ -632,7 +623,7 @@ function TrackContent() {
               )}
 
               {/* Request Bill Button */}
-              <button
+              {/* <button
                 type="button"
                 onClick={handleRequestBill}
                 disabled={requestingBill || billRequested}
@@ -646,10 +637,10 @@ function TrackContent() {
                     ? 'Requesting Bill...'
                     : 'Request Bill from Waiter'}
                 </span>
-              </button>
+              </button> */}
 
               {/* Call Waiter Button */}
-              <button
+              {/* <button
                 type="button"
                 onClick={handleCallWaiter}
                 disabled={callingWaiter}
@@ -663,7 +654,7 @@ function TrackContent() {
                     ? 'Calling Waiter...'
                     : 'Call Waiter to Table'}
                 </span>
-              </button>
+              </button> */}
             </div>
           </>
         )}

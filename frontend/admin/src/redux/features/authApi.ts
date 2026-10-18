@@ -463,7 +463,7 @@ export const authApi = rtkBaseApi.injectEndpoints({
       },
     }),
     getMeQuery: builder.query<UserProfile, void>({
-      query: () => '/auth/me',
+      query: () => '/users/me',
       providesTags: ['USER', 'AUTH'],
     }),
     changePasswordMutation: builder.mutation<MessageResponse, ChangePasswordPayload>({

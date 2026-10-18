@@ -10,6 +10,8 @@ import {
   fetchBranchMenuCatalog,
   resolveCatalogMenuItemId,
 } from '@/redux/features/orderApi';
+import { getCookie, setCookie } from '@/redux/api/baseApi';
+import { toast } from 'sonner';
 
 interface GuestItem {
   id: string;
@@ -67,10 +69,9 @@ function GroupCartContent() {
       return;
     } catch (e) {
       console.warn('Place group order error:', e);
+      toast.error(e?.message || 'Failed to place group order. Please check your items.');
+      // STOP user in place. Do NOT navigate next on error!
     }
-    const lastId = typeof window !== 'undefined' ? (localStorage.getItem('tavonza_last_submitted_order_id') || '') : '';
-    const orderParam = lastId ? `&order=${encodeURIComponent(lastId)}` : '';
-    router.push(`/orders/waiting?table=${encodeURIComponent(activeTable)}&mode=together${orderParam}`);
   };
 
   return (

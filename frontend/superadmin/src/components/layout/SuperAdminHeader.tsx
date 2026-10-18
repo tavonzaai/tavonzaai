@@ -111,10 +111,18 @@ export function SuperAdminHeader({ onMenuClick }: HeaderProps) {
             className="min-w-44 px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800/90 rounded-lg flex items-center gap-2.5 transition border border-transparent hover:border-zinc-700/60 group"
           >
             {/* AM Avatar badge */}
-            <div className="size-8 min-w-8 bg-amber-400 rounded-2xl flex justify-center items-center">
-              <span className="text-zinc-800 text-xs font-semibold font-inter leading-4">
-                {initials}
-              </span>
+            <div className="size-8 min-w-8 bg-amber-400 rounded-2xl flex justify-center items-center overflow-hidden shrink-0">
+              {user?.avatar || user?.avatarUrl ? (
+                <img
+                  src={user.avatar || user.avatarUrl || ''}
+                  alt={displayName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-zinc-800 text-xs font-semibold font-inter leading-4">
+                  {initials}
+                </span>
+              )}
             </div>
 
             {/* Names */}

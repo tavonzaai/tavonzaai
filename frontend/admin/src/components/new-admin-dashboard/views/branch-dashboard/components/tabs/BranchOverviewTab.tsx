@@ -31,7 +31,7 @@ export const BranchOverviewTab: React.FC<BranchOverviewTabProps> = ({
           <div className="self-stretch h-0 outline outline-1 outline-offset-[-0.50px] outline-neutral-800" />
           <div className="self-stretch flex flex-col justify-start items-start gap-3">
             <span className="text-white text-2xl font-medium font-['Inter'] leading-7">
-              ৳ 184,260
+              184,260
             </span>
             <span className="text-green-500 text-sm font-normal font-['Poppins'] leading-4">
               ↑ 8.4% from yesterday

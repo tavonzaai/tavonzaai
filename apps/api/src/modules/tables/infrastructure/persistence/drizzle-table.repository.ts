@@ -129,19 +129,26 @@ export class DrizzleTableRepository {
       floor?: number;
     },
   ): Promise<Table[]> {
-    const rows = await DrizzleQueryBuilder.from(this.db, tables)
+    const qb = DrizzleQueryBuilder.from(this.db, tables)
       .filterExact({
         branchId,
         serviceStatus: options?.serviceStatus,
         operationalFlag: options?.operationalFlag,
         floor: options?.floor,
+        isActive: true,
       })
+      .filterNull(tables.deletedAt, true);
+
+    if (!options?.operationalFlag) {
+      qb.andWhere(ne(tables.operationalFlag, 'OUT_OF_SERVICE'));
+    }
+
+    const rows = await qb
       .search(options?.search, [tables.label])
       .sort(tables.label, 'asc')
-      .executePlain((r) => r);
-    return rows
-      .filter((r: any) => r.isActive !== false && !r.deletedAt)
-      .map((r: any) => this.mapTable(r));
+      .executePlain();
+
+    return rows.map((r) => this.mapTable(r));
   }
 
   /** Reasons a table cannot be soft-deleted (active dining / unpaid work / waiter coverage). */

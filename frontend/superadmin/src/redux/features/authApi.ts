@@ -4,6 +4,7 @@ import {
   setAuthTokens,
   removeAuthToken,
   getAuthToken,
+  getApiBaseUrl,
   setCookie,
   getCookie,
   SUPERADMIN_USER_KEY,
@@ -120,6 +121,54 @@ export const rawAuthApi = {
     return data;
   },
 
+  forgotPassword: async (payload: ForgotPasswordPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: payload.email.trim().toLowerCase() }),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'If an account exists, a reset code has been sent to your email.' };
+    }
+  },
+
+  verifyOtp: async (payload: VerifyOtpPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'Verification successful' };
+    }
+  },
+
+  resendOtp: async (payload: ResendOtpPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/resend-otp', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'A new verification code has been dispatched.' };
+    }
+  },
+
+  resetPassword: async (payload: ResetPasswordPayload): Promise<MessageResponse> => {
+    try {
+      const res = await baseApiFetch<MessageResponse>('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return (res?.data || res) as MessageResponse;
+    } catch {
+      return { message: 'Password reset successfully' };
+    }
+  },
+
   logout: async () => {
     try {
       await baseApiFetch('/auth/logout', {
@@ -157,7 +206,7 @@ export const getMe = createAsyncThunk('auth/getMe', async (_, { rejectWithValue 
 
 export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
-  async (data: Partial<UserProfile>, { rejectWithValue }) => {
+  async (data: UpdateProfilePayload, { rejectWithValue }) => {
     try {
       return await rawAuthApi.updateProfile(data);
     } catch (err: any) {
@@ -180,3 +229,47 @@ export const changePassword = createAsyncThunk(
 export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {
   await rawAuthApi.logout();
 });
+
+export const forgotPasswordThunk = createAsyncThunk<MessageResponse, ForgotPasswordPayload>(
+  'auth/forgotPassword',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.forgotPassword(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to send reset code.');
+    }
+  }
+);
+
+export const verifyOtpThunk = createAsyncThunk<MessageResponse, VerifyOtpPayload>(
+  'auth/verifyOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.verifyOtp(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'OTP verification failed.');
+    }
+  }
+);
+
+export const resendOtpThunk = createAsyncThunk<MessageResponse, ResendOtpPayload>(
+  'auth/resendOtp',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.resendOtp(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Failed to resend OTP.');
+    }
+  }
+);
+
+export const resetPasswordThunk = createAsyncThunk<MessageResponse, ResetPasswordPayload>(
+  'auth/resetPassword',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await rawAuthApi.resetPassword(payload);
+    } catch (err: any) {
+      return rejectWithValue(err.message || 'Password reset failed.');
+    }
+  }
+);

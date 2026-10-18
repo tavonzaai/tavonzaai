@@ -154,7 +154,8 @@ export async function baseApiFetch<T = any>(
   options: RequestInit & { __authRetried?: boolean } = {}
 ): Promise<ApiResponse<T>> {
   const token = getAuthToken();
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

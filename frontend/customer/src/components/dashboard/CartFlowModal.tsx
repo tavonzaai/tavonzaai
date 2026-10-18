@@ -19,7 +19,8 @@ import {
 } from 'lucide-react';
 import { useCart, CartItem } from '@/context/CartContext';
 import { orderService } from '@/redux/features/orderApi';
-import { getCookie } from '@/redux/api/baseApi';
+import { getCookie, setCookie } from '@/redux/api/baseApi';
+import { toast } from 'sonner';
 
 export type CartStep = 'cart' | 'placed' | 'tracking' | 'payment' | 'confirmation';
 
@@ -90,12 +91,16 @@ export default function CartFlowModal({
             if (res.id) localStorage.setItem('tavonza_last_submitted_order_id', res.id);
             if (res.orderNumber) localStorage.setItem('tavonza_last_submitted_order_number', res.orderNumber);
           }
+        } else {
+          toast.error('Branch or table information is missing.');
+          setIsSubmitting(false);
+          return;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Cart submit in modal:', err);
-      } finally {
+        toast.error(err?.message || 'Failed to submit order. Please check your items.');
         setIsSubmitting(false);
-        setStep('placed');
+        return; // STOP! DO NOT MOVE NEXT!
       }
     } else if (step === 'placed') setStep('tracking');
     else if (step === 'tracking') setStep('payment');

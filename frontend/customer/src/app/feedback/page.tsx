@@ -8,6 +8,7 @@ import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
 import { feedbackService, FeedbackRecord } from '@/redux/features/feedbackApi';
 import { getActiveCustomerOrder, orderService } from '@/redux/features/orderApi';
+import { getCookie } from '@/redux/api/baseApi';
 
 function FeedbackContent() {
   const router = useRouter();
@@ -35,17 +36,13 @@ function FeedbackContent() {
       try {
         let currentOrderId = orderId;
 
-        // If no orderId in query, fallback to local storage or active customer orders
+        // If no orderId in query, fallback to session cookie or active customer orders
         if (!currentOrderId) {
-          if (typeof window !== 'undefined') {
-            const lastSubmitted =
-              localStorage.getItem('tavonza_last_submitted_order_id') ||
-              sessionStorage.getItem('tavonza_last_submitted_order_id') ||
-              '';
-            if (lastSubmitted) {
-              currentOrderId = lastSubmitted.trim();
-            }
+          const cookieOrderId = getCookie('tavonza_last_submitted_order_id') || getCookie('tavonza_active_order_id');
+          if (cookieOrderId) {
+            currentOrderId = cookieOrderId.trim();
           }
+        }
 
           if (!currentOrderId) {
             const active = await getActiveCustomerOrder().catch(() => null);
@@ -67,7 +64,6 @@ function FeedbackContent() {
           if (currentOrderId && isMounted) {
             setOrderId(currentOrderId);
           }
-        }
 
         // If we have an orderId, check if feedback was already submitted
         if (currentOrderId) {
