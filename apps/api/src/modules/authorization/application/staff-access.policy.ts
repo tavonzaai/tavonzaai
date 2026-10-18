@@ -65,7 +65,7 @@ export function assertStaffAssignmentInput(
   actor: JwtPayload,
   input: { role?: string; permissions?: string[] },
   options?: {
-    /** When false, only WAITER / CASHIER / KITCHEN_STAFF may be assigned (branch managers). */
+    /** When false, only BRANCH_MANAGER_CREATABLE_ROLES may be assigned (never BRANCH_MANAGER). */
     privilegedActor?: boolean;
   },
 ): { role?: string; permissions?: StaffPermissionAction[] } {

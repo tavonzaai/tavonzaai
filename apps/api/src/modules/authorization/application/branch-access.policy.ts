@@ -37,7 +37,14 @@ export function canAccessBranch(actor: BranchAccessActor, branch: BranchOwnershi
 }
 
 /** Staff roles a branch-scoped manager may create inside their own branch. */
-export const BRANCH_MANAGER_CREATABLE_ROLES = ['WAITER', 'CASHIER', 'KITCHEN_STAFF'] as const;
+/** Roles a branch manager may create in their own branch. Never BRANCH_MANAGER. */
+export const BRANCH_MANAGER_CREATABLE_ROLES = [
+  'WAITER',
+  'CASHIER',
+  'KITCHEN_STAFF',
+  'BARTENDER',
+  'HOST',
+] as const;
 
 export function canCreateStaffRole(
   actor: { isPrivileged: boolean; managesBranch: boolean },

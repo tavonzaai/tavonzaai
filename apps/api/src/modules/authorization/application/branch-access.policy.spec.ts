@@ -59,8 +59,12 @@ describe('branch-access.policy', () => {
   });
 
   it('limits branch managers to waiter/cashier/kitchen roles', () => {
-    assert.deepEqual([...BRANCH_MANAGER_CREATABLE_ROLES], ['WAITER', 'CASHIER', 'KITCHEN_STAFF']);
+    assert.deepEqual(
+      [...BRANCH_MANAGER_CREATABLE_ROLES],
+      ['WAITER', 'CASHIER', 'KITCHEN_STAFF', 'BARTENDER', 'HOST'],
+    );
     assert.equal(canCreateStaffRole({ isPrivileged: false, managesBranch: true }, 'WAITER'), true);
+    assert.equal(canCreateStaffRole({ isPrivileged: false, managesBranch: true }, 'HOST'), true);
     assert.equal(
       canCreateStaffRole({ isPrivileged: false, managesBranch: true }, 'BRANCH_MANAGER'),
       false,

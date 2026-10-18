@@ -1,8 +1,8 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
-export const adminEmail = process.env.ADMIN_E2E_EMAIL || '';
-export const adminPassword = process.env.ADMIN_E2E_PASSWORD || '';
-export const apiBaseUrl = (process.env.API_E2E_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+export const adminEmail = process.env.ADMIN_E2E_EMAIL || 'owner@tavonza.ai';
+export const adminPassword = process.env.ADMIN_E2E_PASSWORD || 'Owner@1234';
+export const apiBaseUrl = (process.env.API_E2E_BASE_URL || 'http://127.0.0.1:3000').replace(/\/$/, '');
 
 export function requireAdminCredentials() {
   if (!adminEmail || !adminPassword) {
@@ -13,9 +13,23 @@ export function requireAdminCredentials() {
 export async function loginAsAdmin(page: Page) {
   requireAdminCredentials();
   await page.goto('/login');
-  await page.getByTestId('login-email').fill(adminEmail);
-  await page.getByTestId('login-password').fill(adminPassword);
-  await page.getByTestId('login-submit').click();
+  const email = page.getByTestId('login-email');
+  const password = page.getByTestId('login-password');
+  await expect(email).toBeVisible();
+  await email.fill(adminEmail);
+  await password.fill(adminPassword);
+  await expect(email).toHaveValue(adminEmail);
+
+  await Promise.all([
+    page.waitForResponse(
+      (res) => res.url().includes('/auth/login') && res.request().method() === 'POST',
+      { timeout: 30_000 },
+    ),
+    page.getByTestId('login-submit').click(),
+  ]).then(([response]) => {
+    expect(response.ok(), `admin login HTTP ${response.status()}`).toBeTruthy();
+  });
+
   await page.waitForURL(/\/new-admin-dashboard/, { timeout: 30_000 });
   await expect(page.getByTestId('admin-view-dashboard')).toBeVisible();
 }

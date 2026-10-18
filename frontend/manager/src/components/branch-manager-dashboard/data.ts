@@ -212,11 +212,11 @@ export const INITIAL_STAFF: StaffCardData[] = [
   {
     id: 'carlos',
     name: 'Carlos',
-    role: 'Assistant Manager',
+    role: 'Host',
     status: 'Late',
     currentShift: 'Lunch Shift (7:00 AM - 5:00PM)',
-    currentAssignment: 'Floor Operation',
-    stationTables: 'Branch Floor',
+    currentAssignment: 'Host Stand',
+    stationTables: 'Entrance',
     clockInTime: '10:02 AM',
   },
 ];

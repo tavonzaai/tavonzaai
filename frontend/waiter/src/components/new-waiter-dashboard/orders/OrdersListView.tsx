@@ -73,7 +73,7 @@ export default function OrdersListView({
       const branchId = getActiveBranchId();
       let statusParam: string | undefined = undefined;
       if (filter === 'Pending') statusParam = 'PENDING,DRAFT,SUBMITTED';
-      if (filter === 'Active') statusParam = 'CONFIRMED,PREPARING,READY';
+      if (filter === 'Active') statusParam = 'ACCEPTED,CONFIRMED,PREPARING,READY';
       if (filter === 'Completed') statusParam = 'SERVED,COMPLETED';
 
       const backendOrders = await waiterService.queryOrders({

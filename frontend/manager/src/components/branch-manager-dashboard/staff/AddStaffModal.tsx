@@ -10,11 +10,13 @@ interface AddStaffModalProps {
   onStaffCreated: () => void;
 }
 
-/** Branch managers may only create these roles in their own branch (backend-enforced). */
+/** Branch managers may only create floor roles — peer manager roles are not creatable here. */
 const AVAILABLE_ROLES = [
   { value: 'WAITER', label: 'Waiter / Server', defaultPerms: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS', 'MANAGE_TABLES'] },
   { value: 'KITCHEN_STAFF', label: 'Kitchen / Line Cook', defaultPerms: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'] },
+  { value: 'BARTENDER', label: 'Bartender', defaultPerms: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'] },
   { value: 'CASHIER', label: 'Cashier / POS Operator', defaultPerms: ['MANAGE_PAYMENTS', 'VIEW_ORDERS', 'APPLY_DISCOUNTS'] },
+  { value: 'HOST', label: 'Host', defaultPerms: ['MANAGE_TABLES', 'MANAGE_RESERVATIONS'] },
 ];
 
 const ALL_PERMISSIONS = [
@@ -203,6 +205,7 @@ export default function AddStaffModal({ isOpen, onClose, onStaffCreated }: AddSt
             <select
               value={selectedRole}
               onChange={(e) => handleRoleChange(e.target.value)}
+              data-testid="add-staff-role-select"
               className="w-full px-3.5 py-2.5 bg-neutral-950/80 border border-neutral-800 rounded-xl text-white text-sm focus:outline-none focus:border-yellow-400/60 cursor-pointer"
             >
               {AVAILABLE_ROLES.map((r) => (

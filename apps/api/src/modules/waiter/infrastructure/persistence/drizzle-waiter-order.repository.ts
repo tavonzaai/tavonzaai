@@ -21,8 +21,15 @@ export class DrizzleWaiterOrderRepository {
       return [];
     }
 
-    const isAllTables = filters.scope?.toUpperCase() === 'ALL_TABLES';
-    const isMyTables = filters.scope?.toUpperCase() === 'MY_TABLES';
+    // Waiters may only ever see orders for their assigned tables.
+    // Empty assignment set must return [] — never the full branch order list.
+    const assignedIds = [...new Set(tableIds.filter((id) => isUUID(id)))];
+    if (assignedIds.length === 0) {
+      return [];
+    }
+
+    // ALL_TABLES is intentionally ignored for waiter-scoped queries.
+    const scopeUpper = filters.scope?.toUpperCase();
 
     const qb = new DrizzleQueryBuilder<typeof orders>(this.db, orders)
       .filterExact({ branchId })
@@ -30,31 +37,27 @@ export class DrizzleWaiterOrderRepository {
 
     if (filters.tableId && filters.tableId.trim()) {
       const cleanTableId = filters.tableId.trim();
+      let resolvedTableId: string | null = null;
+
       if (isUUID(cleanTableId)) {
-        qb.filterExact({ tableId: cleanTableId });
+        resolvedTableId = cleanTableId;
       } else {
-        // Resolve table by label / tableNumber in this branch
         const [tableRecord] = await this.db
           .select({ id: tables.id })
           .from(tables)
           .where(and(eq(tables.branchId, branchId), eq(tables.label, cleanTableId)))
           .limit(1);
-
-        if (tableRecord) {
-          qb.filterExact({ tableId: tableRecord.id });
-        } else {
-          return [];
-        }
+        resolvedTableId = tableRecord?.id ?? null;
       }
-    } else if (isMyTables) {
-      if (tableIds.length === 0) return [];
-      qb.filterIn({ tableId: tableIds });
-    } else if (!isAllTables && tableIds.length > 0) {
-      qb.filterIn({ tableId: tableIds });
+
+      if (!resolvedTableId || !assignedIds.includes(resolvedTableId)) {
+        return [];
+      }
+      qb.filterExact({ tableId: resolvedTableId });
+    } else {
+      qb.filterIn({ tableId: assignedIds });
     }
 
-
-    const scopeUpper = filters.scope?.toUpperCase();
     if (filters.status) {
       if (filters.status.includes(',')) {
         const statuses = filters.status.split(',').map((s) => s.trim().toUpperCase());
@@ -63,9 +66,9 @@ export class DrizzleWaiterOrderRepository {
         qb.filterExact({ status: filters.status.trim().toUpperCase() });
       }
     } else if (scopeUpper === 'PENDING') {
-      qb.filterExact({ status: 'PENDING' });
+      qb.filterIn({ status: ['PENDING', 'SUBMITTED'] });
     } else if (scopeUpper === 'ACTIVE') {
-      qb.filterIn({ status: ['CONFIRMED', 'PREPARING', 'READY'] });
+      qb.filterIn({ status: ['ACCEPTED', 'CONFIRMED', 'PREPARING', 'READY'] });
     } else if (scopeUpper === 'SERVED' || scopeUpper === 'COMPLETED') {
       qb.filterIn({ status: ['SERVED', 'COMPLETED'] });
     } else if (scopeUpper === 'CANCELLED' || scopeUpper === 'REJECTED') {
@@ -83,7 +86,7 @@ export class DrizzleWaiterOrderRepository {
 
   async findPendingOrdersForTables(tableIds: string[], branchId?: string): Promise<any[]> {
     if (branchId) {
-      return this.findOrdersForTables(tableIds, branchId, { status: 'PENDING' });
+      return this.findOrdersForTables(tableIds, branchId, { status: 'PENDING,SUBMITTED' });
     }
     if (tableIds.length === 0) return [];
     const rows = await this.db
@@ -101,7 +104,9 @@ export class DrizzleWaiterOrderRepository {
 
   async findActiveOrdersForTables(tableIds: string[], branchId?: string): Promise<any[]> {
     if (branchId) {
-      return this.findOrdersForTables(tableIds, branchId, { status: 'CONFIRMED,PREPARING,READY' });
+      return this.findOrdersForTables(tableIds, branchId, {
+        status: 'ACCEPTED,CONFIRMED,PREPARING,READY',
+      });
     }
     if (tableIds.length === 0) return [];
     const rows = await this.db

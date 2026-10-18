@@ -9,6 +9,7 @@ import {
   ChefHat,
   CreditCard,
   BookOpen,
+  FolderTree,
   BarChart3,
   Settings,
   X,
@@ -32,6 +33,7 @@ export const managerNavItems: BranchManagerNavItem[] = [
   { name: 'Kitchen', tabKey: 'Kitchen', icon: ChefHat, badgeColor: 'bg-teal-500/20 text-teal-400' },
   { name: 'Payments', tabKey: 'Payments', icon: CreditCard, badgeColor: 'bg-orange-400/20 text-orange-400' },
   { name: 'Menu', tabKey: 'Menu', icon: BookOpen, badgeColor: 'bg-yellow-400/20 text-yellow-400' },
+  { name: 'Categories', tabKey: 'Categories', icon: FolderTree, badgeColor: 'bg-yellow-400/20 text-yellow-400' },
   { name: 'Reports', tabKey: 'Reports', icon: BarChart3 },
   { name: 'Profile', tabKey: 'Profile', icon: User },
 ];
@@ -112,6 +114,7 @@ export default function Sidebar({
                   key={item.tabKey}
                   type="button"
                   onClick={() => handleNavClick(item.tabKey)}
+                  data-testid={`nav-${item.tabKey.toLowerCase()}`}
                   className={`w-full px-3.5 py-2.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer text-left ${
                     isActive
                       ? 'bg-neutral-900 text-white font-medium shadow-sm'

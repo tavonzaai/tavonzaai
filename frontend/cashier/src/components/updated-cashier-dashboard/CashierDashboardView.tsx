@@ -111,6 +111,14 @@ export default function CashierDashboardView({
   const [customerPhone, setCustomerPhone] = useState<string>("");
   const [customerEmail, setCustomerEmail] = useState<string>("");
   const [offlineRequests, setOfflineRequests] = useState<OfflinePaymentRequestItem[]>([]);
+  const [dashboardKpis, setDashboardKpis] = useState({
+    todayRevenue: 0,
+    todayPaidOrders: 0,
+    unpaidOrders: 0,
+    unpaidAmount: 0,
+    refundsToday: 0,
+    refundCountToday: 0,
+  });
 
   useEffect(() => {
     if (queryOrderId) {
@@ -124,11 +132,23 @@ export default function CashierDashboardView({
       try {
         setIsLoading(true);
         const branchId = getActiveBranchId();
-        const [rawOrders, rawMenu, rawRequests] = await Promise.all([
+        const [rawOrders, rawMenu, rawRequests, kpis] = await Promise.all([
           cashierService.getOrders(branchId),
           cashierService.getMenuItems(branchId),
           cashierService.getOfflinePaymentRequests(branchId).catch(() => []),
+          cashierService.getCashierDashboardAnalytics(branchId).catch(() => null),
         ]);
+
+        if (mounted && kpis) {
+          setDashboardKpis({
+            todayRevenue: Number(kpis.todayRevenue || 0),
+            todayPaidOrders: Number(kpis.todayPaidOrders || 0),
+            unpaidOrders: Number(kpis.unpaidOrders || 0),
+            unpaidAmount: Number(kpis.unpaidAmount || 0),
+            refundsToday: Number(kpis.refundsToday || 0),
+            refundCountToday: Number(kpis.refundCountToday || 0),
+          });
+        }
 
         if (mounted && Array.isArray(rawRequests)) {
           setOfflineRequests(rawRequests);
@@ -399,19 +419,18 @@ export default function CashierDashboardView({
               </div>
             </div>
 
-            {/* Top KPI Metrics Bar (3 Cards from Figma) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Card 1: Revenue */}
+            {/* Top KPI Metrics Bar — from GET /analytics/cashier-dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="cashier-analytics-kpis">
               <div className="h-32 p-5 bg-neutral-900 rounded-[10px] shadow-md border border-emerald-900/60 flex items-center justify-between">
                 <div className="space-y-1">
                   <div className="text-teal-500 text-2xl font-bold font-['Inter'] leading-5">
-                    $9,860
+                    ${dashboardKpis.todayRevenue.toFixed(2)}
                   </div>
                   <div className="text-stone-300 text-xs font-semibold font-['Inter']">
                     Today&apos;s Revenue
                   </div>
                   <div className="text-neutral-500 text-[10px] font-medium font-['Inter']">
-                    248 transactions
+                    {dashboardKpis.todayPaidOrders} paid orders
                   </div>
                 </div>
                 <div className="w-8 h-8 bg-teal-500/10 rounded-lg border border-teal-500/20 flex items-center justify-center shrink-0">
@@ -419,17 +438,16 @@ export default function CashierDashboardView({
                 </div>
               </div>
 
-              {/* Card 2: Pending Amount */}
               <div className="h-32 p-5 bg-neutral-900 rounded-[10px] shadow-md border border-yellow-900/60 flex items-center justify-between">
                 <div className="space-y-1">
                   <div className="text-amber-500 text-2xl font-bold font-['Inter'] leading-5">
-                    $113.70
+                    ${dashboardKpis.unpaidAmount.toFixed(2)}
                   </div>
                   <div className="text-stone-300 text-xs font-semibold font-['Inter']">
                     Pending Amount
                   </div>
                   <div className="text-neutral-500 text-[10px] font-medium font-['Inter']">
-                    3 pending payments
+                    {dashboardKpis.unpaidOrders} pending payments
                   </div>
                 </div>
                 <div className="w-8 h-8 bg-amber-500/10 rounded-lg border border-amber-500/20 flex items-center justify-center shrink-0">
@@ -437,17 +455,17 @@ export default function CashierDashboardView({
                 </div>
               </div>
 
-              {/* Card 3: Refunds Today */}
               <div className="h-32 p-5 bg-neutral-900 rounded-[10px] shadow-md border border-pink-950 flex items-center justify-between">
                 <div className="space-y-1">
                   <div className="text-red-500 text-2xl font-bold font-['Inter'] leading-5">
-                    $18.50
+                    ${dashboardKpis.refundsToday.toFixed(2)}
                   </div>
                   <div className="text-stone-300 text-xs font-semibold font-['Inter']">
                     Refunds Today
                   </div>
                   <div className="text-neutral-500 text-[10px] font-medium font-['Inter']">
-                    1 transaction
+                    {dashboardKpis.refundCountToday} transaction
+                    {dashboardKpis.refundCountToday === 1 ? '' : 's'}
                   </div>
                 </div>
                 <div className="w-8 h-8 bg-red-500/10 rounded-lg border border-red-500/20 flex items-center justify-center shrink-0">
