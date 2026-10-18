@@ -14,6 +14,7 @@ import { useCart } from '@/context/CartContext';
 import DraggableAskAi from '@/components/common/DraggableAskAi';
 import { orderService } from '@/redux/features/orderApi';
 import { getCookie, setCookie } from '@/redux/api/baseApi';
+import { toast } from 'sonner';
 
 function CartContent() {
   const router = useRouter();
