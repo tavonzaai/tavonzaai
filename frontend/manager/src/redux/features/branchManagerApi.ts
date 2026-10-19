@@ -1,5 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { baseApiFetch, getCookie } from '../api/baseApi';
+import { baseApiFetch } from '../api/baseApi';
+import {
+  getActiveBranchIdMemory,
+  getBranchIdFromAccessToken,
+  setActiveBranchIdMemory,
+} from '../../lib/auth';
+import { store } from '../store';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -7,25 +13,34 @@ export function isValidUuid(id: any): boolean {
   return typeof id === 'string' && UUID_REGEX.test(id.trim());
 }
 
+/**
+ * Active branch comes from session memory / Redux / JWT — never cookies.
+ */
 export function getActiveBranchId(): string {
-  const fromCookie = getCookie('tavonza_branch_id') || getCookie('branch_id') || getCookie('active_branch_id');
-  if (fromCookie && isValidUuid(fromCookie)) return fromCookie;
+  const fromMemory = getActiveBranchIdMemory();
+  if (fromMemory && isValidUuid(fromMemory)) return fromMemory;
 
-  const rawUser = getCookie('branch_manager_user');
-  if (rawUser) {
-    try {
-      const parsed = JSON.parse(rawUser);
-      if (parsed?.branchId && isValidUuid(parsed.branchId)) return parsed.branchId;
-      if (parsed?.assignments?.[0]?.branchId && isValidUuid(parsed.assignments[0].branchId)) {
-        return parsed.assignments[0].branchId;
-      }
-      if (parsed?.assignments?.[0]?.branch?.id && isValidUuid(parsed.assignments[0].branch.id)) {
-        return parsed.assignments[0].branch.id;
-      }
-    } catch {}
+  try {
+    const user = store.getState()?.auth?.user as any;
+    if (user?.branchId && isValidUuid(user.branchId)) {
+      setActiveBranchIdMemory(user.branchId);
+      return user.branchId;
+    }
+    const assignmentBranch =
+      user?.assignments?.[0]?.branch?.id || user?.assignments?.[0]?.branchId;
+    if (assignmentBranch && isValidUuid(assignmentBranch)) {
+      setActiveBranchIdMemory(assignmentBranch);
+      return assignmentBranch;
+    }
+  } catch {}
+
+  const fromToken = getBranchIdFromAccessToken();
+  if (fromToken) {
+    setActiveBranchIdMemory(fromToken);
+    return fromToken;
   }
 
-  // Fallback to primary seed branch ID (Downtown HQ)
+  // Last-resort seed branch (Downtown) when JWT has no branch claim yet
   return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
 }
 

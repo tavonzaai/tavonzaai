@@ -4,10 +4,11 @@ import React, { useEffect, useRef } from 'react';
 import { Provider } from 'react-redux';
 import { store, useAppDispatch } from './store';
 import { getMe } from './features/authApi';
-import { getAuthToken, getCookie, removeAuthToken } from './api/baseApi';
+import { getAuthToken, removeAuthToken } from './api/baseApi';
 import { setInitialized, setUser } from './slices/authSlice';
 import { setOrganizationId, setOrganizations, setTenantError, setTenantLoading } from './slices/tenantSlice';
 import { restaurantService } from './features/restaurantApi';
+import { RealtimeBridge } from './RealtimeBridge';
 
 export function isRoleAllowedForAdmin(user: any): boolean {
   if (!user) return false;
@@ -50,17 +51,7 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Real API session: verify via getMe()
-    const stored = getCookie('admin_user');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (isRoleAllowedForAdmin(parsed)) {
-          dispatch(setUser(parsed));
-        }
-      } catch {}
-    }
-
+    // Profile always from GET /users/me — never from cookies.
     dispatch(getMe())
       .unwrap()
       .then(async (userProfile: any) => {
@@ -98,8 +89,6 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
-
-import { RealtimeBridge } from './RealtimeBridge';
 
 export default function ReduxProvider({ children }: { children: React.ReactNode }) {
   return (

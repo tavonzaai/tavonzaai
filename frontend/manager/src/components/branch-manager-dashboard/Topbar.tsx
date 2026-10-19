@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, User, Menu, LogOut } from 'lucide-react';
 import { mockManagerProfile } from './data';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import { logoutUser } from '../../redux/features/authApi';
+import { logoutManagerSession } from '../../lib/auth';
 
 import { NotificationCenter } from '../common/NotificationCenter';
 
@@ -19,6 +21,7 @@ export default function Topbar({
   onSearchChange,
   onToggleSidebar,
 }: TopbarProps) {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const reduxUser = useAppSelector((state) => state.auth.user);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -28,9 +31,14 @@ export default function Topbar({
     ? reduxUser.role.replace('_', ' ')
     : mockManagerProfile.role;
 
-  const handleLogout = () => {
-    dispatch(logoutUser());
+  const handleLogout = async () => {
     setShowUserDropdown(false);
+    try {
+      await dispatch(logoutUser()).unwrap();
+    } catch {
+      logoutManagerSession();
+    }
+    router.replace('/login');
   };
 
   return (

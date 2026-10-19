@@ -2,11 +2,13 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import {
   baseApiFetch,
   setAuthTokens,
-  removeAuthToken,
-  setCookie,
-  getCookie,
   rtkBaseApi,
 } from '../api/baseApi';
+import {
+  logoutManagerSession,
+  setActiveBranchIdMemory,
+  resolveBranchIdFromUser,
+} from '../../lib/auth';
 
 // ─── Types & Payloads ──────────────────────────────────────────────────────────
 
@@ -106,6 +108,7 @@ export const rawAuthApi = {
     const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
     const token = data.accessToken || (data as any).access_token;
     if (token) {
+      // Only the access token is persisted in cookies.
       setAuthTokens({ accessToken: token });
     }
 
@@ -114,11 +117,7 @@ export const rawAuthApi = {
         data.user.name ||
         `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim() ||
         data.user.email;
-      setCookie('branch_manager_user', JSON.stringify(data.user));
-      if (data.user.branchId) {
-        setCookie('tavonza_branch_id', data.user.branchId);
-        setCookie('branch_id', data.user.branchId);
-      }
+      setActiveBranchIdMemory(resolveBranchIdFromUser(data.user as any) || data.user.branchId);
     }
 
     return data;
@@ -133,11 +132,7 @@ export const rawAuthApi = {
         user.name ||
         `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
         user.email;
-      setCookie('branch_manager_user', JSON.stringify(user));
-      if (user.branchId) {
-        setCookie('tavonza_branch_id', user.branchId);
-        setCookie('branch_id', user.branchId);
-      }
+      setActiveBranchIdMemory(resolveBranchIdFromUser(user as any) || user.branchId);
     }
     return user;
   },
@@ -156,7 +151,7 @@ export const rawAuthApi = {
     return data;
   },
 
-  /** POST /auth/logout — Invalidate backend session */
+  /** POST /auth/logout — Invalidate backend session and drop access token cookie */
   logout: async (): Promise<MessageResponse> => {
     try {
       const res = await baseApiFetch<MessageResponse>('/auth/logout', {
@@ -165,7 +160,7 @@ export const rawAuthApi = {
       });
       return (res as any).data || res;
     } finally {
-      removeAuthToken();
+      logoutManagerSession();
     }
   },
 
@@ -249,7 +244,7 @@ export const logoutUser = createAsyncThunk<MessageResponse, void>(
     try {
       return await rawAuthApi.logout();
     } catch (err: any) {
-      removeAuthToken();
+      logoutManagerSession();
       return rejectWithValue(err?.message || 'Logout failed.');
     }
   }
