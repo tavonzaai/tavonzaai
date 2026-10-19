@@ -4,13 +4,16 @@ import React, { Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import LoginView from '../../components/auth/LoginView';
 import { useAppSelector } from '../../redux/hooks';
-import { isManagerAuthenticated } from '../../lib/auth';
+import { isManagerAuthenticated, isRoleAllowedForManager, getManagerProfile } from '../../lib/auth';
 
 function LoginContent() {
   const router = useRouter();
   const returnUrl = '/branch-manager-dashboard/dashboard';
-  const { isAuthenticated } = useAppSelector((state) => state.auth);
-  const isAuth = isAuthenticated || isManagerAuthenticated();
+  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
+
+  const activeUser = user || (typeof document !== 'undefined' ? getManagerProfile() : null);
+  const hasManagerRole = activeUser ? isRoleAllowedForManager(activeUser) : false;
+  const isAuth = isManagerAuthenticated() && (isAuthenticated || hasManagerRole);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.search) {

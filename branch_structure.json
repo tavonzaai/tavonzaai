@@ -2,7 +2,7 @@
   "default_branch": "main",
   "branches": [
     "dev",
-    "feat/ai-dietary-menu-and-chat",
+    "euhan",
     "feature/TAVN-AI-jarvis-agent",
     "kayes",
     "main",
@@ -12,7 +12,7 @@
   ],
   "parent": {
     "dev": "main",
-    "feat/ai-dietary-menu-and-chat": "main",
+    "euhan": "main",
     "feature/TAVN-AI-jarvis-agent": "main",
     "kayes": "main",
     "main": null,
@@ -23,7 +23,7 @@
   "order": [
     "main",
     "dev",
-    "feat/ai-dietary-menu-and-chat",
+    "euhan",
     "feature/TAVN-AI-jarvis-agent",
     "kayes",
     "origin",

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { BranchItem } from '../../../types';
 import { BranchFormData } from '../types';
+import { useBranchManagers } from '@/lib/useBranchManagers';
 
 interface EditBranchModalProps {
   restaurantName: string;
@@ -16,11 +17,13 @@ export const EditBranchModal: React.FC<EditBranchModalProps> = ({
   onClose,
   onSubmit,
 }) => {
+  const { managerUsers, isLoading: loadingManagers } = useBranchManagers(branch.id);
   const [editForm, setEditForm] = useState<BranchFormData>({
     name: branch.name,
     address: branch.location,
     contactNumber: branch.contactNumber || '992548756',
     manager: branch.manager,
+    managerId: '',
     status: (branch.status as 'Active' | 'Setup' | 'Closed') || 'Active',
     openingTime: branch.openingTime || '09:00',
     closingTime: branch.closingTime || '23:00',
@@ -133,15 +136,35 @@ export const EditBranchModal: React.FC<EditBranchModalProps> = ({
                 <div className="self-stretch relative">
                   <select
                     value={editForm.manager}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, manager: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const selected = managerUsers.find(
+                        (u) => u.name === e.target.value || u.id === e.target.value,
+                      );
+                      setEditForm({
+                        ...editForm,
+                        manager: selected ? selected.name : e.target.value,
+                        managerId: selected ? selected.id : undefined,
+                      });
+                    }}
                     className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-sans appearance-none focus:outline-none focus:border-amber-400"
                   >
-                    <option value="Nobin Mille">Nobin Mille</option>
-                    <option value="Samira Khan">Samira Khan</option>
-                    <option value="Robert Geo">Robert Geo</option>
-                    <option value="Sarah Ahmed">Sarah Ahmed</option>
+                    {editForm.manager &&
+                      !managerUsers.some((u) => u.name === editForm.manager) && (
+                        <option value={editForm.manager}>
+                          {editForm.manager} (Current)
+                        </option>
+                      )}
+                    {loadingManagers ? (
+                      <option value="" disabled>Loading managers from API...</option>
+                    ) : managerUsers.length === 0 ? (
+                      <option value="" disabled>No users with manager role found</option>
+                    ) : (
+                      managerUsers.map((user) => (
+                        <option key={user.id} value={user.name}>
+                          {user.name} ({user.roleLabel})
+                        </option>
+                      ))
+                    )}
                   </select>
                   <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
