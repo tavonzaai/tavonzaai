@@ -11,11 +11,7 @@ export default function KitchenProfilePage() {
   const router = useRouter();
 
   const handleBack = () => {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      router.back();
-    } else {
-      router.push('/updated-kitchen-dashboard/dashboard');
-    }
+    router.push('/updated-kitchen-dashboard/dashboard');
   };
 
   return (

@@ -210,6 +210,21 @@ export const restaurantService = {
     return (res as any)?.data || res;
   },
 
+  updateBranchStaff: async (
+    branchId: string,
+    staffId: string,
+    payload: any
+  ): Promise<any> => {
+    const res = await baseApiFetch<any>(
+      `/branches/${encodeURIComponent(branchId)}/staff/${encodeURIComponent(staffId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
+    return (res as any)?.data || res;
+  },
+
   deleteBranchStaff: async (branchId: string, staffId: string): Promise<any> => {
     const res = await baseApiFetch<any>(
       `/branches/${encodeURIComponent(branchId)}/staff/${encodeURIComponent(staffId)}`,

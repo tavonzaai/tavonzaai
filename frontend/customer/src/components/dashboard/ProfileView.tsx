@@ -153,14 +153,20 @@ export default function ProfileView() {
   };
 
   return (
-    <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-black text-white flex flex-col justify-between relative overflow-x-hidden font-sans pb-24 pt-2">
+    <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-black text-white flex flex-col justify-between relative overflow-x-hidden font-sans pb-12 pt-2">
       <div className="flex flex-col gap-5 px-5 pt-3">
         {/* Header Banner with Back Button */}
         <div className="flex items-center justify-between gap-4 border-b border-neutral-800 pb-4">
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push('/menu');
+                }
+              }}
               className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-white hover:text-yellow-400 hover:border-yellow-400/50 transition cursor-pointer shrink-0 active:scale-95"
               title="Go Back"
             >

@@ -164,7 +164,7 @@ function DishDetailContent() {
           foundBackend.description ||
           foundBackend.categoryName ||
           foundBackend.category?.name ||
-          'Chef Specialty',
+          'Fresh from kitchen',
         price: foundBackend.price ?? foundBackend.basePrice ?? 0,
         category: foundBackend.categoryId,
         image: getItemImage(
@@ -189,13 +189,13 @@ function DishDetailContent() {
 
     return {
       id: dishParam || '',
-      name: dishParam ? 'Dish Details' : 'Menu Item',
-      subtitle: 'Chef Specialty',
+      name: dishParam ? ' ' : ' ',
+      subtitle: ' ',
       price: 0,
       category: '',
       image: '',
       popular: false,
-      description: 'Prepared fresh with the finest seasonal ingredients by Tavonza chefs.',
+      description: ' .',
       addOns: [],
     };
   }, [dishParam, selectedItem, backendItems]);

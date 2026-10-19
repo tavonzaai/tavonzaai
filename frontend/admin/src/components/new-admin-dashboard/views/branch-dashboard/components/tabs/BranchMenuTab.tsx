@@ -1,11 +1,16 @@
 import React from 'react';
-import { MenuItem } from '../types';
+import { Layers, SlidersHorizontal, Info } from 'lucide-react';
+import { MenuItem, CategoryItem } from '../types';
 import { PaginationBar } from '@/components/common';
 import { paginateItems } from '@/lib/pagination';
 import { useClientPage, useClampPage } from '@/hooks/useListPagination';
 
 interface BranchMenuTabProps {
   menuItems: MenuItem[];
+  categories: CategoryItem[];
+  selectedCategory: string;
+  onSelectCategory: (category: string) => void;
+  onOpenManageCategories: () => void;
   onOpenEditMenu: (item: MenuItem) => void;
   onDuplicateMenu: (item: MenuItem) => void;
   onToggleMenuStatus: (item: MenuItem) => void;
@@ -14,6 +19,10 @@ interface BranchMenuTabProps {
 
 export const BranchMenuTab: React.FC<BranchMenuTabProps> = ({
   menuItems,
+  categories,
+  selectedCategory,
+  onSelectCategory,
+  onOpenManageCategories,
   onOpenEditMenu,
   onDuplicateMenu,
   onToggleMenuStatus,
@@ -24,7 +33,79 @@ export const BranchMenuTab: React.FC<BranchMenuTabProps> = ({
   useClampPage(page, paged.meta.totalPages, setPage);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-4 animate-in fade-in duration-200">
+      {/* Category Section above Menu */}
+      {categories.length === 0 ? (
+        <div className="p-4 bg-yellow-400/10 border border-yellow-400/20 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-yellow-400/20 rounded-lg text-yellow-400 shrink-0">
+              <Info className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-white text-sm font-medium">No menu categories created yet</h4>
+              <p className="text-zinc-400 text-xs">
+                Create categories to organize menu items for this branch.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenManageCategories}
+            className="px-3.5 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-neutral-900 text-xs font-semibold rounded-lg transition shrink-0 cursor-pointer shadow-sm"
+          >
+            + Add Category
+          </button>
+        </div>
+      ) : (
+        <div className="p-3 bg-neutral-900/70 rounded-xl border border-neutral-800 flex flex-wrap items-center justify-between gap-2.5 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onSelectCategory('All Categories')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] transition border cursor-pointer ${
+                selectedCategory === 'All Categories'
+                  ? 'bg-yellow-400 text-neutral-900 border-yellow-400 shadow-sm'
+                  : 'bg-neutral-950/70 text-stone-300 border-neutral-800 hover:bg-neutral-800 hover:text-white'
+              }`}
+            >
+              All Categories
+            </button>
+            {categories.map((cat) => {
+              const isSelected =
+                selectedCategory.toLowerCase() === cat.name.toLowerCase() ||
+                selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => onSelectCategory(cat.name)}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-medium font-['Poppins'] transition border cursor-pointer ${
+                    isSelected
+                      ? 'bg-yellow-400 text-neutral-900 border-yellow-400 shadow-sm'
+                      : 'bg-neutral-950/70 text-stone-300 border-neutral-800 hover:bg-neutral-800 hover:text-white'
+                  }`}
+                >
+                  {cat.name}
+                  {cat.itemCount !== undefined && (
+                    <span className="ml-1.5 opacity-75 text-[11px] font-mono">
+                      ({cat.itemCount})
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={onOpenManageCategories}
+            className="px-3 py-1.5 text-xs text-stone-300 hover:text-white bg-neutral-800 hover:bg-neutral-700 rounded-lg border border-neutral-700 transition flex items-center gap-1.5 cursor-pointer ml-auto"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-yellow-400" />
+            <span>Manage Categories</span>
+          </button>
+        </div>
+      )}
       <div className="w-full overflow-x-auto rounded-xl border border-zinc-800 bg-neutral-900/50 shadow-xl">
         <table className="w-full text-left border-collapse">
           <thead>

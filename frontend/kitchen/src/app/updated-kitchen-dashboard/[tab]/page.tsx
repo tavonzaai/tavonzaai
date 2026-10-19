@@ -1,4 +1,5 @@
 import React from 'react';
+import { redirect } from 'next/navigation';
 import KitchenDashboardView from '@/components/updated-kitchen-dashboard/KitchenDashboardView';
 import AuthGuard from '@/components/auth/AuthGuard';
 
@@ -38,6 +39,9 @@ export default async function UpdatedKitchenTabPage({
 }) {
   const resolvedParams = await params;
   const tabParam = resolvedParams?.tab?.toLowerCase() || '';
+  if (tabParam === 'profile') {
+    redirect('/profile');
+  }
   const tabName = tabMap[tabParam] || 'Dashboard';
 
   return (

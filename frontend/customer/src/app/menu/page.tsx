@@ -743,13 +743,13 @@ function MenuContent() {
                       >
                         {/* Top: Image + Favorite Badge */}
                         <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-neutral-950">
-                          <Image
+                          {/* <Image
                             src={dish.image}
                             alt={dish.name}
                             fill
                             sizes="(max-width: 640px) 180px, 240px"
                             className="object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
+                          /> */}
                           <button
                             type="button"
                             onClick={(e) => toggleFavorite(dish.id, e)}

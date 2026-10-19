@@ -131,6 +131,21 @@ export const InviteStaffModal: React.FC<InviteStaffModalProps> = ({
                 />
               </div>
             </div>
+
+            {/* Phone (Optional backend field) */}
+            <div className="self-stretch flex flex-col justify-start items-start gap-2">
+              <label className="text-white text-sm font-normal font-['Inter'] leading-4">
+                Phone Number <span className="text-neutral-500 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="tel"
+                data-testid="invite-staff-phone"
+                placeholder="e.g. +1 555-0123"
+                value={inviteForm.phone || ''}
+                onChange={(e) => onChange({ ...inviteForm, phone: e.target.value })}
+                className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-['Inter']"
+              />
+            </div>
           </div>
 
           {/* Modal Buttons: Cancel & Save */}
