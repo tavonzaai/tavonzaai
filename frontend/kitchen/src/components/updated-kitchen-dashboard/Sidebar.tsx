@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useLogout } from "@/hooks/useLogout";
 import { useAppSelector } from "@/redux/store";
+import { getStoredKitchenUser } from "@/lib/auth";
 
 export function TavonzaLogoIcon({ className = "w-10 h-10" }: { className?: string }) {
   return (
@@ -61,8 +62,24 @@ export default function Sidebar({
   const { user } = useAppSelector((state) => state.auth);
   const isDashboardView = activeNav === "Dashboard";
 
-  const chefName = user?.name || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Marco Vance');
-  const chefInitials = chefName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'MV';
+  const activeUser = user || (typeof document !== "undefined" ? getStoredKitchenUser() : null);
+  const chefName =
+    activeUser?.name ||
+    ((activeUser as any)?.firstName
+      ? `${(activeUser as any).firstName} ${(activeUser as any).lastName || ""}`.trim()
+      : "Kitchen Staff");
+  const chefInitials =
+    chefName
+      .split(" ")
+      .filter(Boolean)
+      .map((n: string) => n[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase() || "KS";
+  const userAvatar = (activeUser as any)?.avatarUrl || (activeUser as any)?.avatar || null;
+  const fallbackAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+    chefName || "Chef"
+  )}`;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -183,8 +200,22 @@ export default function Sidebar({
               className="flex items-center gap-2.5 overflow-hidden flex-1 cursor-pointer text-left"
               title="View Profile"
             >
-              <div className="w-8 h-8 rounded-lg bg-amber-400 text-black font-bold text-xs flex items-center justify-center shrink-0">
-                {chefInitials}
+              <div className="w-8 h-8 rounded-lg overflow-hidden bg-amber-400 text-black font-bold text-xs relative flex items-center justify-center shrink-0">
+                <span className="select-none">{chefInitials}</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={userAvatar || fallbackAvatar}
+                  alt={chefName}
+                  className="absolute inset-0 w-full h-full object-cover rounded-lg"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.src !== fallbackAvatar) {
+                      target.src = fallbackAvatar;
+                    } else {
+                      target.style.display = "none";
+                    }
+                  }}
+                />
               </div>
               <div className="flex flex-col truncate">
                 <span className="text-xs font-semibold text-white truncate font-['Inter']">

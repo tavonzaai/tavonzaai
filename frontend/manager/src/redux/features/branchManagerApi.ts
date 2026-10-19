@@ -450,7 +450,8 @@ export const branchManagerService = {
           return {
             ...t,
             qrCodeToken: qrToken,
-            qrCodeUrl: t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined),
+            qrCodeUrl: t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken, t.id) : undefined),
+            tableUrl: buildCustomerTableUrl(qrToken, t.id),
           };
         });
     }
@@ -463,11 +464,12 @@ export const branchManagerService = {
     });
     const t = (res as any)?.data || res;
     const qrToken = t.qrCodeToken || t.id;
-    const qrCodeUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
+    const qrCodeUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken, t.id) : undefined);
     return {
       ...t,
       qrCodeUrl,
       qrCodeToken: qrToken,
+      tableUrl: buildCustomerTableUrl(qrToken, t.id),
     };
   },
 

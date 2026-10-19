@@ -1,9 +1,10 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import { MenuFormData } from '../types';
+import { MenuFormData, CategoryItem } from '../types';
 
 interface EditMenuModalProps {
   isOpen: boolean;
+  categories: CategoryItem[];
   menuForm: MenuFormData;
   onChange: (form: MenuFormData) => void;
   onClose: () => void;
@@ -12,6 +13,7 @@ interface EditMenuModalProps {
 
 export const EditMenuModal: React.FC<EditMenuModalProps> = ({
   isOpen,
+  categories,
   menuForm,
   onChange,
   onClose,
@@ -56,15 +58,26 @@ export const EditMenuModal: React.FC<EditMenuModalProps> = ({
             <div className="flex flex-col gap-2">
               <label className="text-white text-sm font-normal">Category</label>
               <select
-                value={menuForm.category}
-                onChange={(e) => onChange({ ...menuForm, category: e.target.value })}
+                value={menuForm.categoryId || ''}
+                onChange={(e) => {
+                  const selectedCat = categories.find((c) => c.id === e.target.value);
+                  onChange({
+                    ...menuForm,
+                    categoryId: e.target.value,
+                    category: selectedCat?.name || menuForm.category,
+                  });
+                }}
                 className="h-11 px-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-300 text-sm focus:outline-none focus:border-amber-400 cursor-pointer"
               >
-                <option value="Main Course">Main Course</option>
-                <option value="Starters">Starters</option>
-                <option value="Beverages">Beverages</option>
-                <option value="Desserts">Desserts</option>
-                <option value="Sides">Sides</option>
+                {categories.length === 0 ? (
+                  <option value="">{menuForm.category || 'No category'}</option>
+                ) : (
+                  categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
