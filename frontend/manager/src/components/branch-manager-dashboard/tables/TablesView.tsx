@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import {
   buildTableQrCodeUrl,
+  getCustomerTableUrl as resolveCustomerTableUrl,
   branchManagerService,
   getActiveBranchId,
   markTableDeletedLocally,
@@ -156,11 +157,7 @@ export default function TablesView({
 
   const getCustomerTableUrl = (table: TableItem) => {
     const token = table.qrCodeToken || table.id;
-    const base =
-      typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-        ? `${window.location.protocol}//${window.location.hostname}:3100`
-        : 'http://localhost:3100';
-    return `${base}?qr=${encodeURIComponent(token)}`;
+    return resolveCustomerTableUrl(token);
   };
 
   const handleCopyLink = (table: TableItem) => {

@@ -280,11 +280,44 @@ export interface KitchenTicketItem {
   createdAt?: string;
 }
 
+/**
+ * Resolves the base URL for the customer ordering application.
+ * - Prioritizes NEXT_PUBLIC_CUSTOMER_APP_URL if defined.
+ * - In production / HTTPS / public domains, never attaches :3100.
+ * - For local development, falls back to http://localhost:3100 (or local IP with port 3100).
+ */
+export function getCustomerBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_CUSTOMER_APP_URL || process.env.CUSTOMER_APP_URL;
+  if (envUrl) {
+    return envUrl.trim().replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isIpAddress = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+
+    // If on HTTPS or any standard domain (e.g. manager.tavonza.com), use the origin without :3100
+    if (protocol === 'https:' || (!isLocalhost && !isIpAddress)) {
+      return `${protocol}//${hostname}`;
+    }
+
+    // Local network IP during development (e.g. 192.168.1.5:3100)
+    if (isIpAddress && !isLocalhost) {
+      return `${protocol}//${hostname}:3100`;
+    }
+  }
+
+  return 'http://localhost:3100';
+}
+
+export function getCustomerTableUrl(token: string): string {
+  const base = getCustomerBaseUrl();
+  return `${base}?qr=${encodeURIComponent(token)}`;
+}
+
 export function buildTableQrCodeUrl(token: string): string {
-  const customerBase = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? `${window.location.protocol}//${window.location.hostname}:3100`
-    : (process.env.NEXT_PUBLIC_CUSTOMER_APP_URL || 'http://localhost:3100');
-  const targetUrl = `${customerBase}?qr=${encodeURIComponent(token)}`;
+  const targetUrl = getCustomerTableUrl(token);
   return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetUrl)}`;
 }
 
@@ -461,7 +494,7 @@ export const branchManagerService = {
       const token = (regen as any)?.qrCodeToken || (regen as any)?.data?.qrCodeToken;
       return {
         qrCodeUrl: token ? buildTableQrCodeUrl(token) : '',
-        tableUrl: token ? `http://localhost:3100?qr=${encodeURIComponent(token)}` : '',
+        tableUrl: token ? getCustomerTableUrl(token) : '',
       };
     }
   },
