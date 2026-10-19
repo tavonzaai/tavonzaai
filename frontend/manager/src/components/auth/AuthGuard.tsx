@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppSelector } from '../../redux/hooks';
-import { isManagerAuthenticated } from '../../lib/auth';
+import { isManagerAuthenticated, isRoleAllowedForManager, getManagerProfile } from '../../lib/auth';
 import { Loader2 } from 'lucide-react';
 
 interface AuthGuardProps {
@@ -14,15 +14,9 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const { isAuthenticated, isInitialized, user } = useAppSelector((state) => state.auth);
 
-  const roleUpper = String(user?.role || '').toUpperCase();
-  const hasManagerRole =
-    Boolean(user) &&
-    (roleUpper.includes('MANAGER') ||
-      roleUpper === 'ADMIN' ||
-      roleUpper === 'OWNER' ||
-      user?.assignments?.some((a: any) => String(a?.role || '').toUpperCase().includes('MANAGER')));
-
-  const isAuth = isAuthenticated && hasManagerRole && isManagerAuthenticated();
+  const activeUser = user || (typeof document !== 'undefined' ? getManagerProfile() : null);
+  const hasManagerRole = activeUser ? isRoleAllowedForManager(activeUser) : false;
+  const isAuth = isManagerAuthenticated() && (isAuthenticated || hasManagerRole);
 
   useEffect(() => {
     if (isInitialized && !isAuth) {

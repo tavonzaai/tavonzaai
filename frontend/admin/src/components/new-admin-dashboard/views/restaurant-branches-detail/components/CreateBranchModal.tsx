@@ -1,27 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { BranchFormData } from '../types';
+import { useBranchManagers } from '@/lib/useBranchManagers';
 
 interface CreateBranchModalProps {
   restaurantName: string;
+  branchId?: string;
   onClose: () => void;
   onSubmit: (form: BranchFormData) => void;
 }
 
 export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
   restaurantName,
+  branchId,
   onClose,
   onSubmit,
 }) => {
+  const { managerUsers, isLoading: loadingManagers } = useBranchManagers(branchId);
   const [createForm, setCreateForm] = useState<BranchFormData>({
     name: '',
     address: 'Cusseta, Georgia',
     contactNumber: '992548756',
-    manager: 'Nobin Mille',
+    manager: '',
+    managerId: '',
     status: 'Active',
     openingTime: '09:00',
     closingTime: '23:00',
   });
+
+  useEffect(() => {
+    if (managerUsers.length > 0 && !createForm.manager) {
+      setCreateForm((prev) => ({
+        ...prev,
+        manager: prev.manager || managerUsers[0].name,
+        managerId: prev.managerId || managerUsers[0].id,
+      }));
+    }
+  }, [managerUsers, createForm.manager]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,15 +148,29 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
                 <div className="self-stretch relative">
                   <select
                     value={createForm.manager}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, manager: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const selected = managerUsers.find(
+                        (u) => u.name === e.target.value || u.id === e.target.value,
+                      );
+                      setCreateForm({
+                        ...createForm,
+                        manager: selected ? selected.name : e.target.value,
+                        managerId: selected ? selected.id : undefined,
+                      });
+                    }}
                     className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-sans appearance-none focus:outline-none focus:border-amber-400"
                   >
-                    <option value="Nobin Mille">Nobin Mille</option>
-                    <option value="Samira Khan">Samira Khan</option>
-                    <option value="Robert Geo">Robert Geo</option>
-                    <option value="Sarah Ahmed">Sarah Ahmed</option>
+                    {loadingManagers ? (
+                      <option value="" disabled>Loading managers from API...</option>
+                    ) : managerUsers.length === 0 ? (
+                      <option value="" disabled>No users with manager role found</option>
+                    ) : (
+                      managerUsers.map((user) => (
+                        <option key={user.id} value={user.name}>
+                          {user.name} ({user.roleLabel})
+                        </option>
+                      ))
+                    )}
                   </select>
                   <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>

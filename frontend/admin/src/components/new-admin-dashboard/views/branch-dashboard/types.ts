@@ -10,10 +10,18 @@ export interface TableItem {
   qrJoinUrl?: string | null;
 }
 
+export interface CategoryItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  itemCount?: number;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
   category: string;
+  categoryId?: string;
   price: string;
   status: 'Active' | 'Disable';
 }
@@ -35,6 +43,7 @@ export interface BranchFormData {
   address: string;
   contactNumber: string;
   manager: string;
+  managerId?: string;
   status: 'Active' | 'Setup' | 'Closed';
   openingTime: string;
   closingTime: string;
@@ -49,6 +58,7 @@ export interface TableFormData {
 export interface MenuFormData {
   name: string;
   category: string;
+  categoryId?: string;
   price: string;
   status: 'Active' | 'Disable';
 }
@@ -56,6 +66,7 @@ export interface MenuFormData {
 export interface StaffInviteFormData {
   name: string;
   email: string;
+  phone?: string;
   password: string;
   role: string;
   branch: string;

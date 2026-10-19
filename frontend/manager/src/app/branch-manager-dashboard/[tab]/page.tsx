@@ -1,6 +1,4 @@
-import React from 'react';
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import React, { Suspense } from 'react';
 import BranchManagerDashboard from '@/components/branch-manager-dashboard/BranchManagerDashboard';
 import { routeToNav } from '@/components/branch-manager-dashboard/routes';
 import AuthGuard from '@/components/auth/AuthGuard';
@@ -41,7 +39,10 @@ export default async function BranchManagerTabPage({
 
   return (
     <AuthGuard>
-      <BranchManagerDashboard initialNav={tabName} />
+      <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-zinc-500">Loading console...</div>}>
+        <BranchManagerDashboard initialNav={tabName} />
+      </Suspense>
     </AuthGuard>
   );
 }
+

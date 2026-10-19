@@ -50,7 +50,7 @@ export default async function BranchSectionPage({
         <NewAdminDashboard
           initialTab="branches"
           initialBranchId={branchId}
-          initialBranchSection={section}
+          initialBranchSection={section || undefined}
         />
       </Suspense>
     </AuthGuard>

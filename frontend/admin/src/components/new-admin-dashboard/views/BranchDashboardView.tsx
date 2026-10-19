@@ -63,6 +63,7 @@ export default function BranchDashboardView({
         onOpenEditBranch={d.handleOpenEdit}
         onOpenAddTable={d.handleOpenAddTable}
         onOpenAddMenu={d.handleOpenAddMenu}
+        onOpenManageCategories={d.handleOpenManageCategories}
         onOpenInviteStaff={d.handleOpenInviteStaff}
         menuFilterStatus={d.menuFilterStatus}
         onMenuFilterStatusChange={d.setMenuFilterStatus}
@@ -102,6 +103,10 @@ export default function BranchDashboardView({
           {d.activeSubTab === 'Menu' && (
             <BranchMenuTab
               menuItems={d.menuItems}
+              categories={d.categories}
+              selectedCategory={d.selectedCategory}
+              onSelectCategory={d.setSelectedCategory}
+              onOpenManageCategories={d.handleOpenManageCategories}
               onOpenEditMenu={d.handleOpenEditMenu}
               onDuplicateMenu={d.handleDuplicateMenu}
               onToggleMenuStatus={d.handleToggleMenuStatus}
@@ -114,6 +119,7 @@ export default function BranchDashboardView({
               staffList={d.staffList}
               onOpenEditStaff={d.handleOpenEditStaff}
               onToggleStaffStatus={d.handleToggleStaffStatus}
+              onDeleteStaff={(member) => d.setDeletingStaff(member)}
             />
           )}
         </>
@@ -138,6 +144,7 @@ export default function BranchDashboardView({
         onConfirmDeleteTable={d.handleConfirmDeleteTable}
         viewingQrTable={d.viewingQrTable}
         onCloseViewingQr={() => d.setViewingQrTable(null)}
+        categories={d.categories}
         isAddMenuOpen={d.isAddMenuOpen}
         onCloseAddMenu={() => d.setIsAddMenuOpen(false)}
         menuForm={d.menuForm}
@@ -149,6 +156,12 @@ export default function BranchDashboardView({
         deletingMenuItem={d.deletingMenuItem}
         onCloseDeleteMenu={() => d.setDeletingMenuItem(null)}
         onConfirmDeleteMenu={d.handleConfirmDeleteMenu}
+        isManageCategoriesOpen={d.isManageCategoriesOpen}
+        onCloseManageCategories={() => d.setIsManageCategoriesOpen(false)}
+        onOpenManageCategories={d.handleOpenManageCategories}
+        onAddCategory={d.handleAddCategory}
+        onUpdateCategory={d.handleUpdateCategory}
+        onDeleteCategory={d.handleDeleteCategory}
         isInviteStaffOpen={d.isInviteStaffOpen}
         onCloseInviteStaff={() => d.setIsInviteStaffOpen(false)}
         inviteForm={d.inviteForm}
@@ -159,6 +172,10 @@ export default function BranchDashboardView({
         editStaffForm={d.editStaffForm}
         setEditStaffForm={d.setEditStaffForm}
         onSaveEditStaff={d.handleSaveEditStaff}
+        deletingStaff={d.deletingStaff}
+        onCloseDeleteStaff={() => d.setDeletingStaff(null)}
+        onConfirmDeleteStaff={d.handleConfirmDeleteStaff}
+        isDeletingStaff={d.isDeletingStaff}
         isEditBranchOpen={d.isEditOpen}
         onCloseEditBranch={() => d.setIsEditOpen(false)}
         editBranchForm={d.editForm}
