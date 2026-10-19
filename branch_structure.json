@@ -1,9 +1,9 @@
 {
   "default_branch": "main",
   "branches": [
-    "dev",
     "euhan",
     "feature/TAVN-AI-jarvis-agent",
+    "feature/backend-standalone",
     "kayes",
     "main",
     "origin",
@@ -11,9 +11,9 @@
     "shuvo"
   ],
   "parent": {
-    "dev": "main",
     "euhan": "main",
     "feature/TAVN-AI-jarvis-agent": "main",
+    "feature/backend-standalone": "main",
     "kayes": "main",
     "main": null,
     "origin": "main",
@@ -22,9 +22,9 @@
   },
   "order": [
     "main",
-    "dev",
     "euhan",
     "feature/TAVN-AI-jarvis-agent",
+    "feature/backend-standalone",
     "kayes",
     "origin",
     "rbac_new",
