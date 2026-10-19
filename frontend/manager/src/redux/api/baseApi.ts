@@ -50,9 +50,8 @@ export function setAuthToken(token: string) {
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
   setAuthToken(tokens.accessToken);
-  if (tokens.refreshToken) {
-    setCookie('refresh_token', tokens.refreshToken);
-  }
+  // Refresh tokens live in HttpOnly cookie tvz_rt_manager — never store in JS-readable cookies.
+    removeCookie('refresh_token');
 }
 
 export function removeAuthToken() {
@@ -61,6 +60,47 @@ export function removeAuthToken() {
   removeCookie('branch_manager_token');
   removeCookie('branch_manager_user');
   removeCookie('cashier_token');
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+export async function refreshAuthSession(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  const priorAccess = getAuthToken();
+
+  refreshPromise = (async () => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client: 'manager' }),
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const current = getAuthToken();
+        if (current && current !== priorAccess) return true;
+        removeAuthToken();
+        return false;
+      }
+      const json = await res.json().catch(() => null);
+      const data = json?.data || json;
+      const newAccess = data?.accessToken || data?.access_token;
+      if (newAccess) {
+        setAuthTokens({ accessToken: newAccess });
+        return true;
+      }
+      removeAuthToken();
+      return false;
+    } catch {
+      removeAuthToken();
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export function getApiBaseUrl(): string {
@@ -111,7 +151,7 @@ export class ApiError extends Error {
  */
 export async function baseApiFetch<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { __authRetried?: boolean } = {}
 ): Promise<ApiResponse<T>> {
   const token = getAuthToken();
   const baseUrl = getApiBaseUrl();
@@ -132,45 +172,21 @@ export async function baseApiFetch<T = any>(
     response = await fetch(url, {
       ...options,
       headers,
+      credentials: 'include',
     });
   } catch (err: any) {
     throw new ApiError(err?.message || 'Network connection failed', 0);
   }
 
-  // Handle 401 Unauthorized / Token Refresh
-  if (response.status === 401) {
-    const refreshToken = getRefreshToken();
-    if (refreshToken && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
-      try {
-        const refreshRes = await fetch(`${baseUrl}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-        });
-
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          const newAccessToken =
-            refreshData?.data?.accessToken || refreshData?.accessToken || refreshData?.data?.token;
-
-          if (newAccessToken) {
-            setAuthTokens({
-              accessToken: newAccessToken,
-              refreshToken: refreshData?.data?.refreshToken || refreshToken,
-            });
-
-            headers['Authorization'] = `Bearer ${newAccessToken}`;
-            const retryRes = await fetch(url, { ...options, headers });
-            const retryData = await retryRes.json().catch(() => ({}));
-            if (!retryRes.ok) {
-              throw new ApiError(retryData?.message || 'Request failed after refresh', retryRes.status, retryData);
-            }
-            return retryData;
-          }
-        }
-      } catch {}
+  if (
+    response.status === 401 &&
+    !endpoint.includes('/auth/') &&
+    !options.__authRetried
+  ) {
+    const refreshed = await refreshAuthSession();
+    if (refreshed) {
+      return baseApiFetch<T>(endpoint, { ...options, __authRetried: true });
     }
-
     removeAuthToken();
     if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
       window.location.href = '/login';

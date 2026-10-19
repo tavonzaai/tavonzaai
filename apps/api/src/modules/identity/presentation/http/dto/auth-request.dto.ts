@@ -5,6 +5,7 @@
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
+import { AUTH_CLIENTS, type AuthClient } from '../../../domain/token-policy';
 
 // ─── Register ─────────────────────────────────────────────────────────
 
@@ -47,15 +48,29 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty()
   password!: string;
+
+  @ApiPropertyOptional({
+    enum: AUTH_CLIENTS,
+    description: 'Browser app identifier. When set, the refresh token is issued as an HttpOnly cookie instead of in the response body.',
+  })
+  @IsOptional()
+  @IsIn(AUTH_CLIENTS)
+  client?: AuthClient;
 }
 
 // ─── Refresh Token ────────────────────────────────────────────────────
 
 export class RefreshTokenDto {
-  @ApiProperty()
+  @ApiPropertyOptional({ description: 'Refresh token for non-browser clients. Browser apps send `client` and rely on the HttpOnly cookie.' })
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  refreshToken!: string;
+  refreshToken?: string;
+
+  @ApiPropertyOptional({ enum: AUTH_CLIENTS })
+  @IsOptional()
+  @IsIn(AUTH_CLIENTS)
+  client?: AuthClient;
 }
 
 // ─── Verify OTP (Email Verification, Phone Verification, Password Reset)

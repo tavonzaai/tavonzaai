@@ -29,7 +29,7 @@ export interface UserProfile {
 
 export interface LoginPayload {
   email: string;
-  password?: string;
+  password: string;
 }
 
 export interface AuthTokensResponse {
@@ -44,191 +44,81 @@ export interface ChangePasswordPayload {
   confirmPassword?: string;
 }
 
-export interface UpdateProfilePayload extends Omit<Partial<UserProfile>, 'avatar'> {
-  avatar?: File | string | null;
-}
-
-export interface VerifyOtpPayload {
-  email: string;
-  code: string;
-  type?: 'email_verification' | 'phone_verification' | 'password_reset' | string;
-}
-
-export interface ResendOtpPayload {
-  email: string;
-  type?: 'email_verification' | 'phone_verification' | 'password_reset' | string;
-}
-
-export interface ForgotPasswordPayload {
-  email: string;
-}
-
-export interface ResetPasswordPayload {
-  email: string;
-  code: string;
-  newPassword: string;
-}
-
-export interface MessageResponse {
-  message: string;
-}
-
-// Fallback demo user matching the Figma "Alex Morgan - Super Admin"
-export const DEMO_SUPERADMIN_USER: UserProfile = {
-  id: 'usr-superadmin-alex',
-  email: 'alex.morgan@tablepilot.io',
-  name: 'Alex Morgan',
-  firstName: 'Alex',
-  lastName: 'Morgan',
-  phone: '+1 (555) 019-2834',
-  contactNo: '+1 (555) 019-2834',
-  title: 'Head of Platform Operations',
-  department: 'Platform Architecture & SecOps',
-  timezone: 'America/New_York (UTC-05:00)',
-  role: 'SUPERADMIN',
-  globalRole: 'SUPERADMIN',
-  avatarUrl: null,
-};
-
 export const rawAuthApi = {
+  /** Real API login only — no demo / dummy token fallbacks. */
   login: async (credentials: LoginPayload): Promise<AuthTokensResponse> => {
-    try {
-      const res = await baseApiFetch<AuthTokensResponse>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: credentials.email.trim().toLowerCase(),
-          password: credentials.password || 'password123',
-        }),
-      });
-
-      const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
-      const token = data.accessToken || (data as any).access_token;
-      if (token) {
-        setAuthTokens({
-          accessToken: token,
-          refreshToken: data.refreshToken,
-        });
-      }
-      if (data.user) {
-        setCookie(SUPERADMIN_USER_KEY, JSON.stringify(data.user));
-      }
-      return data;
-    } catch {
-      // Seamless local / prototype fallback for Super Admin authentication
-      const dummyToken = 'superadmin_token_demo_' + Date.now();
-      const authData: AuthTokensResponse = {
-        accessToken: dummyToken,
-        refreshToken: 'refresh_' + dummyToken,
-        user: {
-          ...DEMO_SUPERADMIN_USER,
-          email: credentials.email || DEMO_SUPERADMIN_USER.email,
-        },
-      };
-      setAuthTokens({ accessToken: dummyToken, refreshToken: authData.refreshToken });
-      setCookie(SUPERADMIN_USER_KEY, JSON.stringify(authData.user));
-      return authData;
+    if (!credentials.password?.trim()) {
+      throw new Error('Password is required');
     }
+
+    const res = await baseApiFetch<AuthTokensResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: credentials.email.trim().toLowerCase(),
+        password: credentials.password,
+        client: 'superadmin',
+      }),
+    });
+
+    const data: AuthTokensResponse = (res.data && (res.data as any).accessToken ? res.data : res) as any;
+    const token = data.accessToken || (data as any).access_token;
+    if (!token) {
+      throw new Error('Login did not return an access token');
+    }
+
+    setAuthTokens({ accessToken: token });
+    if (data.user) {
+      setCookie(SUPERADMIN_USER_KEY, JSON.stringify(data.user));
+    }
+    return data;
   },
 
   getMe: async (): Promise<UserProfile> => {
-    try {
-      const res = await baseApiFetch<UserProfile>('/users/me', { method: 'GET' });
-      const user = (res?.data?.id ? res.data : res) as UserProfile;
-      if (user && user.id) {
-        setCookie(SUPERADMIN_USER_KEY, JSON.stringify(user));
-        return user;
-      }
-    } catch {}
-
-    const stored = getCookie(SUPERADMIN_USER_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch {}
+    const res = await baseApiFetch<UserProfile>('/auth/me', { method: 'GET' });
+    const user = (res?.data && (res.data as any).id ? res.data : res) as UserProfile;
+    if (!user?.id) {
+      throw new Error('Unable to load profile');
     }
-    return DEMO_SUPERADMIN_USER;
+    setCookie(SUPERADMIN_USER_KEY, JSON.stringify(user));
+    return user;
   },
 
-  updateProfile: async (data: UpdateProfilePayload): Promise<UserProfile> => {
-    let uploadedAvatarUrl: string | null | undefined = undefined;
-
-    if (data.avatar instanceof File) {
-      // 1. Attempt upload to backend storage endpoint (/storage/upload)
-      try {
-        const uploadFormData = new FormData();
-        uploadFormData.append('file', data.avatar);
-        const baseUrl = getApiBaseUrl();
-        const token = getAuthToken();
-        const uploadRes = await fetch(`${baseUrl}/storage/upload`, {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: uploadFormData,
-        });
-        if (uploadRes.ok) {
-          const uploadJson = await uploadRes.json();
-          uploadedAvatarUrl =
-            uploadJson.url ||
-            uploadJson.data?.url ||
-            uploadJson.location ||
-            uploadJson.fileUrl;
-        }
-      } catch {}
-
-      // 2. Fallback to Data URL for prototype/local demo session
-      if (!uploadedAvatarUrl && typeof window !== 'undefined') {
-        uploadedAvatarUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(data.avatar as File);
-        });
-      }
-    } else if (typeof data.avatar === 'string' || data.avatar === null) {
-      uploadedAvatarUrl = data.avatar;
+  updateProfile: async (data: Partial<UserProfile>): Promise<UserProfile> => {
+    const res = await baseApiFetch<UserProfile>('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    const updated = (res?.data && (res.data as any).id ? res.data : res) as UserProfile;
+    if (!updated?.id) {
+      throw new Error('Profile update failed');
     }
-
-    const payloadToSend: Record<string, any> = { ...data };
-    if (uploadedAvatarUrl !== undefined) {
-      payloadToSend.avatar = uploadedAvatarUrl;
-      payloadToSend.avatarUrl = uploadedAvatarUrl;
-    }
-
-    let updatedUser: UserProfile = { ...DEMO_SUPERADMIN_USER, ...payloadToSend };
-    try {
-      const res = await baseApiFetch<UserProfile>('/auth/me', {
-        method: 'PATCH',
-        body: JSON.stringify(payloadToSend),
-      });
-      if (res?.data?.id) {
-        updatedUser = res.data;
-      }
-    } catch {}
-
-    // Persist to cookie and return
-    const stored = getCookie(SUPERADMIN_USER_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        updatedUser = { ...parsed, ...payloadToSend };
-      } catch {}
-    }
-    setCookie(SUPERADMIN_USER_KEY, JSON.stringify(updatedUser));
-    return updatedUser;
+    setCookie(SUPERADMIN_USER_KEY, JSON.stringify(updated));
+    return updated;
   },
 
   changePassword: async (payload: ChangePasswordPayload): Promise<{ message: string }> => {
-    try {
-      const res = await baseApiFetch<{ message: string }>('/auth/change-password', {
-        method: 'POST',
-        body: JSON.stringify({
-          currentPassword: payload.currentPassword,
-          newPassword: payload.newPassword,
-        }),
-      });
-      return res?.data || { message: 'Password changed successfully' };
-    } catch {
-      // Fallback for prototype / local demo mode
-      return { message: 'Password updated successfully' };
+    const res = await baseApiFetch<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        currentPassword: payload.currentPassword,
+        newPassword: payload.newPassword,
+      }),
+    });
+    return (res?.data as any) || { message: 'Password changed successfully' };
+  },
+
+  refresh: async (): Promise<AuthTokensResponse> => {
+    const res = await baseApiFetch<AuthTokensResponse>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ client: 'superadmin' }),
+    });
+    const data: AuthTokensResponse = (res.data && (res.data as any).accessToken ? res.data : res) as any;
+    const accessToken = data.accessToken || (data as any).access_token;
+    if (!accessToken) {
+      throw new Error('Refresh did not return an access token');
     }
+    setAuthTokens({ accessToken });
+    return data;
   },
 
   forgotPassword: async (payload: ForgotPasswordPayload): Promise<MessageResponse> => {
@@ -281,9 +171,13 @@ export const rawAuthApi = {
 
   logout: async () => {
     try {
-      await baseApiFetch('/auth/logout', { method: 'POST' });
-    } catch {}
-    removeAuthToken();
+      await baseApiFetch('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ client: 'superadmin' }),
+      });
+    } finally {
+      removeAuthToken();
+    }
   },
 };
 
@@ -295,7 +189,7 @@ export const loginUser = createAsyncThunk(
     } catch (err: any) {
       return rejectWithValue(err.message || 'Login failed.');
     }
-  }
+  },
 );
 
 export const getMe = createAsyncThunk('auth/getMe', async (_, { rejectWithValue }) => {
@@ -303,7 +197,11 @@ export const getMe = createAsyncThunk('auth/getMe', async (_, { rejectWithValue 
   if (!token) {
     return rejectWithValue('No token found');
   }
-  return await rawAuthApi.getMe();
+  try {
+    return await rawAuthApi.getMe();
+  } catch (err: any) {
+    return rejectWithValue(err.message || 'Failed to load profile');
+  }
 });
 
 export const updateProfile = createAsyncThunk(
@@ -314,7 +212,7 @@ export const updateProfile = createAsyncThunk(
     } catch (err: any) {
       return rejectWithValue(err.message || 'Profile update failed.');
     }
-  }
+  },
 );
 
 export const changePassword = createAsyncThunk(
@@ -325,7 +223,7 @@ export const changePassword = createAsyncThunk(
     } catch (err: any) {
       return rejectWithValue(err.message || 'Password update failed.');
     }
-  }
+  },
 );
 
 export const logoutUser = createAsyncThunk('auth/logoutUser', async () => {

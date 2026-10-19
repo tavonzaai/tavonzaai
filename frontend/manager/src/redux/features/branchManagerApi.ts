@@ -355,6 +355,35 @@ export const branchManagerService = {
     return (res as any)?.data || res;
   },
 
+  /**
+   * Branch KPI analytics. Dashboards/reports must use this — never aggregate getOrders/getTables.
+   * GET /analytics/branch-dashboard?branchId=
+   */
+  getBranchDashboardAnalytics: async (branchId: string): Promise<{
+    branchId: string;
+    tablesCount: number;
+    availableTables: number;
+    occupiedTables: number;
+    occupancyPercent: number;
+    staffCount: number;
+    ordersCount: number;
+    pendingOrders: number;
+    preparingOrders: number;
+    readyOrders: number;
+    delayedOrders: number;
+    unpaidOrders: number;
+    unpaidAmount: number;
+    paidRevenue: number;
+    todayOrders: number;
+    todayRevenue: number;
+  }> => {
+    const res = await baseApiFetch<any>(
+      `/analytics/branch-dashboard?branchId=${encodeURIComponent(branchId)}`,
+      { method: 'GET' },
+    );
+    return (res as any)?.data || res;
+  },
+
   updateBranch: async (branchId: string, payload: Partial<BranchDetail>): Promise<BranchDetail> => {
     const res = await baseApiFetch<BranchDetail>(`/branches/${encodeURIComponent(branchId)}`, {
       method: 'PATCH',
@@ -727,17 +756,20 @@ export const branchManagerService = {
   }): Promise<MenuCategoryItem> => {
     let restaurantId = payload.restaurantId;
     if (!restaurantId || !isValidUuid(restaurantId)) {
-      try {
-        const branch = await branchManagerService.getBranch(getActiveBranchId());
-        if (branch?.restaurantId && isValidUuid(branch.restaurantId)) {
-          restaurantId = branch.restaurantId;
-        }
-      } catch {}
+      const branch = await branchManagerService.getBranch(getActiveBranchId());
+      if (branch?.restaurantId && isValidUuid(branch.restaurantId)) {
+        restaurantId = branch.restaurantId;
+      }
+    }
+    if (!restaurantId || !isValidUuid(restaurantId)) {
+      throw new Error(
+        'Cannot create menu category: restaurantId is missing. Open the branch and try again.',
+      );
     }
     const res = await baseApiFetch<MenuCategoryItem>('/menus/categories', {
       method: 'POST',
       body: JSON.stringify({
-        restaurantId: restaurantId || getActiveBranchId(),
+        restaurantId,
         name: payload.name,
         description: payload.description,
         displayOrder: payload.displayOrder ?? 0,

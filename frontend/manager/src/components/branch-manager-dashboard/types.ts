@@ -77,7 +77,7 @@ export interface OrderItemRow {
 export interface StaffCardData {
   id: string;
   name: string;
-  role: 'Waiters' | 'Kitchen' | 'Bartenders' | 'Cashiers' | 'Assistant Manager';
+  role: 'Waiters' | 'Kitchen' | 'Bartenders' | 'Cashiers' | 'Host';
   status: 'Active' | 'Break' | 'Late';
   currentShift: string;
   currentAssignment: string;

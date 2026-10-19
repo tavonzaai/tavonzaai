@@ -21,6 +21,7 @@ import {
   ApiQuery,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Permission } from '@tavonza/authorization';
 import { PaymentService } from '../application/payment.service';
 import {
   CreatePaymentDto,
@@ -42,6 +43,8 @@ import {
 } from './http/dto/payment.dto';
 import { ApiStandardErrors } from '../../../common/swagger';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../identity/infrastructure/adapters/jwt.strategy';
 
@@ -64,48 +67,62 @@ export class PaymentController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer/Cashier] Process payment',
     description: 'Processes a single payment for an entire order or table session, with optional promo discount voucher.',
   })
   @ApiCreatedResponse({ type: PaymentRecordResponseDto, description: 'Payment recorded and marked PAID' })
-  @ApiStandardErrors(400, 404, 409, 500)
-  async createPayment(@Body() dto: CreatePaymentDto): Promise<any> {
-    return this.paymentService.createPayment(dto);
+  @ApiStandardErrors(400, 401, 403, 404, 409, 500)
+  async createPayment(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreatePaymentDto,
+  ): Promise<any> {
+    return this.paymentService.createPayment(user, dto);
   }
 
   @Post('split')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer/Cashier] Process split payment',
     description: 'Processes itemized or equal split payment allocation across specific line items or guests.',
   })
   @ApiCreatedResponse({ type: PaymentDetailResponseDto, description: 'Split payment recorded with item allocations' })
-  @ApiStandardErrors(400, 404, 409, 500)
-  async createSplitPayment(@Body() dto: CreateSplitPaymentDto): Promise<any> {
-    return this.paymentService.createSplitPayment(dto);
+  @ApiStandardErrors(400, 401, 403, 404, 409, 500)
+  async createSplitPayment(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateSplitPaymentDto,
+  ): Promise<any> {
+    return this.paymentService.createSplitPayment(user, dto);
   }
 
   @Post('discounts/apply')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer/Cashier] Validate and calculate discount for an amount',
     description: 'Checks promo voucher validity, expiry, and calculates discount deduction for cart subtotal.',
   })
   @ApiOkResponse({ type: DiscountEvaluationResponseDto, description: 'Calculated discount result' })
-  @ApiStandardErrors(400, 404, 500)
+  @ApiStandardErrors(400, 401, 404, 500)
   async applyDiscount(@Body() dto: ApplyDiscountDto): Promise<DiscountEvaluationResponseDto> {
     return this.paymentService.applyDiscount(dto);
   }
 
   @Post('discounts/validate')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer/Cashier] Validate discount code and calculate discount amount',
     description: 'Alias for discounts/apply.',
   })
   @ApiOkResponse({ type: DiscountEvaluationResponseDto, description: 'Calculated discount result' })
-  @ApiStandardErrors(400, 404, 500)
+  @ApiStandardErrors(400, 401, 404, 500)
   async validateDiscount(@Body() dto: ApplyDiscountDto): Promise<DiscountEvaluationResponseDto> {
     return this.paymentService.applyDiscount(dto);
   }
@@ -114,26 +131,31 @@ export class PaymentController {
 
   @Post('stripe/create-intent')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer] Create Stripe PaymentIntent',
     description: 'Calculates authoritative order/session balance and generates a Stripe client secret for Stripe Elements.',
   })
   @ApiCreatedResponse({ type: StripePaymentIntentResponseDto, description: 'Stripe PaymentIntent generated' })
-  @ApiStandardErrors(400, 404, 500)
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async createStripePaymentIntent(
+    @CurrentUser() user: JwtPayload,
     @Body() dto: CreateStripePaymentIntentDto,
   ): Promise<StripePaymentIntentResponseDto> {
-    return this.paymentService.createStripePaymentIntent(dto);
+    return this.paymentService.createStripePaymentIntent(user, dto);
   }
 
   @Post('stripe/verify')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer] Authoritatively verify Stripe PaymentIntent',
     description: 'Queries Stripe API to confirm PaymentIntent status and updates payment and order records.',
   })
   @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment verified and settled' })
-  @ApiStandardErrors(400, 404, 500)
+  @ApiStandardErrors(400, 401, 404, 500)
   async verifyStripePayment(
     @Body() dto: VerifyStripePaymentDto,
   ): Promise<any> {
@@ -158,20 +180,24 @@ export class PaymentController {
 
   @Post('request-offline')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer/Waiter] Request offline payment (Cash or Card)',
     description: 'Registers an offline payment request for the cashier, transitions session to BILL_REQUESTED, and emits real-time alert.',
   })
   @ApiCreatedResponse({ type: PaymentRecordResponseDto, description: 'Offline payment request registered' })
-  @ApiStandardErrors(400, 404, 500)
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async requestOfflinePayment(
+    @CurrentUser() user: JwtPayload,
     @Body() dto: RequestOfflinePaymentDto,
   ): Promise<any> {
-    return this.paymentService.requestOfflinePayment(dto);
+    return this.paymentService.requestOfflinePayment(user, dto);
   }
 
   @Get('offline/requests')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.PAYMENTS_READ)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Cashier] Get pending offline payment requests',
@@ -179,25 +205,25 @@ export class PaymentController {
   })
   @ApiQuery({ name: 'branchId', required: false, type: String, description: 'Branch UUID' })
   @ApiOkResponse({ type: [OfflinePaymentRequestItemDto], description: 'Pending offline payment requests' })
-  @ApiStandardErrors(400, 401, 500)
+  @ApiStandardErrors(400, 401, 403, 500)
   async getOfflinePaymentRequests(
     @CurrentUser() user: JwtPayload,
     @Query('branchId') branchId?: string,
   ): Promise<OfflinePaymentRequestItemDto[]> {
-    const targetBranchId = branchId || (user?.branchId ? user.branchId : undefined);
-    return this.paymentService.getOfflinePaymentRequests(targetBranchId);
+    return this.paymentService.getOfflinePaymentRequests(user, branchId);
   }
 
   @Post('confirm-offline')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.PAYMENTS_WRITE)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Cashier] Confirm offline payment received (body paymentId)',
     description: 'Cashier authoritatively confirms physical cash receipt or in-person card terminal transaction.',
   })
   @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment marked PAID' })
-  @ApiStandardErrors(400, 401, 404, 500)
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async confirmOfflinePaymentBody(
     @CurrentUser() user: JwtPayload,
     @Body() dto: ConfirmOfflinePaymentDto,
@@ -206,12 +232,13 @@ export class PaymentController {
     if (!id) {
       throw new BadRequestException('paymentId is required in body');
     }
-    return this.paymentService.confirmOfflinePayment(id, user?.sub || '', dto);
+    return this.paymentService.confirmOfflinePayment(user, id, user.sub, dto);
   }
 
   @Post('offline/:id/confirm')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.PAYMENTS_WRITE)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Cashier] Confirm offline payment received (param ID)',
@@ -219,25 +246,26 @@ export class PaymentController {
   })
   @ApiParam({ name: 'id', type: String, description: 'Payment Request UUID' })
   @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment marked PAID' })
-  @ApiStandardErrors(400, 401, 404, 500)
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async confirmOfflinePayment(
     @Param('id') paymentId: string,
     @CurrentUser() user: JwtPayload,
     @Body() dto: ConfirmOfflinePaymentDto,
   ): Promise<any> {
-    return this.paymentService.confirmOfflinePayment(paymentId, user?.sub || '', dto);
+    return this.paymentService.confirmOfflinePayment(user, paymentId, user.sub, dto);
   }
 
   @Post('reject-offline')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.PAYMENTS_WRITE)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Cashier] Reject offline payment request (body paymentId)',
     description: 'Cashier rejects or cancels an offline payment request, returning table session to ACTIVE status.',
   })
   @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment marked FAILED' })
-  @ApiStandardErrors(400, 401, 404, 500)
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async rejectOfflinePaymentBody(
     @CurrentUser() user: JwtPayload,
     @Body() dto: RejectOfflinePaymentDto,
@@ -246,12 +274,13 @@ export class PaymentController {
     if (!id) {
       throw new BadRequestException('paymentId is required in body');
     }
-    return this.paymentService.rejectOfflinePayment(id, user?.sub || '', dto);
+    return this.paymentService.rejectOfflinePayment(user, id, user.sub, dto);
   }
 
   @Post('offline/:id/reject')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.PAYMENTS_WRITE)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Cashier] Reject offline payment request (param ID)',
@@ -259,19 +288,20 @@ export class PaymentController {
   })
   @ApiParam({ name: 'id', type: String, description: 'Payment Request UUID' })
   @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment marked FAILED' })
-  @ApiStandardErrors(400, 401, 404, 500)
+  @ApiStandardErrors(400, 401, 403, 404, 500)
   async rejectOfflinePayment(
     @Param('id') paymentId: string,
     @CurrentUser() user: JwtPayload,
     @Body() dto: RejectOfflinePaymentDto,
   ): Promise<any> {
-    return this.paymentService.rejectOfflinePayment(paymentId, user?.sub || '', dto);
+    return this.paymentService.rejectOfflinePayment(user, paymentId, user.sub, dto);
   }
 
   // ── Ledger, order, session, then parameterized :id ────────────────────
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.PAYMENTS_READ)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Admin] List customer order payments for an organization or branch',
@@ -305,32 +335,43 @@ export class PaymentController {
   }
 
   @Get('order/:orderId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer/Cashier] Get payments associated with an order',
     description: 'Lists all payments and transactions registered under a specific order.',
   })
   @ApiParam({ name: 'orderId', type: String, description: 'Order UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
   @ApiOkResponse({ type: [PaymentRecordResponseDto], description: 'List of order payments' })
-  @ApiStandardErrors(400, 404, 500)
-  async getPaymentsByOrder(@Param('orderId') orderId: string): Promise<any> {
-    return this.paymentService.getPaymentsByOrder(orderId);
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async getPaymentsByOrder(
+    @CurrentUser() user: JwtPayload,
+    @Param('orderId') orderId: string,
+  ): Promise<any> {
+    return this.paymentService.getPaymentsByOrder(user, orderId);
   }
 
   @Get('session/:sessionId/bill')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer/Cashier] Calculate bill and outstanding balance for a table session',
     description: 'Consolidates all session orders, taxes, service charges, payments made, and current balance due.',
   })
   @ApiParam({ name: 'sessionId', type: String, description: 'Table Session UUID', example: '8877332f-4512-40bc-8012-d881e6e58003' })
   @ApiOkResponse({ type: TableBillCalculationResponseDto, description: 'Consolidated table bill calculation' })
-  @ApiStandardErrors(400, 404, 500)
-  async getTableSessionBill(@Param('sessionId') sessionId: string): Promise<TableBillCalculationResponseDto> {
-    return this.paymentService.calculateTableBill(sessionId);
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async getTableSessionBill(
+    @CurrentUser() user: JwtPayload,
+    @Param('sessionId') sessionId: string,
+  ): Promise<TableBillCalculationResponseDto> {
+    return this.paymentService.calculateTableBill(user, sessionId);
   }
 
   @Post(':id/refund')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.PAYMENTS_REFUND)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Manager/Cashier] Refund a payment',
@@ -340,21 +381,27 @@ export class PaymentController {
   @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment refunded' })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async refundPayment(
+    @CurrentUser() user: JwtPayload,
     @Param('id') paymentId: string,
     @Body() dto: RefundPaymentDto,
   ): Promise<any> {
-    return this.paymentService.refundPayment(paymentId, dto);
+    return this.paymentService.refundPayment(user, paymentId, dto);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer/Cashier] Get payment receipt by payment ID',
     description: 'Returns receipt details with line-item allocation breakdown and transaction reference.',
   })
   @ApiParam({ name: 'id', type: String, description: 'Payment UUID', example: '55667788-99aa-bbcc-ddee-112233445566' })
   @ApiOkResponse({ type: PaymentDetailResponseDto, description: 'Payment receipt with transaction details' })
-  @ApiStandardErrors(400, 404, 500)
-  async getPayment(@Param('id') paymentId: string): Promise<any> {
-    return this.paymentService.getPayment(paymentId);
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async getPayment(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') paymentId: string,
+  ): Promise<any> {
+    return this.paymentService.getPayment(user, paymentId);
   }
 }

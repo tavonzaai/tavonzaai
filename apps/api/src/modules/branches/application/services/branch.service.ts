@@ -9,6 +9,7 @@ import { DrizzleOrganizationRepository } from '../../../organizations/infrastruc
 import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 import { assertCanAccessOrganization, isSuperAdmin } from '../../../../common/auth/actor.util';
 import { assertStaffAssignmentInput } from '../../../authorization/application/staff-access.policy';
+import { BranchAccessService } from '../../../authorization/application/services/branch-access.service';
 import type {
   CreateBranchDto,
   UpdateBranchDto,
@@ -31,6 +32,7 @@ export class BranchService {
     private readonly branchRepo: DrizzleBranchRepository,
     private readonly restaurantRepo: DrizzleRestaurantRepository,
     private readonly orgRepo: DrizzleOrganizationRepository,
+    private readonly branchAccess: BranchAccessService,
   ) {}
 
   // ── Branches ──────────────────────────────────────────────────────────
@@ -49,8 +51,8 @@ export class BranchService {
   }
 
   async findById(user: JwtPayload, id: string): Promise<BranchResponseDto> {
+    await this.branchAccess.assertAccess(user, id);
     const branch = await this.requireBranch(id);
-    await this.assertRestaurantAccess(user, branch.restaurantId);
     return this.toResponseDto(branch);
   }
 
@@ -126,8 +128,9 @@ export class BranchService {
   }
 
   async assertBranchAccess(user: JwtPayload, branchId: string): Promise<void> {
-    const branch = await this.requireBranch(branchId);
-    await this.assertRestaurantAccess(user, branch.restaurantId);
+    // Staff (branch managers) and org owners share this gate — assignment/scope based,
+    // not organization-owner-only. Structural create/update still use assertRestaurantAccess.
+    await this.branchAccess.assertAccess(user, branchId);
   }
 
   private async assertRestaurantAccess(user: JwtPayload, restaurantId: string): Promise<void> {
@@ -238,15 +241,20 @@ export class BranchService {
   }
 
   async createStaffForBranch(user: JwtPayload, branchId: string, dto: CreateBranchStaffDto) {
-    const branch = await this.branchRepo.findBranchById(branchId);
-    if (!branch) {
-      throw new NotFoundException(`Branch "${branchId}" not found`);
+    await this.branchAccess.assertAccess(user, branchId);
+    const privileged = this.branchAccess.isPrivileged(user);
+    if (!privileged) {
+      const assigned = await this.branchAccess.isAssignedToBranch(user, branchId);
+      if (!assigned) {
+        throw new ForbiddenException('You can only create staff for a branch you manage');
+      }
     }
 
-    const assignment = assertStaffAssignmentInput(user, {
-      role: dto.role,
-      permissions: dto.permissions,
-    });
+    const assignment = assertStaffAssignmentInput(
+      user,
+      { role: dto.role, permissions: dto.permissions },
+      { privilegedActor: privileged },
+    );
 
     return await this.branchRepo.createStaffAndAssignment({
       branchId,
@@ -264,10 +272,13 @@ export class BranchService {
     branchId: string,
     dto: { staffId: string; role: any; permissions?: string[] },
   ) {
-    const assignment = assertStaffAssignmentInput(user, {
-      role: dto.role,
-      permissions: dto.permissions,
-    });
+    await this.branchAccess.assertAccess(user, branchId);
+    const privileged = this.branchAccess.isPrivileged(user);
+    const assignment = assertStaffAssignmentInput(
+      user,
+      { role: dto.role, permissions: dto.permissions },
+      { privilegedActor: privileged },
+    );
     return this.branchRepo.assignStaff({
       branchId,
       staffId: dto.staffId,
@@ -277,10 +288,13 @@ export class BranchService {
   }
 
   async updateStaff(user: JwtPayload, branchId: string, staffId: string, dto: any) {
-    const assignment = assertStaffAssignmentInput(user, {
-      role: dto.role,
-      permissions: dto.permissions,
-    });
+    await this.branchAccess.assertAccess(user, branchId);
+    const privileged = this.branchAccess.isPrivileged(user);
+    const assignment = assertStaffAssignmentInput(
+      user,
+      { role: dto.role, permissions: dto.permissions },
+      { privilegedActor: privileged },
+    );
     const updated = await this.branchRepo.updateStaffAssignment(branchId, staffId, {
       ...dto,
       ...assignment,

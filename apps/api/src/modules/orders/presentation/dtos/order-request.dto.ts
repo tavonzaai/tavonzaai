@@ -8,29 +8,22 @@ import {
   IsNotEmpty,
   IsInt,
   Min,
+  Max,
+  MaxLength,
   IsOptional,
   IsArray,
+  ArrayMaxSize,
   IsUUID,
-  ValidateNested,
-  IsNumber,
   IsIn,
 } from 'class-validator';
-import { Type } from 'class-transformer';
-
-export class AddOnItemDto {
-  @ApiProperty({ example: 'Extra Aged Cheddar', description: 'Name of the add-on modifier' })
-  @IsString()
-  @IsNotEmpty()
-  name!: string;
-
-  @ApiProperty({ example: 1.50, description: 'Price of the add-on modifier' })
-  @IsNumber()
-  @Min(0)
-  price!: number;
-}
+import {
+  MAX_INSTRUCTIONS_LENGTH,
+  MAX_LINE_QUANTITY,
+} from '../../domain/cart-rules';
 
 // ─── Add to Cart ──────────────────────────────────────────────────────
-// Figma: "Add To Cart" button on item detail screen
+// Figma: "Add To Cart" button on item detail screen. Prices are never taken
+// from the client; they are resolved from the menu and modifier catalog.
 
 export class AddToCartDto {
   @ApiProperty({
@@ -40,14 +33,22 @@ export class AddToCartDto {
   @IsUUID()
   menuItemId!: string;
 
-  @ApiProperty({
-    example: 1,
-    minimum: 1,
-    description: 'Quantity of items to add (default: 1)',
-  })
+  @ApiProperty({ example: 1, minimum: 1, maximum: MAX_LINE_QUANTITY, description: 'Quantity to add' })
   @IsInt()
   @Min(1)
+  @Max(MAX_LINE_QUANTITY)
   quantity!: number;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Selected add-on (modifier) ids offered for this menu item',
+    example: ['6b1f8e3a-3c55-4a8e-8f7f-3b0e1a9b2c11'],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @IsUUID('all', { each: true })
+  modifierIds?: string[];
 
   @ApiPropertyOptional({
     example: 'Extra crispy fries and sauce on the side',
@@ -55,56 +56,53 @@ export class AddToCartDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(MAX_INSTRUCTIONS_LENGTH)
   specialInstructions?: string;
 
   @ApiPropertyOptional({
-    type: [AddOnItemDto],
-    description: 'Selected add-ons and toppings',
-    example: [
-      { name: 'Extra Cheddar', price: 1.50 },
-      { name: 'Truffle Sauce', price: 2.00 },
-    ],
+    description:
+      'Branch the diner is ordering from (resolved from the table QR). Ignored for seated guest sessions, whose branch comes from the token.',
+    example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27',
   })
   @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => AddOnItemDto)
-  addOns?: AddOnItemDto[];
+  @IsUUID()
+  branchId?: string;
 }
 
 // ─── Update Cart Item ─────────────────────────────────────────────────
 // Figma: Quantity change on Order Summary screen
 
 export class UpdateCartItemDto {
-  @ApiPropertyOptional({
-    example: 2,
-    minimum: 1,
-    description: 'New quantity for this line item',
-  })
+  @ApiPropertyOptional({ example: 2, minimum: 1, maximum: MAX_LINE_QUANTITY, description: 'New quantity' })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(MAX_LINE_QUANTITY)
   quantity?: number;
 
   @ApiPropertyOptional({
     example: 'No onions please',
-    description: 'Updated special preparation instructions',
+    description: 'Updated special preparation instructions (empty string clears them)',
   })
   @IsOptional()
   @IsString()
+  @MaxLength(MAX_INSTRUCTIONS_LENGTH)
   specialInstructions?: string;
 }
 
-// ─── Submit Order ─────────────────────────────────────────────────────
+// ─── Place Order (checkout) ───────────────────────────────────────────
 // Figma: "Place Order" button
 
-export class SubmitOrderDto {
-  @ApiProperty({
-    description: 'UUID of the draft order to submit',
-    example: '8877332f-4512-40bc-8012-d881e6e58003',
+export class PlaceOrderDto {
+  @ApiPropertyOptional({
+    description:
+      'Opaque table QR token. Required for signed-in customers; seated guests use the table from their session.',
+    example: '9f2c4e…',
   })
-  @IsUUID()
-  orderId!: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  qrToken?: string;
 }
 
 // ─── Update Order Status (Waiter) ─────────────────────────────────────

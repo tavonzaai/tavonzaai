@@ -22,7 +22,10 @@ export interface KitchenUser {
 export function isKitchenAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
   const kitchenToken = getCookie(KITCHEN_TOKEN_KEY);
-  return Boolean(kitchenToken && kitchenToken.trim().length > 0);
+  if (!kitchenToken || !kitchenToken.trim()) return false;
+  // Reject legacy synthetic tokens — only real API JWTs are accepted.
+  if (kitchenToken.startsWith('ktc_tok_')) return false;
+  return true;
 }
 
 /**
@@ -45,14 +48,14 @@ export function getKitchenProfile(): KitchenUser | null {
 }
 
 /**
- * Log in the chef/kitchen staff, establishing strictly Cookies session (NO LOCALSTORAGE)
+ * Cache kitchen profile after a successful /auth/login.
+ * Requires a real access JWT already stored in kitchen_token.
  */
 export function loginKitchenSession(customUser?: Partial<KitchenUser>): KitchenUser {
   const existingToken = getCookie(KITCHEN_TOKEN_KEY);
-  // Keep existing JWT access token if set by rawAuthApi.login, otherwise generate demo token
-  const token = (existingToken && !existingToken.startsWith('ktc_tok_'))
-    ? existingToken
-    : `ktc_tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  if (!existingToken || existingToken.startsWith('ktc_tok_')) {
+    throw new Error('Kitchen login requires a valid API access token. Sign in through /auth/login.');
+  }
 
   const user: KitchenUser = {
     id: customUser?.id || '',
@@ -65,10 +68,7 @@ export function loginKitchenSession(customUser?: Partial<KitchenUser>): KitchenU
     ...customUser,
   };
 
-  // Store strictly in Cookies (NO LOCALSTORAGE)
-  setCookie(KITCHEN_TOKEN_KEY, token);
   setCookie(KITCHEN_USER_KEY, JSON.stringify(user));
-
   return user;
 }
 

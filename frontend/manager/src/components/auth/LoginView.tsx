@@ -122,6 +122,7 @@ export default function LoginView({ onLoginSuccess, onForgotPassword }: LoginVie
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="manager@tavonza.com"
+            data-testid="login-email"
             className="w-full h-11 px-3.5 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-yellow-400/60 transition"
           />
         </div>
@@ -151,6 +152,7 @@ export default function LoginView({ onLoginSuccess, onForgotPassword }: LoginVie
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••••••"
+              data-testid="login-password"
               className="w-full h-11 pl-3.5 pr-10 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-yellow-400/60 transition"
             />
             <button
@@ -167,6 +169,7 @@ export default function LoginView({ onLoginSuccess, onForgotPassword }: LoginVie
         <button
           type="submit"
           disabled={isSubmitting}
+          data-testid="login-submit"
           className="w-full h-11 mt-2 bg-yellow-400 hover:bg-yellow-300 text-neutral-950 font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-lg shadow-yellow-400/10 active:scale-98 disabled:opacity-50"
         >
           {isSubmitting ? (

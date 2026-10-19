@@ -22,8 +22,8 @@ export default function LoginView({
   onNavigateToVerify,
 }: LoginViewProps) {
   const dispatch = useAppDispatch();
-  const [email, setEmail] = useState('kitchen@tavonza.ai');
-  const [password, setPassword] = useState('Kitchen@1234');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,13 +47,7 @@ export default function LoginView({
         name: logged.name,
         email: logged.email,
         role: logged.role,
-        assignments: logged.assignments || [
-          {
-            id: 'asg-ktc-1',
-            role: 'KITCHEN',
-            branch: { id: 'br-1', name: logged.station },
-          },
-        ],
+        assignments: logged.assignments || [],
       })
     );
     toast.success(`Welcome back, ${logged.name}!`);

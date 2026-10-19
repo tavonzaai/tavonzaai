@@ -18,6 +18,7 @@ import {
   Inject,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { eq, and, gt, desc, inArray } from 'drizzle-orm';
 import { JwtService } from '@nestjs/jwt';
@@ -28,14 +29,23 @@ import {
   tableSessions,
   guestSessions,
   tables,
+  branches,
   orders,
   orderItems,
   tableAuthOtps,
+  customers,
   OutboxService,
 } from '@tavonza/database';
 import { RealtimeGateway } from '../../../realtime/realtime.gateway';
 import { NotificationService } from '../../../notifications/application/services/notification.service';
 import { DrizzleQueryBuilder } from '../../../../common/database';
+import {
+  ACCESS_TOKEN_TTL_SECONDS,
+  TOKEN_TYPE,
+} from '../../../identity/domain/token-policy';
+import { BranchAccessService } from '../../../authorization/application/services/branch-access.service';
+import { isSessionParticipant, isStaffActor, type SessionActor } from '../../domain/session-access';
+import type { JwtPayload } from '../../../identity/infrastructure/adapters/jwt.strategy';
 
 function generateJoinCode(): string {
   // 6-char alphanumeric code — displayed on "Share Code" screen
@@ -48,6 +58,7 @@ export class TableSessionService {
     @Inject(DRIZZLE) private readonly db: DrizzleDatabase,
     private readonly outboxService: OutboxService,
     private readonly jwtService: JwtService,
+    private readonly branchAccess: BranchAccessService,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly notificationService: NotificationService,
   ) {}
@@ -97,7 +108,11 @@ export class TableSessionService {
     code: string;
     displayName?: string;
     tableNumber?: string;
+    /** Authenticated customer user id, when the diner already has an account. */
+    userId?: string;
   }) {
+    await this.assertTableOrderable(dto.branchId, dto.tableId);
+
     const [otpRecord] = await this.db
       .select()
       .from(tableAuthOtps)
@@ -215,10 +230,13 @@ export class TableSessionService {
       });
     }
 
+    const customerId = await this.resolveCustomerId(dto.userId, dto.contact);
+
     const [guest] = await this.db
       .insert(guestSessions)
       .values({
         tableSessionId: session.id,
+        customerId,
         displayName: dto.displayName ?? (isHost ? 'Host' : 'Guest'),
         contact: dto.contact,
         otpVerifiedAt: new Date(),
@@ -245,13 +263,12 @@ export class TableSessionService {
       },
     });
 
-    const accessToken = this.jwtService.sign({
-      sub: guest.id,
-      role: 'CUSTOMER',
+    const accessToken = this.signGuestToken({
       guestSessionId: guest.id,
       tableSessionId: session.id,
       tableId: dto.tableId,
       branchId: dto.branchId,
+      customerId,
     });
 
     return {
@@ -273,6 +290,8 @@ export class TableSessionService {
     userId?: string;
     displayName?: string;
   }) {
+    await this.assertTableOrderable(data.branchId, data.tableId);
+
     // Check for existing active session on this table
     const [existing] = await this.db
       .select()
@@ -394,26 +413,17 @@ export class TableSessionService {
    * GET /sessions/:sessionId
    * Returns current session with all guests
    */
-  async getSession(sessionId: string) {
-    const [session] = await this.db
-      .select()
-      .from(tableSessions)
-      .where(eq(tableSessions.id, sessionId))
-      .limit(1);
-
-    if (!session) throw new NotFoundException('Session not found');
-
-    const guestsQb = new DrizzleQueryBuilder<typeof guestSessions>(this.db, guestSessions)
-      .filterExact({ tableSessionId: sessionId });
-    const guests = await guestsQb.executePlain();
-
+  async getSession(sessionId: string, actor: JwtPayload) {
+    const { session, guests } = await this.requireSessionWithGuests(sessionId);
+    await this.assertCanAccessSession(actor, session, guests);
     return { session, guests };
   }
 
   /**
    * Get all table sessions for a branch with optional status filter.
    */
-  async findSessionsByBranch(branchId: string, status?: string) {
+  async findSessionsByBranch(user: JwtPayload, branchId: string, status?: string) {
+    await this.branchAccess.assertAccess(user, branchId);
     const qb = new DrizzleQueryBuilder<typeof tableSessions>(this.db, tableSessions)
       .filterExact({ branchId, status })
       .sort('startedAt', 'desc');
@@ -425,14 +435,9 @@ export class TableSessionService {
    * POST /sessions/:sessionId/share-code
    * Figma: "Share Code" screen — generates/refreshes join code
    */
-  async generateShareCode(sessionId: string) {
-    const [session] = await this.db
-      .select()
-      .from(tableSessions)
-      .where(eq(tableSessions.id, sessionId))
-      .limit(1);
-
-    if (!session) throw new NotFoundException('Session not found');
+  async generateShareCode(sessionId: string, actor: JwtPayload) {
+    const { session, guests } = await this.requireSessionWithGuests(sessionId);
+    await this.assertCanAccessSession(actor, session, guests);
 
     const code = generateJoinCode();
 
@@ -464,39 +469,64 @@ export class TableSessionService {
       throw new BadRequestException('Invalid or expired join code');
     }
 
+    await this.assertTableOrderable(session.branchId, session.tableId);
+    const customerId = await this.resolveCustomerId(data.userId);
+
     const [guest] = await this.db
       .insert(guestSessions)
       .values({
         tableSessionId: session.id,
+        customerId,
         displayName: data.displayName ?? 'Guest',
         isHostGuest: false,
         status: 'ACTIVE',
       })
       .returning();
 
-    if (guest) {
-      await this.outboxService.publishEvent({
-        aggregateType: 'GUEST_SESSION',
-        aggregateId: guest.id,
-        eventType: 'GuestJoinedSession',
-        branchId: session.branchId,
-        payload: {
-          tableSessionId: session.id,
-          guestSessionId: guest.id,
-          displayName: guest.displayName,
-          isHost: false,
-          joinedAt: new Date().toISOString(),
-        },
-      });
+    if (!guest) {
+      throw new InternalOperationException('Failed to create guest session');
     }
 
-    return { session, guestSession: guest };
+    await this.outboxService.publishEvent({
+      aggregateType: 'GUEST_SESSION',
+      aggregateId: guest.id,
+      eventType: 'GuestJoinedSession',
+      branchId: session.branchId,
+      payload: {
+        tableSessionId: session.id,
+        guestSessionId: guest.id,
+        displayName: guest.displayName,
+        isHost: false,
+        joinedAt: new Date().toISOString(),
+      },
+    });
+
+    const accessToken = this.signGuestToken({
+      guestSessionId: guest.id,
+      tableSessionId: session.id,
+      tableId: session.tableId,
+      branchId: session.branchId,
+      customerId,
+    });
+
+    return { session, guestSession: guest, accessToken };
   }
 
   async setOrderMode(
-    _customerSessionId: string,
+    actor: JwtPayload,
+    customerSessionId: string,
     orderMode: 'individual' | 'together',
   ) {
+    const [guest] = await this.db
+      .select()
+      .from(guestSessions)
+      .where(and(eq(guestSessions.id, customerSessionId), eq(guestSessions.status, 'ACTIVE')))
+      .limit(1);
+    if (!guest) {
+      throw new NotFoundException('Guest session not found');
+    }
+    const { session, guests } = await this.requireSessionWithGuests(guest.tableSessionId);
+    await this.assertCanAccessSession(actor, session, guests);
     return { success: true, orderMode };
   }
 
@@ -505,14 +535,9 @@ export class TableSessionService {
    * Closes the table session after verifying payment and preparation invariants.
    * Resets table service status to AVAILABLE.
    */
-  async closeSession(sessionId: string) {
-    const [session] = await this.db
-      .select()
-      .from(tableSessions)
-      .where(eq(tableSessions.id, sessionId))
-      .limit(1);
-
-    if (!session) throw new NotFoundException('Session not found');
+  async closeSession(sessionId: string, actor: JwtPayload) {
+    const { session, guests } = await this.requireSessionWithGuests(sessionId);
+    await this.assertCanAccessSession(actor, session, guests);
 
     // Invariant 1: Ensure all orders in this table session are paid
     const sessionOrders = await this.db
@@ -631,14 +656,9 @@ export class TableSessionService {
    * POST /sessions/:id/request-bill
    * Guest requests bill settlement
    */
-  async requestBill(sessionId: string) {
-    const [session] = await this.db
-      .select()
-      .from(tableSessions)
-      .where(eq(tableSessions.id, sessionId))
-      .limit(1);
-
-    if (!session) throw new NotFoundException('Session not found');
+  async requestBill(sessionId: string, actor: JwtPayload) {
+    const { session, guests } = await this.requireSessionWithGuests(sessionId);
+    await this.assertCanAccessSession(actor, session, guests);
 
     await this.db
       .update(tableSessions)
@@ -700,14 +720,9 @@ export class TableSessionService {
    * POST /sessions/:id/call-waiter
    * Guest calls staff to table
    */
-  async callWaiter(sessionId: string, reason?: string) {
-    const [session] = await this.db
-      .select()
-      .from(tableSessions)
-      .where(eq(tableSessions.id, sessionId))
-      .limit(1);
-
-    if (!session) throw new NotFoundException('Session not found');
+  async callWaiter(sessionId: string, actor: JwtPayload, reason?: string) {
+    const { session, guests } = await this.requireSessionWithGuests(sessionId);
+    await this.assertCanAccessSession(actor, session, guests);
 
     await this.notificationService.create({
       branchId: session.branchId,
@@ -720,5 +735,112 @@ export class TableSessionService {
     });
 
     return { success: true };
+  }
+
+  private async requireSessionWithGuests(sessionId: string) {
+    const [session] = await this.db
+      .select()
+      .from(tableSessions)
+      .where(eq(tableSessions.id, sessionId))
+      .limit(1);
+
+    if (!session) throw new NotFoundException('Session not found');
+
+    const guestsQb = new DrizzleQueryBuilder<typeof guestSessions>(this.db, guestSessions)
+      .filterExact({ tableSessionId: sessionId });
+    const guests = await guestsQb.executePlain();
+
+    return { session, guests };
+  }
+
+  private async assertCanAccessSession(
+    actor: JwtPayload,
+    session: { id: string; branchId: string },
+    guests: Array<{ id: string; tableSessionId: string; customerId?: string | null }>,
+  ): Promise<void> {
+    const sessionActor: SessionActor = {
+      guestSessionId: actor.guestSessionId,
+      tableSessionId: actor.tableSessionId,
+      customerId: actor.customerId,
+      sub: actor.sub,
+      role: actor.role,
+      typ: actor.typ,
+      branchId: actor.branchId,
+    };
+
+    if (isSessionParticipant(session.id, sessionActor, guests)) {
+      return;
+    }
+
+    if (isStaffActor(sessionActor)) {
+      await this.branchAccess.assertAccess(actor, session.branchId);
+      return;
+    }
+
+    throw new ForbiddenException('You do not have access to this table session');
+  }
+
+  private signGuestToken(claims: {
+    guestSessionId: string;
+    tableSessionId: string;
+    tableId: string;
+    branchId: string;
+    customerId?: string | null;
+  }): string {
+    return this.jwtService.sign(
+      {
+        sub: claims.guestSessionId,
+        typ: TOKEN_TYPE.GUEST,
+        role: 'CUSTOMER',
+        guestSessionId: claims.guestSessionId,
+        tableSessionId: claims.tableSessionId,
+        tableId: claims.tableId,
+        branchId: claims.branchId,
+        customerId: claims.customerId ?? null,
+      },
+      { expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+    );
+  }
+
+  /** Table must be active, not soft-deleted, not out of service, and in an active branch. */
+  private async assertTableOrderable(branchId: string, tableId: string): Promise<void> {
+    const [row] = await this.db
+      .select({
+        tableId: tables.id,
+        branchId: tables.branchId,
+        isActive: tables.isActive,
+        deletedAt: tables.deletedAt,
+        operationalFlag: tables.operationalFlag,
+        branchActive: branches.isActive,
+      })
+      .from(tables)
+      .innerJoin(branches, eq(branches.id, tables.branchId))
+      .where(and(eq(tables.id, tableId), eq(tables.branchId, branchId)))
+      .limit(1);
+
+    if (
+      !row ||
+      row.isActive === false ||
+      row.deletedAt ||
+      row.operationalFlag === 'OUT_OF_SERVICE' ||
+      row.branchActive === false
+    ) {
+      throw new ForbiddenException('This table is not available for seating. Please ask staff for help.');
+    }
+  }
+
+  private async resolveCustomerId(userId?: string, contact?: string): Promise<string | null> {
+    if (userId) {
+      const [byUser] = await this.db
+        .select({ id: customers.id })
+        .from(customers)
+        .where(eq(customers.userId, userId))
+        .limit(1);
+      if (byUser) return byUser.id;
+    }
+    // Contact matching is intentionally not used for ownership linkage without
+    // a verified account token — prevents claiming another diner's profile.
+    void contact;
+    return null;
   }
 }

@@ -5,6 +5,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Order } from '../../domain/entities/order.entity';
 import { OrderItemProps } from '../../domain/entities/order.entity';
+import type { CartView } from '../../application/services/cart.service';
 
 // ─── Order Add-on Response ────────────────────────────────────────────
 
@@ -68,82 +69,94 @@ export class OrderItemResponseDto {
 // ─── Cart Response ────────────────────────────────────────────────────
 // Figma: "Order Summary" screen showing items, subtotal, charges, total
 
-export class CartResponseDto {
-  @ApiProperty({ example: '8877332f-4512-40bc-8012-d881e6e58003', description: 'Order identifier' })
+export class CartModifierResponseDto {
+  @ApiProperty({ example: '6b1f8e3a-3c55-4a8e-8f7f-3b0e1a9b2c11' })
   id!: string;
 
-  @ApiProperty({ example: '8877332f-4512-40bc-8012-d881e6e58003', description: 'Order UUID alias' })
-  orderId!: string;
+  @ApiProperty({ example: 'Extra Cheddar' })
+  name!: string;
 
-  @ApiProperty({ example: 'ORD-84920', description: 'Human-readable order display number' })
-  orderNumber!: string;
+  @ApiProperty({ example: 1.5, description: 'Catalog price of the add-on' })
+  price!: number;
+}
 
-  @ApiProperty({ example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', description: 'Branch UUID' })
-  branchId!: string;
+export class CartLineResponseDto {
+  @ApiProperty({ example: '9988443e-1122-43bb-a123-f992a7a69004', description: 'Cart line UUID' })
+  id!: string;
 
-  @ApiProperty({ example: '5298804e-5847-4e5a-bdba-73a8f06d9ed2', description: 'Table UUID' })
-  tableId!: string;
+  @ApiProperty({ example: '4455110d-8720-41ab-bc92-d667c4c36001' })
+  menuItemId!: string;
 
-  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label or identifier' })
-  tableLabel?: string | null;
+  @ApiProperty({ example: 'Tavonza Signature Burger' })
+  name!: string;
 
-  @ApiPropertyOptional({ example: 'Table 08', description: 'Table label alias / number' })
-  tableNumber?: string | null;
+  @ApiPropertyOptional({ example: 'https://cdn.tavonza.com/menu/burger.jpg' })
+  imageUrl!: string | null;
 
-  @ApiProperty({ example: 'DRAFT', description: 'Current order state', enum: ['DRAFT', 'SUBMITTED', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'REJECTED', 'CANCELLED'] })
-  status!: string;
+  @ApiProperty({ example: 14.5, description: 'Menu price before add-ons' })
+  basePrice!: number;
 
-  @ApiProperty({ type: [OrderItemResponseDto], description: 'Items in cart' })
-  items!: OrderItemResponseDto[];
+  @ApiProperty({ example: 16, description: 'Menu price including add-ons' })
+  unitPrice!: number;
 
-  @ApiProperty({ example: 32.00, description: 'Subtotal before taxes and service charges' })
-  subtotal!: number;
+  @ApiProperty({ example: 2 })
+  quantity!: number;
 
-  @ApiProperty({ example: 0.10, description: 'Service charge percentage rate (e.g. 0.10 = 10%)' })
-  serviceChargeRate!: number;
+  @ApiProperty({ example: 32 })
+  lineTotal!: number;
 
-  @ApiProperty({ example: 3.20, description: 'Calculated service charge amount' })
-  serviceCharge!: number;
+  @ApiPropertyOptional({ example: 'No pickles' })
+  specialInstructions!: string | null;
 
-  @ApiProperty({ example: 0.05, description: 'Tax percentage rate (e.g. 0.05 = 5%)' })
-  taxRate!: number;
+  @ApiProperty({ type: [String] })
+  modifierIds!: string[];
 
-  @ApiProperty({ example: 1.60, description: 'Calculated tax amount' })
-  tax!: number;
+  @ApiProperty({ type: [CartModifierResponseDto] })
+  modifiers!: CartModifierResponseDto[];
 
-  @ApiProperty({ example: 1.60, description: 'Alias for tax amount' })
-  taxAmount!: number;
+  @ApiProperty({ example: true, description: 'False when the item can no longer be ordered as configured' })
+  available!: boolean;
 
-  @ApiProperty({ example: 36.80, description: 'Total payable amount including taxes and fees' })
-  total!: number;
+  @ApiPropertyOptional({ example: null, description: 'Why the line cannot be ordered' })
+  issue!: string | null;
+}
 
-  @ApiProperty({ example: 36.80, description: 'Alias for total amount' })
-  totalAmount!: number;
+export class CartResponseDto {
+  @ApiProperty({ example: '8877332f-4512-40bc-8012-d881e6e58003', description: 'Cart UUID' })
+  id!: string;
+
+  @ApiPropertyOptional({ example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27', description: 'Branch the cart is pinned to' })
+  branchId!: string | null;
+
+  @ApiProperty({ type: [CartLineResponseDto] })
+  items!: CartLineResponseDto[];
 
   @ApiProperty({ example: 2, description: 'Total quantity of items in the cart' })
   itemCount!: number;
 
-  static fromEntity(entity: Order): CartResponseDto {
-    const dto = new CartResponseDto();
-    dto.id = entity.id;
-    dto.orderId = entity.id;
-    dto.orderNumber = entity.orderNumber;
-    dto.branchId = entity.branchId;
-    dto.tableId = entity.tableId ?? '';
-    dto.tableLabel = entity.tableLabel;
-    dto.tableNumber = entity.tableNumber;
-    dto.status = entity.status;
-    dto.items = entity.items.map(OrderItemResponseDto.fromProps);
-    dto.subtotal = entity.subtotal;
-    dto.serviceChargeRate = entity.serviceChargeRate;
-    dto.serviceCharge = entity.serviceCharge;
-    dto.taxRate = entity.taxRate;
-    dto.tax = entity.tax;
-    dto.taxAmount = entity.tax;
-    dto.total = entity.total;
-    dto.totalAmount = entity.total;
-    dto.itemCount = entity.items.reduce((sum, i) => sum + i.quantity, 0);
-    return dto;
+  @ApiProperty({ example: 32.0 })
+  subtotal!: number;
+
+  @ApiProperty({ example: 0.05, description: 'Service charge rate (0.05 = 5%)' })
+  serviceChargeRate!: number;
+
+  @ApiProperty({ example: 1.6 })
+  serviceCharge!: number;
+
+  @ApiProperty({ example: 0.08, description: 'Tax rate (0.08 = 8%)' })
+  taxRate!: number;
+
+  @ApiProperty({ example: 2.56 })
+  tax!: number;
+
+  @ApiProperty({ example: 36.16 })
+  total!: number;
+
+  @ApiProperty({ example: true, description: 'True when every line can be ordered' })
+  canCheckout!: boolean;
+
+  static fromView(view: CartView): CartResponseDto {
+    return Object.assign(new CartResponseDto(), view);
   }
 }
 

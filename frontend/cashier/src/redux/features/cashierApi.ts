@@ -97,6 +97,34 @@ export function getActiveBranchId(): string {
 
 
 export const cashierService = {
+  /** KPI snapshot — never derive dashboard cards from getOrders. */
+  getCashierDashboardAnalytics: async (branchId: string): Promise<{
+    todayRevenue: number;
+    todayPaidOrders: number;
+    unpaidOrders: number;
+    unpaidAmount: number;
+    refundsToday: number;
+    refundCountToday: number;
+    pendingOfflinePayments: number;
+  }> => {
+    if (!branchId) {
+      return {
+        todayRevenue: 0,
+        todayPaidOrders: 0,
+        unpaidOrders: 0,
+        unpaidAmount: 0,
+        refundsToday: 0,
+        refundCountToday: 0,
+        pendingOfflinePayments: 0,
+      };
+    }
+    const res = await baseApiFetch<any>(
+      `/analytics/cashier-dashboard?branchId=${encodeURIComponent(branchId)}`,
+      { method: 'GET' },
+    );
+    return (res as any)?.data || res;
+  },
+
   getOrders: async (branchId: string): Promise<any[]> => {
     if (!branchId) return [];
     const res = await baseApiFetch<any[]>(`/orders/branch/${encodeURIComponent(branchId)}`, {

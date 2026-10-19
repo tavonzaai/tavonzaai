@@ -99,16 +99,14 @@ export const rawAuthApi = {
       body: JSON.stringify({
         email: credentials.email.trim().toLowerCase(),
         password: credentials.password,
+        client: 'manager',
       }),
     });
 
     const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
     const token = data.accessToken || (data as any).access_token;
     if (token) {
-      setAuthTokens({
-        accessToken: token,
-        refreshToken: data.refreshToken,
-      });
+      setAuthTokens({ accessToken: token });
     }
 
     if (data.user) {
@@ -144,13 +142,31 @@ export const rawAuthApi = {
     return user;
   },
 
+  /** POST /auth/refresh — cookie-based refresh for client=manager */
+  refresh: async (): Promise<AuthTokensResponse> => {
+    const res = await baseApiFetch<AuthTokensResponse>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ client: 'manager' }),
+    });
+    const data: AuthTokensResponse = (res.data && (res.data as any).accessToken ? res.data : res) as any;
+    const accessToken = data.accessToken || (data as any).access_token;
+    if (accessToken) {
+      setAuthTokens({ accessToken });
+    }
+    return data;
+  },
+
   /** POST /auth/logout — Invalidate backend session */
   logout: async (): Promise<MessageResponse> => {
     try {
-      await baseApiFetch('/auth/logout', { method: 'POST' });
-    } catch {}
-    removeAuthToken();
-    return { message: 'Logged out successfully' };
+      const res = await baseApiFetch<MessageResponse>('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ client: 'manager' }),
+      });
+      return (res as any).data || res;
+    } finally {
+      removeAuthToken();
+    }
   },
 
   /** POST /auth/verify-otp */

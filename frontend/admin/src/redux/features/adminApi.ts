@@ -209,6 +209,33 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       transformResponse: (response: unknown) => unwrapList<any>(response),
       providesTags: ['ANALYTICS'],
     }),
+    getBranchDashboardAnalytics: builder.query<
+      {
+        branchId: string;
+        tablesCount: number;
+        availableTables: number;
+        occupiedTables: number;
+        occupancyPercent: number;
+        staffCount: number;
+        ordersCount: number;
+        pendingOrders: number;
+        preparingOrders: number;
+        readyOrders: number;
+        delayedOrders: number;
+        unpaidOrders: number;
+        unpaidAmount: number;
+        paidRevenue: number;
+        todayOrders: number;
+        todayRevenue: number;
+      },
+      { branchId: string }
+    >({
+      query: ({ branchId }) => ({
+        url: '/analytics/branch-dashboard',
+        params: { branchId },
+      }),
+      providesTags: ['ANALYTICS', 'DASHBOARD'],
+    }),
     getPayments: builder.query<
       { data: any[]; meta?: any },
       { organizationId?: string; branchId?: string; status?: string; page?: number; limit?: number; search?: string }
@@ -292,6 +319,7 @@ export const {
   useDeleteMenuItemMutation,
   useGetAnalyticsOverviewQuery,
   useGetBranchPerformanceQuery,
+  useGetBranchDashboardAnalyticsQuery,
   useGetPaymentsQuery,
   useRefundPaymentMutation,
   useGetUsersQuery,

@@ -31,6 +31,95 @@ export class AnalyticsController {
     return this.analyticsService.getOverview(user, { organizationId, branchId });
   }
 
+  @Get('branch-dashboard')
+  @RequirePermissions(Permission.REPORTS_READ)
+  @ApiOperation({
+    summary: 'Branch KPI snapshot for manager dashboard / reports',
+    description:
+      'Aggregated analytics for a single branch. Frontends must use this instead of loading all orders/tables to compute KPIs.',
+  })
+  @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiOkResponse({ description: 'Branch dashboard KPI snapshot' })
+  @ApiStandardErrors(401, 403, 500)
+  async branchDashboard(
+    @CurrentUser() user: JwtPayload,
+    @Query('branchId') branchId: string,
+  ) {
+    return this.analyticsService.getBranchDashboard(user, { branchId });
+  }
+
+  @Get('waiter-dashboard')
+  @RequirePermissions(Permission.ORDERS_READ)
+  @ApiOperation({
+    summary: 'Waiter dashboard KPIs (assigned tables only)',
+    description: 'Pending/preparing/ready counts scoped to the waiter table assignments.',
+  })
+  @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiOkResponse({ description: 'Waiter KPI snapshot' })
+  @ApiStandardErrors(400, 401, 403, 500)
+  async waiterDashboard(
+    @CurrentUser() user: JwtPayload,
+    @Query('branchId') branchId: string,
+  ) {
+    return this.analyticsService.getWaiterDashboard(user, { branchId });
+  }
+
+  @Get('cashier-dashboard')
+  @RequirePermissions(Permission.ORDERS_READ)
+  @ApiOperation({
+    summary: 'Cashier dashboard KPIs',
+    description: 'Today revenue, unpaid balance, refunds — do not aggregate from GET /orders.',
+  })
+  @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiOkResponse({ description: 'Cashier KPI snapshot' })
+  @ApiStandardErrors(400, 401, 403, 500)
+  async cashierDashboard(
+    @CurrentUser() user: JwtPayload,
+    @Query('branchId') branchId: string,
+  ) {
+    return this.analyticsService.getCashierDashboard(user, { branchId });
+  }
+
+  @Get('kitchen-dashboard')
+  @RequirePermissions(Permission.ORDERS_READ)
+  @ApiOperation({
+    summary: 'Kitchen dashboard KPIs',
+    description: 'Queue counts (new/preparing/ready/overdue) without loading every order row.',
+  })
+  @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiOkResponse({ description: 'Kitchen KPI snapshot' })
+  @ApiStandardErrors(400, 401, 403, 500)
+  async kitchenDashboard(
+    @CurrentUser() user: JwtPayload,
+    @Query('branchId') branchId: string,
+  ) {
+    return this.analyticsService.getKitchenDashboard(user, { branchId });
+  }
+
+  @Get('bartender-dashboard')
+  @RequirePermissions(Permission.ORDERS_READ)
+  @ApiOperation({ summary: 'Bartender dashboard KPIs (bar station queue)' })
+  @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiOkResponse({ description: 'Bartender KPI snapshot' })
+  @ApiStandardErrors(400, 401, 403, 500)
+  async bartenderDashboard(
+    @CurrentUser() user: JwtPayload,
+    @Query('branchId') branchId: string,
+  ) {
+    return this.analyticsService.getBartenderDashboard(user, { branchId });
+  }
+
+  @Get('customer-dashboard')
+  @ApiOperation({
+    summary: 'Customer home KPIs',
+    description: 'Open/completed order counts for the authenticated customer.',
+  })
+  @ApiOkResponse({ description: 'Customer KPI snapshot' })
+  @ApiStandardErrors(401, 500)
+  async customerDashboard(@CurrentUser() user: JwtPayload) {
+    return this.analyticsService.getCustomerDashboard(user);
+  }
+
   @Get('reports/branch-performance')
   @RequirePermissions(Permission.REPORTS_READ)
   @ApiOperation({ summary: 'Per-branch order and revenue totals' })

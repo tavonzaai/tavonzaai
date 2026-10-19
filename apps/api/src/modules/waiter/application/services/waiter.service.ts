@@ -360,7 +360,12 @@ export class WaiterService {
     filters: { scope?: string; status?: string; tableId?: string; search?: string },
   ): Promise<any[]> {
     const tableIds = await this.getMyTableIds(waiterId, branchId);
-    return this.orderRepo.findOrdersForTables(tableIds, branchId, filters);
+    // Force assigned-table scope. ALL_TABLES is never allowed for waiters.
+    const { scope: _ignoredScope, ...rest } = filters;
+    return this.orderRepo.findOrdersForTables(tableIds, branchId, {
+      ...rest,
+      scope: 'MY_TABLES',
+    });
   }
 
   async getPendingOrders(waiterId: string, branchId: string): Promise<any[]> {
@@ -487,7 +492,10 @@ export class WaiterService {
       branchId,
       profile?.id,
     );
-    return assignments.map((a) => a.tableId);
+    const ids = assignments
+      .map((a) => a.tableId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    return [...new Set(ids)];
   }
 
   private async assertWaiterOwnsTable(

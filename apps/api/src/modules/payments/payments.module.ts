@@ -5,9 +5,11 @@ import { DrizzlePaymentRepository } from './infrastructure/persistence/drizzle-p
 
 import { StripeAdapter } from './infrastructure/adapters/stripe.adapter';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AuthorizationModule } from '../authorization/authorization.module';
+import { IdentityModule } from '../identity/identity.module';
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, AuthorizationModule, IdentityModule],
   controllers: [PaymentController],
   providers: [PaymentService, DrizzlePaymentRepository, StripeAdapter],
   exports: [PaymentService, DrizzlePaymentRepository, StripeAdapter],

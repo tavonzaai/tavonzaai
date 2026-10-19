@@ -19,6 +19,13 @@ async function bootstrap() {
   // Enable graceful shutdown hooks (SIGTERM/SIGINT)
   app.enableShutdownHooks();
 
+  // ── Trust Proxy ────────────────────────────────────────────────────────────
+  // Ensures Express accurately parses X-Forwarded-For behind ALBs, Cloudflare, and Nginx
+  const httpAdapter = app.getHttpAdapter();
+  if (httpAdapter && typeof (httpAdapter.getInstance() as any)?.set === 'function') {
+    (httpAdapter.getInstance() as any).set('trust proxy', true);
+  }
+
   // ── Global Exception Filter ────────────────────────────────────────────────
   // Must be registered before interceptors so it catches everything
   app.useGlobalFilters(new AllExceptionsFilter());

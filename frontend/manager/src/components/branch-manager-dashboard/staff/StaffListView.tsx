@@ -16,7 +16,7 @@ const ROLE_TAB_MAP: Record<string, string | undefined> = {
   Kitchen: 'KITCHEN_STAFF',
   Bartenders: 'BARTENDER',
   Cashiers: 'CASHIER',
-  'Assistant Manager': 'BRANCH_MANAGER',
+  Host: 'HOST',
 };
 
 export default function StaffListView({ onSelectStaff }: StaffListViewProps) {
@@ -47,36 +47,44 @@ export default function StaffListView({ onSelectStaff }: StaffListViewProps) {
       });
 
       if (assignments && assignments.length > 0) {
-        const mapped: StaffCardData[] = assignments.map((s: any) => {
-          const roleUpper = String(s.role || '').toUpperCase();
-          let roleLabel: StaffCardData['role'] = 'Waiters';
-          if (roleUpper.includes('KITCHEN') || roleUpper.includes('CHEF')) roleLabel = 'Kitchen';
-          else if (roleUpper.includes('CASHIER')) roleLabel = 'Cashiers';
-          else if (roleUpper.includes('BARTENDER')) roleLabel = 'Bartenders';
-          else if (roleUpper.includes('MANAGER')) roleLabel = 'Assistant Manager';
+        const mapped: StaffCardData[] = assignments
+          .filter((s: any) => {
+            // Branch managers must not manage / display peer BRANCH_MANAGER roles.
+            const roleUpper = String(s.role || '').toUpperCase();
+            return roleUpper !== 'BRANCH_MANAGER' && !roleUpper.includes('ASSISTANT');
+          })
+          .map((s: any) => {
+            const roleUpper = String(s.role || '').toUpperCase();
+            let roleLabel: StaffCardData['role'] = 'Waiters';
+            if (roleUpper.includes('KITCHEN') || roleUpper.includes('CHEF')) roleLabel = 'Kitchen';
+            else if (roleUpper.includes('CASHIER')) roleLabel = 'Cashiers';
+            else if (roleUpper.includes('BARTENDER')) roleLabel = 'Bartenders';
+            else if (roleUpper.includes('HOST')) roleLabel = 'Host';
 
-          const clockIn = s.assignedAt
-            ? new Date(s.assignedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : '09:00 AM';
+            const clockIn = s.assignedAt
+              ? new Date(s.assignedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '09:00 AM';
 
-          return {
-            id: s.staffId || s.id,
-            name: s.name || s.staffName || 'Staff Member',
-            role: roleLabel,
-            status: s.isActive ? 'Active' : 'Break',
-            currentShift: 'Morning Shift (09:00 - 17:00)',
-            currentAssignment: roleLabel,
-            stationTables:
-              roleLabel === 'Waiters'
-                ? 'Floor Dining Tables'
-                : roleLabel === 'Kitchen'
-                ? 'Main Prep Line'
-                : roleLabel === 'Cashiers'
-                ? 'POS Checkout Counter'
-                : 'Beverage Bar Counter',
-            clockInTime: clockIn,
-          };
-        });
+            return {
+              id: s.staffId || s.id,
+              name: s.name || s.staffName || 'Staff Member',
+              role: roleLabel,
+              status: s.isActive ? 'Active' : 'Break',
+              currentShift: 'Morning Shift (09:00 - 17:00)',
+              currentAssignment: roleLabel,
+              stationTables:
+                roleLabel === 'Waiters'
+                  ? 'Floor Dining Tables'
+                  : roleLabel === 'Kitchen'
+                    ? 'Main Prep Line'
+                    : roleLabel === 'Cashiers'
+                      ? 'POS Checkout Counter'
+                      : roleLabel === 'Host'
+                        ? 'Host Stand'
+                        : 'Beverage Bar Counter',
+              clockInTime: clockIn,
+            };
+          });
 
         setStaffList(mapped);
       } else {
@@ -100,7 +108,7 @@ export default function StaffListView({ onSelectStaff }: StaffListViewProps) {
     setTimeout(() => setSuccessToast(null), 4000);
   };
 
-  const filterTabs = ['ALL', 'Waiters', 'Kitchen', 'Bartenders', 'Cashiers', 'Assistant Manager'];
+  const filterTabs = ['ALL', 'Waiters', 'Kitchen', 'Bartenders', 'Cashiers', 'Host'];
 
   const getStatusBadge = (status: StaffCardData['status']) => {
     if (status === 'Active') {
@@ -171,6 +179,7 @@ export default function StaffListView({ onSelectStaff }: StaffListViewProps) {
           <button
             type="button"
             onClick={() => setIsAddModalOpen(true)}
+            data-testid="add-staff-open"
             className="px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-neutral-950 font-semibold text-sm rounded-xl shadow-lg transition active:scale-95 flex items-center gap-2 font-['Inter']"
           >
             <UserPlus className="w-4 h-4" />

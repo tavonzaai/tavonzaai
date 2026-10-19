@@ -75,11 +75,28 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [stationDropdownOpen, setStationDropdownOpen] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [analyticsCounts, setAnalyticsCounts] = useState({
+    newOrders: 0,
+    preparingOrders: 0,
+    readyOrders: 0,
+    overdueOrders: 0,
+  });
 
   const loadKitchenData = useCallback(async () => {
     try {
       const branchId = getActiveBranchId();
-      const rawOrders = await kitchenService.getOrders(branchId);
+      const [rawOrders, kpis] = await Promise.all([
+        kitchenService.getOrders(branchId),
+        kitchenService.getKitchenDashboardAnalytics(branchId).catch(() => null),
+      ]);
+      if (kpis) {
+        setAnalyticsCounts({
+          newOrders: Number(kpis.newOrders || 0),
+          preparingOrders: Number(kpis.preparingOrders || 0),
+          readyOrders: Number(kpis.readyOrders || 0),
+          overdueOrders: Number(kpis.overdueOrders || 0),
+        });
+      }
       if (Array.isArray(rawOrders)) {
         const mapped: KitchenOrder[] = rawOrders
           .filter(
@@ -265,11 +282,11 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     } catch {}
   };
 
-  // Counters
-  const newCount = orders.filter((o) => o.status === "NEW").length;
-  const preparingCount = orders.filter((o) => o.status === "PREPARING").length;
-  const readyCount = orders.filter((o) => o.status === "READY").length;
-  const overdueCount = orders.filter((o) => o.status !== "READY" && (o.status === "OVERDUE" || !!o.flaggedIssue)).length;
+  // Counters from analytics API (not client-side getAll aggregation)
+  const newCount = analyticsCounts.newOrders;
+  const preparingCount = analyticsCounts.preparingOrders;
+  const readyCount = analyticsCounts.readyOrders;
+  const overdueCount = analyticsCounts.overdueOrders;
 
   // Filtered orders
   const filteredOrders = orders.filter((order) => {

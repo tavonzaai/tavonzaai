@@ -12,6 +12,10 @@ import {
   type StaffPermissionAction,
 } from '@tavonza/authorization';
 import type { JwtPayload } from '../../identity/infrastructure/adapters/jwt.strategy';
+import {
+  BRANCH_MANAGER_CREATABLE_ROLES,
+  canCreateStaffRole,
+} from './branch-access.policy';
 
 export function assertAssignableStaffRole(role: string): void {
   if (!isAssignableStaffRole(role)) {
@@ -60,12 +64,25 @@ export function assertActorCanGrant(
 export function assertStaffAssignmentInput(
   actor: JwtPayload,
   input: { role?: string; permissions?: string[] },
+  options?: {
+    /** When false, only BRANCH_MANAGER_CREATABLE_ROLES may be assigned (never BRANCH_MANAGER). */
+    privilegedActor?: boolean;
+  },
 ): { role?: string; permissions?: StaffPermissionAction[] } {
   if (input.role) {
     if (isPrivilegedGlobalRole(input.role) || input.role === 'CUSTOMER' || input.role === 'STAFF') {
       throw new ForbiddenException('Cannot assign a privileged or non-staff role through staff management');
     }
     assertAssignableStaffRole(input.role);
+
+    const privileged = options?.privilegedActor === true
+      || isPrivilegedGlobalRole(actor.globalRole)
+      || isPrivilegedGlobalRole(actor.role);
+    if (!privileged && !canCreateStaffRole({ isPrivileged: false, managesBranch: true }, input.role)) {
+      throw new ForbiddenException(
+        `Branch managers may only create ${BRANCH_MANAGER_CREATABLE_ROLES.join(', ')} staff in their own branch`,
+      );
+    }
   }
 
   const permissions = assertAssignablePermissions(input.permissions);

@@ -88,23 +88,21 @@ export interface MessageResponse {
 // ─── 📡 Raw API Handlers (Exact Backend Endpoints) ───────────────────────────
 
 export const rawAuthApi = {
-  /** POST /auth/login — Authenticate cashier / user */
+  /** POST /auth/login — Authenticate waiter (refresh token in HttpOnly cookie). */
   login: async (credentials: LoginPayload): Promise<AuthTokensResponse> => {
     const res = await baseApiFetch<AuthTokensResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({
         email: credentials.email.trim().toLowerCase(),
         password: credentials.password,
+        client: 'waiter',
       }),
     });
 
     const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
     const token = data.accessToken || (data as any).access_token;
     if (token) {
-      setAuthTokens({
-        accessToken: token,
-        refreshToken: data.refreshToken,
-      });
+      setAuthTokens({ accessToken: token });
     }
 
     if (data.user) {
@@ -236,32 +234,27 @@ export const rawAuthApi = {
     }
   },
 
-  /** POST /auth/refresh — Refresh access token */
-  refresh: async (refreshTokenOverride?: string): Promise<AuthTokensResponse> => {
-    const token = refreshTokenOverride || getRefreshToken();
-    if (!token) throw new Error('No refresh token available');
-
+  /** POST /auth/refresh — cookie-based refresh for client=waiter */
+  refresh: async (): Promise<AuthTokensResponse> => {
     const res = await baseApiFetch<AuthTokensResponse>('/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ refreshToken: token }),
+      body: JSON.stringify({ client: 'waiter' }),
     });
 
     const data: AuthTokensResponse = (res.data && res.data.accessToken ? res.data : res) as any;
     const accessToken = data.accessToken || (data as any).access_token;
     if (accessToken) {
-      setAuthTokens({
-        accessToken,
-        refreshToken: data.refreshToken,
-      });
+      setAuthTokens({ accessToken });
     }
     return data;
   },
 
-  /** POST /auth/logout — Invalidate session */
+  /** POST /auth/logout — Invalidate session and clear HttpOnly refresh cookie */
   logout: async (): Promise<MessageResponse> => {
     try {
       const res = await baseApiFetch<MessageResponse>('/auth/logout', {
         method: 'POST',
+        body: JSON.stringify({ client: 'waiter' }),
       });
       return res.data || res;
     } finally {

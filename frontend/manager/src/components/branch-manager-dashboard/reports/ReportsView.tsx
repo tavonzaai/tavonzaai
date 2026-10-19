@@ -44,6 +44,21 @@ export default function ReportsView() {
   const [tables, setTables] = useState<TableItem[]>([]);
   const [staff, setStaff] = useState<StaffAssignmentItem[]>([]);
   const [branch, setBranch] = useState<BranchDetail | null>(null);
+  const [analytics, setAnalytics] = useState<{
+    paidRevenue: number;
+    todayRevenue: number;
+    todayOrders: number;
+    ordersCount: number;
+    staffCount: number;
+    tablesCount: number;
+    occupiedTables: number;
+    occupancyPercent: number;
+    unpaidAmount: number;
+    unpaidOrders: number;
+    preparingOrders: number;
+    readyOrders: number;
+    pendingOrders: number;
+  } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   const reportTabs = [
@@ -58,17 +73,29 @@ export default function ReportsView() {
     try {
       setLoading(true);
       const branchId = getActiveBranchId();
-      const [apiOrders, apiTables, apiStaff, apiBranch] = await Promise.all([
-        branchManagerService.getOrders(branchId).catch(() => []),
-        branchManagerService.getTables(branchId).catch(() => []),
-        branchManagerService.getStaffAssignments(branchId).catch(() => []),
+      // Sales KPI cards: analytics only — never GET /orders or GET /tables for totals.
+      const [kpis, apiBranch] = await Promise.all([
+        branchManagerService.getBranchDashboardAnalytics(branchId),
         branchManagerService.getBranch(branchId).catch(() => null),
       ]);
-
-      setOrders(Array.isArray(apiOrders) ? apiOrders : []);
-      setTables(Array.isArray(apiTables) ? apiTables : []);
-      setStaff(Array.isArray(apiStaff) ? apiStaff : []);
+      setAnalytics(kpis);
       setBranch(apiBranch);
+
+      // Detail tabs (staff/kitchen/hourly) load operational lists only when needed.
+      if (activeReportTab !== 'Sales report') {
+        const [apiOrders, apiTables, apiStaff] = await Promise.all([
+          branchManagerService.getOrders(branchId).catch(() => []),
+          branchManagerService.getTables(branchId).catch(() => []),
+          branchManagerService.getStaffAssignments(branchId).catch(() => []),
+        ]);
+        setOrders(Array.isArray(apiOrders) ? apiOrders : []);
+        setTables(Array.isArray(apiTables) ? apiTables : []);
+        setStaff(Array.isArray(apiStaff) ? apiStaff : []);
+      } else {
+        setOrders([]);
+        setTables([]);
+        setStaff([]);
+      }
     } catch (err) {
       console.error('Failed to load real reports data:', err);
     } finally {
@@ -78,32 +105,25 @@ export default function ReportsView() {
 
   useEffect(() => {
     loadReportData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeReportTab]);
 
-  // ─── Real Dynamic Calculations ─────────────────────────────────────────
+  // ─── KPIs from analytics API (authoritative) ───────────────────────────
 
-  // 1. Non-cancelled orders
   const validOrders = useMemo(() => {
     return orders.filter((o) => o.status !== 'CANCELLED');
   }, [orders]);
 
-  // 2. Gross Sales & AOV
-  const grossSales = useMemo(() => {
-    return validOrders.reduce((sum, o) => sum + (Number(o.totalAmount ?? o.total) || 0), 0);
-  }, [validOrders]);
-
-  const totalOrdersCount = validOrders.length;
+  const grossSales = analytics?.paidRevenue ?? 0;
+  const totalOrdersCount = analytics?.ordersCount ?? 0;
   const aov = totalOrdersCount > 0 ? grossSales / totalOrdersCount : 0;
-  const taxCollected = grossSales * 0.0825; // 8.25% standard sales tax
+  const taxCollected = grossSales * 0.0825;
   const netRevenue = Math.max(0, grossSales - taxCollected);
 
-  // 3. Active Staff & Occupancy
-  const activeStaffCount = staff.filter((s) => s.isActive).length;
-  const totalTables = tables.length;
-  const occupiedTables = tables.filter(
-    (t) => t.serviceStatus?.toUpperCase() === 'OCCUPIED' || Boolean(t.activeSessionId)
-  ).length;
-  const occupancyRate = totalTables > 0 ? Math.round((occupiedTables / totalTables) * 100) : 0;
+  const activeStaffCount = analytics?.staffCount ?? staff.filter((s) => s.isActive).length;
+  const totalTables = analytics?.tablesCount ?? tables.length;
+  const occupiedTables = analytics?.occupiedTables ?? 0;
+  const occupancyRate = analytics?.occupancyPercent ?? 0;
 
   // 4. Avg prep speed (calculated from estimated prep times of real orders)
   const avgPrepSpeedMinutes = useMemo(() => {

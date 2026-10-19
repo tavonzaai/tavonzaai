@@ -1,4 +1,9 @@
-import { Injectable, Inject, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { eq, and, or, isNull, desc, count } from 'drizzle-orm';
 import {
   DRIZZLE,
@@ -18,6 +23,8 @@ export interface NotificationUserContext {
   id: string;
   branchId?: string | null;
   role?: string | null;
+  /** When true, actor is a customer/guest — only direct userId notifications are visible. */
+  isCustomer?: boolean;
 }
 
 @Injectable()
@@ -30,6 +37,11 @@ export class NotificationService {
 
   private buildUserVisibilityFilter(user: NotificationUserContext) {
     const userDirect = eq(notifications.userId, user.id);
+
+    // Customers and guests never receive role/branch broadcast notifications.
+    if (user.isCustomer) {
+      return userDirect;
+    }
 
     if (user.branchId && user.role) {
       const roleMatches = and(
@@ -52,6 +64,22 @@ export class NotificationService {
     }
 
     return userDirect;
+  }
+
+  private async assertVisibleToUser(
+    notificationId: string,
+    user: NotificationUserContext,
+  ): Promise<typeof notifications.$inferSelect> {
+    const [existing] = await this.db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.id, notificationId), this.buildUserVisibilityFilter(user)))
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundException(`Notification with ID ${notificationId} not found`);
+    }
+    return existing;
   }
 
   async create(dto: CreateNotificationDto): Promise<NotificationResponseDto> {
@@ -167,15 +195,7 @@ export class NotificationService {
   }
 
   async markAsRead(id: string, user: NotificationUserContext): Promise<NotificationResponseDto> {
-    const [existing] = await this.db
-      .select()
-      .from(notifications)
-      .where(eq(notifications.id, id))
-      .limit(1);
-
-    if (!existing) {
-      throw new NotFoundException(`Notification with ID ${id} not found`);
-    }
+    await this.assertVisibleToUser(id, user);
 
     const [updated] = await this.db
       .update(notifications)
@@ -217,17 +237,8 @@ export class NotificationService {
     return { updatedCount: updated.length };
   }
 
-  async delete(id: string): Promise<void> {
-    const [existing] = await this.db
-      .select()
-      .from(notifications)
-      .where(eq(notifications.id, id))
-      .limit(1);
-
-    if (!existing) {
-      throw new NotFoundException(`Notification with ID ${id} not found`);
-    }
-
+  async delete(id: string, user: NotificationUserContext): Promise<void> {
+    await this.assertVisibleToUser(id, user);
     await this.db.delete(notifications).where(eq(notifications.id, id));
   }
 }

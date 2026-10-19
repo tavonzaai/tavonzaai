@@ -15,6 +15,7 @@ import KitchenKdsView from './kitchen/KitchenKdsView';
 import PaymentsView from './payments/PaymentsView';
 import PaymentDetailView from './payments/PaymentDetailView';
 import MenuView from './menu/MenuView';
+import MenuCategoriesView from './menu/MenuCategoriesView';
 import ReportsView from './reports/ReportsView';
 import BranchConfigView from './config/BranchConfigView';
 import ManagerProfileView from './profile/ProfileView';
@@ -334,6 +335,8 @@ export default function BranchManagerDashboard({
             )
           ) : activeNav.toLowerCase() === 'menu' ? (
             <MenuView />
+          ) : activeNav.toLowerCase() === 'categories' ? (
+            <MenuCategoriesView />
           ) : activeNav.toLowerCase() === 'reports' ? (
             <ReportsView />
           ) : activeNav.toLowerCase() === 'branch config' || activeNav.toLowerCase() === 'branch-config' ? (

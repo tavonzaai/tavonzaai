@@ -6,76 +6,96 @@ import {
 } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
 import { Request, Response } from 'express';
-import { AppLogger, formatDuration } from '@tavonza/observability';
+import {
+  AppLogger,
+  extractHttpRequestMeta,
+  formatHttpTraceSummary,
+  type HttpTraceOptions,
+} from '@tavonza/observability';
+
+/**
+ * Custom actor context for Tavonza AI HTTP logging.
+ */
+interface TavonzaUserContext {
+  id?: string;
+  email?: string;
+  role?: string;
+  organizationId?: string | null;
+  branchId?: string | null;
+}
+
+/**
+ * Consuming application options passed into the generic @tavonza/observability package.
+ */
+const TRACE_OPTIONS: HttpTraceOptions<TavonzaUserContext> = {
+  extractUser: (req) => {
+    const user = (req as any).user;
+    if (!user) return undefined;
+    return {
+      id: user.sub || user.id,
+      email: user.email,
+      role: user.role || user.globalRole,
+      organizationId: user.organizationId,
+      branchId: user.branchId,
+    };
+  },
+  formatUserLabel: (u) => u.email || u.id,
+};
 
 /**
  * HttpLoggerInterceptor
  *
- * Logs every incoming HTTP request and its outgoing response.
- * Structured output example (prod JSON):
- *
- *   {"level":"info","context":"HTTP","method":"POST","path":"/auth/register",
- *    "status":201,"duration":"42ms","ip":"203.x.x.x","userAgent":"..."}
+ * Lightweight NestJS HTTP interceptor.
+ * Delegates metric calculations, IP tracing, and byte sizing to @tavonza/observability.
  */
 @Injectable()
 export class HttpLoggerInterceptor implements NestInterceptor {
   private readonly logger = new AppLogger('HTTP');
 
   intercept(ctx: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const req  = ctx.switchToHttp().getRequest<Request>();
-    const res  = ctx.switchToHttp().getResponse<Response>();
+    const req = ctx.switchToHttp().getRequest<Request>();
+    const res = ctx.switchToHttp().getResponse<Response>();
     const start = Date.now();
 
-    const { method, originalUrl, ip } = req;
-    const userAgent = req.headers['user-agent'] ?? '';
-    const requestId = req.headers['x-request-id'] as string | undefined;
+    // Track response payload bytes
+    let resPayloadBytes = 0;
+    const originalSend = res.send;
+    res.send = function (body: any) {
+      if (body !== undefined && body !== null) {
+        resPayloadBytes = Buffer.isBuffer(body)
+          ? body.length
+          : Buffer.byteLength(typeof body === 'string' ? body : JSON.stringify(body));
+      }
+      return originalSend.apply(res, arguments as any);
+    };
 
-    // Log the incoming request at debug level
-    this.logger.debug(`→ ${method} ${originalUrl}`, {
-      ip,
-      requestId,
-      body: this.sanitizeBody(req.body),
-    });
+    // Log incoming request at debug level
+    const inMeta = extractHttpRequestMeta(req, res, TRACE_OPTIONS);
+    this.logger.debug(
+      `→ ${inMeta.method} ${inMeta.path} [IP: ${inMeta.clientIp}] [ReqHeaders: ${inMeta.requestHeaderSize}] [ReqBody: ${inMeta.requestPayloadSize}]`,
+      inMeta,
+    );
 
     return next.handle().pipe(
       tap({
         next: () => {
-          const duration = formatDuration(Date.now() - start);
-          const status   = res.statusCode;
-          const level    = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
+          const durationMs = Date.now() - start;
+          const meta = extractHttpRequestMeta(req, res, durationMs, resPayloadBytes, TRACE_OPTIONS);
+          const status = meta.statusCode || 200;
+          const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
 
-          this.logger[level](`${method} ${originalUrl} ${status}`, {
-            status,
-            duration,
-            ip,
-            userAgent,
-            requestId,
-          });
+          this.logger[level](formatHttpTraceSummary(meta, TRACE_OPTIONS.formatUserLabel), meta);
         },
         error: () => {
-          // Detailed error and stack trace are logged by AllExceptionsFilter
-          const duration = formatDuration(Date.now() - start);
-          this.logger.debug(`${method} ${originalUrl} failed in ${duration}`, {
-            duration,
-            ip,
-            userAgent,
-            requestId,
-          });
+          const durationMs = Date.now() - start;
+          const meta = extractHttpRequestMeta(req, res, durationMs, resPayloadBytes, TRACE_OPTIONS);
+
+          this.logger.debug(
+            `${meta.method} ${meta.path} failed in ${meta.duration} [IP: ${meta.clientIp}]`,
+            meta,
+          );
         },
       }),
-    );
-  }
-
-  /**
-   * Strip sensitive fields before logging request body.
-   */
-  private sanitizeBody(body: unknown): unknown {
-    if (!body || typeof body !== 'object') return body;
-    const SENSITIVE = new Set(['password', 'token', 'secret', 'accessKey', 'privateKey', 'cardNumber']);
-    return Object.fromEntries(
-      Object.entries(body as Record<string, unknown>).map(([k, v]) =>
-        SENSITIVE.has(k) ? [k, '[REDACTED]'] : [k, v],
-      ),
     );
   }
 }
