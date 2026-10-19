@@ -1,4 +1,5 @@
 import React from 'react';
+import { Edit2, Trash2 } from 'lucide-react';
 import { StaffMember } from '../types';
 import { PaginationBar } from '@/components/common';
 import { paginateItems } from '@/lib/pagination';
@@ -8,12 +9,14 @@ interface BranchStaffTabProps {
   staffList: StaffMember[];
   onOpenEditStaff: (member: StaffMember) => void;
   onToggleStaffStatus: (member: StaffMember) => void;
+  onDeleteStaff: (member: StaffMember) => void;
 }
 
 export const BranchStaffTab: React.FC<BranchStaffTabProps> = ({
   staffList,
   onOpenEditStaff,
   onToggleStaffStatus,
+  onDeleteStaff,
 }) => {
   const { page, setPage } = useClientPage(staffList.length);
   const paged = paginateItems(staffList, page);
@@ -79,20 +82,22 @@ export const BranchStaffTab: React.FC<BranchStaffTabProps> = ({
                     </span>
                   </td>
                   <td className="px-5 py-4 text-center">
-                    <div className="flex items-center justify-center gap-6">
+                    <div className="flex items-center justify-center gap-2">
                       <button
                         type="button"
+                        data-testid={`staff-edit-${member.id}`}
                         onClick={() => onOpenEditStaff(member)}
-                        className="text-neutral-400 hover:text-white text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
+                        className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs font-medium font-['Inter'] transition-colors cursor-pointer border border-neutral-700 flex items-center gap-1.5"
                       >
-                        Edit / Change Role
+                        <Edit2 className="size-3 text-amber-400" />
+                        Edit
                       </button>
                       {member.status === 'Active' ? (
                         <button
                           type="button"
                           data-testid={`staff-deactivate-${member.id}`}
                           onClick={() => onToggleStaffStatus(member)}
-                          className="text-red-400 hover:text-red-300 text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
+                          className="px-2.5 py-1 rounded bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs font-medium font-['Inter'] transition-colors cursor-pointer border border-neutral-700/60"
                         >
                           Deactivate
                         </button>
@@ -101,11 +106,20 @@ export const BranchStaffTab: React.FC<BranchStaffTabProps> = ({
                           type="button"
                           data-testid={`staff-activate-${member.id}`}
                           onClick={() => onToggleStaffStatus(member)}
-                          className="text-green-500 hover:text-green-400 text-xs font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
+                          className="px-2.5 py-1 rounded bg-green-500/10 hover:bg-green-500/20 text-green-400 hover:text-green-300 text-xs font-medium font-['Inter'] transition-colors cursor-pointer border border-green-500/30"
                         >
                           Activate
                         </button>
                       )}
+                      <button
+                        type="button"
+                        data-testid={`staff-delete-${member.id}`}
+                        onClick={() => onDeleteStaff(member)}
+                        className="px-2.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 text-xs font-medium font-['Inter'] transition-colors cursor-pointer border border-red-500/30 flex items-center gap-1"
+                      >
+                        <Trash2 className="size-3" />
+                        Delete
+                      </button>
                     </div>
                   </td>
                 </tr>

@@ -352,7 +352,7 @@ export default function ProfileView({
                 <div className="flex flex-col gap-1.5 pt-1">
                   <span className="text-stone-300 text-xs font-normal">Granted Permissions</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {(user?.assignments?.[0]?.permissions || user?.permissions || ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS', 'MANAGE_TABLES', 'SERVE_ORDERS']).map((perm: string) => (
+                    {user?.permissions?.map((perm: string) => (
                       <span
                         key={perm}
                         className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono font-medium rounded-[5px] flex items-center gap-1"

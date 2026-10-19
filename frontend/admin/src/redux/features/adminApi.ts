@@ -128,6 +128,17 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       }),
       invalidatesTags: ['STAFF', 'ANALYTICS'],
     }),
+    assignBranchStaff: builder.mutation<
+      any,
+      { branchId: string; body: { staffId: string; role: string; permissions?: string[] } }
+    >({
+      query: ({ branchId, body }) => ({
+        url: `/branches/${branchId}/staff/assign`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['STAFF', 'ANALYTICS'],
+    }),
     getTables: builder.query<any[], { branchId: string }>({
       query: ({ branchId }) => ({ url: '/tables', params: { branchId } }),
       transformResponse: (response: unknown) => unwrapList<any>(response),
@@ -161,6 +172,14 @@ export const adminApi = rtkBaseApi.injectEndpoints({
     }),
     createMenuCategory: builder.mutation<any, Record<string, unknown>>({
       query: (body) => ({ url: '/menus/categories', method: 'POST', body }),
+      invalidatesTags: ['MENU'],
+    }),
+    updateMenuCategory: builder.mutation<any, { id: string; body: Record<string, unknown> }>({
+      query: ({ id, body }) => ({ url: `/menus/categories/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['MENU'],
+    }),
+    deleteMenuCategory: builder.mutation<any, string>({
+      query: (id) => ({ url: `/menus/categories/${id}`, method: 'DELETE' }),
       invalidatesTags: ['MENU'],
     }),
     createMenuItem: builder.mutation<any, Record<string, unknown>>({
@@ -253,6 +272,13 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       }),
       invalidatesTags: ['USER', 'STAFF'],
     }),
+    deleteUser: builder.mutation<any, string>({
+      query: (id) => ({
+        url: `/users/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['USER', 'STAFF'],
+    }),
   }),
 });
 
@@ -275,6 +301,7 @@ export const {
   useUpdateBranchSettingsMutation,
   useGetBranchStaffQuery,
   useCreateBranchStaffMutation,
+  useAssignBranchStaffMutation,
   useUpdateBranchStaffMutation,
   useDeleteBranchStaffMutation,
   useGetTablesQuery,
@@ -285,6 +312,8 @@ export const {
   useGetMenuCategoriesQuery,
   useGetMenuItemsQuery,
   useCreateMenuCategoryMutation,
+  useUpdateMenuCategoryMutation,
+  useDeleteMenuCategoryMutation,
   useCreateMenuItemMutation,
   useUpdateMenuItemMutation,
   useDeleteMenuItemMutation,
@@ -295,4 +324,5 @@ export const {
   useRefundPaymentMutation,
   useGetUsersQuery,
   useUpdateUserStatusMutation,
+  useDeleteUserMutation,
 } = adminApi;

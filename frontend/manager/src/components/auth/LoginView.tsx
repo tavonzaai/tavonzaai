@@ -6,7 +6,7 @@ import { Eye, EyeOff, Loader2, AlertCircle, ShieldCheck, Sparkles } from 'lucide
 import { useAppDispatch } from '../../redux/hooks';
 import { loginUser } from '../../redux/features/authApi';
 import { setUser } from '../../redux/slices/authSlice';
-import { loginManagerSession } from '../../lib/auth';
+import { loginManagerSession, isRoleAllowedForManager } from '../../lib/auth';
 import { removeAuthToken } from '../../redux/api/baseApi';
 
 interface LoginViewProps {
@@ -64,16 +64,7 @@ export default function LoginView({ onLoginSuccess, onForgotPassword }: LoginVie
       const userProfile = res?.user || res;
       const authToken = res?.accessToken || res?.data?.accessToken;
 
-      const roleUpper = String(userProfile?.role || '').toUpperCase();
-      const isManager =
-        roleUpper.includes('MANAGER') ||
-        roleUpper === 'ADMIN' ||
-        roleUpper === 'OWNER' ||
-        userProfile?.assignments?.some((a: any) =>
-          String(a.role || '').toUpperCase().includes('MANAGER')
-        );
-
-      if (!isManager) {
+      if (!isRoleAllowedForManager(userProfile)) {
         removeAuthToken();
         setError('Access restricted. Only Branch Managers and Administrators are permitted.');
         setIsSubmitting(false);
