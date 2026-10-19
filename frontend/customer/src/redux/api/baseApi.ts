@@ -53,11 +53,6 @@ export function setAuthToken(token: string) {
 }
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
-<<<<<<<<< Temporary merge branch 1
-  setAuthToken(tokens.accessToken);
-  if (tokens.refreshToken) {
-    setCookie('refresh_token', tokens.refreshToken);
-=========
   // Prefer max-age from the JWT exp claim when present.
   let maxAge: number | undefined;
   try {
@@ -70,7 +65,6 @@ export function setAuthTokens(tokens: { accessToken: string; refreshToken?: stri
     }
   } catch {
     // ignore decode errors
->>>>>>>>> Temporary merge branch 2
   }
   if (typeof document !== 'undefined') {
     const age = maxAge !== undefined ? `; max-age=${maxAge}` : '';
@@ -93,55 +87,6 @@ export function removeAuthToken() {
 
 let refreshPromise: Promise<boolean> | null = null;
 
-export async function refreshAuthSession(): Promise<boolean> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-
-  if (refreshPromise) return refreshPromise;
-
-  refreshPromise = (async () => {
-    try {
-      const baseUrl = getApiBaseUrl();
-      const res = await fetch(`${baseUrl}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        removeAuthToken();
-        return false;
-      }
-
-      const json = await res.json().catch(() => null);
-      const data = json?.data || json;
-      const newAccessToken = data?.accessToken || data?.access_token;
-      const newRefreshToken = data?.refreshToken || data?.refresh_token || refreshToken;
-
-      if (newAccessToken) {
-        setAuthTokens({
-          accessToken: newAccessToken,
-          refreshToken: newRefreshToken,
-        });
-        return true;
-      }
-
-      removeAuthToken();
-      return false;
-    } catch {
-      removeAuthToken();
-      return false;
-    } finally {
-      refreshPromise = null;
-    }
-  })();
-
-  return refreshPromise;
-}
-
-let refreshPromise: Promise<boolean> | null = null;
-
 /** Cookie-based refresh with single-flight dedupe. On failure, clears auth. */
 export async function refreshAuthSession(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
@@ -150,10 +95,15 @@ export async function refreshAuthSession(): Promise<boolean> {
   refreshPromise = (async () => {
     try {
       const baseUrl = getApiBaseUrl();
+      const refreshToken = getRefreshToken();
       const res = await fetch(`${baseUrl}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client: 'customer' }),
+        body: JSON.stringify(
+          refreshToken
+            ? { client: 'customer', refreshToken }
+            : { client: 'customer' }
+        ),
         credentials: 'include',
       });
       if (!res.ok) {
@@ -232,11 +182,7 @@ export class ApiError extends Error {
 
 export interface BaseApiFetchOptions extends RequestInit {
   skipToast?: boolean;
-<<<<<<<<< Temporary merge branch 1
-  _isRetry?: boolean;
-=========
   __authRetried?: boolean;
->>>>>>>>> Temporary merge branch 2
 }
 
 export async function baseApiFetch<T = any>(
@@ -306,35 +252,11 @@ export async function baseApiFetch<T = any>(
   const rawJson = await response.json().catch(() => null);
 
   if (!response.ok) {
-<<<<<<<<< Temporary merge branch 1
-    if (
-      response.status === 401 &&
-      !cleanEndpoint.includes('/auth/login') &&
-      !cleanEndpoint.includes('/auth/refresh') &&
-      !options?._isRetry
-    ) {
-      const refreshed = await refreshAuthSession();
-      if (refreshed) {
-        return baseApiFetch<T>(endpoint, {
-          ...options,
-          _isRetry: true,
-        });
-      }
-      removeAuthToken();
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        if (window.location.pathname.startsWith('/profile') || window.location.pathname.startsWith('/account')) {
-          window.location.href = '/login';
-        }
-      }
-    } else if (response.status === 401) {
-      removeAuthToken();
-=========
     if (response.status === 401 && !cleanEndpoint.startsWith('/auth/') && !options.__authRetried) {
       const refreshed = await refreshAuthSession();
       if (refreshed) {
         return baseApiFetch<T>(endpoint, { ...options, __authRetried: true });
       }
->>>>>>>>> Temporary merge branch 2
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
       }
