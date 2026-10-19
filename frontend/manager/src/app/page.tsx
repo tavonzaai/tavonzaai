@@ -1,8 +1,18 @@
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-export default function RootPage() {
-  redirect('/login');
+export default async function RootPage() {
+  const cookieStore = await cookies();
+  const token =
+    cookieStore.get('access_token')?.value ||
+    cookieStore.get('branch_manager_token')?.value;
+
+  if (token) {
+    redirect('/branch-manager-dashboard/dashboard');
+  } else {
+    redirect('/login');
+  }
 }
 

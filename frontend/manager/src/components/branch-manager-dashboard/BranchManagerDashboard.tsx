@@ -32,7 +32,6 @@ import {
   markTableDeletedLocally,
   isTableDeletedLocally,
   buildTableQrCodeUrl,
-  buildCustomerTableUrl,
 } from '../../redux/features/branchManagerApi';
 import { useAppDispatch } from '../../redux/hooks';
 import { getMe } from '../../redux/features/authApi';
@@ -95,7 +94,7 @@ export default function BranchManagerDashboard({
           else if (serv === 'NEEDS_ATTENTION') status = 'need_attention';
 
             const qrToken = t.qrCodeToken || t.id;
-            const qrCodeUrl = buildTableQrCodeUrl(qrToken, t.id);
+            const qrCodeUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
             const assignedWaiterName = t.assignedWaiter?.name || t.waiterName || (t.waiter ? t.waiter : undefined);
             const waiterId = t.assignedWaiter?.id || t.waiterId;
             return {

@@ -53,11 +53,11 @@ export function setAuthToken(token: string) {
 }
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
-<<<<<<< HEAD
+<<<<<<<<< Temporary merge branch 1
   setAuthToken(tokens.accessToken);
   if (tokens.refreshToken) {
     setCookie('refresh_token', tokens.refreshToken);
-=======
+=========
   // Prefer max-age from the JWT exp claim when present.
   let maxAge: number | undefined;
   try {
@@ -70,7 +70,7 @@ export function setAuthTokens(tokens: { accessToken: string; refreshToken?: stri
     }
   } catch {
     // ignore decode errors
->>>>>>> f1592b1a1b49bc7f020348127108bd8ca6b0af23
+>>>>>>>>> Temporary merge branch 2
   }
   if (typeof document !== 'undefined') {
     const age = maxAge !== undefined ? `; max-age=${maxAge}` : '';
@@ -232,11 +232,11 @@ export class ApiError extends Error {
 
 export interface BaseApiFetchOptions extends RequestInit {
   skipToast?: boolean;
-<<<<<<< HEAD
+<<<<<<<<< Temporary merge branch 1
   _isRetry?: boolean;
-=======
+=========
   __authRetried?: boolean;
->>>>>>> f1592b1a1b49bc7f020348127108bd8ca6b0af23
+>>>>>>>>> Temporary merge branch 2
 }
 
 export async function baseApiFetch<T = any>(
@@ -306,7 +306,7 @@ export async function baseApiFetch<T = any>(
   const rawJson = await response.json().catch(() => null);
 
   if (!response.ok) {
-<<<<<<< HEAD
+<<<<<<<<< Temporary merge branch 1
     if (
       response.status === 401 &&
       !cleanEndpoint.includes('/auth/login') &&
@@ -328,13 +328,13 @@ export async function baseApiFetch<T = any>(
       }
     } else if (response.status === 401) {
       removeAuthToken();
-=======
+=========
     if (response.status === 401 && !cleanEndpoint.startsWith('/auth/') && !options.__authRetried) {
       const refreshed = await refreshAuthSession();
       if (refreshed) {
         return baseApiFetch<T>(endpoint, { ...options, __authRetried: true });
       }
->>>>>>> f1592b1a1b49bc7f020348127108bd8ca6b0af23
+>>>>>>>>> Temporary merge branch 2
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
       }

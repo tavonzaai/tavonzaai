@@ -33,7 +33,9 @@ import {
 import { useAppDispatch, useAppSelector } from '../../../redux/hooks';
 import { getMe, changePasswordThunk, UserProfile, UserAssignment } from '../../../redux/features/authApi';
 import { updateMe } from '../../../redux/features/userApi';
-import { baseApiFetch, setCookie, getCookie } from '../../../redux/api/baseApi';
+import { baseApiFetch } from '../../../redux/api/baseApi';
+import { setActiveBranchIdMemory } from '../../../lib/auth';
+import { getActiveBranchId } from '../../../redux/features/branchManagerApi';
 import { setUser } from '../../../redux/slices/authSlice';
 
 export default function ProfileView() {
@@ -68,12 +70,7 @@ export default function ProfileView() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showRawJson, setShowRawJson] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [activeBranchId, setActiveBranchId] = useState<string>(() => {
-    if (typeof document !== 'undefined') {
-      return getCookie('tavonza_branch_id') || getCookie('branch_id') || '';
-    }
-    return '';
-  });
+  const [activeBranchId, setActiveBranchId] = useState<string>(() => getActiveBranchId());
 
   /**
    * Authoritative Call to GET /users/me
@@ -142,9 +139,11 @@ export default function ProfileView() {
   };
 
   const handleSwitchBranch = (branchId: string, branchName?: string) => {
-    setCookie('tavonza_branch_id', branchId);
-    setCookie('branch_id', branchId);
+    setActiveBranchIdMemory(branchId);
     setActiveBranchId(branchId);
+    if (reduxUser) {
+      dispatch(setUser({ ...reduxUser, branchId } as any));
+    }
     setMessage({
       text: `Active session branch switched to "${branchName || branchId}". Page will reload to apply context.`,
       type: 'success',

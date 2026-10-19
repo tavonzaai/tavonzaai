@@ -1,9 +1,7 @@
 import {
-  getCookie,
-  setCookie,
-  removeCookie,
   getAuthToken,
   removeAuthToken,
+  setAuthToken,
   ADMIN_TOKEN_KEY,
   ADMIN_REFRESH_TOKEN_KEY,
   ADMIN_USER_KEY,
@@ -31,26 +29,25 @@ export function isAdminAuthenticated(): boolean {
   return Boolean(token && token.trim().length > 0);
 }
 
+/** Profile must come from Redux / GET /users/me — never cookies. */
 export function getStoredAdminUser(): AdminUser | null {
-  if (typeof document === 'undefined') return null;
-  const raw = getCookie(ADMIN_USER_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error('Failed to parse admin user session cookie', err);
-    return null;
-  }
+  return null;
 }
 
 export function getAdminProfile(): AdminUser | null {
-  return getStoredAdminUser();
+  return null;
 }
 
+/**
+ * Persist only the access token. User profile stays in Redux from the API.
+ */
 export function loginAdminSession(customUser?: Partial<AdminUser>): AdminUser {
   const token = getAuthToken();
+  if (token) {
+    setAuthToken(token);
+  }
 
-  const user: AdminUser = {
+  return {
     id: customUser?.id || '',
     name: customUser?.name || 'Administrator',
     email: customUser?.email || '',
@@ -59,13 +56,6 @@ export function loginAdminSession(customUser?: Partial<AdminUser>): AdminUser {
     shiftStartedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     ...customUser,
   };
-
-  if (token) {
-    setCookie(ADMIN_TOKEN_KEY, token);
-  }
-  setCookie(ADMIN_USER_KEY, JSON.stringify(user));
-
-  return user;
 }
 
 export function logoutAdminSession(): void {

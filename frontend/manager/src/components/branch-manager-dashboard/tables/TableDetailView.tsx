@@ -23,8 +23,7 @@ import {
   getActiveBranchId,
   LiveOrderItem,
   buildTableQrCodeUrl,
-  buildCustomerTableUrl,
-  getCustomerAppBaseUrl,
+  getCustomerTableUrl,
 } from '../../../redux/features/branchManagerApi';
 import EditTableModal from './EditTableModal';
 import { confirmDeleteTable, showDeleteSuccess, showDeleteError } from '../../../lib/swal';
@@ -368,8 +367,8 @@ export default function TableDetailView({
                   ?qr={liveTable.qrCodeToken || liveTable.id}
                 </span>
               </div>
-              <p className="text-[11px] text-neutral-500 pt-1 leading-normal break-all">
-                Customers scan this QR code to visit <span className="text-neutral-400 font-mono">{getCustomerAppBaseUrl()}?qr=...</span>, login, and place live dine-in orders.
+              <p className="text-[11px] text-neutral-500 pt-1 leading-normal">
+                Customers scan this QR code to visit the live table ordering page, login, and place dine-in orders.
               </p>
             </div>
 
@@ -377,7 +376,7 @@ export default function TableDetailView({
               <button
                 type="button"
                 onClick={() => {
-                  const url = buildCustomerTableUrl(liveTable.qrCodeToken, liveTable.id);
+                  const url = getCustomerTableUrl(liveTable.qrCodeToken || liveTable.id);
                   navigator.clipboard.writeText(url);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);

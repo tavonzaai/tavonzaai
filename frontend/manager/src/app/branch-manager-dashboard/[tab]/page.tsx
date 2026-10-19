@@ -24,6 +24,15 @@ export default async function BranchManagerTabPage({
 }: {
   params: Promise<{ tab: string }>;
 }) {
+  const cookieStore = await cookies();
+  const token =
+    cookieStore.get('access_token')?.value ||
+    cookieStore.get('branch_manager_token')?.value;
+
+  if (!token) {
+    redirect('/login');
+  }
+
   const resolvedParams = await params;
   const tabParam = resolvedParams?.tab?.toLowerCase() || '';
   const tabName = routeToNav[tabParam] || 'Dashboard';

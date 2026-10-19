@@ -45,8 +45,9 @@ export default function LoginView({ onLoginSuccess, onForgotPassword }: LoginVie
         name: logged.name,
         email: logged.email,
         role: logged.role,
+        branchId: logged.branchId,
         assignments: logged.assignments,
-      })
+      } as any)
     );
 
     onLoginSuccess();

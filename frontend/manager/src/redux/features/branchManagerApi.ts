@@ -1,5 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { baseApiFetch, getCookie } from '../api/baseApi';
+import { baseApiFetch } from '../api/baseApi';
+import {
+  getActiveBranchIdMemory,
+  getBranchIdFromAccessToken,
+  setActiveBranchIdMemory,
+} from '../../lib/auth';
+import { store } from '../store';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -7,25 +13,34 @@ export function isValidUuid(id: any): boolean {
   return typeof id === 'string' && UUID_REGEX.test(id.trim());
 }
 
+/**
+ * Active branch comes from session memory / Redux / JWT — never cookies.
+ */
 export function getActiveBranchId(): string {
-  const fromCookie = getCookie('tavonza_branch_id') || getCookie('branch_id') || getCookie('active_branch_id');
-  if (fromCookie && isValidUuid(fromCookie)) return fromCookie;
+  const fromMemory = getActiveBranchIdMemory();
+  if (fromMemory && isValidUuid(fromMemory)) return fromMemory;
 
-  const rawUser = getCookie('branch_manager_user');
-  if (rawUser) {
-    try {
-      const parsed = JSON.parse(rawUser);
-      if (parsed?.branchId && isValidUuid(parsed.branchId)) return parsed.branchId;
-      if (parsed?.assignments?.[0]?.branchId && isValidUuid(parsed.assignments[0].branchId)) {
-        return parsed.assignments[0].branchId;
-      }
-      if (parsed?.assignments?.[0]?.branch?.id && isValidUuid(parsed.assignments[0].branch.id)) {
-        return parsed.assignments[0].branch.id;
-      }
-    } catch {}
+  try {
+    const user = store.getState()?.auth?.user as any;
+    if (user?.branchId && isValidUuid(user.branchId)) {
+      setActiveBranchIdMemory(user.branchId);
+      return user.branchId;
+    }
+    const assignmentBranch =
+      user?.assignments?.[0]?.branch?.id || user?.assignments?.[0]?.branchId;
+    if (assignmentBranch && isValidUuid(assignmentBranch)) {
+      setActiveBranchIdMemory(assignmentBranch);
+      return assignmentBranch;
+    }
+  } catch {}
+
+  const fromToken = getBranchIdFromAccessToken();
+  if (fromToken) {
+    setActiveBranchIdMemory(fromToken);
+    return fromToken;
   }
 
-  // Fallback to primary seed branch ID (Downtown HQ)
+  // Last-resort seed branch (Downtown) when JWT has no branch claim yet
   return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
 }
 
@@ -281,69 +296,43 @@ export interface KitchenTicketItem {
 }
 
 /**
- * Canonical customer app URL resolver:
- * - Production cloud: https://tavonza.com (or https://prod.tavonza.com)
- * - Local dev: http://localhost:3100
- * - Explicit override: NEXT_PUBLIC_CUSTOMER_APP_URL
+ * Resolves the base URL for the customer ordering application.
+ * - Prioritizes NEXT_PUBLIC_CUSTOMER_APP_URL if defined.
+ * - In production / HTTPS / public domains, never attaches :3100.
+ * - For local development, falls back to http://localhost:3100 (or local IP with port 3100).
  */
-export function getCustomerAppBaseUrl(): string {
-  const envUrl =
-    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_CUSTOMER_APP_URL) ||
-    (typeof process !== 'undefined' && process.env?.CUSTOMER_APP_URL);
-  if (envUrl && String(envUrl).trim()) {
-    return String(envUrl).trim().replace(/\/$/, '');
+export function getCustomerBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_CUSTOMER_APP_URL || process.env.CUSTOMER_APP_URL;
+  if (envUrl) {
+    return envUrl.trim().replace(/\/$/, '');
   }
 
   if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname.toLowerCase();
+    const { protocol, hostname } = window.location;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isIpAddress = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
 
-    // 1. Local loopback
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
-      return 'http://localhost:3100';
+    // If on HTTPS or any standard domain (e.g. manager.tavonza.com), use the origin without :3100
+    if (protocol === 'https:' || (!isLocalhost && !isIpAddress)) {
+      return `${protocol}//${hostname}`;
     }
 
-    // 2. Local LAN testing (e.g. mobile testing on same Wi-Fi)
-    const isPrivateIp = /^(?:192\.168\.|10\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(hostname);
-    if (isPrivateIp) {
-      return `${window.location.protocol}//${hostname}:3100`;
+    // Local network IP during development (e.g. 192.168.1.5:3100)
+    if (isIpAddress && !isLocalhost) {
+      return `${protocol}//${hostname}:3100`;
     }
-
-    // 3. Tavonza official production & staging domains
-    if (hostname.includes('tavonza.com')) {
-      if (hostname.includes('prod-') || hostname.startsWith('prod.')) {
-        return 'https://prod.tavonza.com';
-      }
-      return 'https://tavonza.com';
-    }
-
-    // 4. Custom multi-tenant domain (e.g. manager.bistro.com -> https://bistro.com)
-    const parts = hostname.split('.');
-    if (parts.length > 2) {
-      const rootDomain = parts.slice(1).join('.');
-      return `${window.location.protocol}//${rootDomain}`;
-    }
-
-    return `${window.location.protocol}//${hostname}`;
   }
 
   return 'http://localhost:3100';
 }
 
-/**
- * Builds the direct customer join URL for a table:
- * E.g., https://tavonza.com/?qr=<token> or http://localhost:3100/?qr=<token>
- */
-export function buildCustomerTableUrl(token?: string | null, fallbackId?: string | null): string {
-  const effectiveToken = token || fallbackId || '';
-  const base = getCustomerAppBaseUrl();
-  return `${base}?qr=${encodeURIComponent(effectiveToken)}`;
+export function getCustomerTableUrl(token: string): string {
+  const base = getCustomerBaseUrl();
+  return `${base}?qr=${encodeURIComponent(token)}`;
 }
 
-/**
- * Builds the QR Code image URL pointing to the customer ordering page
- */
-export function buildTableQrCodeUrl(token?: string | null, fallbackId?: string | null): string {
-  const targetUrl = buildCustomerTableUrl(token, fallbackId);
+export function buildTableQrCodeUrl(token: string): string {
+  const targetUrl = getCustomerTableUrl(token);
   return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetUrl)}`;
 }
 
@@ -521,8 +510,8 @@ export const branchManagerService = {
       });
       const token = (regen as any)?.qrCodeToken || (regen as any)?.data?.qrCodeToken;
       return {
-        qrCodeUrl: token ? buildTableQrCodeUrl(token, tableId) : '',
-        tableUrl: buildCustomerTableUrl(token, tableId),
+        qrCodeUrl: token ? buildTableQrCodeUrl(token) : '',
+        tableUrl: token ? getCustomerTableUrl(token) : '',
       };
     }
   },
