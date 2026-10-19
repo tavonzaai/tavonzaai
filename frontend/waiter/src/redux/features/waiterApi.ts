@@ -1,8 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { baseApiFetch } from '../api/baseApi';
 
+export const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+export const DEFAULT_FALLBACK_TABLE_ID = 'dc4786be-b894-4337-ab7e-4f7b56d256c4';
+
 export const isUUID = (val?: string | null): boolean =>
-  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
+  Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
 
 export function getActiveBranchId(): string {
   if (typeof window !== 'undefined') {
@@ -24,9 +27,60 @@ export function getActiveBranchId(): string {
           if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
         } catch {}
       }
+
+      // 3. LocalStorage
+      const localBranch =
+        localStorage.getItem('active_branch_id') ||
+        localStorage.getItem('tavonza_branch_id') ||
+        localStorage.getItem('branch_id') ||
+        localStorage.getItem('waiter_branch_id');
+      if (localBranch && isUUID(localBranch)) return localBranch;
+
+      const localUser = localStorage.getItem('waiter_user') || localStorage.getItem('user');
+      if (localUser) {
+        try {
+          const parsed = JSON.parse(localUser);
+          if (isUUID(parsed?.branchId)) return parsed.branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
+          if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
+        } catch {}
+      }
+
+      // 4. URL query param
+      const urlParams = new URLSearchParams(window.location.search);
+      const qBranch = urlParams.get('branchId') || urlParams.get('branch');
+      if (qBranch && isUUID(qBranch)) return qBranch;
     } catch {}
   }
-  return '';
+  return process.env.NEXT_PUBLIC_DEFAULT_BRANCH_ID || DEFAULT_FALLBACK_BRANCH_ID;
+}
+
+export function getActiveTableId(preferredTableId?: string | null): string {
+  if (preferredTableId && isUUID(preferredTableId)) return preferredTableId;
+  if (typeof window !== 'undefined') {
+    try {
+      // 1. Direct table cookies
+      const match = document.cookie.match(/(?:^|;\s*)(?:waiter_table_id|tavonza_table_id|active_table_id|table_id)=([^;]+)/);
+      if (match && match[1]) {
+        const val = decodeURIComponent(match[1]);
+        if (isUUID(val)) return val;
+      }
+
+      // 2. LocalStorage
+      const localTable =
+        localStorage.getItem('waiter_table_id') ||
+        localStorage.getItem('tavonza_table_id') ||
+        localStorage.getItem('active_table_id') ||
+        localStorage.getItem('table_id');
+      if (localTable && isUUID(localTable)) return localTable;
+
+      // 3. URL query param
+      const urlParams = new URLSearchParams(window.location.search);
+      const qTable = urlParams.get('tableId') || urlParams.get('table');
+      if (qTable && isUUID(qTable)) return qTable;
+    } catch {}
+  }
+  return process.env.NEXT_PUBLIC_DEFAULT_TABLE_ID || DEFAULT_FALLBACK_TABLE_ID;
 }
 
 export interface WaiterTableAssignment {
@@ -104,8 +158,9 @@ export interface RejectOrderPayload {
 export interface CreateOrderOnBehalfPayload {
   branchId: string;
   tableId: string;
-  tableSessionId: string;
-  customerIdentifier: string;
+  tableSessionId?: string;
+  customerIdentifier?: string;
+  specialInstructions?: string;
   items: Array<{
     menuItemId: string;
     name: string;
@@ -120,10 +175,38 @@ export const waiterService = {
   getMyTables: async (branchId?: string): Promise<WaiterTableAssignment[]> => {
     const resolvedBranchId = (branchId && isUUID(branchId)) ? branchId : getActiveBranchId();
     const query = resolvedBranchId && isUUID(resolvedBranchId) ? `?branchId=${encodeURIComponent(resolvedBranchId)}` : '';
-    const res = await baseApiFetch<WaiterTableAssignment[]>(`/waiter/tables${query}`, {
-      method: 'GET',
-    });
-    return (res as any)?.data || res;
+    try {
+      const res = await baseApiFetch<WaiterTableAssignment[]>(`/waiter/tables${query}`, {
+        method: 'GET',
+      });
+      const data = (res as any)?.data || res;
+      if (Array.isArray(data) && data.length > 0) return data;
+    } catch {}
+
+    // Fallback: If no waiter table assignments exist for this staff user, query all branch tables!
+    if (resolvedBranchId && isUUID(resolvedBranchId)) {
+      try {
+        const allRes = await baseApiFetch<any[]>(`/tables?branchId=${encodeURIComponent(resolvedBranchId)}`, {
+          method: 'GET',
+        });
+        const allData = (allRes as any)?.data || allRes;
+        if (Array.isArray(allData) && allData.length > 0) {
+          return allData.map((t: any) => ({
+            id: t.id,
+            branchId: t.branchId || resolvedBranchId,
+            waiterId: '',
+            tableId: t.id,
+            tableNumber: t.label || t.tableNumber || `Table-${t.id?.slice(0, 2)}`,
+            capacity: t.capacity || 4,
+            serviceStatus: t.serviceStatus || 'AVAILABLE',
+            activeSessionId: t.activeSessionId || null,
+            sessionStart: new Date().toISOString(),
+            sessionEnd: new Date(Date.now() + 8 * 3600000).toISOString(),
+          }));
+        }
+      } catch {}
+    }
+    return [];
   },
 
   assignTable: async (payload: { branchId: string; waiterId: string; tableId: string }): Promise<WaiterTableAssignment> => {
@@ -341,10 +424,42 @@ export const waiterService = {
     return (res as any)?.data || res;
   },
 
+  updateOrderStatus: async (orderId: string, status: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/orders/${encodeURIComponent(orderId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return (res as any)?.data || res;
+  },
+
+  updateTableStatus: async (tableId: string, serviceStatus: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/tables/${encodeURIComponent(tableId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ serviceStatus }),
+    });
+    return (res as any)?.data || res;
+  },
+
   createOrderOnBehalf: async (payload: CreateOrderOnBehalfPayload): Promise<any> => {
+    // Whitelist and format exactly according to NestJS CreateOrderOnBehalfDto
+    // strictly avoiding extra properties like top-level specialInstructions that trigger forbidNonWhitelisted: true
+    const sanitizedBody = {
+      branchId: payload.branchId,
+      tableId: payload.tableId,
+      tableSessionId: payload.tableSessionId,
+      customerIdentifier: payload.customerIdentifier || `guest_${Date.now()}@tavonza.local`,
+      items: (payload.items || []).map((item) => ({
+        menuItemId: item.menuItemId,
+        name: item.name || 'Dish',
+        unitPrice: String(Number(item.unitPrice || 0).toFixed(2)),
+        quantity: Math.max(1, Math.round(Number(item.quantity) || 1)),
+        ...(item.specialInstructions ? { specialInstructions: item.specialInstructions } : {}),
+        ...(Array.isArray(item.addOns) && item.addOns.length > 0 ? { addOns: item.addOns } : {}),
+      })),
+    };
     const res = await baseApiFetch<any>('/waiter/orders', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(sanitizedBody),
     });
     return (res as any)?.data || res;
   },
@@ -391,11 +506,309 @@ export const waiterService = {
     return (res as any)?.data || res;
   },
 
-  getMenuItems: async (branchId: string): Promise<any[]> => {
-    const res = await baseApiFetch<any[]>(`/menus/${encodeURIComponent(branchId)}/items`, {
+  getMenuItems: async (
+    branchId: string,
+    params?: { categoryId?: string; search?: string; popular?: boolean }
+  ): Promise<any[]> => {
+    let url = `/menus/${encodeURIComponent(branchId)}/items`;
+    const q = new URLSearchParams();
+    if (params?.categoryId && isUUID(params.categoryId)) {
+      q.append('categoryId', params.categoryId);
+    }
+    if (params?.search && params.search.trim()) {
+      q.append('search', params.search.trim());
+    }
+    if (params?.popular) {
+      q.append('popular', 'true');
+    }
+    const qs = q.toString();
+    if (qs) url += `?${qs}`;
+
+    const res = await baseApiFetch<any[]>(url, {
       method: 'GET',
     });
     return (res as any)?.data || res;
+  },
+
+  getMenuCategories: async (branchId: string): Promise<any[]> => {
+    const res = await baseApiFetch<any[]>(`/menus/${encodeURIComponent(branchId)}/categories`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  getBranchSessions: async (branchId: string): Promise<any[]> => {
+    try {
+      const res = await baseApiFetch<any[]>(`/sessions/branch/${encodeURIComponent(branchId)}?status=ACTIVE`, {
+        method: 'GET',
+      });
+      const data = (res as any)?.data || res;
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  },
+
+  ensureTableSession: async (payload: {
+    branchId: string;
+    tableId: string;
+    tableNumber?: string;
+  }): Promise<string> => {
+    // 1. Check existing active session for this table in branch
+    try {
+      const activeSessions = await waiterService.getBranchSessions(payload.branchId);
+      if (Array.isArray(activeSessions) && activeSessions.length > 0) {
+        const found = activeSessions.find(
+          (s: any) => s.tableId === payload.tableId && String(s.status || '').toUpperCase() === 'ACTIVE'
+        );
+        if (found?.id && isUUID(found.id)) {
+          return found.id;
+        }
+      }
+    } catch {}
+
+    // 2. Initialize / join table session via /sessions/scan (creates/returns active session)
+    try {
+      const res = await baseApiFetch<any>('/sessions/scan', {
+        method: 'POST',
+        body: JSON.stringify({
+          branchId: payload.branchId,
+          tableId: payload.tableId,
+          tableNumber: payload.tableNumber || 'Table',
+          displayName: 'Floor Waiter',
+        }),
+      });
+      const data = (res as any)?.data || res;
+      const sessionId =
+        (res as any)?.session?.id ||
+        (res as any)?.data?.session?.id ||
+        data?.session?.id ||
+        data?.tableSessionId ||
+        data?.id;
+      if (sessionId && isUUID(sessionId)) {
+        return sessionId;
+      }
+    } catch (scanErr) {
+      console.warn('Failed to ensure table session via /sessions/scan:', scanErr);
+    }
+    return '';
+  },
+
+  getCart: async (branchId: string, tableId: string): Promise<any> => {
+    try {
+      const res = await baseApiFetch<any>(
+        `/orders/cart/${encodeURIComponent(branchId)}/${encodeURIComponent(tableId)}`,
+        { method: 'GET' }
+      );
+      return (res as any)?.data || res;
+    } catch {
+      const fallback = await baseApiFetch<any>(
+        `/orders/cart?branchId=${encodeURIComponent(branchId)}&tableId=${encodeURIComponent(tableId)}`,
+        { method: 'GET' }
+      );
+      return (fallback as any)?.data || fallback;
+    }
+  },
+
+  addItemToCart: async (
+    orderId: string,
+    payload: { menuItemId: string; quantity: number; specialInstructions?: string }
+  ): Promise<any> => {
+    const res = await baseApiFetch<any>(`/orders/cart/${encodeURIComponent(orderId)}/items`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  updateCartItem: async (
+    orderId: string,
+    itemId: string,
+    payload: { quantity?: number; specialInstructions?: string }
+  ): Promise<any> => {
+    const res = await baseApiFetch<any>(
+      `/orders/cart/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
+    return (res as any)?.data || res;
+  },
+
+  removeCartItem: async (orderId: string, itemId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(
+      `/orders/cart/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+    return (res as any)?.data || res;
+  },
+
+  submitCartOrder: async (orderId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/orders/${encodeURIComponent(orderId)}/submit`, {
+      method: 'POST',
+    });
+    return (res as any)?.data || res;
+  },
+
+  syncAndSubmitTableOrder: async (params: {
+    branchId: string;
+    tableId: string;
+    tableNumber?: string;
+    activeSessionId?: string | null;
+    items: Array<{
+      id: string;
+      menuItemId?: string;
+      name: string;
+      price: number;
+      quantity: number;
+      specialInstructions?: string;
+    }>;
+    specialInstructions?: string;
+    customerName?: string;
+    customerPhone?: string;
+  }): Promise<{ orderNumber: string; orderId: string; order: any }> => {
+    const {
+      branchId,
+      tableId,
+      tableNumber,
+      activeSessionId,
+      items,
+      specialInstructions,
+      customerName,
+      customerPhone,
+    } = params;
+
+    // Filter items to ensure valid UUID menuItemId
+    const validItems = (items || [])
+      .map((it) => {
+        const mId = isUUID(it.menuItemId) ? it.menuItemId : (isUUID(it.id) ? it.id : null);
+        if (!mId) return null;
+        return {
+          ...it,
+          menuItemId: mId,
+          quantity: Math.max(1, Math.round(Number(it.quantity) || 1)),
+        };
+      })
+      .filter(Boolean) as Array<{
+        id: string;
+        menuItemId: string;
+        name: string;
+        price: number;
+        quantity: number;
+        specialInstructions?: string;
+      }>;
+
+    if (validItems.length === 0) {
+      throw new Error('Please select at least one menu item to place an order.');
+    }
+
+    let orderResult: { orderNumber: string; orderId: string; order: any } | null = null;
+    let primaryErr: any = null;
+
+    // ── Primary Path: Synchronize Cart & Submit (/orders/cart -> /orders/:id/submit) ──
+    try {
+      const cartRes = await waiterService.getCart(branchId, tableId);
+      const activeOrderId = cartRes?.id || cartRes?.orderId;
+
+      if (activeOrderId && isUUID(activeOrderId)) {
+        const existingBackendItems: any[] = Array.isArray(cartRes?.items) ? cartRes.items : [];
+
+        // Synchronize all line items into the backend draft cart
+        for (const it of validItems) {
+          const existingLine = existingBackendItems.find(
+            (bi: any) => bi.productId === it.menuItemId || bi.menuItemId === it.menuItemId
+          );
+
+          if (!existingLine) {
+            const addRes = await waiterService.addItemToCart(activeOrderId, {
+              menuItemId: it.menuItemId,
+              quantity: it.quantity,
+              specialInstructions: [it.specialInstructions, specialInstructions].filter(Boolean).join(' • ') || undefined,
+            });
+            if (addRes?.items && Array.isArray(addRes.items)) {
+              existingBackendItems.push(...addRes.items);
+            }
+          } else if (existingLine.quantity !== it.quantity) {
+            await waiterService.updateCartItem(activeOrderId, existingLine.id, {
+              quantity: it.quantity,
+            });
+          }
+        }
+
+        // Now that order_items is populated in the database, submit the cart
+        const submitRes = await waiterService.submitCartOrder(activeOrderId);
+        const orderNum =
+          submitRes?.orderNumber ||
+          submitRes?.order?.orderNumber ||
+          `ORD-${activeOrderId.slice(0, 6).toUpperCase()}`;
+
+        // Attempt waiter approval to dispatch straight to kitchen/bar
+        await waiterService.acceptOrder(activeOrderId).catch(() => {});
+
+        orderResult = {
+          orderNumber: orderNum,
+          orderId: activeOrderId,
+          order: submitRes,
+        };
+      }
+    } catch (err: any) {
+      primaryErr = err;
+      console.warn('Cart sync & submit encountered an issue, attempting createOrderOnBehalf fallback:', err);
+    }
+
+    if (orderResult) {
+      return orderResult;
+    }
+
+    // ── Secondary Path: Waiter Create Order on Behalf (/waiter/orders) ──
+    let tableSessionId = (activeSessionId && isUUID(activeSessionId)) ? activeSessionId : '';
+    if (!tableSessionId) {
+      tableSessionId = await waiterService.ensureTableSession({
+        branchId,
+        tableId,
+        tableNumber: tableNumber || 'Table',
+      });
+    }
+
+    if (!tableSessionId || !isUUID(tableSessionId)) {
+      throw primaryErr || new Error('Could not establish an active dining table session. Please verify table status.');
+    }
+
+    const customerIdentifier =
+      customerPhone?.trim() ||
+      (customerName?.trim()
+        ? `${customerName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}@guest.tavonza.local`
+        : `guest_${Date.now()}@tavonza.local`);
+
+    const behalfPayload: CreateOrderOnBehalfPayload = {
+      branchId,
+      tableId,
+      tableSessionId,
+      customerIdentifier,
+      items: validItems.map((vi) => ({
+        menuItemId: vi.menuItemId,
+        name: vi.name,
+        unitPrice: Number(vi.price || 0).toFixed(2),
+        quantity: vi.quantity,
+        specialInstructions: [vi.specialInstructions, specialInstructions].filter(Boolean).join(' • ') || undefined,
+      })),
+    };
+
+    const behalfRes = await waiterService.createOrderOnBehalf(behalfPayload);
+    const createdOrder = behalfRes?.order || behalfRes;
+    const finalOrderNumber =
+      createdOrder?.orderNumber ||
+      `#${(createdOrder?.id || '').slice(0, 5)}` ||
+      'New Order';
+
+    return {
+      orderNumber: finalOrderNumber,
+      orderId: createdOrder?.id || '',
+      order: behalfRes,
+    };
   },
 
   requestOfflinePayment: async (payload: {

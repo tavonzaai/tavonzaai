@@ -26,12 +26,13 @@ import {
   ShieldCheck,
   Search,
   Check,
+  Loader2,
 } from 'lucide-react';
 import { TavonzaLogoIcon } from '@/components/TavonzaLogo';
 import { useAppSelector } from '@/redux/store';
 import { useLogout } from '@/hooks/useLogout';
 import { toast } from 'sonner';
-import { waiterService, getActiveBranchId } from '@/redux/features/waiterApi';
+import { waiterService, getActiveBranchId, getActiveTableId, isUUID, type CreateOrderOnBehalfPayload } from '@/redux/features/waiterApi';
 import OrdersListView from './orders/OrdersListView';
 import OrderDetailView from './orders/OrderDetailView';
 import { OrderItemData } from './orders/orderData';
@@ -47,6 +48,7 @@ interface TableItem {
   orderCount?: number;
   timeWaiting?: string;
   amount?: string;
+  activeSessionId?: string | null;
 }
 
 interface OrderItem {
@@ -65,11 +67,15 @@ interface MenuItem {
   priceFormatted: string;
   image: string;
   tag: 'None Veg' | 'Veg';
-  category: 'Starters' | 'Mains' | 'Drinks' | 'Desserts';
+  category: string;
+  categoryId?: string;
+  categoryName?: string;
 }
 
 interface CartItem {
   id: string;
+  menuItemId?: string;
+  lineItemId?: string;
   name: string;
   price: number;
   priceFormatted: string;
@@ -82,7 +88,8 @@ interface TableOrderDetail {
   id: string;
   orderNumber: string;
   tableId: string;
-  status: 'Pending' | 'Cooking' | 'Ready to Serve' | 'Completed' | 'Served';
+  status: 'Pending' | 'Cooking' | 'Ready to Serve' | 'Completed' | 'Served' | 'Cancelled' | 'Rejected';
+  rawStatus?: string;
   targetTime: string;
   targetDuration: string;
   items: {
@@ -193,6 +200,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   // 3. Table Orders Details State
   const [tableOrderFilter, setTableOrderFilter] = useState<'ALL' | 'Pending' | 'Active' | 'Completed'>('ALL');
   const [tableOrders, setTableOrders] = useState<TableOrderDetail[]>([]);
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
 
   // Real-time polling for tables and pending orders on the home tab
   const loadHomeDashboardData = React.useCallback(async () => {
@@ -243,10 +251,12 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
             location: 'Main Hall',
             status: statusDisplay,
             orderCount: tableOrdersCount,
+            activeSessionId: bt.activeSessionId || null,
           };
         });
         setTables(mappedTables);
         setSelectedTable((prev) => prev || mappedTables[0] || null);
+        setSelectedTableId((prev) => (prev && mappedTables.some((t) => t.id === prev)) ? prev : (mappedTables[0]?.id || ''));
       }
 
       if (Array.isArray(liveOrders)) {
@@ -295,10 +305,86 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
     }
   }, []);
 
+  // Reusable loader for table orders
+  const loadTableOrders = React.useCallback(async (targetTableId?: string) => {
+    const tableId = targetTableId || selectedTable?.id;
+    if (!tableId) return;
+
+    try {
+      const branchId = getActiveBranchId();
+      const orders = await waiterService.queryOrders({
+        branchId,
+        tableId: isUUID(tableId) ? tableId : undefined,
+      });
+
+      if (Array.isArray(orders) && orders.length > 0) {
+        setTableOrders(
+          orders.map((o: any) => {
+            const placed = o.placedAt ? new Date(o.placedAt) : new Date();
+            const timeStr = !isNaN(placed.getTime())
+              ? placed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '10:24';
+            let statusVal: 'Pending' | 'Cooking' | 'Ready to Serve' | 'Completed' | 'Served' | 'Cancelled' | 'Rejected' = 'Pending';
+            const st = String(o.status || '').toUpperCase();
+            if (st === 'CONFIRMED' || st === 'PREPARING' || st === 'ACCEPTED' || st === 'KITCHEN_QUEUE') {
+              statusVal = 'Cooking';
+            } else if (st === 'READY') {
+              statusVal = 'Ready to Serve';
+            } else if (st === 'SERVED' || st === 'COMPLETED') {
+              statusVal = 'Completed';
+            } else if (st === 'CANCELLED') {
+              statusVal = 'Cancelled';
+            } else if (st === 'REJECTED') {
+              statusVal = 'Rejected';
+            } else {
+              statusVal = 'Pending';
+            }
+
+            const rawOrderNum = o.orderNumber
+              ? String(o.orderNumber).replace(/^#+/, '')
+              : (o.id || o.orderId || '').slice(0, 5);
+
+            return {
+              id: o.id || o.orderId,
+              orderNumber: `Order No #${rawOrderNum}`,
+              tableId: tableId,
+              status: statusVal,
+              rawStatus: st,
+              targetTime: timeStr,
+              targetDuration:
+                statusVal === 'Completed'
+                  ? 'Completed'
+                  : statusVal === 'Cancelled'
+                  ? 'Cancelled'
+                  : statusVal === 'Rejected'
+                  ? 'Rejected'
+                  : 'Target 15min',
+              items:
+                Array.isArray(o.items) && o.items.length > 0
+                  ? o.items.map((i: any) => ({
+                      name: i.productName || i.name || 'Dish',
+                      price: `$${Number(i.unitPrice || 0).toFixed(2)}`,
+                    }))
+                  : [{ name: `${o.itemsCount || 1} Item(s)`, price: `$${Number(o.totalAmount || o.total || 0).toFixed(2)}` }],
+              totalAmount: `$${Number(o.totalAmount || o.total || 0).toFixed(2)}`,
+            };
+          })
+        );
+      } else {
+        setTableOrders([]);
+      }
+    } catch (err) {
+      console.error('Failed to query orders for table:', err);
+    }
+  }, [selectedTable?.id]);
+
   useEffect(() => {
     loadHomeDashboardData();
     const handleRealtime = () => {
       loadHomeDashboardData();
+      if (selectedTable?.id) {
+        loadTableOrders(selectedTable.id);
+      }
     };
     window.addEventListener('tavonza:table_status_changed', handleRealtime);
     window.addEventListener('tavonza:table_session_changed', handleRealtime);
@@ -317,65 +403,32 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
       window.removeEventListener('tavonza:waiter_called', handleRealtime);
       window.removeEventListener('tavonza:payment_status_changed', handleRealtime);
     };
-  }, [loadHomeDashboardData]);
+  }, [loadHomeDashboardData, loadTableOrders, selectedTable?.id]);
 
   // Load orders for selected table
   useEffect(() => {
-    if (selectedTable?.id && selectedTable.id !== 'T-01') {
-      const branchId = getActiveBranchId();
-      waiterService
-        .queryOrders({ branchId, tableId: selectedTable.id })
-
-        .then((orders) => {
-          if (Array.isArray(orders) && orders.length > 0) {
-            setTableOrders(
-              orders.map((o: any) => {
-                const placed = o.placedAt ? new Date(o.placedAt) : new Date();
-                const timeStr = !isNaN(placed.getTime())
-                  ? placed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : '10:24';
-                let statusVal: 'Pending' | 'Cooking' | 'Ready to Serve' | 'Completed' = 'Pending';
-                if (o.status === 'CONFIRMED' || o.status === 'PREPARING') statusVal = 'Cooking';
-                else if (o.status === 'READY') statusVal = 'Ready to Serve';
-                else if (o.status === 'SERVED' || o.status === 'COMPLETED') statusVal = 'Completed';
-
-                return {
-                  id: o.id || o.orderId,
-                  orderNumber: o.orderNumber ? `Order No #${o.orderNumber}` : `Order #${(o.id || '').slice(0, 5)}`,
-                  tableId: selectedTable.id,
-                  status: statusVal,
-                  targetTime: timeStr,
-                  targetDuration: statusVal === 'Completed' ? 'Completed' : 'Target 15min',
-                  items:
-                    Array.isArray(o.items) && o.items.length > 0
-                      ? o.items.map((i: any) => ({
-                          name: i.productName || i.name || 'Dish',
-                          price: `$${Number(i.unitPrice || 0).toFixed(2)}`,
-                        }))
-                      : [{ name: `${o.itemsCount || 1} Item(s)`, price: `$${Number(o.totalAmount || 0).toFixed(2)}` }],
-                  totalAmount: `$${Number(o.totalAmount || o.total || 0).toFixed(2)}`,
-                };
-              })
-            );
-          } else {
-            setTableOrders([]);
-          }
-        })
-        .catch(() => {});
+    if (selectedTable?.id) {
+      loadTableOrders(selectedTable.id);
     }
-  }, [selectedTable?.id]);
+  }, [selectedTable?.id, loadTableOrders]);
 
   // 4. Browse Menu & Search States
   const [menuCatalog, setMenuCatalog] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<'All' | 'Starters' | 'Mains' | 'Drinks' | 'Desserts'>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     const fetchCatalog = async () => {
       try {
         const branchId = getActiveBranchId();
-        const items = await waiterService.getMenuItems(branchId);
+        const [items, cats] = await Promise.all([
+          waiterService.getMenuItems(branchId),
+          waiterService.getMenuCategories(branchId).catch(() => []),
+        ]);
+
         if (mounted && Array.isArray(items)) {
           const mapped: MenuItem[] = items.map((it: any) => ({
             id: it.id,
@@ -384,12 +437,42 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
             price: Number(it.price) || 0,
             priceFormatted: `$${Number(it.price || 0).toFixed(2)}`,
             image: it.imageUrl || it.image || '/images/burger.jpg',
-            tag: it.dietaryTags?.includes('Vegetarian') ? 'Veg' : 'None Veg',
-            category: (['Starters', 'Mains', 'Drinks', 'Desserts'].includes(it.categoryName)
-              ? it.categoryName
-              : 'Mains') as any,
+            tag: (it.isVegetarian || it.dietBadge === 'Vegetarian' || it.dietBadge === 'Vegan' || it.dietaryTags?.includes('Vegetarian')) ? 'Veg' : 'None Veg',
+            category: it.categoryName || it.category || 'Mains',
+            categoryId: it.categoryId || '',
+            categoryName: it.categoryName || it.category || '',
           }));
           setMenuCatalog(mapped);
+
+          if (Array.isArray(cats) && cats.length > 0) {
+            setCategories(cats.map((c: any) => ({ id: c.id, name: c.name })));
+          } else {
+            const uniqueCats = Array.from(
+              new Set(mapped.map((m) => m.categoryName || m.category).filter(Boolean))
+            ).map((name) => ({ id: name, name }));
+            if (uniqueCats.length > 0) {
+              setCategories(uniqueCats);
+            }
+          }
+
+          // Also ensure branch tables are available for table cart selection
+          const branchTables = await waiterService.getMyTables(branchId).catch(() => []);
+          if (mounted && Array.isArray(branchTables) && branchTables.length > 0) {
+            const mappedTables: TableItem[] = branchTables.map((bt: any) => {
+              const tableLabel = bt.tableNumber || bt.label || `Table-${bt.id?.slice(0, 2)}`;
+              return {
+                id: bt.tableId || bt.id,
+                name: tableLabel.startsWith('Table') ? tableLabel : `Table-${tableLabel}`,
+                guests: `${bt.capacity || 4} Guests`,
+                location: 'Main Hall',
+                status: (bt.serviceStatus === 'OCCUPIED' ? 'Occupied' : 'Available') as any,
+                activeSessionId: bt.activeSessionId || null,
+              };
+            });
+            setTables((prev) => (prev.length > 0 ? prev : mappedTables));
+            setSelectedTable((prev) => prev || mappedTables[0] || null);
+            setSelectedTableId((prev) => prev || (mappedTables[0]?.id || ''));
+          }
         }
       } catch (err) {
         console.error('Failed to load menu catalog:', err);
@@ -401,40 +484,161 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
     };
   }, []);
 
+  // Pagination & Search States
+  const [menuCurrentPage, setMenuCurrentPage] = useState(1);
+  const MENU_ITEMS_PER_PAGE = 6;
+  const [homeSearchQuery, setHomeSearchQuery] = useState('');
+
+  // Reset pagination when search or category changes
+  useEffect(() => {
+    setMenuCurrentPage(1);
+  }, [menuSearchQuery, selectedCategory]);
+
+  // Debounced API Search
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(async () => {
+      if (menuSearchQuery.trim()) {
+        try {
+          const branchId = getActiveBranchId();
+          const items = await waiterService.getMenuItems(branchId, { search: menuSearchQuery.trim() });
+          if (active && Array.isArray(items) && items.length > 0) {
+            const mapped: MenuItem[] = items.map((it: any) => ({
+              id: it.id,
+              name: it.name,
+              description: it.description || '',
+              price: Number(it.price) || 0,
+              priceFormatted: `$${Number(it.price || 0).toFixed(2)}`,
+              image: it.imageUrl || it.image || '/images/burger.jpg',
+              tag: (it.isVegetarian || it.dietBadge === 'Vegetarian' || it.dietBadge === 'Vegan' || it.dietaryTags?.includes('Vegetarian')) ? 'Veg' : 'None Veg',
+              category: it.categoryName || it.category || 'Mains',
+              categoryId: it.categoryId || '',
+              categoryName: it.categoryName || it.category || '',
+            }));
+            setMenuCatalog((prev) => {
+              const ids = new Set(mapped.map((m) => m.id));
+              const remaining = prev.filter((p) => !ids.has(p.id));
+              return [...mapped, ...remaining];
+            });
+          }
+        } catch {}
+      }
+    }, 300);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [menuSearchQuery]);
+
   // Filtered menu items
   const filteredMenuItems = menuCatalog.filter((item) => {
-    const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
+    const matchesCategory =
+      selectedCategory === 'All' ||
+      item.categoryId === selectedCategory ||
+      item.categoryName === selectedCategory ||
+      item.category === selectedCategory;
     const matchesQuery =
+      !menuSearchQuery.trim() ||
       item.name.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(menuSearchQuery.toLowerCase());
+      item.description.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
+      item.tag.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
+      (item.category && item.category.toLowerCase().includes(menuSearchQuery.toLowerCase()));
     return matchesCategory && matchesQuery;
+  });
+
+  const totalMenuPages = Math.max(1, Math.ceil(filteredMenuItems.length / MENU_ITEMS_PER_PAGE));
+  const paginatedMenuItems = filteredMenuItems.slice(
+    (menuCurrentPage - 1) * MENU_ITEMS_PER_PAGE,
+    menuCurrentPage * MENU_ITEMS_PER_PAGE
+  );
+
+  const displayedTables = tables.filter((table) => {
+    if (!homeSearchQuery.trim()) return true;
+    const q = homeSearchQuery.toLowerCase();
+    return (
+      table.name.toLowerCase().includes(q) ||
+      table.status.toLowerCase().includes(q) ||
+      table.guests.toLowerCase().includes(q) ||
+      table.location.toLowerCase().includes(q)
+    );
   });
 
   // 5. Cart / Order Ticket State
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartOrderId, setCartOrderId] = useState<string | null>(null);
+  const [backendCartItems, setBackendCartItems] = useState<any[]>([]);
 
   // 6. Create Order Form States
   const [selectedModifications, setSelectedModifications] = useState<string[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [selectedTableId, setSelectedTableId] = useState('T-01');
+  const [selectedTableId, setSelectedTableId] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
+
+  // Synchronize cart from backend whenever table changes
+  useEffect(() => {
+    let mounted = true;
+    const loadTableCart = async () => {
+      const branchId = getActiveBranchId();
+      const targetTableId = getActiveTableId(selectedTableId || selectedTable?.id || tables[0]?.id);
+      if (!branchId || !targetTableId || !isUUID(branchId) || !isUUID(targetTableId)) return;
+
+      try {
+        const cartRes = await waiterService.getCart(branchId, targetTableId);
+        if (mounted && cartRes) {
+          const orderId = cartRes.id || cartRes.orderId;
+          if (orderId) setCartOrderId(orderId);
+          if (Array.isArray(cartRes.items) && cartRes.items.length > 0) {
+            setBackendCartItems(cartRes.items);
+            const mapped: CartItem[] = cartRes.items.map((it: any) => {
+              const matchingItem = menuCatalog.find(
+                (m) => m.id === (it.productId || it.menuItemId)
+              );
+              const unitPrice = Number(it.unitPrice ?? matchingItem?.price ?? 0);
+              return {
+                id: it.productId || it.menuItemId || it.id,
+                menuItemId: it.productId || it.menuItemId || it.id,
+                lineItemId: it.id,
+                name: it.productNameSnapshot || it.productName || it.name || matchingItem?.name || 'Dish',
+                price: unitPrice,
+                priceFormatted: `$${unitPrice.toFixed(2)}`,
+                image: it.imageUrl || matchingItem?.image || '/images/burger.jpg',
+                tag: matchingItem?.tag || 'None Veg',
+                quantity: it.quantity || 1,
+              };
+            });
+            setCartItems(mapped);
+          }
+        }
+      } catch (err) {
+        // No active draft cart for table yet
+      }
+    };
+    loadTableCart();
+    return () => {
+      mounted = false;
+    };
+  }, [selectedTableId, selectedTable?.id, tables, menuCatalog]);
 
   // Cart helper functions
   const totalCartQuantity = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
-  const handleAddToCart = (menuItem: MenuItem) => {
+  const handleAddToCart = async (menuItem: MenuItem) => {
+    // 1. Optimistic UI update so button immediately shows checkmark and toast appears
     setCartItems((prev) => {
-      const existing = prev.find((item) => item.id === menuItem.id);
+      const existing = prev.find((item) => item.id === menuItem.id || item.menuItemId === menuItem.id);
       if (existing) {
         return prev.map((item) =>
-          item.id === menuItem.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === menuItem.id || item.menuItemId === menuItem.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
         );
       }
       return [
         ...prev,
         {
           id: menuItem.id,
+          menuItemId: menuItem.id,
           name: menuItem.name,
           price: menuItem.price,
           priceFormatted: menuItem.priceFormatted,
@@ -445,25 +649,145 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
       ];
     });
     toast.success(`Added ${menuItem.name} to order`);
+
+    // 2. Real API Call to Cart (visible in Network tab)
+    try {
+      const branchId = getActiveBranchId();
+      const targetTableId = getActiveTableId(selectedTableId || selectedTable?.id || tables[0]?.id);
+
+      if (branchId && targetTableId && isUUID(branchId) && isUUID(targetTableId)) {
+        let activeOrderId = cartOrderId;
+        let currentBackendItems = backendCartItems;
+
+        if (!activeOrderId) {
+          const cartRes = await waiterService.getCart(branchId, targetTableId);
+          activeOrderId = cartRes?.id || cartRes?.orderId;
+          if (activeOrderId) {
+            setCartOrderId(activeOrderId);
+          }
+          if (Array.isArray(cartRes?.items)) {
+            currentBackendItems = cartRes.items;
+            setBackendCartItems(cartRes.items);
+          }
+        }
+
+        if (activeOrderId && isUUID(activeOrderId)) {
+          const existingBackendItem = currentBackendItems.find(
+            (bi: any) => bi.productId === menuItem.id || bi.menuItemId === menuItem.id
+          );
+
+          let updatedCart: any;
+          if (existingBackendItem?.id) {
+            updatedCart = await waiterService.updateCartItem(activeOrderId, existingBackendItem.id, {
+              quantity: (existingBackendItem.quantity || 1) + 1,
+            });
+          } else {
+            updatedCart = await waiterService.addItemToCart(activeOrderId, {
+              menuItemId: menuItem.id,
+              quantity: 1,
+            });
+          }
+
+          if (updatedCart?.items && Array.isArray(updatedCart.items)) {
+            setBackendCartItems(updatedCart.items);
+            const lineItem = updatedCart.items.find(
+              (it: any) => (it.productId || it.menuItemId) === menuItem.id
+            );
+            if (lineItem?.id) {
+              setCartItems((prev) =>
+                prev.map((ci) =>
+                  ci.id === menuItem.id || ci.menuItemId === menuItem.id
+                    ? { ...ci, lineItemId: lineItem.id }
+                    : ci
+                )
+              );
+            }
+          }
+        }
+      }
+    } catch (apiErr) {
+      console.warn('POST /orders/cart/:orderId/items encountered an issue, kept in local ticket:', apiErr);
+    }
   };
 
-  const handleUpdateQuantity = (id: string, delta: number) => {
+  const handleUpdateQuantity = async (id: string, delta: number) => {
+    const existing = cartItems.find((ci) => ci.id === id || ci.menuItemId === id || ci.lineItemId === id);
+    if (!existing) return;
+
+    const newQty = existing.quantity + delta;
+
+    // Optimistic UI update
     setCartItems((prev) =>
       prev
         .map((item) => {
-          if (item.id === id) {
-            const newQty = item.quantity + delta;
+          if (item.id === id || item.menuItemId === id) {
             return newQty > 0 ? { ...item, quantity: newQty } : null;
           }
           return item;
         })
         .filter(Boolean) as CartItem[]
     );
+
+    // Call API in background
+    try {
+      const branchId = getActiveBranchId();
+      const targetTableId = getActiveTableId(selectedTableId || selectedTable?.id || tables[0]?.id);
+      let activeOrderId = cartOrderId;
+      if (!activeOrderId && branchId && targetTableId) {
+        const cartRes = await waiterService.getCart(branchId, targetTableId);
+        activeOrderId = cartRes?.id || cartRes?.orderId;
+        if (activeOrderId) setCartOrderId(activeOrderId);
+        if (cartRes?.items) setBackendCartItems(cartRes.items);
+      }
+
+      const targetLineItemId = existing.lineItemId || backendCartItems.find(
+        (bi: any) => bi.productId === id || bi.menuItemId === id || bi.id === id
+      )?.id;
+
+      if (activeOrderId && targetLineItemId) {
+        if (newQty > 0) {
+          const res = await waiterService.updateCartItem(activeOrderId, targetLineItemId, { quantity: newQty });
+          if (res?.items) setBackendCartItems(res.items);
+        } else {
+          const res = await waiterService.removeCartItem(activeOrderId, targetLineItemId);
+          if (res?.items) setBackendCartItems(res.items);
+        }
+      }
+    } catch (err) {
+      console.warn('Cart quantity update API error:', err);
+    }
   };
 
-  const handleDeleteCartItem = (id: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
+  const handleDeleteCartItem = async (id: string) => {
+    const existing = cartItems.find((ci) => ci.id === id || ci.menuItemId === id || ci.lineItemId === id);
+
+    // Optimistic UI update
+    setCartItems((prev) => prev.filter((item) => item.id !== id && item.menuItemId !== id));
     toast.info('Item removed from order');
+
+    // Call API in background
+    try {
+      const branchId = getActiveBranchId();
+      const targetTableId = getActiveTableId(selectedTableId || selectedTable?.id || tables[0]?.id);
+      let activeOrderId = cartOrderId;
+      if (!activeOrderId && branchId && targetTableId) {
+        const cartRes = await waiterService.getCart(branchId, targetTableId);
+        activeOrderId = cartRes?.id || cartRes?.orderId;
+        if (activeOrderId) setCartOrderId(activeOrderId);
+        if (cartRes?.items) setBackendCartItems(cartRes.items);
+      }
+
+      const targetLineItemId = existing?.lineItemId || backendCartItems.find(
+        (bi: any) => bi.productId === id || bi.menuItemId === id || bi.id === id
+      )?.id;
+
+      if (activeOrderId && targetLineItemId) {
+        const res = await waiterService.removeCartItem(activeOrderId, targetLineItemId);
+        if (res?.items) setBackendCartItems(res.items);
+      }
+    } catch (err) {
+      console.warn('Cart item delete API error:', err);
+    }
   };
 
   const toggleModification = (mod: string) => {
@@ -472,99 +796,287 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
     );
   };
 
-  const handleClearTable = (tableId: string) => {
-    setTables((prev) =>
-      prev.map((t) =>
-        t.id === tableId
-          ? { ...t, status: 'Available', orderCount: undefined, timeWaiting: undefined }
-          : t
-      )
-    );
-    toast.success(`${tableId} has been cleared and is now Available.`);
+  const handleClearTable = async (tableId: string) => {
+    try {
+      if (isUUID(tableId)) {
+        await waiterService.updateTableStatus(tableId, 'AVAILABLE').catch(() => {});
+      }
+      setTables((prev) =>
+        prev.map((t) =>
+          t.id === tableId
+            ? { ...t, status: 'Available', orderCount: undefined, timeWaiting: undefined }
+            : t
+        )
+      );
+      toast.success(`Table has been cleared and is now Available.`);
+      await loadHomeDashboardData();
+    } catch (err: any) {
+      toast.error(`Failed to clear table: ${err.message || 'Error occurred'}`);
+    }
   };
 
-  // Interactive Table Orders Actions (Matching Figma Screenshots 1, 2, 3)
-  const handleAcceptTableOrder = (orderId: string) => {
-    setTableOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'Cooking' } : o))
-    );
-    toast.success('Order #1230 Accepted!', {
-      description: 'Kitchen is now preparing the items (Cooking state).',
-    });
+  // Interactive Table Orders Actions with Real API Calls
+  const handleAcceptTableOrder = async (orderId: string) => {
+    const targetOrder = tableOrders.find((o) => o.id === orderId);
+    const orderDisplayNum = targetOrder
+      ? targetOrder.orderNumber.replace('Order No ', '')
+      : `#${orderId.slice(0, 5)}`;
+
+    if (targetOrder?.status === 'Cancelled' || targetOrder?.status === 'Rejected') {
+      toast.error(`Order ${orderDisplayNum} is ${targetOrder.status.toLowerCase()} and cannot be accepted.`);
+      return;
+    }
+
+    setProcessingOrderId(orderId);
+    try {
+      try {
+        await waiterService.acceptOrder(orderId);
+      } catch (apiErr: any) {
+        const msg = String(apiErr?.message || '');
+        if (msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('status') || msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('rejected')) {
+          throw apiErr;
+        }
+        console.warn('waiterService.acceptOrder failed, attempting updateOrderStatus fallback:', apiErr);
+        await waiterService.updateOrderStatus(orderId, 'ACCEPTED');
+      }
+
+      setTableOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: 'Cooking' } : o))
+      );
+
+      toast.success(`Order ${orderDisplayNum} Accepted!`, {
+        description: 'Kitchen is now preparing the items (Cooking state).',
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('tavonza:order_status_changed', {
+            detail: { orderId, status: 'ACCEPTED' },
+          })
+        );
+      }
+
+      await Promise.all([
+        loadHomeDashboardData(),
+        loadTableOrders(selectedTable?.id),
+      ]);
+    } catch (err: any) {
+      console.error('Failed to accept table order:', err);
+      toast.error(`Order ${orderDisplayNum}: ${err.message || 'Error occurred'}`);
+      // Refresh to ensure UI shows the authoritative status from the backend database
+      await Promise.all([
+        loadHomeDashboardData(),
+        loadTableOrders(selectedTable?.id),
+      ]);
+    } finally {
+      setProcessingOrderId(null);
+    }
   };
 
-  const handleRejectTableOrder = (orderId: string) => {
-    setTableOrders((prev) => prev.filter((o) => o.id !== orderId));
-    toast.error('Order #1230 has been rejected.');
+  const handleRejectTableOrder = async (orderId: string) => {
+    const targetOrder = tableOrders.find((o) => o.id === orderId);
+    const orderDisplayNum = targetOrder
+      ? targetOrder.orderNumber.replace('Order No ', '')
+      : `#${orderId.slice(0, 5)}`;
+
+    if (targetOrder?.status === 'Cancelled' || targetOrder?.status === 'Rejected') {
+      toast.error(`Order ${orderDisplayNum} is already ${targetOrder.status.toLowerCase()}.`);
+      return;
+    }
+
+    setProcessingOrderId(orderId);
+    try {
+      try {
+        await waiterService.rejectOrder({
+          orderId,
+          reason: 'Rejected by floor waiter',
+          reasonCode: 'OTHER',
+        });
+      } catch (apiErr: any) {
+        const msg = String(apiErr?.message || '');
+        if (msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('status') || msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('rejected')) {
+          throw apiErr;
+        }
+        console.warn('waiterService.rejectOrder failed, attempting updateOrderStatus fallback:', apiErr);
+        await waiterService.updateOrderStatus(orderId, 'REJECTED');
+      }
+
+      setTableOrders((prev) => prev.filter((o) => o.id !== orderId));
+      toast.error(`Order ${orderDisplayNum} has been rejected.`);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('tavonza:order_status_changed', {
+            detail: { orderId, status: 'REJECTED' },
+          })
+        );
+      }
+
+      await Promise.all([
+        loadHomeDashboardData(),
+        loadTableOrders(selectedTable?.id),
+      ]);
+    } catch (err: any) {
+      console.error('Failed to reject table order:', err);
+      toast.error(`Order ${orderDisplayNum}: ${err.message || 'Error occurred'}`);
+      await Promise.all([
+        loadHomeDashboardData(),
+        loadTableOrders(selectedTable?.id),
+      ]);
+    } finally {
+      setProcessingOrderId(null);
+    }
   };
 
   const handleAdvanceToReadyToServe = (orderId: string) => {
     setTableOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: 'Ready to Serve' } : o))
     );
-    toast.info('Order #1230 is now Ready to Serve at the pass!');
+    toast.info('Order is now Ready to Serve at the pass!');
   };
 
-  const handleMarkTableOrderServed = (orderId: string) => {
-    setTableOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'Served' } : o))
-    );
-    setTables((prev) =>
-      prev.map((t) =>
-        t.id === (selectedTable?.id || 'T-01')
-          ? { ...t, status: 'Occupied' }
-          : t
-      )
-    );
-    toast.success('Order marked as Served!');
+  const handleMarkTableOrderServed = async (orderId: string) => {
+    const targetOrder = tableOrders.find((o) => o.id === orderId);
+    const orderDisplayNum = targetOrder
+      ? targetOrder.orderNumber.replace('Order No ', '')
+      : `#${orderId.slice(0, 5)}`;
+
+    setProcessingOrderId(orderId);
+    try {
+      try {
+        await waiterService.serveOrder(orderId);
+      } catch (apiErr: any) {
+        console.warn('waiterService.serveOrder failed, attempting updateOrderStatus fallback:', apiErr);
+        await waiterService.updateOrderStatus(orderId, 'SERVED');
+      }
+
+      setTableOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: 'Completed' } : o))
+      );
+      if (selectedTable?.id) {
+        setTables((prev) =>
+          prev.map((t) =>
+            t.id === selectedTable.id ? { ...t, status: 'Occupied' } : t
+          )
+        );
+      }
+
+      toast.success(`Order ${orderDisplayNum} marked as Served! 🎉`);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('tavonza:order_status_changed', {
+            detail: { orderId, status: 'SERVED' },
+          })
+        );
+      }
+
+      await Promise.all([
+        loadHomeDashboardData(),
+        loadTableOrders(selectedTable?.id),
+      ]);
+    } catch (err: any) {
+      console.error('Failed to mark order served:', err);
+      toast.error(`Failed to mark order as served: ${err.message || 'Error occurred'}`);
+    } finally {
+      setProcessingOrderId(null);
+    }
   };
 
   const handleDeleteTableOrder = (orderId: string) => {
     setTableOrders((prev) => prev.filter((o) => o.id !== orderId));
-    toast.success('Order deleted/dismissed.');
+    toast.success('Order removed from view.');
   };
 
   // Submit New Order to Kitchen
-  const handleSendToKitchen = () => {
+  const handleSendToKitchen = async () => {
     if (cartItems.length === 0) {
       toast.error('Please add at least one item to create an order.');
       return;
     }
 
-    const newOrderId = `#${Math.floor(10000 + Math.random() * 90000)}`;
+    const branchId = getActiveBranchId();
+    if (!branchId || !isUUID(branchId)) {
+      toast.error('Active branch ID is not found. Please log in or select your branch.');
+      return;
+    }
+
+    const targetTableId = getActiveTableId(selectedTableId || tables.find((t) => t.id === selectedTableId)?.id || tables[0]?.id);
+    const matchedTable = tables.find((t) => t.id === targetTableId) || tables[0];
+
+    if (!targetTableId || !isUUID(targetTableId)) {
+      toast.error('Please select a valid table for this order.');
+      return;
+    }
+
     const itemsSummary = cartItems.map((ci) => `${ci.quantity}x ${ci.name}`).join(', ');
-    const totalPrice = cartItems.reduce((acc, ci) => acc + ci.price * ci.quantity, 0);
+    const combinedInstructions = [
+      specialInstructions?.trim(),
+      selectedModifications.length > 0 ? `Mods: ${selectedModifications.join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' • ');
 
-    // Update tables state
-    setTables((prev) =>
-      prev.map((t) =>
-        t.id === selectedTableId
-          ? { ...t, status: 'New Order', orderCount: (t.orderCount || 0) + 1 }
-          : t
-      )
-    );
+    setIsSubmittingOrder(true);
+    try {
+      const result = await waiterService.syncAndSubmitTableOrder({
+        branchId,
+        tableId: targetTableId,
+        tableNumber: matchedTable?.name || 'Table',
+        activeSessionId: matchedTable?.activeSessionId || null,
+        items: cartItems,
+        specialInstructions: combinedInstructions,
+        customerName,
+        customerPhone,
+      });
 
-    // Add to pending orders
-    setPendingOrders((prev) => [
-      {
-        id: newOrderId,
-        table: selectedTableId,
-        items: itemsSummary,
-        price: `$${totalPrice.toFixed(2)}`,
-        status: 'Active',
-      },
-      ...prev,
-    ]);
+      const finalOrderNumber = result.orderNumber;
 
-    toast.success(`Order ${newOrderId} dispatched to Kitchen for ${selectedTableId}!`, {
-      description: `${itemsSummary} • Mods: ${selectedModifications.join(', ') || 'Standard'}`,
-    });
+      toast.success(`Order ${finalOrderNumber || 'created'} dispatched to kitchen!`, {
+        description: `Table: ${matchedTable?.name || 'Selected'} • ${itemsSummary}`,
+      });
 
-    // Reset and return to Home
-    setCustomerName('');
-    setCustomerPhone('');
-    setSpecialInstructions('');
-    setActiveTab('home');
+      // Clear ticket and form
+      setCartItems([]);
+      setCartOrderId(null);
+      setBackendCartItems([]);
+      setCustomerName('');
+      setCustomerPhone('');
+      setSpecialInstructions('');
+      setSelectedModifications([]);
+
+      // Realtime event dispatch
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('tavonza:order_created', {
+            detail: { tableId: targetTableId },
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent('tavonza:table_status_changed', {
+            detail: { tableId: targetTableId, status: 'OCCUPIED' },
+          })
+        );
+      }
+
+      // Refresh data
+      await Promise.all([
+        loadHomeDashboardData(),
+        loadTableOrders(targetTableId),
+      ]);
+
+      if (matchedTable) {
+        setSelectedTable(matchedTable);
+        setActiveTab('table-orders');
+      } else {
+        setActiveTab('home');
+      }
+    } catch (err: any) {
+      console.error('Failed to create order on behalf:', err);
+      toast.error(err.message || 'Failed to dispatch order to kitchen.');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   const getStatusBadge = (status: TableItem['status']) => {
@@ -601,7 +1113,13 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
     if (tableOrderFilter === 'ALL') return true;
     if (tableOrderFilter === 'Pending') return order.status === 'Pending';
     if (tableOrderFilter === 'Active') return order.status === 'Cooking' || order.status === 'Ready to Serve';
-    if (tableOrderFilter === 'Completed') return order.status === 'Completed';
+    if (tableOrderFilter === 'Completed')
+      return (
+        order.status === 'Completed' ||
+        order.status === 'Served' ||
+        order.status === 'Cancelled' ||
+        order.status === 'Rejected'
+      );
     return true;
   });
 
@@ -639,17 +1157,64 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                 </div>
               </div>
 
-              <div className="px-4 py-5 flex flex-col gap-6">
+              {/* Top Quick Search Bar for Waiter */}
+              <div className="px-4 -mt-2 mb-1">
+                <div className="w-full h-11 px-3.5 bg-neutral-900/90 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-700/80 focus-within:outline-amber-400 flex items-center gap-2.5 shadow-md shadow-black/30 transition">
+                  <Search className="w-4 h-4 text-amber-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={homeSearchQuery}
+                    onChange={(e) => setHomeSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && homeSearchQuery.trim()) {
+                        setMenuSearchQuery(homeSearchQuery.trim());
+                        setActiveTab('menu');
+                      }
+                    }}
+                    placeholder="Search tables (T-01, Occupied...) or food to order..."
+                    className="w-full bg-transparent text-xs text-white placeholder:text-neutral-400 font-['Inter'] focus:outline-none"
+                  />
+                  {homeSearchQuery && (
+                    <button
+                      onClick={() => setHomeSearchQuery('')}
+                      className="text-neutral-400 hover:text-white p-1 transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {homeSearchQuery.trim() && (
+                    <button
+                      onClick={() => {
+                        setMenuSearchQuery(homeSearchQuery.trim());
+                        setActiveTab('menu');
+                      }}
+                      className="px-2 py-1 bg-amber-400 hover:bg-amber-300 text-black text-[10px] font-semibold rounded-md shrink-0 flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <span>Menu</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-4 py-4 flex flex-col gap-5">
                 {/* "My Table" Header Row */}
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col gap-0.5">
                     <h2 className="text-white text-base font-semibold font-['Inter']">My Table</h2>
                     <span className="text-zinc-500 text-xs font-normal font-['Inter']">
-                      {tables.length} tables
+                      {displayedTables.length} {displayedTables.length === 1 ? 'table' : 'tables'}
+                      {homeSearchQuery.trim() && ` matching "${homeSearchQuery.trim()}"`}
                     </span>
                   </div>
                   <button
-                    onClick={() => setActiveTab('menu')}
+                    onClick={() => {
+                      if (!selectedTableId && tables.length > 0 && tables[0]) {
+                        setSelectedTableId(tables[0].id);
+                        setSelectedTable(tables[0]);
+                      }
+                      setActiveTab('menu');
+                    }}
                     className="h-7 px-3 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-medium font-['Inter'] rounded-[6px] flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm shadow-yellow-500/20"
                   >
                     <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -659,7 +1224,18 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
 
                 {/* Table Cards List */}
                 <div className="flex flex-col gap-3.5">
-                  {tables.map((table) => {
+                  {displayedTables.length === 0 ? (
+                    <div className="p-6 bg-neutral-900/40 rounded-xl border border-white/5 text-center flex flex-col items-center gap-2">
+                      <p className="text-zinc-400 text-xs font-['Inter']">No tables found matching &quot;{homeSearchQuery}&quot;</p>
+                      <button
+                        onClick={() => setHomeSearchQuery('')}
+                        className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white text-xs rounded-lg transition"
+                      >
+                        Reset Filter
+                      </button>
+                    </div>
+                  ) : (
+                    displayedTables.map((table) => {
                     const isAvailable = table.status === 'Available';
                     return (
                       <div
@@ -693,7 +1269,11 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                             onClick={() => {
                               setSelectedTable(table);
                               setSelectedTableId(table.id);
-                              setActiveTab('table-orders');
+                              if (table.orderCount && table.orderCount > 0) {
+                                setActiveTab('table-orders');
+                              } else {
+                                setActiveTab('menu');
+                              }
                             }}
                             className="flex-1 py-2.5 flex items-center justify-center gap-1.5 hover:bg-white/5 transition cursor-pointer text-amber-400"
                           >
@@ -704,7 +1284,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                           </button>
 
                           {/* 2. Bill Button */}
-                          <button
+                          {/* <button
                             onClick={() => {
                               setSelectedTable(table);
                               setActiveModal('bill');
@@ -713,7 +1293,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                           >
                             <Receipt className="w-3.5 h-3.5" />
                             <span className="text-xs font-medium font-['Inter']">Bill</span>
-                          </button>
+                          </button> */}
 
                           {/* 3. Clear Button */}
                           <button
@@ -731,7 +1311,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                         </div>
                       </div>
                     );
-                  })}
+                  }))}
                 </div>
 
                 {/* "Pending Orders" Header Row */}
@@ -857,16 +1437,18 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
               {/* Orders Cards List */}
               <div className="flex flex-col gap-3.5">
                 {filteredTableOrders.map((order) => {
-                  const isCompleted = order.status === 'Completed';
+                  const isCompleted = order.status === 'Completed' || order.status === 'Served';
                   const isPending = order.status === 'Pending';
                   const isCooking = order.status === 'Cooking';
                   const isReadyToServe = order.status === 'Ready to Serve';
+                  const isCancelled = order.status === 'Cancelled';
+                  const isRejected = order.status === 'Rejected';
 
                   return (
                     <div
                       key={order.id}
                       className={`w-full p-3.5 bg-neutral-900 rounded-xl border border-white/5 flex flex-col gap-4 transition duration-200 ${
-                        isCompleted ? 'opacity-70' : 'hover:border-white/10'
+                        isCompleted || isCancelled || isRejected ? 'opacity-70' : 'hover:border-white/10'
                       }`}
                     >
                       {/* Card Header & Badge */}
@@ -898,6 +1480,22 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                             <div className="px-2 py-1 bg-neutral-800 rounded-sm inline-flex items-center">
                               <span className="text-emerald-500 text-xs font-normal font-['Inter']">
                                 Completed
+                              </span>
+                            </div>
+                          )}
+                          {isCancelled && (
+                            <div className="px-2.5 py-1 bg-red-950/60 border border-red-800/40 rounded-sm inline-flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                              <span className="text-red-400 text-xs font-medium font-['Inter']">
+                                Cancelled
+                              </span>
+                            </div>
+                          )}
+                          {isRejected && (
+                            <div className="px-2.5 py-1 bg-neutral-800 border border-neutral-700 rounded-sm inline-flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                              <span className="text-zinc-400 text-xs font-medium font-['Inter']">
+                                Rejected
                               </span>
                             </div>
                           )}
@@ -986,15 +1584,17 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                         <div className="flex items-center gap-2 pt-1">
                           <button
                             onClick={() => handleRejectTableOrder(order.id)}
-                            className="flex-1 py-1.5 px-2 bg-neutral-900 rounded-md outline outline-1 outline-offset-[-1px] outline-red-400 text-red-400 text-xs font-medium font-['Poppins'] hover:bg-red-500/10 transition cursor-pointer"
+                            disabled={processingOrderId === order.id}
+                            className="flex-1 py-1.5 px-2 bg-neutral-900 rounded-md outline outline-1 outline-offset-[-1px] outline-red-400 text-red-400 text-xs font-medium font-['Poppins'] hover:bg-red-500/10 transition cursor-pointer disabled:opacity-50"
                           >
-                            Reject Order
+                            {processingOrderId === order.id ? 'Rejecting...' : 'Reject Order'}
                           </button>
                           <button
                             onClick={() => handleAcceptTableOrder(order.id)}
-                            className="flex-1 py-1.5 px-2 bg-green-500 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-800 text-zinc-900 text-xs font-medium font-['Poppins'] hover:bg-green-400 transition cursor-pointer shadow-sm"
+                            disabled={processingOrderId === order.id}
+                            className="flex-1 py-1.5 px-2 bg-green-500 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-800 text-zinc-900 text-xs font-medium font-['Poppins'] hover:bg-green-400 transition cursor-pointer shadow-sm disabled:opacity-50"
                           >
-                            Accept Order
+                            {processingOrderId === order.id ? 'Accepting...' : 'Accept Order'}
                           </button>
                         </div>
                       )}
@@ -1004,9 +1604,10 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                         <button
                           type="button"
                           onClick={() => {
-                            toast.warning(`Order #${order.orderNumber} is currently cooking in the kitchen! Please wait until kitchen marks it "Ready to Serve".`, {
-                              duration: 4000,
-                            });
+                            toast.warning(
+                              `Order ${order.orderNumber.replace('Order No ', '')} is currently cooking in the kitchen! Please wait until kitchen marks it "Ready to Serve".`,
+                              { duration: 4000 }
+                            );
                           }}
                           className="w-full h-9 bg-neutral-800/80 border border-neutral-700/80 rounded-md flex justify-center items-center gap-2 text-zinc-400 text-xs font-medium cursor-not-allowed transition hover:bg-neutral-800"
                           title="Food is cooking in the kitchen. Cannot serve yet."
@@ -1020,9 +1621,10 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                       {isReadyToServe && (
                         <button
                           onClick={() => handleMarkTableOrderServed(order.id)}
-                          className="w-full h-9 bg-yellow-400 hover:bg-yellow-300 rounded-lg flex justify-center items-center text-black text-sm font-semibold font-['Inter'] transition shadow-sm cursor-pointer active:scale-[0.99]"
+                          disabled={processingOrderId === order.id}
+                          className="w-full h-9 bg-yellow-400 hover:bg-yellow-300 rounded-lg flex justify-center items-center text-black text-sm font-semibold font-['Inter'] transition shadow-sm cursor-pointer active:scale-[0.99] disabled:opacity-50"
                         >
-                          Mark as Served
+                          {processingOrderId === order.id ? 'Updating...' : 'Mark as Served'}
                         </button>
                       )}
 
@@ -1044,6 +1646,22 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                           </button>
                         </div>
                       )}
+
+                      {/* State 5: Cancelled or Rejected (Notice + Dismiss button) */}
+                      {(isCancelled || isRejected) && (
+                        <div className="flex items-center justify-between p-2.5 bg-neutral-950/70 rounded-md border border-white/5">
+                          <span className="text-xs text-neutral-400 font-['Inter']">
+                            {isCancelled ? 'Order was cancelled by customer' : 'Order was rejected'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTableOrder(order.id)}
+                            className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-neutral-300 text-xs font-medium transition cursor-pointer"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1054,7 +1672,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
           {/* ──────────────── TAB 3: BROWSE MENU (FIGMA SNIPPET 1) ──────────────── */}
           {activeTab === 'menu' && (
             <div className="px-4 py-3 flex flex-col gap-3.5 animate-fadeIn">
-              {/* Header Title */}
+              {/* Header Title & Items Count */}
               <div className="flex items-center justify-between pt-1">
                 <button
                   onClick={() => setActiveTab('home')}
@@ -1063,22 +1681,30 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                 >
                   <ChevronLeft className="w-5 h-5 text-amber-400" />
                 </button>
-                <h1 className="text-white text-xl font-medium font-['Inter']">Browse Menu</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-white text-xl font-medium font-['Inter']">Browse Menu</h1>
+                  <span className="px-2 py-0.5 bg-neutral-800 rounded-full text-[11px] font-medium text-amber-400 border border-amber-400/20">
+                    {filteredMenuItems.length} dishes
+                  </span>
+                </div>
                 <div className="w-5" />
               </div>
 
-              {/* Search Bar Input */}
-              <div className="w-full h-10 px-3 py-2 bg-stone-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center gap-2">
-                <Search className="w-4 h-4 text-stone-400 shrink-0" />
+              {/* Top Search Bar Input */}
+              <div className="w-full h-11 px-3.5 bg-stone-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-700/80 focus-within:outline-amber-400 flex items-center gap-2.5 shadow-md shadow-black/30 transition">
+                <Search className="w-4 h-4 text-amber-400 shrink-0" />
                 <input
                   type="text"
                   value={menuSearchQuery}
                   onChange={(e) => setMenuSearchQuery(e.target.value)}
-                  placeholder="Search..."
-                  className="w-full bg-transparent text-sm text-white placeholder:text-stone-400 font-['Inter'] focus:outline-none"
+                  placeholder="Search food by name, description, ingredients..."
+                  className="w-full bg-transparent text-xs text-white placeholder:text-stone-400 font-['Inter'] focus:outline-none"
                 />
                 {menuSearchQuery && (
-                  <button onClick={() => setMenuSearchQuery('')} className="text-stone-400 hover:text-white">
+                  <button
+                    onClick={() => setMenuSearchQuery('')}
+                    className="text-stone-400 hover:text-white p-1 transition cursor-pointer"
+                  >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -1086,87 +1712,172 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
 
               {/* Horizontal Category Filters */}
               <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar select-none">
-                {(['All', 'Starters', 'Mains', 'Drinks', 'Desserts'] as const).map((cat) => {
-                  const isActive = selectedCategory === cat;
+                <button
+                  onClick={() => setSelectedCategory('All')}
+                  className={`px-3 py-1.5 rounded-[10px] text-xs font-medium font-['Inter'] transition cursor-pointer shrink-0 ${
+                    selectedCategory === 'All'
+                      ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                      : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700'
+                  }`}
+                >
+                  All
+                </button>
+                {categories.map((cat) => {
+                  const isActive = selectedCategory === cat.id || selectedCategory === cat.name;
                   return (
                     <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
+                      key={cat.id || cat.name}
+                      onClick={() => setSelectedCategory(cat.id || cat.name)}
                       className={`px-3 py-1.5 rounded-[10px] text-xs font-medium font-['Inter'] transition cursor-pointer shrink-0 ${
                         isActive
                           ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
                           : 'bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700'
                       }`}
                     >
-                      {cat}
+                      {cat.name}
                     </button>
                   );
                 })}
               </div>
 
-              {/* 2-Column Grid of Food Cards */}
-              <div className="grid grid-cols-2 gap-2.5 pt-1">
-                {filteredMenuItems.map((item) => {
-                  const inCart = cartItems.find((ci) => ci.id === item.id);
-                  return (
-                    <div
-                      key={item.id}
-                      className="p-2 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-700 flex flex-col justify-between gap-2 hover:border-amber-400/40 transition group"
+              {/* 2-Column Grid of Food Cards (Paginated) */}
+              {filteredMenuItems.length === 0 ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2.5 text-center bg-neutral-900/40 rounded-xl border border-white/5 p-5">
+                  <UtensilsCrossed className="w-8 h-8 text-neutral-500" />
+                  <p className="text-white text-sm font-medium">No dishes found</p>
+                  <p className="text-neutral-400 text-xs">Try a different search term or select another category.</p>
+                  <button
+                    onClick={() => {
+                      setMenuSearchQuery('');
+                      setSelectedCategory('All');
+                    }}
+                    className="mt-1 px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-black text-xs font-semibold rounded-lg transition cursor-pointer"
+                  >
+                    Clear Search &amp; Filters
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  {paginatedMenuItems.map((item) => {
+                    const inCart = cartItems.find((ci) => ci.id === item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-2 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-700 flex flex-col justify-between gap-2 hover:border-amber-400/40 transition group"
+                      >
+                        <div className="relative w-full h-32 rounded-lg overflow-hidden bg-neutral-800">
+                          <Image
+                            src={item.image}
+                            alt={item.name}
+                            fill
+                            unoptimized
+                            className="object-cover group-hover:scale-105 transition duration-300"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5 flex-1 justify-between">
+                          <div>
+                            <h3 className="text-white text-sm font-medium font-['Inter'] leading-5 line-clamp-1">
+                              {item.name}
+                            </h3>
+                            <p className="text-neutral-400 text-[11px] font-normal font-['Poppins'] line-clamp-1">
+                              {item.description}
+                            </p>
+                          </div>
+
+                          {/* Dietary Tag */}
+                          <div className="self-start px-2 py-0.5 bg-neutral-800 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-orange-600" />
+                            <span className="text-orange-600 text-[10px] font-normal font-['Poppins']">
+                              {item.tag}
+                            </span>
+                          </div>
+
+                          {/* Price & Add Action Button */}
+                          <div className="flex items-center justify-between pt-1 mt-auto">
+                            <span className="text-yellow-400 text-sm font-semibold font-['Inter']">
+                              {item.priceFormatted}
+                            </span>
+                            <button
+                              onClick={() => handleAddToCart(item)}
+                              className={`w-9 h-9 rounded-lg flex items-center justify-center transition cursor-pointer active:scale-90 ${
+                                inCart
+                                  ? 'bg-amber-400 text-black font-bold shadow-md shadow-amber-500/20'
+                                  : 'bg-green-500/10 outline outline-1 outline-offset-[-1px] outline-green-500/20 text-green-400 hover:bg-green-500/20'
+                              }`}
+                              title="Add item to ticket"
+                            >
+                              {inCart ? <Check className="w-4 h-4 stroke-[3]" /> : <Plus className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Sleek Pagination Controls for Menu */}
+              {totalMenuPages > 1 && (
+                <div className="flex items-center justify-between px-3 py-2 bg-neutral-900/80 rounded-xl border border-neutral-800 shadow-sm mt-1">
+                  <span className="text-[11px] text-neutral-400 font-['Inter']">
+                    Showing {(menuCurrentPage - 1) * MENU_ITEMS_PER_PAGE + 1}–
+                    {Math.min(menuCurrentPage * MENU_ITEMS_PER_PAGE, filteredMenuItems.length)} of{' '}
+                    {filteredMenuItems.length} dishes
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setMenuCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={menuCurrentPage === 1}
+                      className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed text-white text-xs rounded-lg transition flex items-center gap-1 border border-neutral-700/60 cursor-pointer"
                     >
-                      <div className="relative w-full h-32 rounded-lg overflow-hidden bg-neutral-800">
-                        <Image
-                          src={item.image}
-                          alt={item.name}
-                          fill
-                          className="object-cover group-hover:scale-105 transition duration-300"
-                        />
-                      </div>
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Prev</span>
+                    </button>
 
-                      <div className="flex flex-col gap-1.5 flex-1 justify-between">
-                        <div>
-                          <h3 className="text-white text-sm font-medium font-['Inter'] leading-5 line-clamp-1">
-                            {item.name}
-                          </h3>
-                          <p className="text-neutral-400 text-[11px] font-normal font-['Poppins'] line-clamp-1">
-                            {item.description}
-                          </p>
-                        </div>
-
-                        {/* Dietary Tag */}
-                        <div className="self-start px-2 py-0.5 bg-neutral-800 rounded-md outline outline-1 outline-offset-[-1px] outline-neutral-700 flex items-center gap-1">
-                          <div className="w-1.5 h-1.5 rounded-full bg-orange-600" />
-                          <span className="text-orange-600 text-[10px] font-normal font-['Poppins']">
-                            {item.tag}
-                          </span>
-                        </div>
-
-                        {/* Price & Add Action Button */}
-                        <div className="flex items-center justify-between pt-1 mt-auto">
-                          <span className="text-yellow-400 text-sm font-semibold font-['Inter']">
-                            {item.priceFormatted}
-                          </span>
-                          <button
-                            onClick={() => handleAddToCart(item)}
-                            className={`w-9 h-9 rounded-lg flex items-center justify-center transition cursor-pointer active:scale-90 ${
-                              inCart
-                                ? 'bg-amber-400 text-black font-bold shadow-md shadow-amber-500/20'
-                                : 'bg-green-500/10 outline outline-1 outline-offset-[-1px] outline-green-500/20 text-green-400 hover:bg-green-500/20'
-                            }`}
-                            title="Add item to ticket"
-                          >
-                            {inCart ? <Check className="w-4 h-4 stroke-[3]" /> : <Plus className="w-4 h-4" />}
-                          </button>
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalMenuPages }, (_, i) => i + 1).map((pageNum) => (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          onClick={() => setMenuCurrentPage(pageNum)}
+                          className={`w-7 h-7 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                            menuCurrentPage === pageNum
+                              ? 'bg-amber-400 text-black shadow-sm shadow-amber-400/20 font-bold'
+                              : 'bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700 border border-neutral-700/40'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setMenuCurrentPage((p) => Math.min(totalMenuPages, p + 1))}
+                      disabled={menuCurrentPage === totalMenuPages}
+                      className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed text-white text-xs rounded-lg transition flex items-center gap-1 border border-neutral-700/60 cursor-pointer"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Floating Bottom Cart Action Banner (Figma: Item added | Create Order) */}
               {totalCartQuantity > 0 && (
                 <div
-                  onClick={() => setActiveTab('create-order')}
+                  onClick={() => {
+                    const firstTable = tables[0];
+                    if (!selectedTableId && firstTable) {
+                      setSelectedTableId(firstTable.id);
+                      setSelectedTable(firstTable);
+                    }
+                    setActiveTab('create-order');
+                  }}
                   className="w-full p-3 mt-2 bg-yellow-950 hover:bg-yellow-900 border border-yellow-800/40 rounded-[44px] flex justify-between items-center cursor-pointer shadow-lg shadow-yellow-950/40 transition active:scale-[0.98]"
                 >
                   <div className="flex items-center gap-2">
@@ -1204,60 +1915,81 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
               </div>
 
               {/* Order Items List */}
-              <div className="flex flex-col gap-2.5">
-                {cartItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 bg-zinc-900/50 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-700 flex flex-col gap-2.5"
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2.5">
-                        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-neutral-800 shrink-0">
-                          <Image src={item.image} alt={item.name} fill className="object-cover" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-white text-sm font-medium font-['Inter'] leading-5">
-                            {item.name}
-                          </span>
-                          <span className="text-yellow-400 text-xs font-semibold font-['Inter']">
-                            {item.priceFormatted}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Stepper: - 1 + */}
-                      <div className="w-28 h-9 px-3 bg-yellow-950 rounded-lg flex justify-between items-center border border-yellow-900/40">
-                        <button
-                          onClick={() => handleUpdateQuantity(item.id, -1)}
-                          className="text-orange-50 hover:text-white p-1 cursor-pointer font-bold"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-white text-sm font-medium font-['Inter']">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => handleUpdateQuantity(item.id, 1)}
-                          className="text-orange-50 hover:text-white p-1 cursor-pointer font-bold"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Delete Item Row */}
-                    <div className="flex justify-end items-center">
-                      <button
-                        onClick={() => handleDeleteCartItem(item.id)}
-                        className="flex items-center gap-1 text-red-500 hover:text-red-400 text-xs font-medium font-['Inter'] transition cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete</span>
-                      </button>
-                    </div>
+              {cartItems.length === 0 ? (
+                <div className="py-10 flex flex-col items-center justify-center gap-3 text-center bg-white/5 rounded-2xl border border-white/10 p-6">
+                  <div className="w-12 h-12 rounded-full bg-amber-400/10 flex items-center justify-center text-amber-400">
+                    <UtensilsCrossed className="w-6 h-6" />
                   </div>
-                ))}
-              </div>
+                  <div className="flex flex-col gap-1">
+                    <h3 className="text-white text-base font-semibold font-['Inter']">No items in ticket</h3>
+                    <p className="text-zinc-400 text-xs font-['Inter'] max-w-[260px]">
+                      Browse the menu and add dishes to send this order to the kitchen.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('menu')}
+                    className="mt-1 px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-semibold rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-yellow-500/20"
+                  >
+                    <Plus className="w-4 h-4 stroke-[2.5]" />
+                    <span>Browse Menu</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {cartItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-3 bg-zinc-900/50 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-700 flex flex-col gap-2.5"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2.5">
+                          <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-neutral-800 shrink-0">
+                            <Image src={item.image} alt={item.name} fill unoptimized className="object-cover" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-white text-sm font-medium font-['Inter'] leading-5">
+                              {item.name}
+                            </span>
+                            <span className="text-yellow-400 text-xs font-semibold font-['Inter']">
+                              {item.priceFormatted}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Stepper: - 1 + */}
+                        <div className="w-28 h-9 px-3 bg-yellow-950 rounded-lg flex justify-between items-center border border-yellow-900/40">
+                          <button
+                            onClick={() => handleUpdateQuantity(item.id, -1)}
+                            className="text-orange-50 hover:text-white p-1 cursor-pointer font-bold"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-white text-sm font-medium font-['Inter']">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => handleUpdateQuantity(item.id, 1)}
+                            className="text-orange-50 hover:text-white p-1 cursor-pointer font-bold"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Delete Item Row */}
+                      <div className="flex justify-end items-center">
+                        <button
+                          onClick={() => handleDeleteCartItem(item.id)}
+                          className="flex items-center gap-1 text-red-500 hover:text-red-400 text-xs font-medium font-['Inter'] transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Add More Button */}
               <button
@@ -1327,8 +2059,13 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                   <label className="text-zinc-400 text-xs font-normal font-['Inter']">Table Number</label>
                   <div className="relative">
                     <select
-                      value={selectedTableId}
-                      onChange={(e) => setSelectedTableId(e.target.value)}
+                      value={selectedTableId || (tables[0]?.id ?? '')}
+                      onChange={(e) => {
+                        const newId = e.target.value;
+                        setSelectedTableId(newId);
+                        const found = tables.find((t) => t.id === newId);
+                        if (found) setSelectedTable(found);
+                      }}
                       className="w-full h-10 px-3 bg-neutral-950 rounded-lg border border-neutral-700 text-white text-xs font-['Inter'] appearance-none focus:outline-amber-400 transition pr-8 cursor-pointer"
                     >
                       {tables.map((t) => (
@@ -1357,9 +2094,21 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
               {/* Big Bottom Action Button: Create & Send to Kitchen */}
               <button
                 onClick={handleSendToKitchen}
-                className="w-full p-3.5 mt-2 bg-yellow-400 hover:bg-yellow-300 text-black text-sm font-semibold font-['Inter'] rounded-[44px] flex justify-center items-center shadow-lg shadow-yellow-500/20 active:scale-[0.98] transition cursor-pointer"
+                disabled={isSubmittingOrder || cartItems.length === 0}
+                className={`w-full p-3.5 mt-2 text-sm font-semibold font-['Inter'] rounded-[44px] flex justify-center items-center gap-2 shadow-lg transition cursor-pointer ${
+                  isSubmittingOrder || cartItems.length === 0
+                    ? 'bg-neutral-800 text-zinc-500 cursor-not-allowed border border-white/5 shadow-none'
+                    : 'bg-yellow-400 hover:bg-yellow-300 text-black shadow-yellow-500/20 active:scale-[0.98]'
+                }`}
               >
-                Create &amp; Send to Kitchen
+                {isSubmittingOrder ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-black" />
+                    <span>Sending to Kitchen...</span>
+                  </>
+                ) : (
+                  <span>Create &amp; Send to Kitchen</span>
+                )}
               </button>
             </div>
           )}
@@ -1463,7 +2212,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
   const modalsContent = (
     <>
       {/* ──────────────── MODAL: TABLE BILL MODAL ──────────────── */}
-      {activeModal === 'bill' && selectedTable && (
+      {/* {activeModal === 'bill' && selectedTable && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeIn">
           <div className="w-full max-w-md bg-neutral-900 rounded-t-3xl sm:rounded-2xl border border-white/10 p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -1514,7 +2263,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* ──────────────── MODAL: JARVIS COPILOT ──────────────── */}
       {activeModal === 'jarvis' && (
