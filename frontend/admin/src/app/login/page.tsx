@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import LoginView from '@/components/auth/LoginView';
 import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
 import { useAppSelector } from '@/redux/store';
-import { isAdminAuthenticated, getStoredAdminUser } from '@/lib/auth';
+import { isAdminAuthenticated } from '@/lib/auth';
 import { isRoleAllowedForAdmin } from '@/redux/ReduxProvider';
 
 function LoginContent() {
@@ -13,9 +13,8 @@ function LoginContent() {
   const returnUrl = '/new-admin-dashboard/dashboard';
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
 
-  const activeUser = user || (typeof document !== 'undefined' ? getStoredAdminUser() : null);
-  const hasAdminRole = activeUser ? isRoleAllowedForAdmin(activeUser) : false;
-  const isAuth = isAdminAuthenticated() && (isAuthenticated || hasAdminRole);
+  const hasAdminRole = user ? isRoleAllowedForAdmin(user) : false;
+  const isAuth = isAdminAuthenticated() && isAuthenticated && hasAdminRole;
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.search) {

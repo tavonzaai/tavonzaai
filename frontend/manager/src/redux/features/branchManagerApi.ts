@@ -1,5 +1,11 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { baseApiFetch, getCookie } from '../api/baseApi';
+import { baseApiFetch } from '../api/baseApi';
+import {
+  getActiveBranchIdMemory,
+  getBranchIdFromAccessToken,
+  setActiveBranchIdMemory,
+} from '../../lib/auth';
+import { store } from '../store';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -7,25 +13,34 @@ export function isValidUuid(id: any): boolean {
   return typeof id === 'string' && UUID_REGEX.test(id.trim());
 }
 
+/**
+ * Active branch comes from session memory / Redux / JWT — never cookies.
+ */
 export function getActiveBranchId(): string {
-  const fromCookie = getCookie('tavonza_branch_id') || getCookie('branch_id') || getCookie('active_branch_id');
-  if (fromCookie && isValidUuid(fromCookie)) return fromCookie;
+  const fromMemory = getActiveBranchIdMemory();
+  if (fromMemory && isValidUuid(fromMemory)) return fromMemory;
 
-  const rawUser = getCookie('branch_manager_user');
-  if (rawUser) {
-    try {
-      const parsed = JSON.parse(rawUser);
-      if (parsed?.branchId && isValidUuid(parsed.branchId)) return parsed.branchId;
-      if (parsed?.assignments?.[0]?.branchId && isValidUuid(parsed.assignments[0].branchId)) {
-        return parsed.assignments[0].branchId;
-      }
-      if (parsed?.assignments?.[0]?.branch?.id && isValidUuid(parsed.assignments[0].branch.id)) {
-        return parsed.assignments[0].branch.id;
-      }
-    } catch {}
+  try {
+    const user = store.getState()?.auth?.user as any;
+    if (user?.branchId && isValidUuid(user.branchId)) {
+      setActiveBranchIdMemory(user.branchId);
+      return user.branchId;
+    }
+    const assignmentBranch =
+      user?.assignments?.[0]?.branch?.id || user?.assignments?.[0]?.branchId;
+    if (assignmentBranch && isValidUuid(assignmentBranch)) {
+      setActiveBranchIdMemory(assignmentBranch);
+      return assignmentBranch;
+    }
+  } catch {}
+
+  const fromToken = getBranchIdFromAccessToken();
+  if (fromToken) {
+    setActiveBranchIdMemory(fromToken);
+    return fromToken;
   }
 
-  // Fallback to primary seed branch ID (Downtown HQ)
+  // Last-resort seed branch (Downtown) when JWT has no branch claim yet
   return 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
 }
 
@@ -280,11 +295,44 @@ export interface KitchenTicketItem {
   createdAt?: string;
 }
 
+/**
+ * Resolves the base URL for the customer ordering application.
+ * - Prioritizes NEXT_PUBLIC_CUSTOMER_APP_URL if defined.
+ * - In production / HTTPS / public domains, never attaches :3100.
+ * - For local development, falls back to http://localhost:3100 (or local IP with port 3100).
+ */
+export function getCustomerBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_CUSTOMER_APP_URL || process.env.CUSTOMER_APP_URL;
+  if (envUrl) {
+    return envUrl.trim().replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isIpAddress = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+
+    // If on HTTPS or any standard domain (e.g. manager.tavonza.com), use the origin without :3100
+    if (protocol === 'https:' || (!isLocalhost && !isIpAddress)) {
+      return `${protocol}//${hostname}`;
+    }
+
+    // Local network IP during development (e.g. 192.168.1.5:3100)
+    if (isIpAddress && !isLocalhost) {
+      return `${protocol}//${hostname}:3100`;
+    }
+  }
+
+  return 'http://localhost:3100';
+}
+
+export function getCustomerTableUrl(token: string): string {
+  const base = getCustomerBaseUrl();
+  return `${base}?qr=${encodeURIComponent(token)}`;
+}
+
 export function buildTableQrCodeUrl(token: string): string {
-  const customerBase = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? `${window.location.protocol}//${window.location.hostname}:3100`
-    : (process.env.NEXT_PUBLIC_CUSTOMER_APP_URL || 'http://localhost:3100');
-  const targetUrl = `${customerBase}?qr=${encodeURIComponent(token)}`;
+  const targetUrl = getCustomerTableUrl(token);
   return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetUrl)}`;
 }
 
@@ -293,6 +341,35 @@ export const branchManagerService = {
     const res = await baseApiFetch<BranchDetail>(`/branches/${encodeURIComponent(branchId)}`, {
       method: 'GET',
     });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * Branch KPI analytics. Dashboards/reports must use this — never aggregate getOrders/getTables.
+   * GET /analytics/branch-dashboard?branchId=
+   */
+  getBranchDashboardAnalytics: async (branchId: string): Promise<{
+    branchId: string;
+    tablesCount: number;
+    availableTables: number;
+    occupiedTables: number;
+    occupancyPercent: number;
+    staffCount: number;
+    ordersCount: number;
+    pendingOrders: number;
+    preparingOrders: number;
+    readyOrders: number;
+    delayedOrders: number;
+    unpaidOrders: number;
+    unpaidAmount: number;
+    paidRevenue: number;
+    todayOrders: number;
+    todayRevenue: number;
+  }> => {
+    const res = await baseApiFetch<any>(
+      `/analytics/branch-dashboard?branchId=${encodeURIComponent(branchId)}`,
+      { method: 'GET' },
+    );
     return (res as any)?.data || res;
   },
 
@@ -432,7 +509,7 @@ export const branchManagerService = {
       const token = (regen as any)?.qrCodeToken || (regen as any)?.data?.qrCodeToken;
       return {
         qrCodeUrl: token ? buildTableQrCodeUrl(token) : '',
-        tableUrl: token ? `http://localhost:3100?qr=${encodeURIComponent(token)}` : '',
+        tableUrl: token ? getCustomerTableUrl(token) : '',
       };
     }
   },
@@ -666,17 +743,20 @@ export const branchManagerService = {
   }): Promise<MenuCategoryItem> => {
     let restaurantId = payload.restaurantId;
     if (!restaurantId || !isValidUuid(restaurantId)) {
-      try {
-        const branch = await branchManagerService.getBranch(getActiveBranchId());
-        if (branch?.restaurantId && isValidUuid(branch.restaurantId)) {
-          restaurantId = branch.restaurantId;
-        }
-      } catch {}
+      const branch = await branchManagerService.getBranch(getActiveBranchId());
+      if (branch?.restaurantId && isValidUuid(branch.restaurantId)) {
+        restaurantId = branch.restaurantId;
+      }
+    }
+    if (!restaurantId || !isValidUuid(restaurantId)) {
+      throw new Error(
+        'Cannot create menu category: restaurantId is missing. Open the branch and try again.',
+      );
     }
     const res = await baseApiFetch<MenuCategoryItem>('/menus/categories', {
       method: 'POST',
       body: JSON.stringify({
-        restaurantId: restaurantId || getActiveBranchId(),
+        restaurantId,
         name: payload.name,
         description: payload.description,
         displayOrder: payload.displayOrder ?? 0,

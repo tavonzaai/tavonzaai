@@ -65,6 +65,24 @@ export function getActiveBranchId(): string {
 
 
 export const kitchenService = {
+  /** Queue KPI counts — do not derive filter badges from a full getOrders scan. */
+  getKitchenDashboardAnalytics: async (branchId: string): Promise<{
+    newOrders: number;
+    preparingOrders: number;
+    readyOrders: number;
+    overdueOrders: number;
+    activeTotal: number;
+  }> => {
+    if (!branchId) {
+      return { newOrders: 0, preparingOrders: 0, readyOrders: 0, overdueOrders: 0, activeTotal: 0 };
+    }
+    const res = await baseApiFetch<any>(
+      `/analytics/kitchen-dashboard?branchId=${encodeURIComponent(branchId)}`,
+      { method: 'GET' },
+    );
+    return (res as any)?.data || res;
+  },
+
   getOrders: async (branchId: string): Promise<any[]> => {
     if (!branchId) return [];
     const res = await baseApiFetch<any[]>(`/orders/branch/${encodeURIComponent(branchId)}`, {

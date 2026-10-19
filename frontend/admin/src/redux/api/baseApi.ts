@@ -44,14 +44,20 @@ export function getRefreshToken(): string | null {
 }
 
 export function setAuthToken(token: string) {
+  // Only the access token is stored client-side. Profile comes from GET /users/me.
   setCookie(ADMIN_TOKEN_KEY, token);
+  removeCookie(ADMIN_USER_KEY);
+  removeCookie('tavonza_token');
 }
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
   setAuthToken(tokens.accessToken);
-  if (tokens.refreshToken) {
-    setCookie(ADMIN_REFRESH_TOKEN_KEY, tokens.refreshToken);
-  }
+  // Prefer HttpOnly refresh from the API; do not keep a JS-readable refresh cookie.
+  removeCookie(ADMIN_REFRESH_TOKEN_KEY);
+  removeCookie('admin_refresh_token');
+  removeCookie('tavonza_refresh_token');
+  removeCookie('refresh_token');
+  void tokens.refreshToken;
 }
 
 export function removeAuthToken() {
@@ -60,6 +66,9 @@ export function removeAuthToken() {
   removeCookie(ADMIN_USER_KEY);
   removeCookie('tavonza_token');
   removeCookie('tavonza_refresh_token');
+  removeCookie('admin_refresh_token');
+  removeCookie('refresh_token');
+  removeCookie('access_token');
 }
 
 let refreshPromise: Promise<boolean> | null = null;

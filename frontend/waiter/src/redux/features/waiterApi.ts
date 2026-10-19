@@ -134,6 +134,29 @@ export const waiterService = {
     return (res as any)?.data || res;
   },
 
+  getWaiterDashboardAnalytics: async (branchId: string): Promise<{
+    assignedTables: number;
+    pendingOrders: number;
+    preparingOrders: number;
+    readyOrders: number;
+    servedToday: number;
+  }> => {
+    if (!branchId || !isUUID(branchId)) {
+      return {
+        assignedTables: 0,
+        pendingOrders: 0,
+        preparingOrders: 0,
+        readyOrders: 0,
+        servedToday: 0,
+      };
+    }
+    const res = await baseApiFetch<any>(
+      `/analytics/waiter-dashboard?branchId=${encodeURIComponent(branchId)}`,
+      { method: 'GET' },
+    );
+    return (res as any)?.data || res;
+  },
+
   queryOrders: async (params: {
     branchId?: string;
     scope?: 'MY_TABLES' | 'ALL_TABLES';
@@ -146,7 +169,8 @@ export const waiterService = {
     const q = new URLSearchParams();
     const resolvedBranchId = (params.branchId && isUUID(params.branchId)) ? params.branchId : getActiveBranchId();
     if (resolvedBranchId && isUUID(resolvedBranchId)) q.append('branchId', resolvedBranchId);
-    if (params.scope) q.append('scope', params.scope);
+    // Always request assigned-table scope. Never ALL_TABLES — backend ignores it for waiters.
+    q.append('scope', 'MY_TABLES');
     if (params.status) q.append('status', params.status);
     if (params.tableId && params.tableId.trim() && params.tableId !== 'T-01') {
       q.append('tableId', params.tableId.trim());
@@ -188,125 +212,21 @@ export const waiterService = {
   },
 
   getPendingOrders: async (branchId: string): Promise<WaiterOrderSummary[]> => {
-    try {
-      const res = await baseApiFetch<any[]>(`/waiter/orders/pending?branchId=${encodeURIComponent(branchId)}`, {
-        method: 'GET',
-      });
-      const data = (res as any)?.data || res;
-      if (Array.isArray(data) && data.length > 0) {
-        return data.map((o: any) => ({
-          id: o.id || o.orderId,
-          orderId: o.id || o.orderId,
-          orderNumber: o.orderNumber || `#${(o.id || o.orderId).slice(0, 5)}`,
-          tableId: o.tableId,
-          tableNumber: o.tableNumber || o.tableLabel || 'Table',
-          tableLabel: o.tableNumber || o.tableLabel || 'Table',
-          status: o.status,
-          displayStatus: o.displayStatus || 'Pending Acceptance',
-          itemsCount: o.itemsCount || o.itemCount || (o.items?.length ?? 1),
-          totalAmount: Number(o.totalAmount ?? o.total ?? 0),
-          total: Number(o.total ?? o.totalAmount ?? 0),
-          paymentStatus: o.paymentStatus || 'PENDING',
-          placedAt: o.placedAt || o.submittedAt || o.createdAt || new Date().toISOString(),
-          createdAt: o.createdAt,
-          submittedAt: o.submittedAt,
-        }));
-      }
-    } catch {
-      // Fallback to general branch endpoint
-    }
-
-    try {
-      const branchRes = await baseApiFetch<any[]>(`/orders/branch/${encodeURIComponent(branchId)}?status=SUBMITTED`, {
-        method: 'GET',
-      });
-      const raw = (branchRes as any)?.data || branchRes;
-      if (Array.isArray(raw)) {
-        return raw.map((o: any) => ({
-          id: o.id || o.orderId,
-          orderId: o.orderId || o.id,
-          orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
-          tableId: o.tableId,
-          tableNumber: o.tableNumber || o.tableLabel || 'Table',
-          tableLabel: o.tableLabel || 'Table',
-          status: o.status,
-          displayStatus: o.displayStatus || 'Pending Acceptance',
-          itemsCount: o.itemsCount || o.itemCount || 1,
-          totalAmount: Number(o.total || o.totalAmount || 0),
-          total: Number(o.total || o.totalAmount || 0),
-          paymentStatus: o.paymentStatus || 'PENDING',
-          placedAt: o.placedAt || o.createdAt || new Date().toISOString(),
-          createdAt: o.createdAt,
-          submittedAt: o.submittedAt,
-        }));
-      }
-    } catch {
-      // empty
-    }
-    return [];
+    // Assigned-table scope only — never fall back to /orders/branch (branch-wide).
+    return waiterService.queryOrders({
+      branchId,
+      scope: 'MY_TABLES',
+      status: 'PENDING,SUBMITTED',
+    });
   },
 
   getActiveOrders: async (branchId: string): Promise<WaiterOrderSummary[]> => {
-    try {
-      const res = await baseApiFetch<any[]>(`/waiter/orders/active?branchId=${encodeURIComponent(branchId)}`, {
-        method: 'GET',
-      });
-      const data = (res as any)?.data || res;
-      if (Array.isArray(data) && data.length > 0) {
-        return data.map((o: any) => ({
-          id: o.id || o.orderId,
-          orderId: o.id || o.orderId,
-          orderNumber: o.orderNumber || `#${(o.id || o.orderId).slice(0, 5)}`,
-          tableId: o.tableId,
-          tableNumber: o.tableNumber || o.tableLabel || (o.tableId ? 'Table' : 'Takeaway'),
-          tableLabel: o.tableNumber || o.tableLabel || (o.tableId ? 'Table' : 'Takeaway'),
-          status: o.status,
-          displayStatus: o.displayStatus || o.status,
-          itemsCount: o.itemsCount || o.itemCount || (o.items?.length ?? 1),
-          totalAmount: Number(o.totalAmount ?? o.total ?? 0),
-          total: Number(o.total ?? o.totalAmount ?? 0),
-          paymentStatus: o.paymentStatus || 'PENDING',
-          waiterName: o.waiterName || 'Staff',
-          items: o.items || [],
-          placedAt: o.placedAt || o.submittedAt || o.createdAt || new Date().toISOString(),
-          createdAt: o.createdAt,
-          submittedAt: o.submittedAt,
-        }));
-      }
-    } catch {
-      // Fallback to general branch endpoint
-    }
-
-    try {
-      const branchRes = await baseApiFetch<any[]>(`/orders/branch/${encodeURIComponent(branchId)}`, {
-        method: 'GET',
-      });
-      const raw = (branchRes as any)?.data || branchRes;
-      if (Array.isArray(raw)) {
-        return raw.map((o: any) => ({
-          id: o.id || o.orderId,
-          orderId: o.orderId || o.id,
-          orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
-          tableId: o.tableId,
-          tableNumber: o.tableNumber || o.tableLabel || (o.tableId ? 'Table' : 'Takeaway'),
-          tableLabel: o.tableLabel || (o.tableId ? 'Table' : 'Takeaway'),
-          status: o.status,
-          displayStatus: o.displayStatus || o.status,
-          itemsCount: o.itemsCount || o.itemCount || (o.items?.length ?? 1),
-          totalAmount: Number(o.total || o.totalAmount || 0),
-          total: Number(o.total || o.totalAmount || 0),
-          paymentStatus: o.paymentStatus || 'PENDING',
-          waiterName: o.waiterName || 'Staff',
-          items: o.items || [],
-          placedAt: o.placedAt || o.createdAt || new Date().toISOString(),
-          createdAt: o.createdAt,
-          submittedAt: o.submittedAt,
-        }));
-      }
-    } catch {
-      // empty
-    }
-    return [];
+    // Assigned-table scope only — never fall back to /orders/branch (branch-wide).
+    return waiterService.queryOrders({
+      branchId,
+      scope: 'MY_TABLES',
+      status: 'ACCEPTED,CONFIRMED,PREPARING,READY',
+    });
   },
 
   getOrderDetail: async (orderId: string): Promise<WaiterOrderDetail> => {

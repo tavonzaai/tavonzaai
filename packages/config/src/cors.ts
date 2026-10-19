@@ -136,6 +136,52 @@ export function isOriginAllowed(origin?: string): boolean {
   return false;
 }
 
+/**
+ * Default request headers allowed in CORS preflight requests
+ */
+export const DEFAULT_ALLOWED_HEADERS: string[] = [
+  'Content-Type',
+  'Authorization',
+  'Accept',
+  'X-Requested-With',
+  'X-Branch-Id',
+  'X-Table-Id',
+  'X-Session-Id',
+  'X-Session-Token',
+  'X-Organization-Id',
+  'X-Request-Id',
+  'x-request-id',
+  'X-Forwarded-Proto',
+  'X-Forwarded-Host',
+  'Origin',
+  'Idempotency-Key',
+  'idempotency-key',
+];
+
+/**
+ * Default response headers exposed to browser clients
+ */
+export const DEFAULT_EXPOSED_HEADERS: string[] = [
+  'Content-Range',
+  'X-Total-Count',
+  'X-Response-Time',
+  'X-Session-Token',
+  'X-Request-Id',
+  'Idempotency-Key',
+];
+
+/**
+ * Reads any additional comma-separated headers from environment variable
+ */
+export function getEnvCustomHeaders(): string[] {
+  const envHeaders = process.env.CORS_ALLOWED_HEADERS;
+  if (!envHeaders) return [];
+  return envHeaders
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean);
+}
+
 export interface CorsConfigOptions {
   allowedHeaders?: string[];
   exposedHeaders?: string[];
@@ -168,23 +214,10 @@ export function getCorsConfig(customOptions?: CorsConfigOptions) {
       'OPTIONS',
     ],
     allowedHeaders: customOptions?.allowedHeaders ?? [
-      'Content-Type',
-      'Authorization',
-      'Accept',
-      'X-Requested-With',
-      'X-Branch-Id',
-      'X-Table-Id',
-      'X-Session-Id',
-      'X-Forwarded-Proto',
-      'X-Forwarded-Host',
-      'Origin',
+      ...DEFAULT_ALLOWED_HEADERS,
+      ...getEnvCustomHeaders(),
     ],
-    exposedHeaders: customOptions?.exposedHeaders ?? [
-      'Content-Range',
-      'X-Total-Count',
-      'X-Response-Time',
-      'X-Session-Token',
-    ],
+    exposedHeaders: customOptions?.exposedHeaders ?? DEFAULT_EXPOSED_HEADERS,
     maxAge: customOptions?.maxAge ?? 86400, // 24 hours preflight cache
   };
 }

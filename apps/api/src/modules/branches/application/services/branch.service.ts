@@ -51,8 +51,8 @@ export class BranchService {
   }
 
   async findById(user: JwtPayload, id: string): Promise<BranchResponseDto> {
+    await this.branchAccess.assertAccess(user, id);
     const branch = await this.requireBranch(id);
-    await this.assertRestaurantAccess(user, branch.restaurantId);
     return this.toResponseDto(branch);
   }
 
@@ -128,8 +128,9 @@ export class BranchService {
   }
 
   async assertBranchAccess(user: JwtPayload, branchId: string): Promise<void> {
-    const branch = await this.requireBranch(branchId);
-    await this.assertRestaurantAccess(user, branch.restaurantId);
+    // Staff (branch managers) and org owners share this gate — assignment/scope based,
+    // not organization-owner-only. Structural create/update still use assertRestaurantAccess.
+    await this.branchAccess.assertAccess(user, branchId);
   }
 
   private async assertRestaurantAccess(user: JwtPayload, restaurantId: string): Promise<void> {

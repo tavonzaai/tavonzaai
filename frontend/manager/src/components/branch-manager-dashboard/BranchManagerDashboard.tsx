@@ -15,6 +15,7 @@ import KitchenKdsView from './kitchen/KitchenKdsView';
 import PaymentsView from './payments/PaymentsView';
 import PaymentDetailView from './payments/PaymentDetailView';
 import MenuView from './menu/MenuView';
+import MenuCategoriesView from './menu/MenuCategoriesView';
 import ReportsView from './reports/ReportsView';
 import BranchConfigView from './config/BranchConfigView';
 import ManagerProfileView from './profile/ProfileView';
@@ -30,6 +31,7 @@ import {
   getActiveBranchId,
   markTableDeletedLocally,
   isTableDeletedLocally,
+  buildTableQrCodeUrl,
 } from '../../redux/features/branchManagerApi';
 import { useAppDispatch } from '../../redux/hooks';
 import { getMe } from '../../redux/features/authApi';
@@ -92,7 +94,7 @@ export default function BranchManagerDashboard({
           else if (serv === 'NEEDS_ATTENTION') status = 'need_attention';
 
             const qrToken = t.qrCodeToken || t.id;
-            const qrCodeUrl = t.qrCodeUrl || (qrToken ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrToken)}` : undefined);
+            const qrCodeUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
             const assignedWaiterName = t.assignedWaiter?.name || t.waiterName || (t.waiter ? t.waiter : undefined);
             const waiterId = t.assignedWaiter?.id || t.waiterId;
             return {
@@ -332,6 +334,8 @@ export default function BranchManagerDashboard({
             )
           ) : activeNav.toLowerCase() === 'menu' ? (
             <MenuView />
+          ) : activeNav.toLowerCase() === 'categories' ? (
+            <MenuCategoriesView />
           ) : activeNav.toLowerCase() === 'reports' ? (
             <ReportsView />
           ) : activeNav.toLowerCase() === 'branch config' || activeNav.toLowerCase() === 'branch-config' ? (

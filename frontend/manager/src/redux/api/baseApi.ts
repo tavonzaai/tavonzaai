@@ -21,21 +21,16 @@ export function removeCookie(name: string) {
 }
 
 /**
- * 🍪 Cookie Management for Authentication Tokens (STRICTLY COOKIES ONLY)
+ * Auth cookies: only the access token is stored client-side.
+ * Profile / branch context come from GET /users/me (Redux), never cookies.
+ * Refresh stays HttpOnly (tvz_rt_manager) from the API.
  */
 export function getAuthToken(): string | null {
-  // 1. Check access_token cookie
   const token = getCookie('access_token');
   if (token) return token;
-
-  // 2. Check branch_manager_token cookie
-  const managerToken = getCookie('branch_manager_token');
-  if (managerToken) return managerToken;
-
-  // 3. Fallback to cashier_token or general auth token
-  const cashierToken = getCookie('cashier_token');
-  if (cashierToken) return cashierToken;
-
+  // Migrate legacy manager token once, then prefer access_token going forward.
+  const legacy = getCookie('branch_manager_token');
+  if (legacy) return legacy;
   return null;
 }
 
@@ -45,13 +40,20 @@ export function getRefreshToken(): string | null {
 
 export function setAuthToken(token: string) {
   setCookie('access_token', token);
-  setCookie('branch_manager_token', token);
+  // Drop duplicate / legacy auth cookies so only access_token remains.
+  removeCookie('branch_manager_token');
+  removeCookie('cashier_token');
+  removeCookie('branch_manager_user');
+  removeCookie('cashier_user');
+  removeCookie('branch_id');
+  removeCookie('tavonza_branch_id');
+  removeCookie('active_branch_id');
 }
 
 export function setAuthTokens(tokens: { accessToken: string; refreshToken?: string }) {
   setAuthToken(tokens.accessToken);
   // Refresh tokens live in HttpOnly cookie tvz_rt_manager — never store in JS-readable cookies.
-    removeCookie('refresh_token');
+  removeCookie('refresh_token');
 }
 
 export function removeAuthToken() {
@@ -60,6 +62,10 @@ export function removeAuthToken() {
   removeCookie('branch_manager_token');
   removeCookie('branch_manager_user');
   removeCookie('cashier_token');
+  removeCookie('cashier_user');
+  removeCookie('branch_id');
+  removeCookie('tavonza_branch_id');
+  removeCookie('active_branch_id');
 }
 
 let refreshPromise: Promise<boolean> | null = null;

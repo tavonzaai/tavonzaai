@@ -18,7 +18,13 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
-import { branchManagerService, getActiveBranchId, LiveOrderItem, buildTableQrCodeUrl } from '../../../redux/features/branchManagerApi';
+import {
+  branchManagerService,
+  getActiveBranchId,
+  LiveOrderItem,
+  buildTableQrCodeUrl,
+  getCustomerTableUrl,
+} from '../../../redux/features/branchManagerApi';
 import EditTableModal from './EditTableModal';
 import { confirmDeleteTable, showDeleteSuccess, showDeleteError } from '../../../lib/swal';
 
@@ -362,7 +368,7 @@ export default function TableDetailView({
                 </span>
               </div>
               <p className="text-[11px] text-neutral-500 pt-1 leading-normal">
-                Customers scan this QR code to visit http://localhost:3100?qr=..., login, and place live dine-in orders.
+                Customers scan this QR code to visit the live table ordering page, login, and place dine-in orders.
               </p>
             </div>
 
@@ -370,10 +376,7 @@ export default function TableDetailView({
               <button
                 type="button"
                 onClick={() => {
-                  const base = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-                    ? `${window.location.protocol}//${window.location.hostname}:3100`
-                    : 'http://localhost:3100';
-                  const url = `${base}?qr=${encodeURIComponent(liveTable.qrCodeToken || liveTable.id)}`;
+                  const url = getCustomerTableUrl(liveTable.qrCodeToken || liveTable.id);
                   navigator.clipboard.writeText(url);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);

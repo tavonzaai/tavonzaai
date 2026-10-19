@@ -172,11 +172,12 @@ export class ApiError extends Error {
 
 export interface BaseApiFetchOptions extends RequestInit {
   skipToast?: boolean;
+  __authRetried?: boolean;
 }
 
 export async function baseApiFetch<T = any>(
   endpoint: string,
-  options: RequestInit & { __authRetried?: boolean } = {}
+  options: BaseApiFetchOptions = {}
 ): Promise<ApiResponse<T> & T> {
   const token = getAuthToken();
   const headers: Record<string, string> = {

@@ -67,9 +67,10 @@ function GroupCartContent() {
         `/orders/waiting?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(submittedId || '')}&mode=together`
       );
       return;
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn('Place group order error:', e);
-      toast.error(e?.message || 'Failed to place group order. Please check your items.');
+      const message = e instanceof Error ? e.message : 'Failed to place group order. Please check your items.';
+      toast.error(message);
       // STOP user in place. Do NOT navigate next on error!
     }
   };
