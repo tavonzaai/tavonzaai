@@ -7,9 +7,6 @@ import { getMe } from '@/redux/features/authApi';
 import { setCookie } from '@/redux/api/baseApi';
 import CreateAccountView from '@/components/auth/CreateAccountView';
 import AuthDesktopLayout from '@/components/auth/AuthDesktopLayout';
-import BottomNav from '@/components/dashboard/BottomNav';
-import JarvisChatView from '@/components/dashboard/JarvisChatView';
-import MenuPage from './menu/page';
 
 
 

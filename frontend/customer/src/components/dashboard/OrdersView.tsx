@@ -19,6 +19,7 @@ import {
   Flame,
   ChefHat,
   ArrowRight,
+  ArrowLeft,
   PlusCircle,
 } from 'lucide-react';
 import { orderService, OrderListResponse, CartResponse } from '@/redux/features/orderApi';
@@ -202,38 +203,64 @@ export default function OrdersView({ onReserveClick, onOpenFeedback }: OrdersVie
   };
 
   return (
-    <div className="w-full max-w-md md:max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto min-h-screen bg-black text-white flex flex-col justify-between relative overflow-x-hidden font-sans pb-28 pt-2">
+    <div className="w-full max-w-md md:max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto min-h-screen bg-black text-white flex flex-col justify-between relative overflow-x-hidden font-sans pb-12 pt-2">
       {/* 1. Header Banner */}
-      <div className="w-full p-5 bg-gradient-to-br from-neutral-900 to-neutral-800/40 border-b border-white/10 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/10 border border-neutral-700">
-            <Calendar className="w-3.5 h-3.5 text-yellow-400" />
-            <span className="text-yellow-400 text-[10px] font-semibold font-['Inter']">
-              Live Order Management
-            </span>
+      <div className="w-full p-5 bg-gradient-to-br from-neutral-900 to-neutral-800/40 border-b border-white/10 flex flex-col gap-4">
+        {/* Top Header Row with Back Button, Title, and Actions */}
+        <div className="flex items-center justify-between gap-4 border-b border-neutral-800/80 pb-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push('/menu');
+                }
+              }}
+              className="w-8 h-8 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-white hover:text-yellow-400 hover:border-yellow-400/50 transition cursor-pointer shrink-0 active:scale-95 shadow-sm"
+              title="Go Back"
+            >
+              <ArrowLeft className="w-4 h-4 text-white hover:text-yellow-400 transition" />
+            </button>
+
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-white font-['Inter']">
+                  Your Orders
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-yellow-400/15 border border-yellow-400/30 text-yellow-400 text-[10px] font-semibold font-mono flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                  Live
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed font-['Inter']">
+                Live Kitchen Tracker & Meal History
+              </p>
+            </div>
           </div>
 
-          <button
-            onClick={() => fetchOrdersData(true)}
-            className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white transition flex items-center gap-1 text-xs cursor-pointer"
-            title="Refresh Orders"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg sm:text-xl font-bold text-white font-['Inter']">
-            Your Orders & Live Kitchen Tracker
-          </h2>
-          <p className="text-xs text-neutral-400 leading-relaxed font-['Poppins']">
-            Track dishes currently preparing in the kitchen and review previous meal history in real time.
-          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/menu')}
+              className="px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-yellow-400/40 text-white transition flex items-center gap-1.5 text-xs font-medium cursor-pointer active:scale-95 shadow-sm"
+              title="Browse Menu"
+            >
+              <Utensils className="w-3.5 h-3.5 text-yellow-400" />
+              <span>Menu</span>
+            </button>
+            <button
+              onClick={() => fetchOrdersData(true)}
+              className="p-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-yellow-400/40 text-white transition flex items-center gap-1 text-xs cursor-pointer active:scale-95 shadow-sm"
+              title="Refresh Orders"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
         {/* Tab Filters */}
-        <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setTabFilter('all')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${

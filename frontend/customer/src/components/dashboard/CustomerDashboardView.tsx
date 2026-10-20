@@ -585,16 +585,6 @@ export default function CustomerDashboardView({
 
       {/* Floating Draggable Ask AI Concierge Button & Popup Modal */}
       <DraggableAskAi defaultBottom={24} defaultRight={24} />
-
-      {/* Persistent Bottom Nav - Hidden on profile page */}
-      {activeTab !== 'profile' && (
-        <BottomNav
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          isVisible={isNavVisible}
-          hasActiveOrder={hasActiveOrder}
-        />
-      )}
     </div>
   );
 }

@@ -259,7 +259,13 @@ function TrackContent() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push(`/menu?table=${encodeURIComponent(activeTable)}`);
+                }
+              }}
               className="w-8 h-8 bg-[#191818] border border-neutral-800 rounded-full flex items-center justify-center hover:bg-neutral-800 transition cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4 text-white" />

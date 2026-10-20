@@ -13,11 +13,14 @@ import {
   Camera,
   CheckCircle2,
   User as UserIcon,
+  FileText,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { logoutUser, changePassword, getMe } from '@/redux/features/authApi';
 import { updateMe } from '@/redux/features/userApi';
 import { clearAuthError } from '@/redux/slices/authSlice';
+import { getActiveCustomerOrder } from '@/redux/features/orderApi';
+import { resolveDynamicBranchId, resolveDynamicTableId } from '@/context/CartContext';
 
 export default function ProfileView() {
   const router = useRouter();
@@ -44,9 +47,27 @@ export default function ProfileView() {
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [hasActiveOrder, setHasActiveOrder] = useState(false);
 
   useEffect(() => {
     dispatch(getMe());
+
+    const branchId = resolveDynamicBranchId();
+    const tableId = resolveDynamicTableId();
+    const checkActiveOrder = () => {
+      getActiveCustomerOrder(branchId, tableId)
+        .then((ord) => setHasActiveOrder(Boolean(ord)))
+        .catch(() => setHasActiveOrder(false));
+    };
+
+    checkActiveOrder();
+    const timer = setInterval(checkActiveOrder, 8000);
+    const handleEvt = () => checkActiveOrder();
+    window.addEventListener('tavonza:order_status_changed', handleEvt);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('tavonza:order_status_changed', handleEvt);
+    };
   }, [dispatch]);
 
   useEffect(() => {
@@ -180,13 +201,32 @@ export default function ProfileView() {
             </div>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="px-3.5 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 rounded-xl text-xs font-medium text-red-300 flex items-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Log Out</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Orders Button (beside Log Out button) */}
+            <button
+              type="button"
+              onClick={() => router.push('/orders')}
+              className="relative px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-yellow-400/50 rounded-xl text-xs font-medium text-white flex items-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95 group shadow-sm"
+              title="View Orders & Live Tracker"
+            >
+              <FileText className="w-3.5 h-3.5 text-yellow-400 group-hover:scale-110 transition-transform" />
+              <span>Orders</span>
+              {hasActiveOrder && (
+                <span className="relative flex h-2 w-2 ml-0.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-400" />
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="px-3.5 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 rounded-xl text-xs font-medium text-red-300 flex items-center gap-1.5 transition shrink-0 cursor-pointer active:scale-95"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log Out</span>
+            </button>
+          </div>
         </div>
 
         {error && (
