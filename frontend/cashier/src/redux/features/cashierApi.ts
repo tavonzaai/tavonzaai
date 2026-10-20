@@ -11,7 +11,7 @@ export interface ProcessPaymentPayload {
   orderId?: string;
   tableSessionId?: string;
   payerGuestSessionId?: string;
-  scope: 'FULL_ORDER' | 'ORDER_ITEMS' | 'SPLIT_EQUAL';
+  scope: 'ORDER' | 'FULL_ORDER' | 'ORDER_ITEMS' | 'SPLIT_EQUAL' | 'TABLE_SESSION' | 'GUEST_SESSION';
   amount: number;
   tipAmount?: number;
   method: 'CASH' | 'CARD' | 'MOBILE_WALLET' | 'ONLINE_GATEWAY';
@@ -163,9 +163,65 @@ export const cashierService = {
   },
 
   processPayment: async (payload: ProcessPaymentPayload): Promise<CashierPaymentRecord> => {
+    const isUuid = (val?: string) =>
+      typeof val === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val.trim());
+
+    const cleanPayload: Record<string, any> = {
+      amount: typeof payload.amount === 'number' ? Number(payload.amount.toFixed(2)) : payload.amount,
+      method: payload.method || 'CASH',
+      scope: payload.scope === 'FULL_ORDER' ? 'ORDER' : (payload.scope || 'ORDER'),
+    };
+
+    if (isUuid(payload.orderId)) cleanPayload.orderId = payload.orderId;
+    if (isUuid(payload.tableSessionId)) cleanPayload.tableSessionId = payload.tableSessionId;
+    if (isUuid(payload.payerGuestSessionId)) cleanPayload.payerGuestSessionId = payload.payerGuestSessionId;
+    if (typeof payload.tipAmount === 'number' && payload.tipAmount > 0) cleanPayload.tipAmount = payload.tipAmount;
+    if (payload.discountCode?.trim()) cleanPayload.discountCode = payload.discountCode.trim();
+    if (payload.transactionRef?.trim()) cleanPayload.transactionRef = payload.transactionRef.trim();
+
     const res = await baseApiFetch<CashierPaymentRecord>('/payments', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  createStripePaymentIntent: async (payload: {
+    orderId?: string;
+    tableSessionId?: string;
+    tipAmount?: number;
+    discountCode?: string;
+  }): Promise<{
+    clientSecret: string;
+    paymentIntentId: string;
+    amount: number;
+    currency: string;
+    publishableKey: string;
+    orderId: string | null;
+    tableSessionId: string | null;
+  }> => {
+    const isUuid = (val?: string) =>
+      typeof val === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val.trim());
+
+    const cleanPayload: Record<string, any> = {};
+    if (isUuid(payload.orderId)) cleanPayload.orderId = payload.orderId;
+    if (isUuid(payload.tableSessionId)) cleanPayload.tableSessionId = payload.tableSessionId;
+    if (typeof payload.tipAmount === 'number' && payload.tipAmount > 0) cleanPayload.tipAmount = payload.tipAmount;
+    if (payload.discountCode?.trim()) cleanPayload.discountCode = payload.discountCode.trim();
+
+    const res = await baseApiFetch<any>('/payments/stripe/create-intent', {
+      method: 'POST',
+      body: JSON.stringify(cleanPayload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  verifyStripePayment: async (paymentIntentId: string): Promise<CashierPaymentRecord> => {
+    const res = await baseApiFetch<CashierPaymentRecord>('/payments/stripe/verify', {
+      method: 'POST',
+      body: JSON.stringify({ paymentIntentId }),
     });
     return (res as any)?.data || res;
   },

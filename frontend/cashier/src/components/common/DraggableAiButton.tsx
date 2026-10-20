@@ -205,7 +205,7 @@ export default function DraggableAiButton({
         touchAction: 'none',
         userSelect: 'none',
       }}
-      className="pointer-events-auto"
+      className={`pointer-events-auto print:hidden ${className}`}
     >
       <button
         ref={btnRef}

@@ -30,7 +30,9 @@ import {
   X,
   Filter,
   Printer,
+  Loader2,
 } from "lucide-react";
+import { loadStripe, Stripe, StripeCardElement } from "@stripe/stripe-js";
 import { toast } from "sonner";
 import AskAiModal from "./AskAiModal";
 import DraggableAiButton from "../common/DraggableAiButton";
@@ -120,6 +122,19 @@ export default function CashierDashboardView({
     refundCountToday: 0,
   });
 
+  // Stripe Checkout Modal state for Cashier
+  const [isStripeModalOpen, setIsStripeModalOpen] = useState(false);
+  const [stripeTargetOrder, setStripeTargetOrder] = useState<CashierOrder | null>(null);
+  const [stripeInstance, setStripeInstance] = useState<Stripe | null>(null);
+  const [cardElement, setCardElement] = useState<StripeCardElement | null>(null);
+  const [stripeClientSecret, setStripeClientSecret] = useState<string>("");
+  const [stripePaymentIntentId, setStripePaymentIntentId] = useState<string>("");
+  const [isStripeLoading, setIsStripeLoading] = useState(false);
+  const [isProcessingStripe, setIsProcessingStripe] = useState(false);
+  const [stripeMountError, setStripeMountError] = useState<string | null>(null);
+  const [stripeCardholderName, setStripeCardholderName] = useState<string>("Valued Guest");
+  const stripeCardRef = React.useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (queryOrderId) {
       setSelectedOrderId(queryOrderId);
@@ -190,6 +205,8 @@ export default function CashierDashboardView({
               o.paymentStatus === "PAID" ? "PAID_CASH" : "REQUESTING_CASH",
             paymentDate: new Date(o.createdAt).toLocaleDateString(),
             paymentMethod: o.paymentMethod || "Cash",
+            tableSessionId: o.tableSessionId,
+            tableId: o.tableId,
             items: (o.items || []).map((it: any, idx: number) => ({
               id: it.id || `item-${idx}`,
               name: it.name,
@@ -333,8 +350,12 @@ export default function CashierDashboardView({
         return;
       }
 
-      // Check if an offline payment request exists for this order
-      const matchingReq = offlineRequests.find((r) => r.orderId === orderId);
+      // Check if an offline payment request exists for this order or table session
+      const matchingReq = offlineRequests.find(
+        (r) =>
+          (r.orderId && r.orderId === orderId) ||
+          (targetOrd.tableSessionId && r.tableSessionId === targetOrd.tableSessionId)
+      );
       if (matchingReq) {
         await cashierService.confirmOfflinePayment(matchingReq.id, {
           receivedAmount: targetOrd.totalAmount,
@@ -342,7 +363,8 @@ export default function CashierDashboardView({
       } else {
         await cashierService.processPayment({
           orderId: targetOrd.id,
-          scope: "FULL_ORDER",
+          tableSessionId: targetOrd.tableSessionId,
+          scope: "ORDER",
           amount: targetOrd.totalAmount,
           method: "CASH",
         });
@@ -370,6 +392,126 @@ export default function CashierDashboardView({
       );
     } catch (err: any) {
       toast.error(err?.message || "Failed to confirm cash paid");
+    }
+  };
+
+  // Open Stripe checkout modal for an order
+  const handleOpenStripeModal = async (targetOrder: CashierOrder) => {
+    setStripeTargetOrder(targetOrder);
+    setIsStripeModalOpen(true);
+    setIsStripeLoading(true);
+    setStripeMountError(null);
+    setStripeClientSecret("");
+    setStripePaymentIntentId("");
+    setStripeCardholderName(targetOrder.customerName || "Valued Guest");
+
+    try {
+      const intentRes = await cashierService.createStripePaymentIntent({
+        orderId: targetOrder.id,
+        tableSessionId: targetOrder.tableSessionId,
+      });
+
+      setStripeClientSecret(intentRes.clientSecret);
+      setStripePaymentIntentId(intentRes.paymentIntentId);
+
+      if (intentRes.publishableKey && !intentRes.clientSecret.startsWith("pi_test_")) {
+        try {
+          const stripeObj = await loadStripe(intentRes.publishableKey);
+          if (stripeObj) {
+            setStripeInstance(stripeObj);
+            const elements = stripeObj.elements();
+            const card = elements.create("card", {
+              style: {
+                base: {
+                  color: "#ffffff",
+                  fontFamily: "Inter, sans-serif",
+                  fontSize: "15px",
+                  "::placeholder": { color: "#71717a" },
+                },
+                invalid: { color: "#ef4444", iconColor: "#ef4444" },
+              },
+            });
+            setTimeout(() => {
+              if (stripeCardRef.current) {
+                stripeCardRef.current.innerHTML = "";
+                card.mount(stripeCardRef.current);
+                setCardElement(card);
+              }
+            }, 100);
+          }
+        } catch (e: any) {
+          console.warn("Stripe Elements mount notice:", e);
+        }
+      }
+    } catch (err: any) {
+      console.error("Failed to initialize Stripe PaymentIntent:", err);
+      setStripeMountError(err?.message || "Failed to initiate Stripe session");
+    } finally {
+      setIsStripeLoading(false);
+    }
+  };
+
+  // Execute Stripe Payment
+  const handleExecuteStripePayment = async () => {
+    if (!stripeTargetOrder || !stripePaymentIntentId) {
+      toast.error("Stripe session not initialized");
+      return;
+    }
+
+    setIsProcessingStripe(true);
+    try {
+      if (stripeInstance && cardElement && stripeClientSecret && !stripeClientSecret.startsWith("pi_test_")) {
+        const result = await stripeInstance.confirmCardPayment(stripeClientSecret, {
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              name: stripeCardholderName || "Guest",
+            },
+          },
+        });
+
+        if (result.error) {
+          const msg = result.error.message || "Payment declined by Stripe";
+          toast.error(msg);
+          setIsProcessingStripe(false);
+          return;
+        }
+      }
+
+      await cashierService.verifyStripePayment(stripePaymentIntentId);
+
+      toast.success(
+        `Payment of $${stripeTargetOrder.totalAmount.toFixed(2)} settled via Stripe!`
+      );
+
+      setOrders((prev) =>
+        prev.map((ord) => {
+          if (ord.id === stripeTargetOrder.id) {
+            return {
+              ...ord,
+              financeStatus: "PAID_CASH",
+              paymentMethod: "Stripe / Card",
+              paymentDate: new Date().toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            };
+          }
+          return ord;
+        })
+      );
+
+      setIsStripeModalOpen(false);
+      if (cardElement) {
+        cardElement.destroy();
+        setCardElement(null);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Stripe payment processing failed");
+    } finally {
+      setIsProcessingStripe(false);
     }
   };
 
@@ -1012,9 +1154,27 @@ export default function CashierDashboardView({
           /* ========================================================================= */
           /* DEDICATED ORDER DETAILS MODE                                              */
           /* ========================================================================= */
-          <div className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 max-w-[1600px] w-full mx-auto">
+          <div className="p-4 sm:p-6 lg:p-8 print:p-0 print:m-0 space-y-6 print:space-y-2 flex-1 max-w-[1600px] w-full mx-auto">
+            {/* Printable Receipt Branded Header */}
+            <div className="hidden print:flex items-center justify-between pb-2 border-b border-neutral-700 w-full mb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-amber-400 flex items-center justify-center text-black font-bold text-xs">
+                  T
+                </div>
+                <div>
+                  <span className="font-bold text-sm tracking-tight text-white font-['Inter']">
+                    Tavonza Restaurant POS
+                  </span>
+                  <span className="text-neutral-500 text-xs ml-2">• Official Order Receipt</span>
+                </div>
+              </div>
+              <div className="text-right text-xs text-neutral-400 font-['Poppins']">
+                <span>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+            </div>
+
             {/* Top Bar with Back Button */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-800 print:pb-2 print:border-neutral-700">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -1022,7 +1182,7 @@ export default function CashierDashboardView({
                     setActiveNav("Table View");
                     router.push("/updated-cashier-dashboard/table-view");
                   }}
-                  className="p-2 bg-neutral-900 hover:bg-neutral-800 rounded-lg border border-neutral-800 text-neutral-300 hover:text-white transition flex items-center gap-2 text-sm font-medium cursor-pointer"
+                  className="p-2 bg-neutral-900 hover:bg-neutral-800 rounded-lg border border-neutral-800 text-neutral-300 hover:text-white transition flex items-center gap-2 text-sm font-medium cursor-pointer print:hidden"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to Table View</span>
@@ -1097,33 +1257,33 @@ export default function CashierDashboardView({
                 </div>
               </div>
             ) : activeOrder ? (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="grid grid-cols-1 lg:grid-cols-12 print:grid-cols-12 gap-6 print:gap-4 items-start">
                 {/* Left Column: Full Order Itemization & Metadata */}
-                <div className="lg:col-span-8 space-y-6">
+                <div className="lg:col-span-8 print:col-span-8 space-y-6 print:space-y-2.5">
                   {/* Metadata Cards */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="p-3.5 bg-neutral-900 rounded-xl border border-neutral-800 space-y-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 print:grid-cols-4 gap-3 print:gap-2">
+                    <div className="p-3.5 print:p-2 bg-neutral-900 rounded-xl border border-neutral-800 print:border-neutral-700 space-y-1">
                       <span className="text-xs text-neutral-500 font-medium font-['Poppins']">Table</span>
-                      <p className="text-base font-semibold text-white font-['Poppins']">{activeOrder.tableNumber}</p>
+                      <p className="text-base print:text-sm font-semibold text-white font-['Poppins']">{activeOrder.tableNumber}</p>
                     </div>
-                    <div className="p-3.5 bg-neutral-900 rounded-xl border border-neutral-800 space-y-1">
+                    <div className="p-3.5 print:p-2 bg-neutral-900 rounded-xl border border-neutral-800 print:border-neutral-700 space-y-1">
                       <span className="text-xs text-neutral-500 font-medium font-['Poppins']">Customer</span>
-                      <p className="text-base font-semibold text-white font-['Poppins'] truncate">{activeOrder.customerName}</p>
+                      <p className="text-base print:text-sm font-semibold text-white font-['Poppins'] truncate">{activeOrder.customerName}</p>
                     </div>
-                    <div className="p-3.5 bg-neutral-900 rounded-xl border border-neutral-800 space-y-1">
+                    <div className="p-3.5 print:p-2 bg-neutral-900 rounded-xl border border-neutral-800 print:border-neutral-700 space-y-1">
                       <span className="text-xs text-neutral-500 font-medium font-['Poppins']">Guests</span>
-                      <p className="text-base font-semibold text-white font-['Poppins']">{activeOrder.guestCount} Guests</p>
+                      <p className="text-base print:text-sm font-semibold text-white font-['Poppins']">{activeOrder.guestCount} Guests</p>
                     </div>
-                    <div className="p-3.5 bg-neutral-900 rounded-xl border border-neutral-800 space-y-1">
+                    <div className="p-3.5 print:p-2 bg-neutral-900 rounded-xl border border-neutral-800 print:border-neutral-700 space-y-1">
                       <span className="text-xs text-neutral-500 font-medium font-['Poppins']">Wait Time</span>
-                      <p className="text-base font-semibold text-amber-400 font-['Poppins']">{activeOrder.waitTime}</p>
+                      <p className="text-base print:text-sm font-semibold text-amber-400 font-['Poppins']">{activeOrder.waitTime}</p>
                     </div>
                   </div>
 
                   {/* Itemized Table */}
-                  <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-5 sm:p-6 space-y-4 shadow-xl">
-                    <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-                      <h3 className="text-lg font-semibold text-white font-['Poppins']">
+                  <div className="bg-neutral-900 rounded-xl border border-neutral-800 print:border-neutral-700 p-5 sm:p-6 print:p-3 space-y-4 print:space-y-1.5 shadow-xl">
+                    <div className="flex items-center justify-between pb-3 print:pb-1.5 border-b border-neutral-800 print:border-neutral-700">
+                      <h3 className="text-lg print:text-sm font-semibold text-white font-['Poppins']">
                         Item Breakdown ({activeOrder.items?.length || activeOrder.itemCount || 1} items)
                       </h3>
                       <span className="text-xs text-neutral-400 font-['Inter']">Line Items</span>
@@ -1134,17 +1294,17 @@ export default function CashierDashboardView({
                         ? activeOrder.items
                         : [{ id: "", name: "", price: activeOrder.subtotal, quantity: 1 }]
                       ).map((it, idx) => (
-                        <div key={it.id || idx} className="py-3.5 flex items-center justify-between">
+                        <div key={it.id || idx} className="py-3.5 print:py-1.5 flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <span className="w-7 h-7 rounded-md bg-neutral-800 border border-neutral-700 text-xs font-semibold text-amber-400 flex items-center justify-center font-['Poppins']">
+                            <span className="w-7 h-7 print:w-6 print:h-6 rounded-md bg-neutral-800 border border-neutral-700 text-xs font-semibold text-amber-400 flex items-center justify-center font-['Poppins']">
                               {it.quantity || 1}x
                             </span>
                             <div>
-                              <p className="text-base font-medium text-white font-['Poppins']">{it.name}</p>
+                              <p className="text-base print:text-sm font-medium text-white font-['Poppins']">{it.name}</p>
                               <p className="text-xs text-neutral-500 font-['Inter']">${it.price.toFixed(2)} each</p>
                             </div>
                           </div>
-                          <span className="text-base font-semibold text-white font-['Poppins']">
+                          <span className="text-base print:text-sm font-semibold text-white font-['Poppins']">
                             ${(it.price * (it.quantity || 1)).toFixed(2)}
                           </span>
                         </div>
@@ -1152,20 +1312,20 @@ export default function CashierDashboardView({
                     </div>
 
                     {/* Calculations Breakdown */}
-                    <div className="pt-4 border-t border-neutral-800 space-y-2.5 font-['Poppins']">
-                      <div className="flex justify-between text-sm text-neutral-400">
+                    <div className="pt-4 print:pt-2 border-t border-neutral-800 print:border-neutral-700 space-y-2.5 print:space-y-1 font-['Poppins']">
+                      <div className="flex justify-between text-sm print:text-xs text-neutral-400">
                         <span>Subtotal</span>
                         <span className="text-white">${activeOrder.subtotal.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between text-sm text-neutral-400">
+                      <div className="flex justify-between text-sm print:text-xs text-neutral-400">
                         <span>Service Charge (5%)</span>
                         <span className="text-white">${activeOrder.serviceCharge.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between text-sm text-neutral-400">
+                      <div className="flex justify-between text-sm print:text-xs text-neutral-400">
                         <span>Tax (8%)</span>
                         <span className="text-white">${activeOrder.tax.toFixed(2)}</span>
                       </div>
-                      <div className="pt-3 border-t border-neutral-800 flex justify-between text-lg sm:text-xl font-bold">
+                      <div className="pt-3 print:pt-1.5 border-t border-neutral-800 print:border-neutral-700 flex justify-between text-lg sm:text-xl print:text-sm font-bold">
                         <span className="text-white">AMOUNT TO BE PAID</span>
                         <span className="text-amber-500">${activeOrder.totalAmount.toFixed(2)}</span>
                       </div>
@@ -1174,30 +1334,31 @@ export default function CashierDashboardView({
                 </div>
 
                 {/* Right Column: Actions & Payment Settlement */}
-                <div className="lg:col-span-4 bg-neutral-900 rounded-xl border border-neutral-800 p-5 sm:p-6 space-y-6 shadow-xl">
-                  <h3 className="text-white text-lg font-semibold font-['Poppins'] text-center">
-                    Summary & Actions
+                <div className="lg:col-span-4 print:col-span-4 bg-neutral-900 rounded-xl border border-neutral-800 print:border-neutral-700 p-5 sm:p-6 print:p-3 space-y-6 print:space-y-2 shadow-xl">
+                  <h3 className="text-white text-lg print:text-sm font-semibold font-['Poppins'] text-center">
+                    <span className="print:hidden">Summary & Actions</span>
+                    <span className="hidden print:inline">Payment Summary</span>
                   </h3>
 
-                  <div className="h-px bg-neutral-800 w-full" />
+                  <div className="h-px bg-neutral-800 print:bg-neutral-700 w-full" />
 
                   {/* Status Box */}
-                  <div className="p-4 bg-neutral-950/60 rounded-xl border border-neutral-800 flex flex-col items-center gap-3 text-center">
-                    <div className="w-12 h-12 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center text-green-400">
-                      <CheckCircle2 className="w-7 h-7" />
+                  <div className="p-4 print:p-2 bg-neutral-950/60 rounded-xl border border-neutral-800 print:border-neutral-700 flex flex-col items-center gap-3 print:gap-1 text-center">
+                    <div className="w-12 h-12 print:w-7 print:h-7 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center text-green-400">
+                      <CheckCircle2 className="w-7 h-7 print:w-4 print:h-4" />
                     </div>
                     <div>
-                      <div className="text-2xl font-bold text-white font-['Poppins']">
+                      <div className="text-2xl print:text-lg font-bold text-white font-['Poppins']">
                         ${activeOrder.totalAmount.toFixed(2)}
                       </div>
-                      <div className="text-green-400 text-sm font-semibold font-['Poppins']">
+                      <div className="text-green-400 text-sm print:text-xs font-semibold font-['Poppins']">
                         {activeOrder.financeStatus === "PAID_CASH"
                           ? "Payment Successful"
                           : "Awaiting Cash Settle"}
                       </div>
                     </div>
 
-                    <div className="w-full text-left space-y-2 pt-2 border-t border-neutral-800 text-xs text-neutral-400 font-['Poppins']">
+                    <div className="w-full text-left space-y-2 print:space-y-1 pt-2 border-t border-neutral-800 print:border-neutral-700 text-xs print:text-[11px] text-neutral-400 font-['Poppins']">
                       <div className="flex justify-between">
                         <span>Status</span>
                         <span className="text-white font-medium">
@@ -1216,7 +1377,7 @@ export default function CashierDashboardView({
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="space-y-3">
+                  <div className="space-y-3 print:hidden">
                     {activeOrder.financeStatus === "PAID_CASH" ? (
                       <button
                         type="button"
@@ -1227,14 +1388,25 @@ export default function CashierDashboardView({
                         Payment Settled
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleConfirmCashPaid(activeOrder.id)}
-                        className="w-full py-3 px-4 bg-green-500 hover:bg-green-400 text-black font-semibold rounded-lg text-base text-center shadow-lg shadow-green-500/20 transition cursor-pointer active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        <Banknote className="w-5 h-5" />
-                        Confirm Cash Paid
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmCashPaid(activeOrder.id)}
+                          className="w-full py-3 px-4 bg-green-500 hover:bg-green-400 text-black font-semibold rounded-lg text-base text-center shadow-lg shadow-green-500/20 transition cursor-pointer active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <Banknote className="w-5 h-5" />
+                          Confirm Cash Paid
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenStripeModal(activeOrder)}
+                          className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-base text-center shadow-lg shadow-indigo-600/25 transition cursor-pointer active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <CreditCard className="w-5 h-5" />
+                          Pay with Stripe / Card
+                        </button>
+                      </>
                     )}
 
                     <button
@@ -1825,25 +1997,38 @@ export default function CashierDashboardView({
                     </div>
 
                     {/* Action Button */}
-                    {activeOrder.financeStatus === "PAID_CASH" ? (
-                      <button
-                        type="button"
-                        disabled
-                        className="w-full py-3 px-4 bg-neutral-700 text-neutral-300 rounded-lg font-medium font-['Inter'] text-base text-center cursor-not-allowed transition flex items-center justify-center gap-2"
-                      >
-                        <CheckCircle2 className="w-5 h-5 text-green-400" />
-                        Payment Done
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleConfirmCashPaid(activeOrder.id)}
-                        className="w-full py-3 px-4 bg-green-500 hover:bg-green-400 text-black font-semibold rounded-lg font-['Inter'] text-base text-center shadow-lg shadow-green-500/20 transition cursor-pointer active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        <Banknote className="w-5 h-5" />
-                        Confirm Cash Paid
-                      </button>
-                    )}
+                    <div className="space-y-2 print:hidden">
+                      {activeOrder.financeStatus === "PAID_CASH" ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-full py-3 px-4 bg-neutral-700 text-neutral-300 rounded-lg font-medium font-['Inter'] text-base text-center cursor-not-allowed transition flex items-center justify-center gap-2"
+                        >
+                          <CheckCircle2 className="w-5 h-5 text-green-400" />
+                          Payment Done
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmCashPaid(activeOrder.id)}
+                            className="w-full py-3 px-4 bg-green-500 hover:bg-green-400 text-black font-semibold rounded-lg font-['Inter'] text-base text-center shadow-lg shadow-green-500/20 transition cursor-pointer active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <Banknote className="w-5 h-5" />
+                            Confirm Cash Paid
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenStripeModal(activeOrder)}
+                            className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg font-['Inter'] text-base text-center shadow-lg shadow-indigo-600/25 transition cursor-pointer active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <CreditCard className="w-5 h-5" />
+                            Pay with Stripe / Card
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1935,7 +2120,7 @@ export default function CashierDashboardView({
 
                     await cashierService
                       .processPayment({
-                        scope: "FULL_ORDER",
+                        scope: "ORDER",
                         amount: cartTotal,
                         method: mappedMethod,
                       })
@@ -2061,6 +2246,126 @@ export default function CashierDashboardView({
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* STRIPE PAYMENT MODAL OVERLAY (FOR CASHIER)                                */}
+      {/* ========================================================================= */}
+      {isStripeModalOpen && stripeTargetOrder && (
+        <div className="fixed inset-0 z-50 bg-neutral-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative text-white">
+            <button
+              type="button"
+              onClick={() => {
+                setIsStripeModalOpen(false);
+                if (cardElement) {
+                  cardElement.destroy();
+                  setCardElement(null);
+                }
+              }}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold font-['Inter'] text-white">
+                  Stripe Card Payment
+                </h3>
+                <p className="text-xs text-neutral-400 font-['Inter']">
+                  Order {stripeTargetOrder.orderNumber} · {stripeTargetOrder.tableNumber}
+                </p>
+              </div>
+            </div>
+
+            {/* Amount card */}
+            <div className="p-4 bg-neutral-950/60 rounded-xl border border-neutral-800 mb-6 flex items-center justify-between">
+              <div>
+                <span className="text-xs text-neutral-400 block font-['Inter']">Amount Due</span>
+                <span className="text-2xl font-bold text-yellow-400 font-['Poppins']">
+                  ${stripeTargetOrder.totalAmount.toFixed(2)}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs px-2.5 py-1 bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30 font-medium">
+                  Stripe Test / Live
+                </span>
+              </div>
+            </div>
+
+            {isStripeLoading ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-neutral-400">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+                <span className="text-sm font-['Inter']">Preparing secure Stripe session...</span>
+              </div>
+            ) : stripeMountError ? (
+              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm mb-4">
+                {stripeMountError}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-neutral-300 block mb-1.5 font-['Inter']">
+                    Cardholder Name
+                  </label>
+                  <input
+                    type="text"
+                    value={stripeCardholderName}
+                    onChange={(e) => setStripeCardholderName(e.target.value)}
+                    placeholder="e.g. John Doe"
+                    className="w-full px-3.5 py-2.5 bg-neutral-950 border border-neutral-800 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500 transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-neutral-300 block mb-1.5 font-['Inter']">
+                    Card Details
+                  </label>
+                  {/* Stripe Card Element Container */}
+                  <div
+                    ref={stripeCardRef}
+                    className="w-full min-h-[46px] px-3.5 py-3 bg-neutral-950 border border-neutral-800 rounded-lg text-white text-sm focus-within:border-indigo-500 transition"
+                  >
+                    {!cardElement && (
+                      <div className="flex items-center justify-between text-xs text-neutral-400">
+                        <span>Simulated Card / Test Gateway Ready (4242 •••• •••• 4242)</span>
+                        <CheckCircle2 className="w-4 h-4 text-green-400" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-neutral-500 mt-1.5 font-['Inter']">
+                    Accepts Visa, Mastercard, Amex, Discover. 256-bit encrypted end-to-end.
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    disabled={isProcessingStripe}
+                    onClick={handleExecuteStripePayment}
+                    className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold rounded-lg text-base text-center shadow-lg shadow-indigo-600/30 transition cursor-pointer flex items-center justify-center gap-2 active:scale-95"
+                  >
+                    {isProcessingStripe ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Processing with Stripe...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-5 h-5" />
+                        <span>Pay ${stripeTargetOrder.totalAmount.toFixed(2)} with Stripe</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -2074,7 +2379,7 @@ export default function CashierDashboardView({
   }
 
   return (
-    <div className="h-screen bg-black text-white font-['Poppins',sans-serif] flex flex-col lg:flex-row overflow-hidden selection:bg-amber-500 selection:text-black relative">
+    <div className="h-screen print:h-auto bg-black text-white font-['Poppins',sans-serif] flex flex-col lg:flex-row overflow-hidden print:overflow-visible selection:bg-amber-500 selection:text-black relative">
       {/* Sidebar */}
       <CashierSidebar
         activeNav={activeNav}
@@ -2084,9 +2389,9 @@ export default function CashierDashboardView({
       />
 
       {/* Main Content Viewport */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-black relative">
+      <div className="flex-1 flex flex-col min-w-0 h-screen print:h-auto overflow-hidden print:overflow-visible bg-black relative">
         {/* Top Header Bar */}
-        <header className="h-[77px] px-4 sm:px-8 border-b border-neutral-800 shadow-[0px_0px_10.8px_0px_rgba(255,255,255,0.15)] flex items-center justify-between shrink-0 bg-black z-30">
+        <header className="h-[77px] px-4 sm:px-8 border-b border-neutral-800 shadow-[0px_0px_10.8px_0px_rgba(255,255,255,0.15)] flex items-center justify-between shrink-0 bg-black z-30 print:hidden">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -2126,7 +2431,7 @@ export default function CashierDashboardView({
         </header>
 
         {/* Scrollable Body Content */}
-        <main className="cashier-dashboard-main flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+        <main className="cashier-dashboard-main flex-1 overflow-y-auto print:overflow-visible print:h-auto custom-scrollbar flex flex-col">
           {bodyContent}
         </main>
       </div>
@@ -2138,6 +2443,7 @@ export default function CashierDashboardView({
         isOpen={isAskAiOpen}
         onToggle={() => setIsAskAiOpen((prev) => !prev)}
         storageKey="updated_cashier_ask_ai_pos"
+        className="print:hidden"
       />
 
       {/* Ask AI Assistant Floating Chat Modal */}

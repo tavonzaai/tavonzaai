@@ -81,3 +81,103 @@
   transform: scale(1.1) !important;
   opacity: 1 !important;
 }
+
+/* ========================================================================= */
+/* PRINT MEDIA STYLES - GUARANTEED SINGLE PAGE RECEIPT PRINTING              */
+/* ========================================================================= */
+@media print {
+  @page {
+    size: auto;
+    margin: 8mm 10mm;
+  }
+
+  html,
+  body {
+    background-color: #0c0a09 !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Force background colors, borders, and prevent multi-page breaks */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Prevent page breaks inside receipt panels */
+  .grid,
+  .space-y-6,
+  .space-y-4,
+  .divide-y,
+  .rounded-xl {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Reset layout constraints for full paper usage */
+  .h-screen,
+  .min-h-screen,
+  .overflow-hidden,
+  .overflow-y-auto {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Hide app chrome, headers, navigation, sidebars, modals, floating buttons, toasts */
+  aside,
+  header,
+  nav,
+  button,
+  .print\:hidden,
+  [data-sonner-toaster],
+  [data-draggable-ai],
+  .draggable-ai-button {
+    display: none !important;
+  }
+
+  /* Unconstrain cashier dashboard main area */
+  .cashier-dashboard-main {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Force 12-column grid side-by-side in print mode */
+  .print\:grid-cols-12 {
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    gap: 1rem !important;
+  }
+
+  .print\:col-span-8 {
+    grid-column: span 8 / span 8 !important;
+  }
+
+  .print\:col-span-4 {
+    grid-column: span 4 / span 4 !important;
+  }
+
+  .print\:grid-cols-4 {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Clean print borders */
+  .border-neutral-800 {
+    border-color: #3f3f46 !important;
+  }
+}

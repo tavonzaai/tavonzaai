@@ -10,7 +10,7 @@ export interface CreatePaymentPayload {
   tableSessionId?: string;
   payerGuestSessionId?: string;
   paidForGuestIds?: string[];
-  scope: 'FULL_ORDER' | 'ORDER_ITEMS' | 'SPLIT_EQUAL';
+  scope: 'ORDER' | 'FULL_ORDER' | 'ORDER_ITEMS' | 'SPLIT_EQUAL' | 'TABLE_SESSION' | 'GUEST_SESSION';
   amount: number;
   tipAmount?: number;
   method: 'CASH' | 'CARD' | 'MOBILE_WALLET' | 'ONLINE_GATEWAY';
@@ -91,9 +91,26 @@ export const paymentService = {
   },
 
   createPayment: async (payload: CreatePaymentPayload): Promise<PaymentResponse> => {
+    const isUuid = (val?: string) =>
+      typeof val === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val.trim());
+
+    const cleanPayload: Record<string, any> = {
+      amount: typeof payload.amount === 'number' ? Number(payload.amount.toFixed(2)) : payload.amount,
+      method: payload.method,
+      scope: payload.scope === 'FULL_ORDER' ? 'ORDER' : (payload.scope || 'ORDER'),
+    };
+
+    if (isUuid(payload.orderId)) cleanPayload.orderId = payload.orderId;
+    if (isUuid(payload.tableSessionId)) cleanPayload.tableSessionId = payload.tableSessionId;
+    if (isUuid(payload.payerGuestSessionId)) cleanPayload.payerGuestSessionId = payload.payerGuestSessionId;
+    if (Array.isArray(payload.paidForGuestIds)) cleanPayload.paidForGuestIds = payload.paidForGuestIds.filter(isUuid);
+    if (typeof payload.tipAmount === 'number' && payload.tipAmount > 0) cleanPayload.tipAmount = payload.tipAmount;
+    if (payload.discountCode?.trim()) cleanPayload.discountCode = payload.discountCode.trim();
+
     const res = await baseApiFetch<PaymentResponse>('/payments', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
     return (res as any)?.data || res;
   },
@@ -107,9 +124,20 @@ export const paymentService = {
   },
 
   createStripePaymentIntent: async (payload: StripePaymentIntentPayload): Promise<StripePaymentIntentResponse> => {
+    const isUuid = (val?: string) =>
+      typeof val === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val.trim());
+
+    const cleanPayload: Record<string, any> = {};
+    if (isUuid(payload.orderId)) cleanPayload.orderId = payload.orderId;
+    if (isUuid(payload.tableSessionId)) cleanPayload.tableSessionId = payload.tableSessionId;
+    if (isUuid(payload.payerGuestSessionId)) cleanPayload.payerGuestSessionId = payload.payerGuestSessionId;
+    if (typeof payload.tipAmount === 'number' && payload.tipAmount > 0) cleanPayload.tipAmount = payload.tipAmount;
+    if (payload.discountCode?.trim()) cleanPayload.discountCode = payload.discountCode.trim();
+
     const res = await baseApiFetch<StripePaymentIntentResponse>('/payments/stripe/create-intent', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
     return (res as any)?.data || res;
   },

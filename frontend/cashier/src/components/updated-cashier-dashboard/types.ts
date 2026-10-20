@@ -33,6 +33,8 @@ export interface CashierOrder {
   tax: number;
   paymentDate?: string;
   paymentMethod?: string;
+  tableSessionId?: string;
+  tableId?: string;
 }
 
 export interface BillQueueItem {

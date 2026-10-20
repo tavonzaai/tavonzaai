@@ -78,7 +78,7 @@ export default function CashierSidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 lg:w-72 h-screen bg-black border-r border-neutral-800 shadow-[0px_0px_10.8px_0px_rgba(255,255,255,0.40)] flex flex-col lg:relative lg:top-0 lg:translate-x-0 shrink-0 select-none transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 lg:w-72 h-screen bg-black border-r border-neutral-800 shadow-[0px_0px_10.8px_0px_rgba(255,255,255,0.40)] flex flex-col lg:relative lg:top-0 lg:translate-x-0 shrink-0 select-none transition-transform duration-300 print:hidden ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
