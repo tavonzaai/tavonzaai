@@ -145,6 +145,28 @@ export const paymentService = {
     });
     return (res as any)?.data || res;
   },
+
+  /**
+   * GET /payments/session/:sessionId/bill
+   * Authoritative bill calculation for the active table session.
+   */
+  getSessionBill: async (sessionId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/payments/session/${encodeURIComponent(sessionId)}/bill`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * GET /payments/:id
+   * Fetch payment receipt by payment ID.
+   */
+  getPaymentReceipt: async (paymentId: string): Promise<PaymentResponse> => {
+    const res = await baseApiFetch<PaymentResponse>(`/payments/${encodeURIComponent(paymentId)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
 };
 
 export const processPaymentThunk = createAsyncThunk<PaymentResponse, CreatePaymentPayload, { rejectValue: string }>(

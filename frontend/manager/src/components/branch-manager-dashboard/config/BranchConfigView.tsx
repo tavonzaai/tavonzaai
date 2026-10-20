@@ -221,7 +221,7 @@ function BranchConfigContent() {
               })
               .map((t) => {
                 const qrToken = t.qrCodeToken || t.id;
-                const qrUrl = buildTableQrCodeUrl(qrToken, t.id);
+                const qrUrl = buildTableQrCodeUrl(qrToken);
                 return {
                   id: t.id,
                   number: t.label || (t as any).number || 'Table',
@@ -363,7 +363,7 @@ function BranchConfigContent() {
       });
 
       const qrToken = createdTable.qrCodeToken || createdTable.id || `token-${Date.now()}`;
-      const qrUrl = buildTableQrCodeUrl(qrToken, createdTable.id);
+      const qrUrl = buildTableQrCodeUrl(qrToken);
 
       const tableItem: ConfigTable = {
         id: createdTable.id,

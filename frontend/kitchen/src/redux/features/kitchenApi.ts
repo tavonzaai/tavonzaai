@@ -158,6 +158,51 @@ export const kitchenService = {
     });
     return (res as any)?.data || res || [];
   },
+
+  /**
+   * GET /shifts/staff/:staffAssignmentId
+   * Retrieves all scheduled shifts for the kitchen staff member.
+   */
+  getMyStaffShifts: async (staffAssignmentId: string): Promise<any[]> => {
+    const res = await baseApiFetch<any[]>(`/shifts/staff/${encodeURIComponent(staffAssignmentId)}`, {
+      method: 'GET',
+    });
+    const data = (res as any)?.data || res;
+    return Array.isArray(data) ? data : [];
+  },
+
+  /**
+   * PATCH /shifts/:id/clock-in
+   * Clocks into the scheduled shift.
+   */
+  clockInShift: async (shiftId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/shifts/${encodeURIComponent(shiftId)}/clock-in`, {
+      method: 'PATCH',
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * PATCH /shifts/:id/clock-out
+   * Clocks out of the scheduled shift.
+   */
+  clockOutShift: async (shiftId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/shifts/${encodeURIComponent(shiftId)}/clock-out`, {
+      method: 'PATCH',
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * GET /analytics/bartender-dashboard?branchId=
+   * Bar station order metrics and drink queue count.
+   */
+  getBartenderDashboard: async (branchId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/analytics/bartender-dashboard?branchId=${encodeURIComponent(branchId)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
 };
 
 export const fetchActiveKitchenTickets = createAsyncThunk<

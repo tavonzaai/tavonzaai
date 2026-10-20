@@ -186,6 +186,13 @@ export const inventoryService = {
     return (res as any)?.data || res;
   },
 
+  getSupplierById: async (id: string): Promise<BackendSupplier> => {
+    const res = await baseApiFetch<BackendSupplier>(`/inventory/suppliers/${encodeURIComponent(id)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
   getCategories: async (branchId: string): Promise<BackendInventoryCategory[]> => {
     const res = await baseApiFetch<BackendInventoryCategory[]>(
       `/inventory/categories/branch/${encodeURIComponent(branchId)}`,
@@ -196,11 +203,32 @@ export const inventoryService = {
     return (res as any)?.data || res || [];
   },
 
+  getCategoryById: async (id: string): Promise<BackendInventoryCategory> => {
+    const res = await baseApiFetch<BackendInventoryCategory>(
+      `/inventory/categories/${encodeURIComponent(id)}`,
+      {
+        method: 'GET',
+      }
+    );
+    return (res as any)?.data || res;
+  },
+
   createCategory: async (payload: any): Promise<BackendInventoryCategory> => {
     const res = await baseApiFetch<BackendInventoryCategory>('/inventory/categories', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    return (res as any)?.data || res;
+  },
+
+  updateCategory: async (id: string, payload: Partial<BackendInventoryCategory>): Promise<BackendInventoryCategory> => {
+    const res = await baseApiFetch<BackendInventoryCategory>(
+      `/inventory/categories/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
     return (res as any)?.data || res;
   },
 

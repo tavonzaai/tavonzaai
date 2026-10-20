@@ -418,6 +418,28 @@ export const notificationsApi = rtkBaseApi.injectEndpoints({
       }),
       invalidatesTags: ['NOTIFICATION'],
     }),
+    createNotification: builder.mutation<any, {
+      title: string;
+      message: string;
+      type?: string;
+      targetRole?: string;
+      targetUserId?: string;
+      branchId?: string;
+    }>({
+      query: (body) => ({
+        url: '/notifications',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
+    deleteNotification: builder.mutation<any, string>({
+      query: (id) => ({
+        url: `/notifications/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['NOTIFICATION'],
+    }),
   }),
 });
 
@@ -426,5 +448,7 @@ export const {
   useGetUnreadCountQuery,
   useMarkAsReadMutation,
   useMarkAllAsReadMutation,
+  useCreateNotificationMutation,
+  useDeleteNotificationMutation,
 } = notificationsApi;
 

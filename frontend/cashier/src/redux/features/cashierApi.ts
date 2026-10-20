@@ -233,6 +233,40 @@ export const cashierService = {
     });
     return (res as any)?.data || res || [];
   },
+
+  /**
+   * GET /payments/:id
+   * Fetch itemized payment receipt breakdown.
+   */
+  getPaymentReceipt: async (paymentId: string): Promise<CashierPaymentRecord> => {
+    const res = await baseApiFetch<CashierPaymentRecord>(`/payments/${encodeURIComponent(paymentId)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * GET /payments/order/:orderId
+   * Retrieve all payment records under an order.
+   */
+  getPaymentsByOrder: async (orderId: string): Promise<CashierPaymentRecord[]> => {
+    const res = await baseApiFetch<CashierPaymentRecord[]>(`/payments/order/${encodeURIComponent(orderId)}`, {
+      method: 'GET',
+    });
+    const data = (res as any)?.data || res;
+    return Array.isArray(data) ? data : [];
+  },
+
+  /**
+   * GET /payments/session/:sessionId/bill
+   * Authoritative bill total and remaining unpaid balance for table session.
+   */
+  getSessionBill: async (sessionId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/payments/session/${encodeURIComponent(sessionId)}/bill`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
 };
 
 export const processCashierPayment = createAsyncThunk<

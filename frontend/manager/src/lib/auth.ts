@@ -69,6 +69,27 @@ export function resolveBranchIdFromUser(user?: BranchManagerUser | null): string
   return null;
 }
 
+export function isRoleAllowedForManager(
+  user?: { role?: string; assignments?: Array<{ role: string; branchId?: string; branch?: any }> } | null,
+): boolean {
+  if (!user) return false;
+  const role = String(user.role || '').toUpperCase();
+  const allowed = [
+    'SUPER_ADMIN',
+    'ORG_ADMIN',
+    'RESTAURANT_OWNER',
+    'BRANCH_MANAGER',
+    'MANAGER',
+    'GENERAL_MANAGER',
+    'ADMIN',
+  ];
+  if (allowed.includes(role)) return true;
+  if (Array.isArray(user.assignments)) {
+    return user.assignments.some((a) => allowed.includes(String(a.role || '').toUpperCase()));
+  }
+  return false;
+}
+
 export function isManagerAuthenticated(): boolean {
   if (typeof document === 'undefined') return false;
   const token = getAuthToken();

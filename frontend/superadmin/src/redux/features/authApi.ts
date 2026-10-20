@@ -44,6 +44,42 @@ export interface ChangePasswordPayload {
   confirmPassword?: string;
 }
 
+export interface MessageResponse {
+  message: string;
+  status?: string;
+}
+
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface VerifyOtpPayload {
+  email: string;
+  code: string;
+  type?: string;
+}
+
+export interface ResendOtpPayload {
+  email: string;
+  type?: string;
+}
+
+export interface ResetPasswordPayload {
+  email: string;
+  code: string;
+  newPassword: string;
+}
+
+export interface UpdateProfilePayload {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  title?: string;
+  department?: string;
+  timezone?: string;
+  avatarUrl?: string;
+}
+
 export const rawAuthApi = {
   /** Real API login only — no demo / dummy token fallbacks. */
   login: async (credentials: LoginPayload): Promise<AuthTokensResponse> => {

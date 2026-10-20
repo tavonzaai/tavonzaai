@@ -150,7 +150,7 @@ export default function TablesView({
   };
 
   const getTableQrUrl = (table: TableItem) => {
-    return buildTableQrCodeUrl(table.qrCodeToken, table.id);
+    return buildTableQrCodeUrl(table.qrCodeToken || table.id);
   };
 
   const getCustomerTableUrl = (table: TableItem) => {
@@ -178,7 +178,7 @@ export default function TablesView({
       });
 
       const qrToken = created.qrCodeToken || created.id;
-      const qrCodeUrl = buildTableQrCodeUrl(qrToken, created.id);
+      const qrCodeUrl = buildTableQrCodeUrl(qrToken);
       const mappedTable: TableItem = {
         id: created.id,
         number: created.label || data.number,

@@ -450,8 +450,8 @@ export const branchManagerService = {
           return {
             ...t,
             qrCodeToken: qrToken,
-            qrCodeUrl: t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken, t.id) : undefined),
-            tableUrl: buildCustomerTableUrl(qrToken, t.id),
+            qrCodeUrl: t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined),
+            tableUrl: getCustomerTableUrl(qrToken),
           };
         });
     }
@@ -464,12 +464,12 @@ export const branchManagerService = {
     });
     const t = (res as any)?.data || res;
     const qrToken = t.qrCodeToken || t.id;
-    const qrCodeUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken, t.id) : undefined);
+    const qrCodeUrl = t.qrCodeUrl || (qrToken ? buildTableQrCodeUrl(qrToken) : undefined);
     return {
       ...t,
       qrCodeUrl,
       qrCodeToken: qrToken,
-      tableUrl: buildCustomerTableUrl(qrToken, t.id),
+      tableUrl: getCustomerTableUrl(qrToken),
     };
   },
 
@@ -879,6 +879,85 @@ export const branchManagerService = {
   deleteReservation: async (id: string): Promise<any> => {
     const res = await baseApiFetch(`/tables/reservations/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * DELETE /orders/:orderId
+   * Cancels order and triggers stock restoration.
+   */
+  cancelOrder: async (orderId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/orders/${encodeURIComponent(orderId)}`, {
+      method: 'DELETE',
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * POST /shifts
+   * Schedules a new work shift for staff.
+   */
+  createShift: async (payload: {
+    staffAssignmentId: string;
+    branchId: string;
+    startTime: string;
+    endTime: string;
+    notes?: string;
+  }): Promise<any> => {
+    const res = await baseApiFetch<any>('/shifts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * GET /shifts/:id
+   * Retrieves single shift details.
+   */
+  getShift: async (shiftId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/shifts/${encodeURIComponent(shiftId)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * PATCH /shifts/:id/cancel
+   * Cancels a scheduled shift.
+   */
+  cancelShift: async (shiftId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/shifts/${encodeURIComponent(shiftId)}/cancel`, {
+      method: 'PATCH',
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * DELETE /shifts/:id
+   * Soft deletes a scheduled shift.
+   */
+  deleteShift: async (shiftId: string): Promise<any> => {
+    const res = await baseApiFetch<any>(`/shifts/${encodeURIComponent(shiftId)}`, {
+      method: 'DELETE',
+    });
+    return (res as any)?.data || res;
+  },
+
+  /**
+   * POST /storage/upload/base64
+   * Direct Base64 image/document upload to S3.
+   */
+  uploadBase64: async (payload: {
+    base64Data: string;
+    mimeType: string;
+    folder?: string;
+    filename?: string;
+  }): Promise<{ url: string; key: string }> => {
+    const res = await baseApiFetch<{ url: string; key: string }>('/storage/upload/base64', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
     return (res as any)?.data || res;
   },

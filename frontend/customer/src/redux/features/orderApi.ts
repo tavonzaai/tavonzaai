@@ -366,6 +366,17 @@ export const orderService = {
     });
     return (res as any)?.data || res;
   },
+
+  /**
+   * GET /analytics/customer-dashboard
+   * Customer order and dining statistics snapshot.
+   */
+  getCustomerDashboard: async (): Promise<any> => {
+    const res = await baseApiFetch<any>('/analytics/customer-dashboard', {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
 };
 
 export const fetchActiveCart = createAsyncThunk<CartResponse, { branchId: string; tableId: string }, { rejectValue: string }>(

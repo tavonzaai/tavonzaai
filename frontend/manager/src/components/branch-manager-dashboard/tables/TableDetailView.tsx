@@ -348,7 +348,7 @@ export default function TableDetailView({
 
             <div className="bg-white p-3 rounded-xl mx-auto w-fit shadow-md">
               <img
-                src={buildTableQrCodeUrl(liveTable.qrCodeToken, liveTable.id)}
+                src={buildTableQrCodeUrl(liveTable.qrCodeToken || liveTable.id)}
                 alt={`QR code for ${liveTable.number}`}
                 className="w-36 h-36 object-contain"
               />
@@ -363,7 +363,7 @@ export default function TableDetailView({
               </div>
               <div className="flex justify-between items-center text-neutral-400">
                 <span>Customer Link:</span>
-                <span className="text-amber-400 font-mono truncate max-w-[170px]" title={buildCustomerTableUrl(liveTable.qrCodeToken, liveTable.id)}>
+                <span className="text-amber-400 font-mono truncate max-w-[170px]" title={getCustomerTableUrl(liveTable.qrCodeToken || liveTable.id)}>
                   ?qr={liveTable.qrCodeToken || liveTable.id}
                 </span>
               </div>
@@ -387,7 +387,7 @@ export default function TableDetailView({
                 <span>{copied ? 'Copied' : 'Copy Link'}</span>
               </button>
               <a
-                href={buildTableQrCodeUrl(liveTable.qrCodeToken, liveTable.id)}
+                href={buildTableQrCodeUrl(liveTable.qrCodeToken || liveTable.id)}
                 download={`qr-${liveTable.number}.png`}
                 target="_blank"
                 rel="noreferrer"
