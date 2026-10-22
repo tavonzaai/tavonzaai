@@ -5,10 +5,11 @@ import { useAppSelector, useAppDispatch } from '@/redux/store';
 import { getMe, changePassword } from '@/redux/features/authApi';
 import { rawUserApi } from '@/redux/features/userApi';
 import { setUser } from '@/redux/slices/authSlice';
-import { User, Mail, Phone, Camera, Check, Loader2, Save, ArrowLeft, ChefHat, Building2, CheckCircle2, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Phone, Camera, Check, Loader2, Save, ArrowLeft, ChefHat, Building2, CheckCircle2, Lock, Eye, EyeOff, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { setCookie } from '@/redux/api/baseApi';
 import { KITCHEN_USER_KEY, getStoredKitchenUser } from '@/lib/auth';
+import { useLogout } from '@/hooks/useLogout';
 
 export default function ProfileView({ onBack }: { onBack?: () => void }) {
   const dispatch = useAppDispatch();
@@ -21,6 +22,9 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { handleLogout } = useLogout();
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Change Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -168,6 +172,17 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
             </p>
           </div>
         </div>
+
+        {/* Sign Out Shift Button */}
+        <button
+          type="button"
+          onClick={() => setLogoutModalOpen(true)}
+          className="h-10 px-3.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-rose-500/50 hover:bg-rose-500/10 text-zinc-300 hover:text-rose-400 transition flex items-center gap-2 text-xs font-semibold font-['Inter'] cursor-pointer group shrink-0"
+          title="Sign Out Kitchen Shift"
+        >
+          <LogOut className="w-4 h-4 text-zinc-400 group-hover:text-rose-400 transition-colors" />
+          <span className="hidden sm:inline">Sign Out Shift</span>
+        </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -484,6 +499,97 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
           </div>
         </form>
       </div>
+
+      {/* Active Shift Session & Terminal Sign Out Card */}
+      <div className="p-6 bg-zinc-900/90 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+            <LogOut className="w-5 h-5 text-rose-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-white font-['Inter']">
+              Kitchen Terminal Shift Session
+            </h3>
+            <p className="text-xs text-zinc-400 mt-0.5 font-['Inter']">
+              Signed in as <span className="text-white font-medium">{user?.name || firstName}</span> at <span className="text-amber-400 font-medium">{branchName}</span>. End your shift to lock this station.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setLogoutModalOpen(true)}
+          className="w-full sm:w-auto h-11 px-5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition flex items-center justify-center gap-2 text-xs font-semibold font-['Inter'] cursor-pointer shrink-0"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Sign Out Kitchen Shift</span>
+        </button>
+      </div>
+
+      {/* LOGOUT CONFIRMATION MODAL */}
+      {logoutModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => !isLoggingOut && setLogoutModalOpen(false)}
+        >
+          <div
+            className="bg-[#121214] border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-5"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                <LogOut className="w-5 h-5 text-rose-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-white font-['Inter']">
+                  Sign Out Kitchen Shift?
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed font-['Inter']">
+                  You will be signed out of your shift at <span className="text-zinc-200 font-semibold">{branchName}</span>. Any active orders will remain available to other staff.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setLogoutModalOpen(false)}
+                disabled={isLoggingOut}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsLoggingOut(true);
+                  try {
+                    await handleLogout();
+                  } finally {
+                    setIsLoggingOut(false);
+                    setLogoutModalOpen(false);
+                  }
+                }}
+                disabled={isLoggingOut}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 transition flex items-center gap-2 cursor-pointer shadow-lg shadow-rose-600/20 disabled:opacity-50"
+              >
+                {isLoggingOut ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Signing out...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out Shift</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
