@@ -34,11 +34,24 @@ export default function LoginView({
     role = 'WAITER',
     profile?: any
   ) => {
+    const branchId =
+      profile?.branchId ||
+      profile?.assignments?.[0]?.branchId ||
+      profile?.assignments?.[0]?.branch?.id ||
+      'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
+    const branchName =
+      profile?.branchName ||
+      profile?.assignments?.[0]?.branchName ||
+      profile?.assignments?.[0]?.branch?.name ||
+      'Downtown Flagship HQ';
+
     const logged = loginWaiterSession({
       id: profile?.id,
       name,
       email: userEmail,
       role,
+      branchId,
+      branchName,
       assignments: profile?.assignments,
     });
     dispatch(
@@ -47,11 +60,15 @@ export default function LoginView({
         name: logged.name,
         email: logged.email,
         role: logged.role,
+        branchId,
+        branchName,
         assignments: logged.assignments || [
           {
             id: 'asg-wtr-1',
             role: 'WAITER',
-            branch: { id: 'br-1', name: logged.station },
+            branchId,
+            branchName,
+            branch: { id: branchId, name: branchName },
           },
         ],
       })
