@@ -13,8 +13,6 @@ out/
 .turbo/
 
 # Environment files and credentials
-.env
-.env.*
 !.env.example
 !.env.*.example
 *.pem
@@ -34,7 +32,6 @@ Thumbs.db
 
 # IDEs
 .idea/
-.vscode/
 *.swp
 *.swo
 
@@ -68,3 +65,4 @@ tfplan
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+config.bat
