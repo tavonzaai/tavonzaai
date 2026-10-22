@@ -81,25 +81,12 @@ export function loginWaiterSession(customUser?: Partial<WaiterUser>): WaiterUser
   if (branchId) {
     setCookie('waiter_branch_id', branchId);
     setCookie('active_branch_id', branchId);
-    if (typeof localStorage !== 'undefined') {
-      try {
-        localStorage.setItem('waiter_branch_id', branchId);
-        localStorage.setItem('active_branch_id', branchId);
-      } catch {}
-    }
   }
 
   // Clear any stale table cookies from other sessions/branches
   removeCookie('active_table_id');
   removeCookie('table_id');
   removeCookie('waiter_table_id');
-  if (typeof localStorage !== 'undefined') {
-    try {
-      localStorage.removeItem('active_table_id');
-      localStorage.removeItem('table_id');
-      localStorage.removeItem('waiter_table_id');
-    } catch {}
-  }
 
   return user;
 }
@@ -116,15 +103,6 @@ export function logoutWaiterSession(): void {
   removeCookie('active_table_id');
   removeCookie('table_id');
   removeCookie('waiter_table_id');
-  if (typeof localStorage !== 'undefined') {
-    try {
-      localStorage.removeItem('waiter_branch_id');
-      localStorage.removeItem('active_branch_id');
-      localStorage.removeItem('active_table_id');
-      localStorage.removeItem('table_id');
-      localStorage.removeItem('waiter_table_id');
-    } catch {}
-  }
 }
 
 // Backwards compatibility aliases

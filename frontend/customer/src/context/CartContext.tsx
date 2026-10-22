@@ -115,9 +115,9 @@ function mapServerCart(view: CartResponse): {
 function readPreSessionCart(): CartItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(PRE_SESSION_CART_KEY);
+    const raw = getCookie(PRE_SESSION_CART_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(decodeURIComponent(raw));
     return Array.isArray(parsed) ? parsed.filter((item) => item && (item.dishId || item.id || item.name)) : [];
   } catch {
     return [];
@@ -126,7 +126,7 @@ function readPreSessionCart(): CartItem[] {
 
 function writePreSessionCart(items: CartItem[]) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(PRE_SESSION_CART_KEY, JSON.stringify(items));
+  setCookie(PRE_SESSION_CART_KEY, encodeURIComponent(JSON.stringify(items)));
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {

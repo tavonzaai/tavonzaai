@@ -98,7 +98,12 @@ export const paymentService = {
     const cleanPayload: Record<string, any> = {
       amount: typeof payload.amount === 'number' ? Number(payload.amount.toFixed(2)) : payload.amount,
       method: payload.method,
-      scope: payload.scope === 'FULL_ORDER' ? 'ORDER' : (payload.scope || 'ORDER'),
+      scope:
+        payload.scope === 'FULL_ORDER' || !payload.scope
+          ? 'ORDER'
+          : ['ORDER', 'ORDER_ITEMS', 'GUEST_SESSION', 'TABLE_SESSION'].includes(payload.scope)
+          ? payload.scope
+          : 'ORDER',
     };
 
     if (isUuid(payload.orderId)) cleanPayload.orderId = payload.orderId;

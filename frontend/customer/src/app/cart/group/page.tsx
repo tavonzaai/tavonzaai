@@ -56,10 +56,9 @@ function GroupCartContent() {
       const submitted = await orderService.placeOrder({ qrToken });
       const submittedId = submitted?.id || submitted?.orderId || submitted?.orderNumber;
       if (submittedId && typeof window !== 'undefined') {
-        localStorage.setItem('tavonza_last_submitted_order_id', submittedId);
-        localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(submitted));
+        setCookie('tavonza_last_submitted_order_id', submittedId);
         if (submitted?.orderNumber) {
-          localStorage.setItem('tavonza_last_submitted_order_number', submitted.orderNumber);
+          setCookie('tavonza_last_submitted_order_number', submitted.orderNumber);
         }
       }
       clearCart();

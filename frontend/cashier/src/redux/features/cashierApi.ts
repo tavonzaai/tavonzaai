@@ -70,27 +70,115 @@ export interface OfflinePaymentRequestItem {
 const isUUID = (val?: string | null): boolean =>
   Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val));
 
+let cachedBranchId: string = '';
+let cachedOrganizationId: string = '';
+
+/**
+ * Returns the currently active branch ID if cached in memory or set in active_branch_id cookie.
+ */
 export function getActiveBranchId(): string {
+  if (cachedBranchId && isUUID(cachedBranchId)) {
+    return cachedBranchId;
+  }
   if (typeof window !== 'undefined') {
     try {
-      // 1. Direct branch cookies
-      const match = document.cookie.match(/(?:^|;\s*)(?:active_branch_id|tavonza_branch_id|cashier_branch_id|branch_id)=([^;]+)/);
+      const match = document.cookie.match(/(?:^|;\s*)(?:active_branch_id|branch_id)=([^;]+)/);
       if (match && match[1]) {
         const val = decodeURIComponent(match[1]);
-        if (isUUID(val)) return val;
-      }
-
-      // 2. User cookies (cashier_user, tavonza_user, user)
-      const userCookieMatch = document.cookie.match(/(?:^|;\s*)(?:cashier_user|tavonza_user|user)=([^;]+)/);
-      if (userCookieMatch && userCookieMatch[1]) {
-        try {
-          const parsed = JSON.parse(decodeURIComponent(userCookieMatch[1]));
-          if (isUUID(parsed?.branchId)) return parsed.branchId;
-          if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
-          if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
-        } catch {}
+        if (isUUID(val)) {
+          cachedBranchId = val;
+          return val;
+        }
       }
     } catch {}
+  }
+  return '';
+}
+
+/**
+ * Dynamically resolves the active branch ID from authoritative backend APIs:
+ * 1. GET /me/assignments (Staff Assignments)
+ * 2. GET /users/me (User Profile)
+ */
+export async function fetchActiveBranchId(): Promise<string> {
+  if (cachedBranchId && isUUID(cachedBranchId)) {
+    return cachedBranchId;
+  }
+  const synchronousId = getActiveBranchId();
+  if (synchronousId) return synchronousId;
+
+  try {
+    const res = await baseApiFetch<any>('/me/assignments', { method: 'GET' }).catch(() => null);
+    const data = (res as any)?.data || res;
+    const assignments = data?.assignments || (Array.isArray(data) ? data : []);
+    const active = assignments.find((a: any) => a.isActive !== false && isUUID(a.branchId));
+    const branchId = active?.branchId || assignments[0]?.branchId;
+    if (branchId && isUUID(branchId)) {
+      cachedBranchId = branchId;
+      return branchId;
+    }
+  } catch {}
+
+  try {
+    const meRes = await baseApiFetch<any>('/users/me', { method: 'GET' }).catch(() => null);
+    const meData = (meRes as any)?.data || meRes;
+    if (isUUID(meData?.branchId)) {
+      cachedBranchId = meData.branchId;
+      return meData.branchId;
+    }
+  } catch {}
+
+  return '';
+}
+
+/**
+ * Dynamically resolves the organization ID from backend APIs:
+ * 1. GET /users/me (User Profile)
+ * 2. GET /branches/:branchId -> GET /restaurants/:restaurantId (Branch Hierarchy)
+ */
+export async function resolveOrganizationId(branchId?: string): Promise<string> {
+  if (cachedOrganizationId && isUUID(cachedOrganizationId)) {
+    return cachedOrganizationId;
+  }
+
+  // 1. Dynamic API: Check user profile
+  try {
+    const meRes = await baseApiFetch<any>('/users/me', { method: 'GET' }).catch(() => null);
+    const meData = (meRes as any)?.data || meRes;
+    if (isUUID(meData?.organizationId)) {
+      cachedOrganizationId = meData.organizationId;
+      return cachedOrganizationId;
+    }
+  } catch {}
+
+  // 2. Dynamic API: Resolve through branch & restaurant hierarchy
+  const bId = branchId || cachedBranchId || (await fetchActiveBranchId());
+  if (!bId) return '';
+  try {
+    const branchRes = await baseApiFetch<any>(`/branches/${encodeURIComponent(bId)}`, {
+      method: 'GET',
+    }).catch(() => null);
+    const branchData = (branchRes as any)?.data || branchRes;
+    const restaurantId = branchData?.restaurantId;
+    if (restaurantId) {
+      const restRes = await baseApiFetch<any>(`/restaurants/${encodeURIComponent(restaurantId)}`, {
+        method: 'GET',
+      }).catch(() => null);
+      const restData = (restRes as any)?.data || restRes;
+      const orgId = restData?.organizationId;
+      if (orgId && isUUID(orgId)) {
+        cachedOrganizationId = orgId;
+        return orgId;
+      }
+    }
+  } catch {}
+
+  return '';
+}
+
+export function getActiveOrganizationId(): string {
+  if (cachedOrganizationId && isUUID(cachedOrganizationId)) {
+    return cachedOrganizationId;
   }
   return '';
 }
@@ -170,7 +258,12 @@ export const cashierService = {
     const cleanPayload: Record<string, any> = {
       amount: typeof payload.amount === 'number' ? Number(payload.amount.toFixed(2)) : payload.amount,
       method: payload.method || 'CASH',
-      scope: payload.scope === 'FULL_ORDER' ? 'ORDER' : (payload.scope || 'ORDER'),
+      scope:
+        payload.scope === 'FULL_ORDER' || !payload.scope
+          ? 'ORDER'
+          : ['ORDER', 'ORDER_ITEMS', 'GUEST_SESSION', 'TABLE_SESSION'].includes(payload.scope)
+          ? payload.scope
+          : 'ORDER',
     };
 
     if (isUuid(payload.orderId)) cleanPayload.orderId = payload.orderId;
@@ -311,6 +404,34 @@ export const cashierService = {
     });
     const data = (res as any)?.data || res;
     return Array.isArray(data) ? data : [];
+  },
+
+  /**
+   * GET /payments?branchId=:branchId&organizationId=:organizationId&page=:page&limit=10
+   * Retrieve recent payments ledger for the branch to identify paid orders.
+   * Per-page limit is strictly 10.
+   */
+  listPayments: async (branchId: string, page = 1, limit = 10): Promise<any[]> => {
+    if (!branchId) return [];
+    try {
+      let orgId = getActiveOrganizationId();
+      if (!orgId) {
+        orgId = await resolveOrganizationId(branchId);
+      }
+      // If organizationId is missing, do not make an invalid call that triggers
+      // backend 400 Bad Request ("organizationId is required" - payment.service.ts line 1292)
+      if (!orgId) {
+        return [];
+      }
+      const res = await baseApiFetch<any>(
+        `/payments?branchId=${encodeURIComponent(branchId)}&organizationId=${encodeURIComponent(orgId)}&page=${page}&limit=${limit}`,
+        { method: 'GET' }
+      );
+      const data = (res as any)?.data || res;
+      return Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
   },
 
   /**

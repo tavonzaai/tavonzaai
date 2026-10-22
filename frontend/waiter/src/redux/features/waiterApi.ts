@@ -1,9 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { baseApiFetch } from '../api/baseApi';
 
-export const DEFAULT_FALLBACK_BRANCH_ID = 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27';
-export const DEFAULT_FALLBACK_TABLE_ID = 'dc4786be-b894-4337-ab7e-4f7b56d256c4';
-
 export const isUUID = (val?: string | null): boolean =>
   Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
 
@@ -45,34 +42,20 @@ export function getActiveBranchId(): string {
         if (isUUID(val)) return val;
       }
 
-      // 4. LocalStorage waiter user / branch
-      const localWaiterUser = localStorage.getItem('waiter_user');
-      if (localWaiterUser) {
-        try {
-          const parsed = JSON.parse(localWaiterUser);
-          if (isUUID(parsed?.branchId)) return parsed.branchId;
-          if (isUUID(parsed?.assignments?.[0]?.branchId)) return parsed.assignments[0].branchId;
-          if (isUUID(parsed?.assignments?.[0]?.branch?.id)) return parsed.assignments[0].branch.id;
-        } catch {}
-      }
-
-      const localBranch = localStorage.getItem('waiter_branch_id');
-      if (localBranch && isUUID(localBranch)) return localBranch;
-
-      // 5. Generic branch cookies
+      // 4. Generic branch cookies
       const match = document.cookie.match(/(?:^|;\s*)(?:active_branch_id|tavonza_branch_id|branch_id)=([^;]+)/);
       if (match && match[1]) {
         const val = decodeURIComponent(match[1]);
         if (isUUID(val)) return val;
       }
 
-      // 6. URL query param
+      // 5. URL query param
       const urlParams = new URLSearchParams(window.location.search);
       const qBranch = urlParams.get('branchId') || urlParams.get('branch');
       if (qBranch && isUUID(qBranch)) return qBranch;
     } catch {}
   }
-  return process.env.NEXT_PUBLIC_DEFAULT_BRANCH_ID || DEFAULT_FALLBACK_BRANCH_ID;
+  return '';
 }
 
 export function getActiveTableId(preferredTableId?: string | null): string {
@@ -86,11 +69,7 @@ export function getActiveTableId(preferredTableId?: string | null): string {
         if (isUUID(val)) return val;
       }
 
-      // 2. LocalStorage
-      const localTable = localStorage.getItem('waiter_table_id');
-      if (localTable && isUUID(localTable)) return localTable;
-
-      // 3. URL query param
+      // 2. URL query param
       const urlParams = new URLSearchParams(window.location.search);
       const qTable = urlParams.get('tableId') || urlParams.get('table');
       if (qTable && isUUID(qTable)) return qTable;

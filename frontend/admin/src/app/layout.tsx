@@ -22,8 +22,8 @@ export default function RootLayout({
   children: ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-black text-white antialiased min-h-screen">
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className="bg-black text-white antialiased min-h-screen" suppressHydrationWarning>
         <ReduxProvider>
           {children}
         </ReduxProvider>

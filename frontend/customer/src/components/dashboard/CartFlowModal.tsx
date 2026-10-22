@@ -87,9 +87,8 @@ export default function CartFlowModal({
           setSubmittedOrderData(res);
           setSubmittedOrderId(res.orderNumber || res.id);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('tavonza_last_submitted_order_data', JSON.stringify(res));
-            if (res.id) localStorage.setItem('tavonza_last_submitted_order_id', res.id);
-            if (res.orderNumber) localStorage.setItem('tavonza_last_submitted_order_number', res.orderNumber);
+            if (res.id) setCookie('tavonza_last_submitted_order_id', res.id);
+            if (res.orderNumber) setCookie('tavonza_last_submitted_order_number', res.orderNumber);
           }
         } else {
           toast.error('Branch or table information is missing.');

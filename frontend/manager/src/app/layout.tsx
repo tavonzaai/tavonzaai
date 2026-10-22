@@ -18,8 +18,8 @@ export default function RootLayout({
   children: ReactNode;
 }) {
   return (
-    <html lang="en" className="dark h-full antialiased">
-      <body className="min-h-full bg-black text-white font-sans overflow-x-hidden selection:bg-amber-400 selection:text-black">
+    <html lang="en" className="dark h-full antialiased" suppressHydrationWarning>
+      <body className="min-h-full bg-black text-white font-sans overflow-x-hidden selection:bg-amber-400 selection:text-black" suppressHydrationWarning>
         <ReduxProvider>{children}</ReduxProvider>
         <Toaster richColors position="top-right" theme="dark" closeButton />
       </body>
