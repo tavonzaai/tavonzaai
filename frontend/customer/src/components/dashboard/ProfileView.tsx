@@ -61,12 +61,16 @@ export default function ProfileView() {
     };
 
     checkActiveOrder();
-    const timer = setInterval(checkActiveOrder, 8000);
     const handleEvt = () => checkActiveOrder();
     window.addEventListener('tavonza:order_status_changed', handleEvt);
+    window.addEventListener('tavonza:order_created', handleEvt);
+    window.addEventListener('tavonza:payment_status_changed', handleEvt);
+    window.addEventListener('focus', handleEvt);
     return () => {
-      clearInterval(timer);
       window.removeEventListener('tavonza:order_status_changed', handleEvt);
+      window.removeEventListener('tavonza:order_created', handleEvt);
+      window.removeEventListener('tavonza:payment_status_changed', handleEvt);
+      window.removeEventListener('focus', handleEvt);
     };
   }, [dispatch]);
 

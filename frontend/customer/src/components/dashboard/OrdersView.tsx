@@ -49,10 +49,10 @@ export default function OrdersView({ onReserveClick, onOpenFeedback }: OrdersVie
       const branchId = resolveDynamicBranchId();
       const tableId = resolveDynamicTableId(null, tableNumber);
 
-      // 1. Fetch user session orders from backend GET /orders/me?branchId=...&tableId=...
+      // 1. Fetch user session orders from backend GET /orders/me?branchId=...
       let myOrdersList: OrderListResponse[] = [];
       try {
-        myOrdersList = await orderService.getMyOrders({ branchId, tableId });
+        myOrdersList = await orderService.getMyOrders({ branchId });
       } catch (e) {
         console.warn('getMyOrders error:', e);
       }
@@ -105,19 +105,19 @@ export default function OrdersView({ onReserveClick, onOpenFeedback }: OrdersVie
   useEffect(() => {
     fetchOrdersData(true);
 
-    // Auto-refresh orders every 6 seconds for live kitchen progress updates
-    const interval = setInterval(() => {
-      fetchOrdersData(false);
-    }, 6000);
-
     const handleRealtime = () => fetchOrdersData(false);
     window.addEventListener('tavonza:order_status_changed', handleRealtime);
     window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    window.addEventListener('tavonza:order_created', handleRealtime);
+    window.addEventListener('tavonza:payment_status_changed', handleRealtime);
+    window.addEventListener('focus', handleRealtime);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('tavonza:order_status_changed', handleRealtime);
       window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_created', handleRealtime);
+      window.removeEventListener('tavonza:payment_status_changed', handleRealtime);
+      window.removeEventListener('focus', handleRealtime);
     };
   }, [tableNumber]);
 

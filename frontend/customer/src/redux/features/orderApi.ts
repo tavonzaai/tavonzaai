@@ -1,5 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { baseApiFetch, getCookie } from '../api/baseApi';
+import { baseApiFetch, getCookie, getAuthToken } from '../api/baseApi';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -215,39 +215,157 @@ function newIdempotencyKey(): string {
   return `ord_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
+interface MyOrdersCacheEntry {
+  data: OrderListResponse[];
+  timestamp: number;
+}
+
+const myOrdersCache = new Map<string, MyOrdersCacheEntry>();
+const myOrdersInFlight = new Map<string, Promise<OrderListResponse[]>>();
+const MY_ORDERS_CACHE_TTL_MS = 15000; // 15 seconds in-memory deduplication cache
+
+let cartCache: { data: CartResponse; timestamp: number } | null = null;
+let cartInFlight: Promise<CartResponse> | null = null;
+const CART_CACHE_TTL_MS = 4000; // 4 seconds in-memory cache for rapid renders
+
+const trackOrderCache = new Map<string, { data: OrderTrackingResponse; timestamp: number }>();
+const trackOrderInFlight = new Map<string, Promise<OrderTrackingResponse>>();
+
+const orderDetailCache = new Map<string, { data: OrderDetailResponse; timestamp: number }>();
+const orderDetailInFlight = new Map<string, Promise<OrderDetailResponse>>();
+const ORDER_DETAIL_TTL_MS = 8000; // 8 seconds
+
+export function clearCartCache(): void {
+  cartCache = null;
+  cartInFlight = null;
+}
+
+export function clearMyOrdersCache(): void {
+  myOrdersCache.clear();
+  myOrdersInFlight.clear();
+}
+
+export function clearTrackOrderCache(): void {
+  trackOrderCache.clear();
+  trackOrderInFlight.clear();
+  orderDetailCache.clear();
+  orderDetailInFlight.clear();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('tavonza:order_status_changed', () => {
+    clearMyOrdersCache();
+    clearTrackOrderCache();
+  });
+  window.addEventListener('tavonza:order_created', () => {
+    clearMyOrdersCache();
+    clearTrackOrderCache();
+    clearCartCache();
+  });
+  window.addEventListener('tavonza:order_item_changed', () => {
+    clearMyOrdersCache();
+    clearTrackOrderCache();
+    clearCartCache();
+  });
+  window.addEventListener('tavonza:payment_status_changed', () => {
+    clearMyOrdersCache();
+    clearTrackOrderCache();
+  });
+}
+
 export const orderService = {
-  /** GET /cart — server-side cart for the authenticated diner. */
+  /** GET /cart — server-side cart for the authenticated diner (deduplicated). */
   getCart: async (_branchId?: string, _tableId?: string): Promise<CartResponse> => {
-    const res = await baseApiFetch<CartResponse>('/cart', { method: 'GET' });
-    return unwrapCart(res);
+    if (cartCache && Date.now() - cartCache.timestamp < CART_CACHE_TTL_MS) {
+      return cartCache.data;
+    }
+    if (cartInFlight) {
+      return cartInFlight;
+    }
+    const reqPromise = (async () => {
+      try {
+        const res = await baseApiFetch<CartResponse>('/cart', { method: 'GET' });
+        const unwrapped = unwrapCart(res);
+        cartCache = { data: unwrapped, timestamp: Date.now() };
+        return unwrapped;
+      } finally {
+        cartInFlight = null;
+      }
+    })();
+    cartInFlight = reqPromise;
+    return reqPromise;
   },
 
   getCartFromSession: async (_branchId?: string, _tableId?: string): Promise<CartResponse> => {
     return orderService.getCart();
   },
 
-  // GET /orders/me
-  getMyOrders: async (filters?: {
-    branchId?: string;
-    tableId?: string;
-    status?: string;
-    search?: string;
-  }): Promise<OrderListResponse[]> => {
+  // GET /orders/me (with in-flight request deduplication and short TTL cache)
+  getMyOrders: async (
+    filters?: {
+      branchId?: string;
+      tableId?: string;
+      status?: string;
+      search?: string;
+    },
+    options?: { forceRefresh?: boolean }
+  ): Promise<OrderListResponse[]> => {
+    // /orders/me requires an authenticated customer account or active guest session.
+    // If diner is unauthenticated, return [] immediately without sending an unauthorized/forbidden HTTP request.
+    const token = getAuthToken();
+    if (!token) {
+      return [];
+    }
+
     const params = new URLSearchParams();
     if (filters?.branchId) params.append('branchId', filters.branchId);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.search) params.append('search', filters.search);
     const queryString = params.toString() ? `?${params.toString()}` : '';
+    const cacheKey = queryString || '__all__';
 
-    const res = await baseApiFetch<OrderListResponse[]>(`/orders/me${queryString}`, {
-      method: 'GET',
-    });
-    const data = (res as any)?.data || res;
-    return Array.isArray(data) ? data : [];
+    // 1. Check TTL cache if not forcing refresh
+    if (!options?.forceRefresh) {
+      const cached = myOrdersCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < MY_ORDERS_CACHE_TTL_MS) {
+        return cached.data;
+      }
+
+      // 2. Reuse active in-flight request to prevent parallel duplicate calls
+      const inFlight = myOrdersInFlight.get(cacheKey);
+      if (inFlight) {
+        return inFlight;
+      }
+    }
+
+    // 3. Initiate request with in-flight deduplication
+    const reqPromise = (async () => {
+      try {
+        const res = await baseApiFetch<OrderListResponse[]>(`/orders/me${queryString}`, {
+          method: 'GET',
+          skipToast: true,
+        });
+        const data = (res as any)?.data || res;
+        const list = Array.isArray(data) ? data : [];
+        myOrdersCache.set(cacheKey, { data: list, timestamp: Date.now() });
+        return list;
+      } catch (err: any) {
+        // If 403 Forbidden or 401 Unauthorized, safely return empty orders without throwing
+        const fallback = myOrdersCache.get(cacheKey);
+        if (fallback) return fallback.data;
+        return [];
+      } finally {
+        myOrdersInFlight.delete(cacheKey);
+      }
+    })();
+
+    myOrdersInFlight.set(cacheKey, reqPromise);
+    return reqPromise;
   },
 
   // POST /cart/items
   addItem: async (payload: AddItemToCartPayload): Promise<CartResponse> => {
+    clearCartCache();
     const body = {
       menuItemId: payload.menuItemId,
       quantity: payload.quantity,
@@ -264,6 +382,7 @@ export const orderService = {
 
   // PATCH /cart/items/:itemId
   updateItem: async (payload: UpdateCartItemPayload): Promise<CartResponse> => {
+    clearCartCache();
     const itemId = (payload.itemId || '').trim();
     if (!itemId) throw new Error('itemId is required to update cart item');
     const res = await baseApiFetch<CartResponse>(`/cart/items/${encodeURIComponent(itemId)}`, {
@@ -278,6 +397,7 @@ export const orderService = {
 
   // DELETE /cart/items/:itemId
   removeItem: async (payload: RemoveCartItemPayload): Promise<CartResponse> => {
+    clearCartCache();
     const itemId = (payload.itemId || '').trim();
     if (!itemId) throw new Error('itemId is required to remove cart item');
     const res = await baseApiFetch<CartResponse>(`/cart/items/${encodeURIComponent(itemId)}`, {
@@ -287,6 +407,7 @@ export const orderService = {
   },
 
   clearCart: async (): Promise<CartResponse> => {
+    clearCartCache();
     const res = await baseApiFetch<CartResponse>('/cart', { method: 'DELETE' });
     return unwrapCart(res);
   },
@@ -299,6 +420,9 @@ export const orderService = {
     qrToken?: string;
     idempotencyKey?: string;
   }): Promise<OrderTrackingResponse> => {
+    clearCartCache();
+    clearMyOrdersCache();
+    clearTrackOrderCache();
     const key = options?.idempotencyKey || newIdempotencyKey();
     const res = await baseApiFetch<OrderTrackingResponse>('/orders', {
       method: 'POST',
@@ -315,24 +439,70 @@ export const orderService = {
     return orderService.placeOrder({ qrToken });
   },
 
-  // GET /orders/:orderId/track
-  trackOrder: async (orderId: string): Promise<OrderTrackingResponse> => {
+  // GET /orders/:orderId/track (with deduplication & TTL cache)
+  trackOrder: async (orderId: string, options?: { forceRefresh?: boolean }): Promise<OrderTrackingResponse> => {
     const cleanId = (orderId || '').trim();
     if (!cleanId) throw new Error('orderId is required to track order');
-    const res = await baseApiFetch<OrderTrackingResponse>(`/orders/${encodeURIComponent(cleanId)}/track`, {
-      method: 'GET',
-    });
-    return (res as any)?.data || res;
+
+    if (!options?.forceRefresh) {
+      const cached = trackOrderCache.get(cleanId);
+      if (cached && Date.now() - cached.timestamp < ORDER_DETAIL_TTL_MS) {
+        return cached.data;
+      }
+      const inFlight = trackOrderInFlight.get(cleanId);
+      if (inFlight) {
+        return inFlight;
+      }
+    }
+
+    const reqPromise = (async () => {
+      try {
+        const res = await baseApiFetch<OrderTrackingResponse>(`/orders/${encodeURIComponent(cleanId)}/track`, {
+          method: 'GET',
+        });
+        const data = (res as any)?.data || res;
+        trackOrderCache.set(cleanId, { data, timestamp: Date.now() });
+        return data;
+      } finally {
+        trackOrderInFlight.delete(cleanId);
+      }
+    })();
+
+    trackOrderInFlight.set(cleanId, reqPromise);
+    return reqPromise;
   },
 
-  // GET /orders/:orderId
-  getOrderDetail: async (orderId: string): Promise<OrderDetailResponse> => {
+  // GET /orders/:orderId (with deduplication & TTL cache)
+  getOrderDetail: async (orderId: string, options?: { forceRefresh?: boolean }): Promise<OrderDetailResponse> => {
     const cleanId = (orderId || '').trim();
     if (!cleanId) throw new Error('orderId is required to get order detail');
-    const res = await baseApiFetch<OrderDetailResponse>(`/orders/${encodeURIComponent(cleanId)}`, {
-      method: 'GET',
-    });
-    return (res as any)?.data || res;
+
+    if (!options?.forceRefresh) {
+      const cached = orderDetailCache.get(cleanId);
+      if (cached && Date.now() - cached.timestamp < ORDER_DETAIL_TTL_MS) {
+        return cached.data;
+      }
+      const inFlight = orderDetailInFlight.get(cleanId);
+      if (inFlight) {
+        return inFlight;
+      }
+    }
+
+    const reqPromise = (async () => {
+      try {
+        const res = await baseApiFetch<OrderDetailResponse>(`/orders/${encodeURIComponent(cleanId)}`, {
+          method: 'GET',
+        });
+        const data = (res as any)?.data || res;
+        orderDetailCache.set(cleanId, { data, timestamp: Date.now() });
+        return data;
+      } finally {
+        orderDetailInFlight.delete(cleanId);
+      }
+    })();
+
+    orderDetailInFlight.set(cleanId, reqPromise);
+    return reqPromise;
   },
 
   // GET /orders/branch/:branchId
@@ -406,7 +576,7 @@ export async function getActiveCustomerOrder(
   tableId?: string
 ): Promise<OrderListResponse | null> {
   try {
-    const orders = await orderService.getMyOrders({ branchId, tableId });
+    const orders = await orderService.getMyOrders({ branchId });
     const active = orders.find((o) =>
       ['SUBMITTED', 'ACCEPTED', 'CONFIRMED', 'IN_PREPARATION', 'PREPARING', 'READY'].includes(
         (o.status || '').toUpperCase()

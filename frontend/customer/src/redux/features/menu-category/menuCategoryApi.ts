@@ -35,8 +35,26 @@ export interface MenuCategoryQuery {
 }
 
 // ─────────────────────────────────────────
-// 📡 Direct Customer Menu Category API Handlers
+// 📡 Direct Customer Menu Category API Handlers (with deduplication & cache)
 // ─────────────────────────────────────────
+interface MenuCategoryCacheEntry {
+  data: ApiResponse<MenuCategoryResponseDto[]>;
+  timestamp: number;
+}
+
+const menuCategoriesCache = new Map<string, MenuCategoryCacheEntry>();
+const menuCategoriesInFlight = new Map<string, Promise<ApiResponse<MenuCategoryResponseDto[]>>>();
+const MENU_CATEGORIES_CACHE_TTL_MS = 120000; // 2 minutes in-memory cache
+
+export function clearMenuCategoriesCache(): void {
+  menuCategoriesCache.clear();
+  menuCategoriesInFlight.clear();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('tavonza:menu_updated', () => clearMenuCategoriesCache());
+}
+
 export const rawMenuCategoryApi = {
   /**
    * GET /menus/:branchId/categories
@@ -60,10 +78,40 @@ export const rawMenuCategoryApi = {
     if (query.sort) params.append('sort', query.sort);
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
-    return await baseApiFetch<MenuCategoryResponseDto[]>(
-      `/menus/${encodeURIComponent(branchId.trim())}/categories${queryString}`,
-      { method: 'GET' }
-    );
+    const cacheKey = `${branchId.trim()}:${queryString}`;
+
+    // 1. Check in-memory cache
+    const cached = menuCategoriesCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < MENU_CATEGORIES_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    // 2. Check active in-flight request to prevent parallel duplicates
+    const inFlight = menuCategoriesInFlight.get(cacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    // 3. Launch request with deduplication
+    const reqPromise = (async () => {
+      try {
+        const res = await baseApiFetch<MenuCategoryResponseDto[]>(
+          `/menus/${encodeURIComponent(branchId.trim())}/categories${queryString}`,
+          { method: 'GET' }
+        );
+        menuCategoriesCache.set(cacheKey, { data: res, timestamp: Date.now() });
+        return res;
+      } catch (err) {
+        const fallback = menuCategoriesCache.get(cacheKey);
+        if (fallback) return fallback.data;
+        throw err;
+      } finally {
+        menuCategoriesInFlight.delete(cacheKey);
+      }
+    })();
+
+    menuCategoriesInFlight.set(cacheKey, reqPromise);
+    return reqPromise;
   },
 
   findById: async (id: string, branchId?: string): Promise<ApiResponse<MenuCategoryResponseDto>> => {

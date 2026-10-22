@@ -103,8 +103,26 @@ export interface MenuItemQuery {
 }
 
 // ─────────────────────────────────────────
-// 📡 Direct Customer Menu Items API Handlers
+// 📡 Direct Customer Menu Items API Handlers (with deduplication & cache)
 // ─────────────────────────────────────────
+interface MenuItemCacheEntry {
+  data: ApiResponse<BackendMenuItem[]>;
+  timestamp: number;
+}
+
+const menuItemsCache = new Map<string, MenuItemCacheEntry>();
+const menuItemsInFlight = new Map<string, Promise<ApiResponse<BackendMenuItem[]>>>();
+const MENU_ITEMS_CACHE_TTL_MS = 60000; // 60s in-memory cache
+
+export function clearMenuItemsCache(): void {
+  menuItemsCache.clear();
+  menuItemsInFlight.clear();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('tavonza:menu_updated', () => clearMenuItemsCache());
+}
+
 export const rawMenuItemApi = {
   /**
    * GET /menus/:branchId/items
@@ -134,10 +152,40 @@ export const rawMenuItemApi = {
     }
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
-    return await baseApiFetch<BackendMenuItem[]>(
-      `/menus/${encodeURIComponent(branchId.trim())}/items${queryString}`,
-      { method: 'GET' }
-    );
+    const cacheKey = `${branchId.trim()}:${queryString}`;
+
+    // 1. Check in-memory cache
+    const cached = menuItemsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < MENU_ITEMS_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    // 2. Check active in-flight request to prevent parallel duplicates
+    const inFlight = menuItemsInFlight.get(cacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    // 3. Launch request with deduplication
+    const reqPromise = (async () => {
+      try {
+        const res = await baseApiFetch<BackendMenuItem[]>(
+          `/menus/${encodeURIComponent(branchId.trim())}/items${queryString}`,
+          { method: 'GET' }
+        );
+        menuItemsCache.set(cacheKey, { data: res, timestamp: Date.now() });
+        return res;
+      } catch (err) {
+        const fallback = menuItemsCache.get(cacheKey);
+        if (fallback) return fallback.data;
+        throw err;
+      } finally {
+        menuItemsInFlight.delete(cacheKey);
+      }
+    })();
+
+    menuItemsInFlight.set(cacheKey, reqPromise);
+    return reqPromise;
   },
 
   /**

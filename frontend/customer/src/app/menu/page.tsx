@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState, useMemo, useEffect } from 'react';
+import React, { Suspense, useState, useMemo, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -108,7 +108,7 @@ function MenuContent() {
     }
   }, [searchParams]);
 
-  // Continuously check and poll for active order preparing in kitchen
+  // Check active order on mount and via realtime WebSocket events
   useEffect(() => {
     if (!mounted) return;
 
@@ -121,46 +121,73 @@ function MenuContent() {
     };
 
     checkActive();
-    const timer = setInterval(checkActive, 7000);
     const handleEvt = () => checkActive();
     window.addEventListener('tavonza:order_status_changed', handleEvt);
+    window.addEventListener('tavonza:order_created', handleEvt);
+    window.addEventListener('focus', handleEvt);
     return () => {
-      clearInterval(timer);
       window.removeEventListener('tavonza:order_status_changed', handleEvt);
+      window.removeEventListener('tavonza:order_created', handleEvt);
+      window.removeEventListener('focus', handleEvt);
     };
   }, [mounted, activeTable]);
 
-  // Fetch dynamic categories via Backend API on mount & on category search
+  // Debounce search queries to prevent repetitive API calls on every keystroke
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+  const [debouncedCategorySearchQuery, setDebouncedCategorySearchQuery] = useState(categorySearchQuery);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCategorySearchQuery(categorySearchQuery);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [categorySearchQuery]);
+
+  // Fetch dynamic categories via Backend API on mount & on debounced category search
   useEffect(() => {
     if (mounted) {
       dispatch(
         fetchMenuCategories({
           page: 1,
           limit: 10,
-          searchTerm: categorySearchQuery.trim() || undefined,
+          searchTerm: debouncedCategorySearchQuery.trim() || undefined,
         })
       );
     }
-  }, [dispatch, mounted, categorySearchQuery]);
+  }, [dispatch, mounted, debouncedCategorySearchQuery]);
 
-  // Reset pagination to page 1 whenever search query or selected category changes
+  // Coordinate pagination and fetch items via Backend Search, Category Filter, and items per page limit
+  const prevFilterRef = useRef({ search: debouncedSearchQuery, cat: selectedCategory });
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedCategory]);
+    if (
+      prevFilterRef.current.search !== debouncedSearchQuery ||
+      prevFilterRef.current.cat !== selectedCategory
+    ) {
+      prevFilterRef.current = { search: debouncedSearchQuery, cat: selectedCategory };
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+        return; // Next render with currentPage=1 will trigger fetch
+      }
+    }
 
-  // Fetch items via Backend Search, Category Filter, and items per page limit
-  useEffect(() => {
     if (mounted) {
       dispatch(
         fetchMenuItems({
           page: currentPage,
           limit: 20,
-          searchTerm: searchQuery.trim() || undefined,
+          searchTerm: debouncedSearchQuery.trim() || undefined,
           categoryId: selectedCategory !== 'all' ? selectedCategory : undefined,
         })
       );
     }
-  }, [dispatch, mounted, currentPage, searchQuery, selectedCategory]);
+  }, [dispatch, mounted, currentPage, debouncedSearchQuery, selectedCategory]);
 
   // Dynamic categories strictly from backend categories API (never borrows dish images)
   const allCategories: DisplayCategory[] = useMemo(() => {

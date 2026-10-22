@@ -15,12 +15,21 @@ import {
   ShoppingBag,
   Star,
   Receipt,
+  CreditCard,
+  Banknote,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import DesktopSplitLayout from '@/components/layout/DesktopSplitLayout';
 import { orderService, OrderTrackingResponse } from '@/redux/features/orderApi';
 import { feedbackService, FeedbackRecord } from '@/redux/features/feedbackApi';
 import { sessionService } from '@/redux/features/sessionApi';
+import { paymentService, PaymentResponse, TableBillCalculationResponse } from '@/redux/features/paymentApi';
 import { getCookie } from '@/redux/api/baseApi';
 
 function TrackContent() {
@@ -51,6 +60,11 @@ function TrackContent() {
   const [requestingBill, setRequestingBill] = useState(false);
   const [toastNotification, setToastNotification] = useState<string | null>(null);
   const [existingFeedback, setExistingFeedback] = useState<FeedbackRecord | null>(null);
+
+  // Authoritative Payment History State
+  const [paymentsList, setPaymentsList] = useState<PaymentResponse[]>([]);
+  const [sessionBill, setSessionBill] = useState<TableBillCalculationResponse | null>(null);
+  const [loadingPayments, setLoadingPayments] = useState(false);
 
   useEffect(() => {
     const trimmedId = (orderId || '').trim();
@@ -126,6 +140,26 @@ function TrackContent() {
     }
   };
 
+  const fetchPaymentData = async () => {
+    const trimmedId = (orderId || '').trim();
+    if (!trimmedId) return;
+
+    setLoadingPayments(true);
+    try {
+      const list = await paymentService.getPaymentsByOrder(trimmedId);
+      setPaymentsList(list || []);
+
+      const sId = getSessionId();
+      if (sId) {
+        paymentService.getSessionBill(sId).then(setSessionBill).catch(() => null);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch payment history:', err);
+    } finally {
+      setLoadingPayments(false);
+    }
+  };
+
   useEffect(() => {
     const trimmedId = (orderId || '').trim();
     if (!trimmedId) {
@@ -135,25 +169,26 @@ function TrackContent() {
     }
 
     fetchTrackData();
-
-    // Only continue polling if order exists and is not a 404
-    const interval = setInterval(() => {
-      if (!isNotFound) {
-        fetchTrackData();
-      }
-    }, 6000);
+    fetchPaymentData();
 
     const handleRealtime = () => {
       if (!isNotFound) {
         fetchTrackData();
+        fetchPaymentData();
       }
     };
     window.addEventListener('tavonza:order_status_changed', handleRealtime);
     window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    window.addEventListener('tavonza:order_created', handleRealtime);
+    window.addEventListener('tavonza:payment_status_changed', handleRealtime);
+    window.addEventListener('focus', handleRealtime);
+
     return () => {
-      clearInterval(interval);
       window.removeEventListener('tavonza:order_status_changed', handleRealtime);
       window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_created', handleRealtime);
+      window.removeEventListener('tavonza:payment_status_changed', handleRealtime);
+      window.removeEventListener('focus', handleRealtime);
     };
   }, [orderId, isNotFound]);
 
@@ -570,7 +605,7 @@ function TrackContent() {
                   )}
 
                   <div className="pt-2 border-t border-neutral-800 flex items-center justify-between">
-                    <span className="text-white font-semibold text-sm">Total Paid / Due</span>
+                    <span className="text-white font-semibold text-sm">Total Order Value</span>
                     <span className="text-yellow-400 font-extrabold text-base sm:text-lg font-poppins">
                       ${Number(orderTracking.totalAmount || orderTracking.total || 0).toFixed(2)}
                     </span>
@@ -578,6 +613,212 @@ function TrackContent() {
                 </div>
               </div>
             )}
+
+            {/* ═════════════════════════════════════════════════════════════════════ */}
+            {/* 4. AUTHORITATIVE PAYMENT HISTORY SECTION                              */}
+            {/* ═════════════════════════════════════════════════════════════════════ */}
+            <div className="w-full bg-[#181818] border border-[#262626] rounded-2xl overflow-hidden shadow-xl">
+              {/* Header */}
+              <div className="px-5 py-3.5 bg-neutral-900/90 border-b border-neutral-800 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-yellow-400/20 text-yellow-400 flex items-center justify-center">
+                    <Receipt className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-white text-xs sm:text-sm font-bold font-montserrat tracking-wide">
+                      Payment & Transaction History
+                    </span>
+                    <span className="text-[11px] text-zinc-400 font-inter">
+                      Official payment ledger for this order
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-400 font-mono bg-neutral-800 px-2 py-0.5 rounded border border-neutral-700">
+                    {paymentsList.length} {paymentsList.length === 1 ? 'Record' : 'Records'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={fetchPaymentData}
+                    className="p-1.5 rounded-lg bg-neutral-800/80 hover:bg-neutral-800 text-zinc-400 hover:text-white transition cursor-pointer"
+                    title="Refresh payment records"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingPayments ? 'animate-spin text-yellow-400' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Table Session Billing Summary Strip */}
+              {sessionBill && (
+                <div className="px-5 py-2.5 bg-black/40 border-b border-neutral-800/80 flex items-center justify-between text-xs font-mono">
+                  <div className="flex items-center gap-1.5 text-zinc-400">
+                    <span>Outstanding:</span>
+                    <span className={sessionBill.balanceDue === 0 ? 'text-emerald-400 font-bold' : 'text-yellow-400 font-bold'}>
+                      ${Number(sessionBill.balanceDue).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">Paid: ${Number(sessionBill.paidAmount).toFixed(2)}</span>
+                    <span className="text-zinc-600">•</span>
+                    <span className="text-zinc-400">Total: ${Number(sessionBill.totalAmount).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Body: Payment Records List or Empty State */}
+              <div className="p-4 flex flex-col gap-3">
+                {loadingPayments && paymentsList.length === 0 ? (
+                  <div className="py-6 flex items-center justify-center gap-2 text-xs text-zinc-500 font-montserrat">
+                    <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
+                    <span>Loading payment ledger records...</span>
+                  </div>
+                ) : paymentsList.length > 0 ? (
+                  <div className="flex flex-col gap-2.5">
+                    {paymentsList.map((payment) => {
+                      const isPaid =
+                        String(payment.status).toUpperCase() === 'PAID' ||
+                        String(payment.status).toUpperCase() === 'COMPLETED';
+                      const isFailed = String(payment.status).toUpperCase() === 'FAILED';
+                      const isRefunded = String(payment.status).toUpperCase() === 'REFUNDED';
+                      const formattedDate = payment.paidAt
+                        ? new Date(payment.paidAt).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : payment.createdAt
+                        ? new Date(payment.createdAt).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : 'Recent';
+
+                      const methodLabel =
+                        payment.method === 'ONLINE_GATEWAY'
+                          ? 'Stripe Card (Online)'
+                          : payment.method === 'CARD'
+                          ? 'Credit/Debit Card (POS)'
+                          : payment.method === 'CASH'
+                          ? 'Cash at Table'
+                          : payment.method === 'MOBILE_WALLET'
+                          ? 'Mobile Wallet'
+                          : payment.method;
+
+                      return (
+                        <div
+                          key={payment.id}
+                          className={`p-3.5 rounded-xl border flex flex-col gap-2 transition-all ${
+                            isPaid
+                              ? 'bg-neutral-900/90 border-emerald-500/30 shadow-sm'
+                              : isFailed
+                              ? 'bg-neutral-900/90 border-red-500/30'
+                              : 'bg-neutral-900/60 border-neutral-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {payment.method === 'CASH' ? (
+                                <Banknote className="w-4 h-4 text-emerald-400 shrink-0" />
+                              ) : (
+                                <CreditCard className="w-4 h-4 text-yellow-400 shrink-0" />
+                              )}
+                              <span className="text-white text-xs font-semibold font-montserrat">
+                                {methodLabel}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-bold font-poppins text-sm">
+                                ${Number(payment.amount).toFixed(2)}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono ${
+                                  isPaid
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                    : isFailed
+                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                    : isRefunded
+                                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                }`}
+                              >
+                                {payment.status}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-zinc-400 font-inter pt-1 border-t border-neutral-800/60">
+                            <div className="flex items-center gap-2">
+                              <span>{formattedDate}</span>
+                              {payment.tipAmount && Number(payment.tipAmount) > 0 && (
+                                <span className="text-amber-300 font-medium">
+                                  (+${Number(payment.tipAmount).toFixed(2)} tip)
+                                </span>
+                              )}
+                            </div>
+
+                            <span
+                              className="font-mono text-zinc-500 text-[10px] truncate max-w-[130px]"
+                              title={payment.transactionRef || payment.id}
+                            >
+                              #{payment.transactionRef || payment.id.slice(0, 12)}
+                            </span>
+                          </div>
+
+                          {isPaid && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                router.push(
+                                  `/checkout/confirmation?amount=${Number(payment.amount).toFixed(2)}&ref=${encodeURIComponent(
+                                    payment.transactionRef || payment.id
+                                  )}&table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(orderId)}`
+                                )
+                              }
+                              className="mt-1 py-1.5 px-3 bg-neutral-800 hover:bg-neutral-700/80 rounded-lg text-[11px] text-yellow-400 font-medium font-montserrat flex items-center justify-center gap-1.5 transition cursor-pointer"
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                              <span>View Official Receipt</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Empty State */
+                  <div className="p-4 bg-neutral-950/60 border border-neutral-800 rounded-xl flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <Clock className="w-4 h-4 text-zinc-500 shrink-0" />
+                      <div className="flex flex-col">
+                        <span className="text-zinc-300 font-semibold font-montserrat">
+                          No payments recorded yet
+                        </span>
+                        <span className="text-zinc-500 text-[11px] font-inter">
+                          Total due for this order: ${Number(orderTracking?.totalAmount || orderTracking?.total || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `/checkout/payment?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(orderId)}`
+                        )
+                      }
+                      className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-bold font-montserrat rounded-lg transition cursor-pointer shrink-0 shadow-sm"
+                    >
+                      Pay Now
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* BOTTOM ACTION BUTTONS */}
             <div className="w-full flex flex-col gap-2.5 pt-1">
@@ -589,19 +830,36 @@ function TrackContent() {
                 <span>+ Add More Food</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() =>
-                  router.push(
-                    `/checkout/payment?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(
-                      orderId
-                    )}`
-                  )
-                }
-                className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 active:scale-[0.99] text-white text-sm sm:text-base font-semibold font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>Proceed to Payment</span>
-              </button>
+              {orderTracking?.paymentStatus === 'PAID' ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      `/checkout/confirmation?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(
+                        orderId
+                      )}`
+                    )
+                  }
+                  className="w-full py-3.5 bg-emerald-950/70 hover:bg-emerald-900/70 border border-emerald-500/60 active:scale-[0.99] text-emerald-300 text-sm sm:text-base font-semibold font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  <span>Payment Settled ✓ (View Receipt)</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      `/checkout/payment?table=${encodeURIComponent(activeTable)}&order=${encodeURIComponent(
+                        orderId
+                      )}`
+                    )
+                  }
+                  className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 active:scale-[0.99] text-white text-sm sm:text-base font-semibold font-inter rounded-xl transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Proceed to Payment</span>
+                </button>
+              )}
 
               {/* <button
                 type="button"

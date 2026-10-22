@@ -65,12 +65,20 @@ function ConfirmedContent() {
     };
 
     fetchOrderDetails();
-    const interval = setInterval(fetchOrderDetails, 5000);
+    const handleRealtime = () => {
+      fetchOrderDetails();
+    };
+    window.addEventListener('tavonza:order_status_changed', handleRealtime);
+    window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    window.addEventListener('focus', handleRealtime);
+
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      window.removeEventListener('tavonza:order_status_changed', handleRealtime);
+      window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+      window.removeEventListener('focus', handleRealtime);
     };
-  }, [orderId, orderData?.orderId, orderData?.id]);
+  }, [orderId]);
 
   const displayOrderNum =
     orderData?.orderNumber ||

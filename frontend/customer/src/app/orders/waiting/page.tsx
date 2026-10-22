@@ -97,20 +97,20 @@ function WaitingContent() {
     };
 
     checkStatus();
-    const interval = setInterval(checkStatus, 4000);
     const handleRealtime = () => {
       checkStatus();
     };
     window.addEventListener('tavonza:order_status_changed', handleRealtime);
     window.addEventListener('tavonza:order_item_changed', handleRealtime);
+    window.addEventListener('focus', handleRealtime);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
       window.removeEventListener('tavonza:order_status_changed', handleRealtime);
       window.removeEventListener('tavonza:order_item_changed', handleRealtime);
+      window.removeEventListener('focus', handleRealtime);
     };
-  }, [orderId, orderData?.orderId, orderData?.id, activeTable, router]);
+  }, [orderId, activeTable, router]);
 
   const handleCancelOrder = () => {
     router.push(`/order-unavailable?table=${encodeURIComponent(activeTable)}&reason=cancelled`);

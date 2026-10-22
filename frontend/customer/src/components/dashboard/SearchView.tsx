@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
@@ -42,33 +42,58 @@ export default function SearchView({ onReserveClick, onDishClick }: SearchViewPr
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Fetch Categories from Backend API on mount & whenever categorySearchQuery changes
+  // Debounce search queries to prevent repetitive API calls on every keystroke
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+  const [debouncedCategorySearchQuery, setDebouncedCategorySearchQuery] = useState(categorySearchQuery);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCategorySearchQuery(categorySearchQuery);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [categorySearchQuery]);
+
+  // Fetch Categories from Backend API on mount & on debounced category search
   useEffect(() => {
     dispatch(
       fetchMenuCategories({
         page: 1,
         limit: 10,
-        searchTerm: categorySearchQuery.trim() || undefined,
+        searchTerm: debouncedCategorySearchQuery.trim() || undefined,
       })
     );
-  }, [dispatch, categorySearchQuery]);
+  }, [dispatch, debouncedCategorySearchQuery]);
 
-  // Reset pagination to page 1 on query or category change
+  // Coordinate pagination and fetch Items from Backend GET API with searchTerm and 10 items limit per page
+  const prevFilterRef = useRef({ search: debouncedSearchQuery, cat: selectedCategory });
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedCategory]);
+    if (
+      prevFilterRef.current.search !== debouncedSearchQuery ||
+      prevFilterRef.current.cat !== selectedCategory
+    ) {
+      prevFilterRef.current = { search: debouncedSearchQuery, cat: selectedCategory };
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+        return; // Next render with currentPage=1 will trigger fetch
+      }
+    }
 
-  // Fetch Items from Backend GET API with searchTerm and 10 items limit per page
-  useEffect(() => {
     dispatch(
       fetchMenuItems({
         page: currentPage,
         limit: 10,
-        searchTerm: searchQuery.trim() || undefined,
+        searchTerm: debouncedSearchQuery.trim() || undefined,
         categoryId: selectedCategory !== 'all' ? selectedCategory : undefined,
       })
     );
-  }, [dispatch, currentPage, searchQuery, selectedCategory]);
+  }, [dispatch, currentPage, debouncedSearchQuery, selectedCategory]);
 
   const categories = useMemo(() => {
     const list = (backendCategories || []).map((c) => ({

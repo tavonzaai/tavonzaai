@@ -29,16 +29,54 @@ export function removeCookie(name: string) {
 }
 
 /**
+ * 🔒 Checks if a token payload belongs to a customer account or seated guest session.
+ * Prevents staff tokens (e.g. Cashier/Waiter/Kitchen) on localhost from colliding with customer app.
+ */
+export function isCustomerOrGuestToken(token: string | null | undefined): boolean {
+  if (!token || typeof token !== 'string') return false;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return false;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+
+    // Check expiration
+    if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now()) {
+      return false;
+    }
+
+    // Seated diner guest token (TOKEN_TYPE.GUEST)
+    if (payload.typ === 'guest') return true;
+
+    // Customer account token
+    const globalRole = String(payload.globalRole || '').toUpperCase();
+    const role = String(payload.role || '').toUpperCase();
+    if (globalRole === 'CUSTOMER' || role === 'CUSTOMER') return true;
+
+    // If token has no staff role assigned, allow
+    if (!globalRole && !role) return true;
+
+    // If token is for staff (CASHIER, WAITER, KITCHEN, SUPERADMIN, ORG_ADMIN, etc.), reject
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 🍪 Cookie Management for Authentication Tokens (STRICTLY COOKIES ONLY - NO LOCALSTORAGE)
  */
 export function getAuthToken(): string | null {
-  // 1. Check access_token cookie
-  const token = getCookie('access_token');
-  if (token) return token;
-
-  // 2. Check customer_session cookie
+  // 1. Prefer customer_session cookie (dedicated to customer portal)
   const sessionToken = getCookie('customer_session');
-  if (sessionToken) return sessionToken;
+  if (sessionToken && isCustomerOrGuestToken(sessionToken)) {
+    return sessionToken;
+  }
+
+  // 2. Check access_token ONLY IF it belongs to a customer/guest
+  const token = getCookie('access_token');
+  if (token && isCustomerOrGuestToken(token)) {
+    return token;
+  }
 
   return null;
 }
@@ -259,6 +297,13 @@ export async function baseApiFetch<T = any>(
       }
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
+      }
+    }
+
+    if (response.status === 403 && typeof window !== 'undefined') {
+      const currentToken = getCookie('access_token');
+      if (currentToken && !isCustomerOrGuestToken(currentToken)) {
+        removeCookie('access_token');
       }
     }
 

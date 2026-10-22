@@ -1242,8 +1242,16 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                         key={table.id}
                         className="w-full bg-white/5 rounded-[12px] border border-white/10 backdrop-blur-md overflow-hidden hover:border-amber-400/30 transition-all duration-200"
                       >
-                        {/* Top Card Info Row */}
-                        <div className="p-3.5 flex items-center justify-between">
+                        {/* Top Card Info Row - Clicking table opens its orders */}
+                        <div
+                          onClick={() => {
+                            setSelectedTable(table);
+                            setSelectedTableId(table.id);
+                            setTableOrderFilter('ALL');
+                            setActiveTab('table-orders');
+                          }}
+                          className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-white/[0.03] transition"
+                        >
                           <div className="flex flex-col gap-0.5">
                             <span className="text-white text-base font-semibold font-['Inter']">
                               {table.name}
@@ -1264,16 +1272,13 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
 
                         {/* Bottom Action Split Buttons */}
                         <div className="border-t border-white/5 flex items-center divide-x divide-white/5 bg-neutral-900/60">
-                          {/* 1. Order Button -> Opens Table Order Details (Exact Figma Screens) */}
+                          {/* 1. Order Button -> Always Opens Table Order Details */}
                           <button
                             onClick={() => {
                               setSelectedTable(table);
                               setSelectedTableId(table.id);
-                              if (table.orderCount && table.orderCount > 0) {
-                                setActiveTab('table-orders');
-                              } else {
-                                setActiveTab('menu');
-                              }
+                              setTableOrderFilter('ALL');
+                              setActiveTab('table-orders');
                             }}
                             className="flex-1 py-2.5 flex items-center justify-center gap-1.5 hover:bg-white/5 transition cursor-pointer text-amber-400"
                           >
@@ -1436,7 +1441,32 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
 
               {/* Orders Cards List */}
               <div className="flex flex-col gap-3.5">
-                {filteredTableOrders.map((order) => {
+                {filteredTableOrders.length === 0 ? (
+                  <div className="p-8 bg-neutral-900/60 rounded-xl border border-white/5 text-center flex flex-col items-center justify-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
+                      <UtensilsCrossed className="w-6 h-6 text-zinc-500" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-white text-sm font-semibold font-['Inter']">
+                        No orders for {selectedTable?.name || 'this table'}
+                      </span>
+                      <span className="text-zinc-400 text-xs font-['Inter']">
+                        {tableOrderFilter === 'ALL'
+                          ? 'This table currently has no active or pending orders.'
+                          : `No ${tableOrderFilter.toLowerCase()} orders found.`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('menu')}
+                      className="mt-2 px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black text-xs font-bold rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-sm shadow-yellow-500/20"
+                    >
+                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>Create Order</span>
+                    </button>
+                  </div>
+                ) : (
+                  filteredTableOrders.map((order) => {
                   const isCompleted = order.status === 'Completed' || order.status === 'Served';
                   const isPending = order.status === 'Pending';
                   const isCooking = order.status === 'Cooking';
@@ -1664,7 +1694,7 @@ export default function NewWaiterLandingView({ initialTab = 'home' }: { initialT
                       )}
                     </div>
                   );
-                })}
+                }))}
               </div>
             </div>
           )}

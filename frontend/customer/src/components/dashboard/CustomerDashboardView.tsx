@@ -63,7 +63,7 @@ export default function CustomerDashboardView({
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
 
-  // Poll active kitchen order to highlight live indicator in BottomNav
+  // Check active kitchen order on mount and via realtime WebSocket events
   useEffect(() => {
     const branchId = resolveDynamicBranchId();
     const tableId = resolveDynamicTableId();
@@ -74,23 +74,25 @@ export default function CustomerDashboardView({
     };
 
     checkActive();
-    const timer = setInterval(checkActive, 8000);
     const handleEvt = () => checkActive();
     window.addEventListener('tavonza:order_status_changed', handleEvt);
+    window.addEventListener('tavonza:order_created', handleEvt);
+    window.addEventListener('focus', handleEvt);
     return () => {
-      clearInterval(timer);
       window.removeEventListener('tavonza:order_status_changed', handleEvt);
+      window.removeEventListener('tavonza:order_created', handleEvt);
+      window.removeEventListener('focus', handleEvt);
     };
   }, []);
 
+  const menuInitialLoadedRef = useRef(false);
   useEffect(() => {
-    if (!backendMenuItems || backendMenuItems.length === 0) {
+    if (!menuInitialLoadedRef.current) {
+      menuInitialLoadedRef.current = true;
       dispatch(fetchMenuItems({ page: 1, limit: 20 }));
-    }
-    if (!backendCategories || backendCategories.length === 0) {
       dispatch(fetchMenuCategories({ page: 1, limit: 20 }));
     }
-  }, [dispatch, backendMenuItems, backendCategories]);
+  }, [dispatch]);
 
   useEffect(() => {
     setActiveTab(initialTab);
