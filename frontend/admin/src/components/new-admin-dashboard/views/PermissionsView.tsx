@@ -25,6 +25,8 @@ import {
   UserCheck,
   Edit2,
   Trash2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   PermissionsHeader,
@@ -300,6 +302,7 @@ export default function PermissionsView() {
     password: '',
     role: '',
   });
+  const [showInvitePassword, setShowInvitePassword] = useState(false);
 
   // Dynamically derive assignable staff roles from roles loaded from PostgreSQL database (dbRoles)
   const dynamicStaffRoles = useMemo(() => {
@@ -942,16 +945,26 @@ export default function PermissionsView() {
               <label className="text-xs font-medium text-stone-300">
                 Temporary Password <span className="text-amber-400">*</span>
               </label>
-              <input
-                required
-                type="password"
-                minLength={8}
-                data-testid="create-staff-password"
-                placeholder="Temporary password (min 8 chars)"
-                value={invite.password}
-                onChange={(e) => setInvite((prev) => ({ ...prev, password: e.target.value }))}
-                className="h-11 px-3.5 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
-              />
+              <div className="relative flex items-center">
+                <input
+                  required
+                  type={showInvitePassword ? 'text' : 'password'}
+                  minLength={8}
+                  data-testid="create-staff-password"
+                  placeholder="Temporary password (min 8 chars)"
+                  value={invite.password}
+                  onChange={(e) => setInvite((prev) => ({ ...prev, password: e.target.value }))}
+                  className="w-full h-11 px-3.5 pr-10 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowInvitePassword((p) => !p)}
+                  className="absolute right-3 text-neutral-400 hover:text-white"
+                  title={showInvitePassword ? 'Hide password' : 'Show password'}
+                >
+                  {showInvitePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             {/* Phone (Optional backend payload field) */}

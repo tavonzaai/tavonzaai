@@ -18,6 +18,7 @@ export const DEFAULT_PORTS = {
   BRANCH_MANAGER: 3103,
   CASHIER: 3104,
   KITCHEN: 3105,
+  SUPERADMIN: 3106,
 } as const;
 
 export type AppServicePort = typeof DEFAULT_PORTS[keyof typeof DEFAULT_PORTS];

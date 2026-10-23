@@ -30,6 +30,10 @@ export const LOCAL_CORS_ORIGINS: string[] = [
   `http://localhost:${DEFAULT_PORTS.KITCHEN}`,
   `http://127.0.0.1:${DEFAULT_PORTS.KITCHEN}`,
 
+  // Super Admin Console
+  `http://localhost:${DEFAULT_PORTS.SUPERADMIN}`,
+  `http://127.0.0.1:${DEFAULT_PORTS.SUPERADMIN}`,
+
   // Next.js Default / API & Realtime WebSockets
   `http://localhost:${DEFAULT_PORTS.API}`,
   `http://127.0.0.1:${DEFAULT_PORTS.API}`,
@@ -48,6 +52,7 @@ export const LIVE_CORS_ORIGINS: string[] = [
   'https://tavonza.com',
   'https://www.tavonza.com',
   'https://admin.tavonza.com',
+  'https://superadmin.tavonza.com',
   'https://kitchen.tavonza.com',
   'https://cashier.tavonza.com',
   'https://waiter.tavonza.com',
@@ -65,6 +70,7 @@ export const PROD_TESTING_CORS_ORIGINS: string[] = [
   'https://prod.tavonza.com',
   'https://www.prod.tavonza.com',
   'https://prod-admin.tavonza.com',
+  'https://prod-superadmin.tavonza.com',
   'https://prod-kitchen.tavonza.com',
   'https://prod-cashier.tavonza.com',
   'https://prod-waiter.tavonza.com',

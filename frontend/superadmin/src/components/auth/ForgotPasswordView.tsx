@@ -76,7 +76,7 @@ export default function ForgotPasswordView({
             <Shield className="w-6 h-6 text-yellow-400" />
           </div>
         </div>
-        <h1 className="text-xl font-bold text-white tracking-tight">TablePilot</h1>
+        <h1 className="text-xl font-bold text-white tracking-tight">Tavonza AI</h1>
         <span className="text-[11px] font-semibold text-yellow-400 uppercase tracking-widest mt-0.5">
           Super Admin Console
         </span>
@@ -114,7 +114,7 @@ export default function ForgotPasswordView({
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="alex.morgan@tablepilot.io"
+              placeholder="superadmin@tavonza.ai"
               className="w-full pl-9 pr-3 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-400/80 transition"
             />
           </div>

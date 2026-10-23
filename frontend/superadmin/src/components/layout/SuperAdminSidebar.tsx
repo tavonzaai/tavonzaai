@@ -129,7 +129,7 @@ export function SuperAdminSidebar({ isOpen = false, onClose }: SidebarProps) {
 
             <div className="flex flex-col">
               <span className="text-white text-base font-bold leading-6">
-                TablePilot
+                Tavonza AI
               </span>
               <span className="text-white/30 text-[10px] font-normal uppercase leading-4 tracking-wide">
                 Super Admin

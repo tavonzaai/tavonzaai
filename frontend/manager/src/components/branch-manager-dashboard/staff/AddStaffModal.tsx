@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, UserPlus, Lock, Mail, User, Phone, ShieldCheck, Check } from 'lucide-react';
+import { X, UserPlus, Lock, Mail, User, Phone, ShieldCheck, Check, Eye, EyeOff } from 'lucide-react';
 import { branchManagerService, getActiveBranchId, CreateStaffPayload } from '../../../redux/features/branchManagerApi';
 
 interface AddStaffModalProps {
@@ -34,6 +34,7 @@ export default function AddStaffModal({ isOpen, onClose, onStaffCreated }: AddSt
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState('WAITER');
   const [permissions, setPermissions] = useState<string[]>(['VIEW_ORDERS', 'UPDATE_ORDER_STATUS', 'MANAGE_TABLES']);
@@ -171,17 +172,25 @@ export default function AddStaffModal({ isOpen, onClose, onStaffCreated }: AddSt
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-neutral-300 mb-1.5">Initial Password * (min 8 chars)</label>
-              <div className="relative">
+              <div className="relative flex items-center">
                 <Lock className="absolute left-3 top-3 w-4 h-4 text-neutral-500" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-3.5 py-2.5 bg-neutral-950/80 border border-neutral-800 rounded-xl text-white text-sm focus:outline-none focus:border-yellow-400/60"
+                  className="w-full pl-9 pr-10 py-2.5 bg-neutral-950/80 border border-neutral-800 rounded-xl text-white text-sm focus:outline-none focus:border-yellow-400/60"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((p) => !p)}
+                  className="absolute right-3 text-neutral-400 hover:text-white transition-colors"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 

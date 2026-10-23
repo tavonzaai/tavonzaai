@@ -5,7 +5,7 @@ import { Toaster } from 'sonner';
 import ReduxProvider from '@/redux/ReduxProvider';
 
 export const metadata: Metadata = {
-  title: 'TablePilot Super Admin | Tavonza AI Hospitality',
+  title: 'Tavonza AI Super Admin | Global Enterprise Hospitality',
   description: 'Enterprise multi-tenant restaurant and hospitality SaaS super administrative command center.',
   icons: {
     icon: [

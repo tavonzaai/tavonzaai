@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, ChevronDown } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { StaffInviteFormData } from '../types';
 
 interface InviteStaffModalProps {
@@ -19,6 +19,7 @@ export const InviteStaffModal: React.FC<InviteStaffModalProps> = ({
   onClose,
   onSubmit,
 }) => {
+  const [showPassword, setShowPassword] = useState(false);
   if (!isOpen) return null;
 
   return (
@@ -82,15 +83,25 @@ export const InviteStaffModal: React.FC<InviteStaffModalProps> = ({
               </div>
               <div className="flex flex-col justify-start items-start gap-2">
                 <label className="text-white text-sm font-normal font-['Inter'] leading-4">Temporary password</label>
+                <div className="self-stretch relative flex items-center">
                   <input
-                  type="password"
-                  required
-                  minLength={8}
-                  data-testid="invite-staff-password"
-                  value={inviteForm.password}
-                  onChange={(e) => onChange({ ...inviteForm, password: e.target.value })}
-                  className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-['Inter']"
-                />
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    data-testid="invite-staff-password"
+                    value={inviteForm.password}
+                    onChange={(e) => onChange({ ...inviteForm, password: e.target.value })}
+                    className="self-stretch w-full h-11 px-3.5 pr-10 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-['Inter']"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((p) => !p)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 

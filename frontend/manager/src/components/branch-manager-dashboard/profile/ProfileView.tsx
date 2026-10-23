@@ -29,6 +29,8 @@ import {
   UserCheck,
   Sparkles,
   ExternalLink,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../../redux/hooks';
 import { getMe, changePasswordThunk, UserProfile, UserAssignment } from '../../../redux/features/authApi';
@@ -63,6 +65,9 @@ export default function ProfileView() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // UI state
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -664,35 +669,65 @@ export default function ProfileView() {
             <div className="space-y-3.5">
               <div>
                 <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">Current Password</label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-10 pl-3 pr-10 bg-neutral-950 border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors"
+                    title={showCurrentPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">New Password</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-10 pl-3 pr-10 bg-neutral-950 border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors"
+                    title={showNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">Confirm New Password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full h-10 px-3 bg-neutral-950 border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-10 pl-3 pr-10 bg-neutral-950 border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors"
+                    title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

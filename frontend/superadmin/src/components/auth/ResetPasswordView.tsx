@@ -161,7 +161,7 @@ export default function ResetPasswordView({
               required
               value={targetEmail}
               onChange={(e) => setTargetEmail(e.target.value)}
-              placeholder="alex.morgan@tablepilot.io"
+              placeholder="superadmin@tavonza.ai"
               className="w-full px-3 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-400/80 transition"
             />
           </div>

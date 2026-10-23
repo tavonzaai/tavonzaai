@@ -64,7 +64,7 @@ export default function SuperAdminProfilePage() {
     if (user) {
       setFirstName(user.firstName || user.name?.split(' ')[0] || 'Alex');
       setLastName(user.lastName || user.name?.split(' ').slice(1).join(' ') || 'Morgan');
-      setEmail(user.email || 'alex.morgan@tablepilot.io');
+      setEmail(user.email || 'superadmin@tavonza.ai');
       setPhone(user.phone || user.contactNo || '+1 (555) 019-2834');
       setTitle(user.title || 'Head of Platform Operations');
       setDepartment(user.department || 'Super Administration & SecOps');
@@ -392,7 +392,7 @@ export default function SuperAdminProfilePage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="w-full h-10 pl-9 pr-3 bg-neutral-950 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-stone-300 text-xs font-normal focus:outline-yellow-400 transition"
-                        placeholder="alex.morgan@tablepilot.io"
+                        placeholder="superadmin@tavonza.ai"
                       />
                     </div>
                   </div>

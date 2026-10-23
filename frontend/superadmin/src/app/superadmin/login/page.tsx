@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { loginUser } from '@/redux/features/authApi';
-import { removeCookie } from '@/redux/api/baseApi';
+import { removeCookie, removeAuthToken } from '@/redux/api/baseApi';
 import { Shield, Lock, Mail, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,12 +36,25 @@ export default function SuperAdminLoginPage() {
 
     try {
       removeCookie('superadmin_logged_out');
-      await dispatch(loginUser({ email: email.trim(), password })).unwrap();
+      const res: any = await dispatch(loginUser({ email: email.trim(), password })).unwrap();
+      const user = res?.user || res;
+      const role = String(user?.role || user?.globalRole || '').toUpperCase();
+      if (role !== 'SUPER_ADMIN') {
+        removeAuthToken();
+        toast.error('Access denied. This console is strictly reserved for Super Administrators.');
+        return;
+      }
       toast.success('Welcome back, Super Administrator!');
       router.push('/superadmin/dashboard');
     } catch (err: any) {
       toast.error(typeof err === 'string' ? err : 'Authentication failed. Please verify your credentials.');
     }
+  };
+
+  const handleFillSuperAdminCredentials = () => {
+    setEmail('superadmin@tavonza.ai');
+    setPassword('SuperAdmin@1234');
+    toast.info('Populated Super Administrator credentials');
   };
 
   return (
@@ -57,13 +70,28 @@ export default function SuperAdminLoginPage() {
               <Shield className="w-6 h-6 text-yellow-400" />
             </div>
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">TablePilot</h1>
+          <h1 className="text-xl font-bold text-white tracking-tight">Tavonza AI</h1>
           <span className="text-[11px] font-semibold text-yellow-400 uppercase tracking-widest mt-0.5">
             Super Admin Console
           </span>
           <p className="text-xs text-zinc-400 pt-2">
             Enter your credentials to access platform-wide control.
           </p>
+        </div>
+
+        {/* Quick Demo Credentials Pill */}
+        <div className="mb-4 p-3 bg-zinc-950/80 border border-yellow-500/30 rounded-xl flex items-center justify-between gap-2">
+          <div className="text-[11px] text-zinc-400 leading-tight">
+            <span className="text-yellow-400 font-semibold block">Default Platform Superadmin:</span>
+            <span className="text-zinc-300 font-mono text-[10px]">superadmin@tavonza.ai</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleFillSuperAdminCredentials}
+            className="px-2.5 py-1 text-[11px] font-medium text-black bg-yellow-400 hover:bg-yellow-300 rounded-lg transition shrink-0 cursor-pointer shadow-sm shadow-yellow-500/20"
+          >
+            Auto-fill
+          </button>
         </div>
 
         {/* Login Form */}
@@ -79,7 +107,7 @@ export default function SuperAdminLoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@tablepilot.io"
+                placeholder="superadmin@tavonza.ai"
                 className="w-full pl-9 pr-3 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-400/80 transition"
               />
             </div>

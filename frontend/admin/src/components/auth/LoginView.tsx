@@ -41,6 +41,7 @@ export default function LoginView({
   const [forgotNewPass, setForgotNewPass] = useState('');
   const [forgotConfirmPass, setForgotConfirmPass] = useState('');
   const [showForgotNewPass, setShowForgotNewPass] = useState(false);
+  const [showForgotConfirmPass, setShowForgotConfirmPass] = useState(false);
   const [isForgotLoading, setIsForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -449,14 +450,24 @@ export default function LoginView({
 
                 <div className="space-y-1.5">
                   <label className="text-xs text-neutral-300 font-['Inter']">Confirm New Password</label>
-                  <input
-                    type={showForgotNewPass ? 'text' : 'password'}
-                    required
-                    value={forgotConfirmPass}
-                    onChange={(e) => setForgotConfirmPass(e.target.value)}
-                    placeholder="Confirm new password"
-                    className="w-full h-11 px-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showForgotConfirmPass ? 'text' : 'password'}
+                      required
+                      value={forgotConfirmPass}
+                      onChange={(e) => setForgotConfirmPass(e.target.value)}
+                      placeholder="Confirm new password"
+                      className="w-full h-11 px-3 pr-10 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotConfirmPass(!showForgotConfirmPass)}
+                      className="absolute right-3 top-3 text-neutral-400 hover:text-white"
+                      title={showForgotConfirmPass ? 'Hide password' : 'Show password'}
+                    >
+                      {showForgotConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <button

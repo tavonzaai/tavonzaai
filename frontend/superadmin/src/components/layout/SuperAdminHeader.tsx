@@ -146,7 +146,7 @@ export function SuperAdminHeader({ onMenuClick }: HeaderProps) {
             <div className="absolute right-0 mt-2 w-56 bg-neutral-900 border border-zinc-800 rounded-xl shadow-2xl py-1.5 z-50 animate-fade-in font-inter">
               <div className="px-3.5 py-2.5 border-b border-zinc-800/80">
                 <p className="text-xs font-medium text-white">{displayName}</p>
-                <p className="text-[11px] text-zinc-400 truncate">{user?.email || 'alex.morgan@tablepilot.io'}</p>
+                <p className="text-[11px] text-zinc-400 truncate">{user?.email || 'superadmin@tavonza.ai'}</p>
                 <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-amber-400/10 text-amber-400 border border-amber-400/20">
                   <Shield className="w-3 h-3" />
                   Global Super Admin

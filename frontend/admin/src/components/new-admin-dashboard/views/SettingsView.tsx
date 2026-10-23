@@ -112,7 +112,9 @@ export default function SettingsView({ section }: SettingsViewProps) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [directNewPassword, setDirectNewPassword] = useState('');
   const [directConfirmPassword, setDirectConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showDirectNewPass, setShowDirectNewPass] = useState(false);
+  const [showDirectConfirmPass, setShowDirectConfirmPass] = useState(false);
   const [isDirectChangingPass, setIsDirectChangingPass] = useState(false);
 
   // Password Reset / Change Password Authentication Modal State (OTP Flow)
@@ -123,6 +125,7 @@ export default function SettingsView({ section }: SettingsViewProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isPwdLoading, setIsPwdLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const { page: notificationPage, setPage: setNotificationPage } = useClientPage();
@@ -850,13 +853,23 @@ export default function SettingsView({ section }: SettingsViewProps) {
                 <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">
                   Current Password
                 </label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full h-10 px-3 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-10 px-3 pr-9 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword((p) => !p)}
+                    className="absolute right-2.5 text-neutral-500 hover:text-white"
+                    title={showCurrentPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -875,6 +888,7 @@ export default function SettingsView({ section }: SettingsViewProps) {
                     type="button"
                     onClick={() => setShowDirectNewPass((p) => !p)}
                     className="absolute right-2.5 text-neutral-500 hover:text-white"
+                    title={showDirectNewPass ? 'Hide password' : 'Show password'}
                   >
                     {showDirectNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -885,13 +899,23 @@ export default function SettingsView({ section }: SettingsViewProps) {
                 <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">
                   Confirm New Password
                 </label>
-                <input
-                  type="password"
-                  value={directConfirmPassword}
-                  onChange={(e) => setDirectConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full h-10 px-3 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showDirectConfirmPass ? 'text' : 'password'}
+                    value={directConfirmPassword}
+                    onChange={(e) => setDirectConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-10 px-3 pr-9 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDirectConfirmPass((p) => !p)}
+                    className="absolute right-2.5 text-neutral-500 hover:text-white"
+                    title={showDirectConfirmPass ? 'Hide password' : 'Show password'}
+                  >
+                    {showDirectConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1069,40 +1093,70 @@ export default function SettingsView({ section }: SettingsViewProps) {
                     <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">
                       Current Password
                     </label>
-                    <input
-                      type="password"
-                      data-testid="settings-current-password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full h-10 px-3 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        data-testid="settings-current-password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full h-10 px-3 pr-9 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword((p) => !p)}
+                        className="absolute right-2.5 text-neutral-500 hover:text-white"
+                        title={showCurrentPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">
                       New Password
                     </label>
-                    <input
-                      type="password"
-                      data-testid="settings-new-password"
-                      value={directNewPassword}
-                      onChange={(e) => setDirectNewPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full h-10 px-3 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type={showDirectNewPass ? 'text' : 'password'}
+                        data-testid="settings-new-password"
+                        value={directNewPassword}
+                        onChange={(e) => setDirectNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full h-10 px-3 pr-9 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDirectNewPass((p) => !p)}
+                        className="absolute right-2.5 text-neutral-500 hover:text-white"
+                        title={showDirectNewPass ? 'Hide password' : 'Show password'}
+                      >
+                        {showDirectNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-neutral-400 text-xs font-semibold uppercase mb-1">
                       Confirm New Password
                     </label>
-                    <input
-                      type="password"
-                      data-testid="settings-confirm-password"
-                      value={directConfirmPassword}
-                      onChange={(e) => setDirectConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full h-10 px-3 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type={showDirectConfirmPass ? 'text' : 'password'}
+                        data-testid="settings-confirm-password"
+                        value={directConfirmPassword}
+                        onChange={(e) => setDirectConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full h-10 px-3 pr-9 bg-black border border-neutral-800 focus:border-amber-400 rounded-lg text-white text-sm outline-none transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDirectConfirmPass((p) => !p)}
+                        className="absolute right-2.5 text-neutral-500 hover:text-white"
+                        title={showDirectConfirmPass ? 'Hide password' : 'Show password'}
+                      >
+                        {showDirectConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="flex justify-end">
@@ -1376,13 +1430,23 @@ export default function SettingsView({ section }: SettingsViewProps) {
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs text-neutral-400">Confirm New Password</label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full h-10 px-3 bg-black border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400 transition"
-                    placeholder="••••••••"
-                  />
+                  <div className="relative flex items-center">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full h-10 px-3 pr-10 bg-black border border-neutral-800 rounded-lg text-sm text-white focus:outline-none focus:border-amber-400 transition"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      className="absolute right-3 text-neutral-400 hover:text-white"
+                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">

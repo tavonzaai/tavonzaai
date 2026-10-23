@@ -19,7 +19,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         </div>
         <div className="flex items-center gap-2 text-sm text-zinc-400 font-inter">
           <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-          <span>Loading TablePilot Super Admin...</span>
+          <span>Loading Tavonza AI Super Admin...</span>
         </div>
       </div>
     );
