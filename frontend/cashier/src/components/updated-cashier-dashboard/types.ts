@@ -1,4 +1,13 @@
-export type KitchenStatus = "READY_TO_SERVE" | "PREPARING" | "COMPLETED";
+export type KitchenStatus =
+  | "READY_TO_SERVE"
+  | "READY"
+  | "PREPARING"
+  | "COMPLETED"
+  | "SERVED"
+  | "ACCEPTED"
+  | "SUBMITTED"
+  | "CANCELLED"
+  | "REJECTED";
 export type FinanceStatus = "REQUESTING_CASH" | "NOT_PAID" | "PAID_CASH" | "PAID";
 
 export type QueueStatus =
@@ -28,7 +37,11 @@ export interface CashierOrder {
   items: CashierOrderItem[];
   kitchenStatus: KitchenStatus;
   financeStatus: FinanceStatus;
+  status?: string;
+  displayStatus?: string;
   paymentStatus?: string;
+  amountPaid?: number;
+  isFullyPaid?: boolean;
   isPaid?: boolean;
   subtotal: number;
   serviceCharge: number;

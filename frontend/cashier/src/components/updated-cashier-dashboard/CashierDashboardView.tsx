@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import CashierSidebar from "./Sidebar";
 import ProfileView from "./ProfileView";
-import { CashierOrder, BillQueueItem } from "./types";
+import { CashierOrder, BillQueueItem, KitchenStatus } from "./types";
 import { cashierService, getActiveBranchId, fetchActiveBranchId, OfflinePaymentRequestItem } from "@/redux/features/cashierApi";
 import { useAppSelector } from "@/redux/store";
 import {
@@ -12,8 +12,8 @@ import {
   Clock,
   User,
   CheckCircle2,
-  AlertCircle,
   ChefHat,
+  Utensils,
   Banknote,
   ChevronRight,
   ChevronDown,
@@ -143,15 +143,21 @@ export default function CashierDashboardView({
 
   const isPaidOrder = (ord?: CashierOrder | null): boolean => {
     if (!ord) return false;
+    const fStatus = String(ord.financeStatus || "").toUpperCase();
+    const pStatus = String((ord as any).paymentStatus || "").toUpperCase();
+    const oStatus = String((ord as any).status || "").toUpperCase();
     return (
-      ord.financeStatus === "PAID_CASH" ||
-      ord.financeStatus === "PAID" ||
-      (ord as any).paymentStatus === "PAID" ||
-      (ord as any).paymentStatus === "paid" ||
-      (ord as any).paymentStatus === "COMPLETED" ||
-      (ord as any).paymentStatus === "completed" ||
+      fStatus === "PAID_CASH" ||
+      fStatus === "PAID" ||
+      pStatus === "PAID" ||
+      pStatus === "COMPLETED" ||
+      oStatus === "PAID" ||
       Boolean(ord.isPaid) ||
-      Boolean((ord as any).paid)
+      Boolean((ord as any).paid) ||
+      Boolean((ord as any).isFullyPaid) ||
+      (ord.amountPaid != null &&
+        Number(ord.amountPaid) > 0 &&
+        Number(ord.amountPaid) >= Number(ord.totalAmount || (ord as any).total || 0))
     );
   };
 
@@ -175,7 +181,7 @@ export default function CashierDashboardView({
           cashierService.getMenuItems(branchId),
           cashierService.getOfflinePaymentRequests(branchId).catch(() => []),
           cashierService.getCashierDashboardAnalytics(branchId).catch(() => null),
-          cashierService.listPayments(branchId, 1, 10).catch(() => []),
+          cashierService.listPayments(branchId, 1, 100).catch(() => []),
         ]);
 
         if (mounted && kpis) {
@@ -207,60 +213,168 @@ export default function CashierDashboardView({
         }
 
         if (mounted && Array.isArray(rawOrders)) {
+          // If queryOrderId is requested from URL but not in recent branch orders list, fetch it directly
+          if (queryOrderId && !rawOrders.some((o: any) => (o.orderId || o.id) === queryOrderId)) {
+            try {
+              const singleOrder = await cashierService.getOrder(queryOrderId);
+              if (singleOrder && (singleOrder.id || singleOrder.orderId)) {
+                rawOrders.unshift(singleOrder);
+              }
+            } catch (err) {
+              console.warn("Could not load queryOrderId directly:", err);
+            }
+          }
+
           const paidOrdersMap = new Map<string, { status: string; method?: string }>();
+          const paidSessionsMap = new Map<string, { status: string; method?: string }>();
           if (Array.isArray(rawPayments)) {
             for (const p of rawPayments) {
               const pStatus = String(p.status || "").toUpperCase();
-              if (p.orderId && (pStatus === "PAID" || pStatus === "COMPLETED" || Boolean(p.paidAt))) {
-                paidOrdersMap.set(p.orderId, {
-                  status: pStatus,
-                  method: p.method === "CASH" ? "Cash" : p.method === "CARD" ? "Card" : p.method,
-                });
+              if (pStatus === "PAID" || pStatus === "COMPLETED" || Boolean(p.paidAt)) {
+                const rawMethod = String(p.method || "").toUpperCase();
+                const cleanMethod =
+                  rawMethod === "CASH"
+                    ? "Cash"
+                    : rawMethod === "CARD"
+                    ? "Card"
+                    : rawMethod === "ONLINE_GATEWAY" || rawMethod.includes("STRIPE")
+                    ? "Stripe Card (Online)"
+                    : p.method || "Paid";
+                if (p.orderId) {
+                  paidOrdersMap.set(p.orderId, {
+                    status: pStatus,
+                    method: cleanMethod,
+                  });
+                }
+                if (p.tableSessionId) {
+                  paidSessionsMap.set(p.tableSessionId, {
+                    status: pStatus,
+                    method: cleanMethod,
+                  });
+                }
               }
             }
           }
 
+          const hasOfflineRequest = (ordId: string, sessId?: string) => {
+            if (!Array.isArray(rawRequests) || rawRequests.length === 0) return false;
+            return rawRequests.some(
+              (r: any) =>
+                (r.orderId && r.orderId === ordId) ||
+                (sessId && r.tableSessionId && r.tableSessionId === sessId)
+            );
+          };
+
           const mappedOrders: CashierOrder[] = rawOrders.map((o: any) => {
-            const pRecord = paidOrdersMap.get(o.orderId || o.id);
+            const ordId = o.orderId || o.id;
+            const pRecord = paidOrdersMap.get(ordId) || (o.tableSessionId ? paidSessionsMap.get(o.tableSessionId) : undefined);
+            const pStatus = String(o.paymentStatus || "").toUpperCase();
+            const oStatus = String(o.status || "").toUpperCase();
+
             const isOrderPaidStatus =
               Boolean(pRecord) ||
-              o.paymentStatus === "PAID" ||
-              o.paymentStatus === "paid" ||
-              o.paymentStatus === "COMPLETED" ||
-              o.paymentStatus === "completed" ||
+              pStatus === "PAID" ||
+              pStatus === "COMPLETED" ||
+              oStatus === "PAID" ||
+              Boolean(o.isFullyPaid) ||
               Boolean(o.isPaid) ||
               Boolean(o.paid) ||
+              (o.amountPaid != null &&
+                Number(o.amountPaid) > 0 &&
+                Number(o.amountPaid) >= Number(o.totalAmount || o.total || 0)) ||
               o.financeStatus === "PAID_CASH" ||
               o.financeStatus === "PAID";
 
+            const isRequestingCash =
+              !isOrderPaidStatus &&
+              (o.financeStatus === "REQUESTING_CASH" || hasOfflineRequest(ordId, o.tableSessionId));
+
+            const cleanKitchenStatus = (
+              o.status === "SERVED"
+                ? "SERVED"
+                : o.status === "READY_TO_SERVE" || o.status === "READY"
+                ? "READY_TO_SERVE"
+                : o.status === "PREPARING"
+                ? "PREPARING"
+                : o.status === "ACCEPTED"
+                ? "ACCEPTED"
+                : o.status === "SUBMITTED"
+                ? "SUBMITTED"
+                : o.status === "CANCELLED"
+                ? "CANCELLED"
+                : o.status === "REJECTED"
+                ? "REJECTED"
+                : "COMPLETED"
+            ) as KitchenStatus;
+
+            let methodStr = pRecord?.method || o.paymentMethod;
+            if (!methodStr && isOrderPaidStatus) {
+              methodStr = "Stripe Card (Online)";
+            } else if (methodStr) {
+              const upper = String(methodStr).toUpperCase();
+              if (upper.includes("STRIPE") || upper.includes("ONLINE") || upper === "ONLINE_GATEWAY") {
+                methodStr = "Stripe Card (Online)";
+              } else if (upper === "CARD" || upper === "CREDIT_CARD") {
+                methodStr = "Card";
+              } else if (upper === "CASH") {
+                methodStr = "Cash";
+              }
+            } else {
+              methodStr = isRequestingCash ? "Cash" : "Pending";
+            }
+
+            const total = Number(o.totalAmount || o.total || 0);
+            const subtotal = o.subtotal != null ? Number(o.subtotal) : total * 0.9;
+            const serviceCharge = o.serviceCharge != null ? Number(o.serviceCharge) : total * 0.05;
+            const tax = o.tax != null ? Number(o.tax) : total * 0.05;
+
             return {
-              id: o.orderId || o.id,
-              orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
-              totalAmount: o.totalAmount || o.total || 0,
-              tableNumber: o.tableLabel || (o.tableId ? `Table` : "Takeaway"),
+              id: ordId,
+              orderNumber: o.orderNumber || `#${ordId.slice(0, 5)}`,
+              totalAmount: total,
+              tableNumber: o.tableLabel || (o.tableNumber ? `Table ${o.tableNumber}` : o.tableId ? "Table" : "Takeaway"),
               guestCount: 2,
               waitTime: "Just now",
-              customerName: o.customerName || "Guest",
+              customerName: o.customerName || o.guestName || "Guest",
               itemCount: o.itemCount || (o.items?.length ?? 1),
-              subtotal: (o.totalAmount || o.total || 0) * 0.9,
-              serviceCharge: (o.totalAmount || o.total || 0) * 0.05,
-              tax: (o.totalAmount || o.total || 0) * 0.05,
-              kitchenStatus:
-                o.status === "READY_TO_SERVE"
-                  ? "READY_TO_SERVE"
+              subtotal,
+              serviceCharge,
+              tax,
+              status: o.status,
+              displayStatus:
+                o.displayStatus ||
+                (o.status === "SERVED"
+                  ? "Served"
+                  : o.status === "READY" || o.status === "READY_TO_SERVE"
+                  ? "Ready to serve"
                   : o.status === "PREPARING"
-                  ? "PREPARING"
-                  : "COMPLETED",
-              financeStatus: isOrderPaidStatus ? "PAID_CASH" : "REQUESTING_CASH",
-              paymentStatus: isOrderPaidStatus ? "PAID" : (o.paymentStatus || "UNPAID"),
+                  ? "Preparing"
+                  : o.status === "ACCEPTED"
+                  ? "Accepted"
+                  : o.status === "SUBMITTED"
+                  ? "Order Received"
+                  : o.status === "CANCELLED"
+                  ? "Cancelled"
+                  : o.status === "REJECTED"
+                  ? "Rejected"
+                  : "Completed"),
+              kitchenStatus: cleanKitchenStatus,
+              financeStatus: isOrderPaidStatus
+                ? "PAID"
+                : isRequestingCash
+                ? "REQUESTING_CASH"
+                : "NOT_PAID",
+              paymentStatus: isOrderPaidStatus ? "PAID" : o.paymentStatus || "UNPAID",
+              amountPaid: Number(o.amountPaid || (isOrderPaidStatus ? total : 0)),
+              isFullyPaid: isOrderPaidStatus,
               isPaid: isOrderPaidStatus,
-              paymentDate: new Date(o.createdAt).toLocaleDateString(),
-              paymentMethod: pRecord?.method || o.paymentMethod || (isOrderPaidStatus ? "Paid" : "Cash"),
+              paymentDate: o.createdAt ? new Date(o.createdAt).toLocaleDateString() : "Today",
+              paymentMethod: methodStr,
               tableSessionId: o.tableSessionId,
               tableId: o.tableId,
               items: (o.items || []).map((it: any, idx: number) => ({
                 id: it.id || `item-${idx}`,
-                name: it.name,
+                name: it.name || it.productNameSnapshot || `Item #${idx + 1}`,
                 price: Number(it.price || it.unitPrice || 0),
                 quantity: it.quantity || 1,
               })),
@@ -269,26 +383,32 @@ export default function CashierDashboardView({
 
           const mappedBills: BillQueueItem[] = rawOrders
             .filter((o: any) => {
-              const pRecord = paidOrdersMap.get(o.orderId || o.id);
+              const ordId = o.orderId || o.id;
+              const pRecord = paidOrdersMap.get(ordId);
+              const pStatus = String(o.paymentStatus || "").toUpperCase();
+              const oStatus = String(o.status || "").toUpperCase();
               const isOrderPaidStatus =
                 Boolean(pRecord) ||
-                o.paymentStatus === "PAID" ||
-                o.paymentStatus === "paid" ||
-                o.paymentStatus === "COMPLETED" ||
-                o.paymentStatus === "completed" ||
+                pStatus === "PAID" ||
+                pStatus === "COMPLETED" ||
+                oStatus === "PAID" ||
+                Boolean(o.isFullyPaid) ||
                 Boolean(o.isPaid) ||
                 Boolean(o.paid) ||
+                (o.amountPaid != null &&
+                  Number(o.amountPaid) > 0 &&
+                  Number(o.amountPaid) >= Number(o.totalAmount || o.total || 0)) ||
                 o.financeStatus === "PAID_CASH" ||
                 o.financeStatus === "PAID";
               return !isOrderPaidStatus;
             })
             .map((o: any) => {
-              const total = o.totalAmount || o.total || 0;
-              const subtotal = total * 0.9;
-              const tax = total * 0.05;
-              const serviceCharge = total * 0.05;
-              const items = (o.items || []).map((it: any) => ({
-                name: it.name,
+              const total = Number(o.totalAmount || o.total || 0);
+              const subtotal = o.subtotal != null ? Number(o.subtotal) : total * 0.9;
+              const tax = o.tax != null ? Number(o.tax) : total * 0.05;
+              const serviceCharge = o.serviceCharge != null ? Number(o.serviceCharge) : total * 0.05;
+              const items = (o.items || []).map((it: any, idx: number) => ({
+                name: it.name || it.productNameSnapshot || `Item #${idx + 1}`,
                 price: Number(it.price || it.unitPrice || 0),
                 quantity: Number(it.quantity || 1),
               }));
@@ -296,7 +416,7 @@ export default function CashierDashboardView({
                 id: `bill-${o.orderId || o.id}`,
                 orderNumber: o.orderNumber || `#${(o.orderId || o.id).slice(0, 5)}`,
                 tableNumber: o.tableLabel || "Table",
-                customerName: o.customerName || "Guest",
+                customerName: o.customerName || o.guestName || "Guest",
                 itemCount: items.length || 1,
                 paymentMethod: (o.paymentMethod === "CARD" ? "Visa Card" : "Cash") as "Visa Card" | "Cash" | "Digital Wallet",
                 status: "Pending",
@@ -350,40 +470,71 @@ export default function CashierDashboardView({
 
   // Active selected order in Table View
   const activeOrder =
-    orders.find((o) => o.id === selectedOrderId) || orders[0];
+    orders.find((o) => o.id === selectedOrderId || o.orderNumber === selectedOrderId) ||
+    (queryOrderId ? orders.find((o) => o.id === queryOrderId || o.orderNumber === queryOrderId) : null) ||
+    orders[0];
 
   // Proactively check if currently selected active order has already been settled in backend payments
   useEffect(() => {
     if (!activeOrder || isPaidOrder(activeOrder)) return;
     let isCurrent = true;
 
-    cashierService
-      .getPaymentsByOrder(activeOrder.id)
-      .then((records) => {
-        if (!isCurrent || !Array.isArray(records) || records.length === 0) return;
-        const hasPaidPayment = records.some((p: any) => {
-          const st = String(p.status || "").toUpperCase();
-          return st === "PAID" || st === "COMPLETED" || Boolean(p.paidAt);
-        });
-        const totalPaid = records
-          .filter((p: any) => {
-            const st = String(p.status || "").toUpperCase();
-            return st === "PAID" || Boolean(p.paidAt);
-          })
-          .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    Promise.all([
+      cashierService.getPaymentsByOrder(activeOrder.id).catch(() => []),
+      activeOrder.tableSessionId
+        ? cashierService.getSessionBill(activeOrder.tableSessionId).catch(() => null)
+        : Promise.resolve(null),
+    ])
+      .then(([records, sessionBill]) => {
+        if (!isCurrent) return;
 
-        if (hasPaidPayment || (totalPaid > 0 && totalPaid >= activeOrder.totalAmount)) {
-          const firstMethod = records[0]?.method;
-          const cleanMethod =
-            firstMethod === "CASH" ? "Cash" : firstMethod === "CARD" ? "Card" : firstMethod || "Paid";
+        const hasPaidPayment =
+          Array.isArray(records) &&
+          records.some((p: any) => {
+            const st = String(p.status || "").toUpperCase();
+            return st === "PAID" || st === "COMPLETED" || Boolean(p.paidAt);
+          });
+
+        const totalPaid = Array.isArray(records)
+          ? records
+              .filter((p: any) => {
+                const st = String(p.status || "").toUpperCase();
+                return st === "PAID" || Boolean(p.paidAt);
+              })
+              .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+          : 0;
+
+        const isSessionPaid =
+          sessionBill &&
+          (sessionBill.isFullyPaid === true ||
+            (sessionBill.paidAmount != null &&
+              Number(sessionBill.paidAmount) > 0 &&
+              Number(sessionBill.balanceDue || 0) === 0));
+
+        if (hasPaidPayment || (totalPaid > 0 && totalPaid >= activeOrder.totalAmount) || isSessionPaid) {
+          let cleanMethod = "Stripe Card (Online)";
+          if (Array.isArray(records) && records.length > 0) {
+            const firstMethod = String(records[0]?.method || "").toUpperCase();
+            cleanMethod =
+              firstMethod === "CASH"
+                ? "Cash"
+                : firstMethod === "CARD"
+                ? "Card"
+                : firstMethod === "ONLINE_GATEWAY" || firstMethod.includes("STRIPE")
+                ? "Stripe Card (Online)"
+                : records[0]?.method || "Paid";
+          }
+
           setOrders((prev) =>
             prev.map((ord) => {
               if (ord.id === activeOrder.id) {
                 return {
                   ...ord,
-                  financeStatus: "PAID_CASH",
+                  financeStatus: "PAID",
                   paymentStatus: "PAID",
                   isPaid: true,
+                  amountPaid: ord.totalAmount,
+                  isFullyPaid: true,
                   paymentMethod: cleanMethod,
                 };
               }
@@ -402,7 +553,7 @@ export default function CashierDashboardView({
     return () => {
       isCurrent = false;
     };
-  }, [activeOrder?.id]);
+  }, [activeOrder?.id, activeOrder?.tableSessionId]);
 
   // Search filter for Table View
   const filteredOrders = orders.filter(
@@ -1438,37 +1589,76 @@ export default function CashierDashboardView({
 
               {activeOrder && (
                 <div className="flex items-center gap-2">
-                  {/* Kitchen Status Badge */}
-                  <div className="px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-500/20 flex items-center gap-2">
-                    <div className="w-6 h-6 bg-green-500/20 rounded-md border border-green-500/50 flex items-center justify-center">
-                      <ChefHat className="w-3.5 h-3.5 text-green-400" />
+                  {/* Exact Kitchen / Order Status Badge */}
+                  <div
+                    className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 ${
+                      activeOrder.status === "SERVED"
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                        : activeOrder.status === "READY" || activeOrder.kitchenStatus === "READY_TO_SERVE"
+                        ? "bg-green-500/10 border-green-500/30 text-green-400"
+                        : activeOrder.status === "PREPARING" || activeOrder.kitchenStatus === "PREPARING"
+                        ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                        : activeOrder.status === "CANCELLED" || activeOrder.status === "REJECTED"
+                        ? "bg-rose-500/10 border-rose-500/30 text-rose-400"
+                        : "bg-blue-500/10 border-blue-500/30 text-blue-400"
+                    }`}
+                  >
+                    <div className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center">
+                      {activeOrder.status === "SERVED" ? (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      ) : activeOrder.status === "PREPARING" ? (
+                        <ChefHat className="w-3.5 h-3.5" />
+                      ) : (
+                        <Utensils className="w-3.5 h-3.5" />
+                      )}
                     </div>
-                    <span className="text-green-500 text-xs sm:text-sm font-normal font-['Poppins']">
-                      {activeOrder.kitchenStatus === "READY_TO_SERVE"
-                        ? "Ready to serve"
-                        : activeOrder.kitchenStatus === "PREPARING"
-                        ? "Preparing"
-                        : "Completed"}
+                    <span className="text-xs sm:text-sm font-medium font-['Poppins']">
+                      {activeOrder.displayStatus || (
+                        activeOrder.status === "SERVED"
+                          ? "Served"
+                          : activeOrder.status === "READY" || activeOrder.kitchenStatus === "READY_TO_SERVE"
+                          ? "Ready to serve"
+                          : activeOrder.status === "PREPARING"
+                          ? "Preparing"
+                          : activeOrder.status === "ACCEPTED"
+                          ? "Accepted"
+                          : activeOrder.status === "SUBMITTED"
+                          ? "Order Received"
+                          : activeOrder.status === "CANCELLED"
+                          ? "Cancelled"
+                          : activeOrder.status === "REJECTED"
+                          ? "Rejected"
+                          : "Completed"
+                      )}
                     </span>
                   </div>
 
-                  {/* Finance Status Badge */}
+                  {/* Finance / Payment Status Badge */}
                   {isPaidOrder(activeOrder) ? (
-                    <div className="px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-500/20 flex items-center gap-2">
+                    <div className="px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-500/30 flex items-center gap-2">
                       <div className="w-6 h-6 bg-green-500/20 rounded-md border border-green-500/50 flex items-center justify-center">
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
                       </div>
-                      <span className="text-green-500 text-xs sm:text-sm font-normal font-['Poppins']">
+                      <span className="text-green-400 text-xs sm:text-sm font-semibold font-['Poppins']">
                         Paid ({activeOrder.paymentMethod || "Settled"})
                       </span>
                     </div>
-                  ) : (
-                    <div className="px-3 py-1.5 bg-amber-500/10 rounded-lg border border-amber-500/20 flex items-center gap-2">
+                  ) : activeOrder.financeStatus === "REQUESTING_CASH" ? (
+                    <div className="px-3 py-1.5 bg-amber-500/10 rounded-lg border border-amber-500/30 flex items-center gap-2">
                       <div className="w-6 h-6 bg-amber-500/20 rounded-md border border-amber-500/50 flex items-center justify-center">
                         <Banknote className="w-3.5 h-3.5 text-amber-500" />
                       </div>
-                      <span className="text-amber-500 text-xs sm:text-sm font-normal font-['Poppins']">
+                      <span className="text-amber-400 text-xs sm:text-sm font-medium font-['Poppins']">
                         Request to Pay Cash
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="px-3 py-1.5 bg-neutral-800/80 rounded-lg border border-neutral-700 flex items-center gap-2">
+                      <div className="w-6 h-6 bg-neutral-700/80 rounded-md flex items-center justify-center">
+                        <Clock className="w-3.5 h-3.5 text-neutral-300" />
+                      </div>
+                      <span className="text-neutral-300 text-xs sm:text-sm font-medium font-['Poppins']">
+                        Pending Payment
                       </span>
                     </div>
                   )}
@@ -1580,25 +1770,55 @@ export default function CashierDashboardView({
 
                   {/* Status Box */}
                   <div className="p-4 print:p-2 bg-neutral-950/60 rounded-xl border border-neutral-800 print:border-neutral-700 flex flex-col items-center gap-3 print:gap-1 text-center">
-                    <div className="w-12 h-12 print:w-7 print:h-7 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center text-green-400">
-                      <CheckCircle2 className="w-7 h-7 print:w-4 print:h-4" />
+                    <div
+                      className={`w-12 h-12 print:w-7 print:h-7 rounded-full flex items-center justify-center ${
+                        isPaidOrder(activeOrder)
+                          ? "bg-green-500/20 border border-green-500/40 text-green-400"
+                          : "bg-amber-500/20 border border-amber-500/40 text-amber-400"
+                      }`}
+                    >
+                      {isPaidOrder(activeOrder) ? (
+                        <CheckCircle2 className="w-7 h-7 print:w-4 print:h-4 text-green-400" />
+                      ) : (
+                        <Clock className="w-7 h-7 print:w-4 print:h-4 text-amber-400" />
+                      )}
                     </div>
                     <div>
                       <div className="text-2xl print:text-lg font-bold text-white font-['Poppins']">
                         ${activeOrder.totalAmount.toFixed(2)}
                       </div>
-                      <div className="text-green-400 text-sm print:text-xs font-semibold font-['Poppins']">
+                      <div
+                        className={`text-sm print:text-xs font-semibold font-['Poppins'] ${
+                          isPaidOrder(activeOrder) ? "text-green-400" : "text-amber-400"
+                        }`}
+                      >
                         {isPaidOrder(activeOrder)
                           ? "Payment Successful"
-                          : "Awaiting Cash Settle"}
+                          : activeOrder.financeStatus === "REQUESTING_CASH"
+                          ? "Awaiting Cash Settle"
+                          : "Pending Settlement"}
                       </div>
                     </div>
 
                     <div className="w-full text-left space-y-2 print:space-y-1 pt-2 border-t border-neutral-800 print:border-neutral-700 text-xs print:text-[11px] text-neutral-400 font-['Poppins']">
                       <div className="flex justify-between">
-                        <span>Status</span>
+                        <span>Order Status</span>
                         <span className="text-white font-medium">
-                          {isPaidOrder(activeOrder) ? `Paid (${activeOrder.paymentMethod || "Settled"})` : "Pending Cash"}
+                          {activeOrder.displayStatus || activeOrder.status || "Active"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Payment Status</span>
+                        <span
+                          className={`font-semibold ${
+                            isPaidOrder(activeOrder) ? "text-green-400" : "text-amber-400"
+                          }`}
+                        >
+                          {isPaidOrder(activeOrder)
+                            ? `Paid (${activeOrder.paymentMethod || "Settled"})`
+                            : activeOrder.financeStatus === "REQUESTING_CASH"
+                            ? "Awaiting Cash Settle"
+                            : "Pending Payment"}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -1607,7 +1827,11 @@ export default function CashierDashboardView({
                       </div>
                       <div className="flex justify-between">
                         <span>Payment Method</span>
-                        <span className="text-white font-medium">{activeOrder.paymentMethod || "Cash"}</span>
+                        <span className="text-white font-medium">
+                          {isPaidOrder(activeOrder)
+                            ? activeOrder.paymentMethod || "Online / Card"
+                            : activeOrder.paymentMethod || "Cash"}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1615,14 +1839,10 @@ export default function CashierDashboardView({
                   {/* Action Buttons */}
                   <div className="space-y-3 print:hidden">
                     {isPaidOrder(activeOrder) ? (
-                      <button
-                        type="button"
-                        disabled
-                        className="w-full py-3 px-4 bg-neutral-800/90 border border-neutral-700/80 text-neutral-300 rounded-lg font-medium text-base text-center cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        <CheckCircle2 className="w-5 h-5 text-green-400" />
+                      <div className="w-full py-3.5 px-4 bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 rounded-lg font-semibold text-base text-center flex items-center justify-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                         <span>Payment Settled ({activeOrder.paymentMethod || "Paid"})</span>
-                      </button>
+                      </div>
                     ) : (
                       <>
                         <button
@@ -1851,46 +2071,76 @@ export default function CashierDashboardView({
               <div className="flex flex-wrap items-center gap-3">
                 {activeOrder && (
                   <div className="flex items-center gap-2">
-                    {/* Kitchen Status Badge */}
-                    <div className="px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-500/20 flex items-center gap-2">
-                      <div className="w-6 h-6 bg-green-500/20 rounded-md border border-green-500/50 flex items-center justify-center">
-                        <ChefHat className="w-3.5 h-3.5 text-green-400" />
+                    {/* Exact Kitchen / Order Status Badge */}
+                    <div
+                      className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 ${
+                        activeOrder.status === "SERVED"
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                          : activeOrder.status === "READY" || activeOrder.kitchenStatus === "READY_TO_SERVE"
+                          ? "bg-green-500/10 border-green-500/30 text-green-400"
+                          : activeOrder.status === "PREPARING" || activeOrder.kitchenStatus === "PREPARING"
+                          ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                          : activeOrder.status === "CANCELLED" || activeOrder.status === "REJECTED"
+                          ? "bg-rose-500/10 border-rose-500/30 text-rose-400"
+                          : "bg-blue-500/10 border-blue-500/30 text-blue-400"
+                      }`}
+                    >
+                      <div className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center">
+                        {activeOrder.status === "SERVED" ? (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        ) : activeOrder.status === "PREPARING" ? (
+                          <ChefHat className="w-3.5 h-3.5" />
+                        ) : (
+                          <Utensils className="w-3.5 h-3.5" />
+                        )}
                       </div>
-                      <span className="text-green-500 text-xs sm:text-sm font-normal font-['Poppins'] leading-4">
-                        {activeOrder.kitchenStatus === "READY_TO_SERVE"
-                          ? "Ready to serve"
-                          : activeOrder.kitchenStatus === "PREPARING"
-                          ? "Preparing"
-                          : "Completed"}
+                      <span className="text-xs sm:text-sm font-medium font-['Poppins']">
+                        {activeOrder.displayStatus || (
+                          activeOrder.status === "SERVED"
+                            ? "Served"
+                            : activeOrder.status === "READY" || activeOrder.kitchenStatus === "READY_TO_SERVE"
+                            ? "Ready to serve"
+                            : activeOrder.status === "PREPARING"
+                            ? "Preparing"
+                            : activeOrder.status === "ACCEPTED"
+                            ? "Accepted"
+                            : activeOrder.status === "SUBMITTED"
+                            ? "Order Received"
+                            : activeOrder.status === "CANCELLED"
+                            ? "Cancelled"
+                            : activeOrder.status === "REJECTED"
+                            ? "Rejected"
+                            : "Completed"
+                        )}
                       </span>
                     </div>
 
                     {/* Finance Status Badge */}
                     {isPaidOrder(activeOrder) ? (
-                      <div className="px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-500/20 flex items-center gap-2">
+                      <div className="px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-500/30 flex items-center gap-2">
                         <div className="w-6 h-6 bg-green-500/20 rounded-md border border-green-500/50 flex items-center justify-center">
                           <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
                         </div>
-                        <span className="text-green-500 text-xs sm:text-sm font-normal font-['Poppins'] leading-4">
+                        <span className="text-green-400 text-xs sm:text-sm font-semibold font-['Poppins'] leading-4">
                           Paid ({activeOrder.paymentMethod || "Settled"})
                         </span>
                       </div>
                     ) : activeOrder.financeStatus === "REQUESTING_CASH" ? (
-                      <div className="px-3 py-1.5 bg-amber-500/10 rounded-lg border border-amber-500/20 flex items-center gap-2">
+                      <div className="px-3 py-1.5 bg-amber-500/10 rounded-lg border border-amber-500/30 flex items-center gap-2">
                         <div className="w-6 h-6 bg-amber-500/20 rounded-md border border-amber-500/50 flex items-center justify-center">
                           <Banknote className="w-3.5 h-3.5 text-amber-500" />
                         </div>
-                        <span className="text-amber-500 text-xs sm:text-sm font-normal font-['Poppins'] leading-4">
+                        <span className="text-amber-400 text-xs sm:text-sm font-medium font-['Poppins'] leading-4">
                           Request to Pay Cash
                         </span>
                       </div>
                     ) : (
-                      <div className="px-3 py-1.5 bg-red-400/10 rounded-lg border border-red-400/20 flex items-center gap-2">
-                        <div className="w-6 h-6 bg-red-400/20 rounded-md border border-red-400/50 flex items-center justify-center">
-                          <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                      <div className="px-3 py-1.5 bg-neutral-800/80 rounded-lg border border-neutral-700 flex items-center gap-2">
+                        <div className="w-6 h-6 bg-neutral-700/80 rounded-md flex items-center justify-center">
+                          <Clock className="w-3.5 h-3.5 text-neutral-300" />
                         </div>
-                        <span className="text-red-400 text-xs sm:text-sm font-normal font-['Poppins'] leading-4">
-                          Not Paid
+                        <span className="text-neutral-300 text-xs sm:text-sm font-medium font-['Poppins'] leading-4">
+                          Pending Payment
                         </span>
                       </div>
                     )}
@@ -1982,30 +2232,52 @@ export default function CashierDashboardView({
                         </span>
                       </div>
 
-                      {/* Kitchen Status Pill */}
+                      {/* Order Status Pill */}
                       <div className="space-y-2">
                         <div
                           className={`p-2.5 rounded-lg border flex items-center gap-2.5 ${
-                            ord.kitchenStatus === "READY_TO_SERVE"
-                              ? "bg-green-500/10 border-green-500/20 text-green-500"
-                              : ord.kitchenStatus === "PREPARING"
-                              ? "bg-fuchsia-500/10 border-fuchsia-500/20 text-fuchsia-500"
-                              : "bg-stone-500/10 border-stone-500/20 text-stone-400"
+                            ord.status === "SERVED"
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                              : ord.status === "READY" || ord.kitchenStatus === "READY_TO_SERVE"
+                              ? "bg-green-500/10 border-green-500/20 text-green-400"
+                              : ord.status === "PREPARING" || ord.kitchenStatus === "PREPARING"
+                              ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                              : ord.status === "CANCELLED" || ord.status === "REJECTED"
+                              ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                              : "bg-blue-500/10 border-blue-500/20 text-blue-400"
                           }`}
                         >
                           <div className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center shrink-0">
-                            <ChefHat className="w-3.5 h-3.5" />
+                            {ord.status === "SERVED" ? (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            ) : ord.status === "PREPARING" ? (
+                              <ChefHat className="w-3.5 h-3.5" />
+                            ) : (
+                              <Utensils className="w-3.5 h-3.5" />
+                            )}
                           </div>
                           <div>
                             <div className="text-neutral-400 text-xs font-normal font-['Poppins']">
-                              Kitchen
+                              Order Status
                             </div>
                             <div className="text-base font-medium font-['Poppins']">
-                              {ord.kitchenStatus === "READY_TO_SERVE"
-                                ? "Ready to serve"
-                                : ord.kitchenStatus === "PREPARING"
-                                ? "Preparing"
-                                : "Completed"}
+                              {ord.displayStatus || (
+                                ord.status === "SERVED"
+                                  ? "Served"
+                                  : ord.status === "READY" || ord.kitchenStatus === "READY_TO_SERVE"
+                                  ? "Ready to serve"
+                                  : ord.status === "PREPARING"
+                                  ? "Preparing"
+                                  : ord.status === "ACCEPTED"
+                                  ? "Accepted"
+                                  : ord.status === "SUBMITTED"
+                                  ? "Order Received"
+                                  : ord.status === "CANCELLED"
+                                  ? "Cancelled"
+                                  : ord.status === "REJECTED"
+                                  ? "Rejected"
+                                  : "Completed"
+                              )}
                             </div>
                           </div>
                         </div>
@@ -2017,14 +2289,16 @@ export default function CashierDashboardView({
                               ? "bg-green-500/10 border-green-500/20 text-green-500"
                               : ord.financeStatus === "REQUESTING_CASH"
                               ? "bg-amber-500/10 border-amber-500/20 text-amber-500"
-                              : "bg-red-400/10 border-red-400/20 text-red-400"
+                              : "bg-neutral-800 border-neutral-700 text-neutral-400"
                           }`}
                         >
                           <div className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center shrink-0">
                             {isPaidOrder(ord) ? (
                               <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
-                            ) : (
+                            ) : ord.financeStatus === "REQUESTING_CASH" ? (
                               <Banknote className="w-3.5 h-3.5" />
+                            ) : (
+                              <Clock className="w-3.5 h-3.5 text-neutral-400" />
                             )}
                           </div>
                           <div>
@@ -2036,7 +2310,7 @@ export default function CashierDashboardView({
                                 ? `Paid (${ord.paymentMethod || "Settled"})`
                                 : ord.financeStatus === "REQUESTING_CASH"
                                 ? "Requesting Cash"
-                                : "Not Paid"}
+                                : "Pending Payment"}
                             </div>
                           </div>
                         </div>
@@ -2188,18 +2462,34 @@ export default function CashierDashboardView({
                   <div className="space-y-6">
                     {/* Status Banner */}
                     <div className="p-4 bg-neutral-900 rounded-xl border border-neutral-800 flex flex-col items-center gap-4 text-center">
-                      <div className="w-12 h-12 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center text-green-400">
-                        <CheckCircle2 className="w-7 h-7" />
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                          isPaidOrder(activeOrder)
+                            ? "bg-green-500/20 border border-green-500/40 text-green-400"
+                            : "bg-amber-500/20 border border-amber-500/40 text-amber-400"
+                        }`}
+                      >
+                        {isPaidOrder(activeOrder) ? (
+                          <CheckCircle2 className="w-7 h-7 text-green-400" />
+                        ) : (
+                          <Clock className="w-7 h-7 text-amber-400" />
+                        )}
                       </div>
 
                       <div>
                         <div className="text-stone-50 text-xl font-semibold font-['Poppins'] leading-7">
                           ${activeOrder.totalAmount.toFixed(2)}
                         </div>
-                        <div className="text-green-400 text-base font-semibold font-['Poppins']">
+                        <div
+                          className={`text-base font-semibold font-['Poppins'] ${
+                            isPaidOrder(activeOrder) ? "text-green-400" : "text-amber-400"
+                          }`}
+                        >
                           {isPaidOrder(activeOrder)
                             ? "Payment Successful"
-                            : "Awaiting Cash Settle"}
+                            : activeOrder.financeStatus === "REQUESTING_CASH"
+                            ? "Awaiting Cash Settle"
+                            : "Pending Settlement"}
                         </div>
                       </div>
 
@@ -2209,12 +2499,27 @@ export default function CashierDashboardView({
                       <div className="w-full text-left space-y-3">
                         <div>
                           <div className="text-neutral-500 text-xs font-semibold font-['Poppins']">
-                            Status
+                            Order Status
                           </div>
                           <div className="text-white text-base font-normal font-['Poppins']">
+                            {activeOrder.displayStatus || activeOrder.status || "Active"}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-neutral-500 text-xs font-semibold font-['Poppins']">
+                            Payment Status
+                          </div>
+                          <div
+                            className={`text-base font-medium font-['Poppins'] ${
+                              isPaidOrder(activeOrder) ? "text-green-400" : "text-amber-400"
+                            }`}
+                          >
                             {isPaidOrder(activeOrder)
-                              ? `Successful (${activeOrder.paymentMethod || "Paid"})`
-                              : "Pending Cash"}
+                              ? `Paid (${activeOrder.paymentMethod || "Settled"})`
+                              : activeOrder.financeStatus === "REQUESTING_CASH"
+                              ? "Awaiting Cash Settle"
+                              : "Pending Payment"}
                           </div>
                         </div>
 
@@ -2223,7 +2528,7 @@ export default function CashierDashboardView({
                             Date
                           </div>
                           <div className="text-white text-base font-normal font-['Poppins']">
-                            {activeOrder.paymentDate || "September 28, at 07:30 pm"}
+                            {activeOrder.paymentDate || "Today"}
                           </div>
                         </div>
 
@@ -2232,7 +2537,9 @@ export default function CashierDashboardView({
                             Payment Method
                           </div>
                           <div className="text-white text-base font-normal font-['Poppins']">
-                            {activeOrder.paymentMethod || "Cash"}
+                            {isPaidOrder(activeOrder)
+                              ? activeOrder.paymentMethod || "Online / Card"
+                              : activeOrder.paymentMethod || "Cash"}
                           </div>
                         </div>
                       </div>
@@ -2247,7 +2554,7 @@ export default function CashierDashboardView({
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-zinc-400 text-base font-medium font-['Poppins']">
-                        <span>Tax (8.5%)</span>
+                        <span>Tax (8%)</span>
                         <span className="text-white">
                           ${activeOrder.tax.toFixed(2)}
                         </span>
@@ -2266,14 +2573,10 @@ export default function CashierDashboardView({
                     {/* Action Button */}
                     <div className="space-y-2 print:hidden">
                       {isPaidOrder(activeOrder) ? (
-                        <button
-                          type="button"
-                          disabled
-                          className="w-full py-3 px-4 bg-neutral-800/90 border border-neutral-700/80 text-neutral-300 rounded-lg font-medium font-['Inter'] text-base text-center cursor-not-allowed transition flex items-center justify-center gap-2"
-                        >
-                          <CheckCircle2 className="w-5 h-5 text-green-400" />
+                        <div className="w-full py-3.5 px-4 bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 rounded-lg font-semibold font-['Inter'] text-base text-center flex items-center justify-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                           <span>Payment Settled ({activeOrder.paymentMethod || "Paid"})</span>
-                        </button>
+                        </div>
                       ) : (
                         <>
                           <button

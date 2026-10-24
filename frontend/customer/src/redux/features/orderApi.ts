@@ -124,6 +124,9 @@ export interface OrderTrackingResponse {
   total?: number;
   totalAmount: number;
   paymentStatus?: string;
+  amountPaid?: number;
+  isFullyPaid?: boolean;
+  tableSessionId?: string | null;
   placedAt?: string;
   submittedAt?: string | Date | null;
   acceptedAt?: string | Date | null;

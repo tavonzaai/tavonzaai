@@ -633,7 +633,7 @@ function PaymentContent() {
         </div>
 
         {/* 2. PROMO CODE / VOUCHER SECTION */}
-        <div className="w-full bg-neutral-900/90 border border-neutral-800 p-3.5 rounded-xl flex flex-col gap-2">
+        {/* <div className="w-full bg-neutral-900/90 border border-neutral-800 p-3.5 rounded-xl flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <label className="text-white/80 text-xs font-semibold font-montserrat uppercase tracking-wider flex items-center gap-1.5">
               <Percent className="w-3.5 h-3.5 text-yellow-400" />
@@ -690,10 +690,10 @@ function PaymentContent() {
           {promoError && (
             <span className="text-[11px] text-red-400 font-inter">{promoError}</span>
           )}
-        </div>
+        </div> */}
 
         {/* 3. TIPPING OPTIONS */}
-        <div className="w-full bg-neutral-900/90 border border-neutral-800 p-3.5 rounded-xl flex flex-col gap-2.5">
+        {/* <div className="w-full bg-neutral-900/90 border border-neutral-800 p-3.5 rounded-xl flex flex-col gap-2.5">
           <label className="text-white/80 text-xs font-semibold font-montserrat uppercase tracking-wider">
             Add Server Gratuity (Tip)
           </label>
@@ -730,11 +730,11 @@ function PaymentContent() {
               className="bg-neutral-950 border border-neutral-700 px-2 py-1.5 rounded-lg text-xs text-center text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-400 transition"
             />
           </div>
-        </div>
+        </div> */}
 
         {/* 4. SPLIT BILL & WAITER ASSISTANCE BAR */}
         <div className="grid grid-cols-2 gap-3">
-          <button
+          {/* <button
             type="button"
             onClick={() =>
               router.push(
@@ -745,7 +745,7 @@ function PaymentContent() {
           >
             <Users className="w-4 h-4 text-yellow-400" />
             <span>Split Bill with Table</span>
-          </button>
+          </button> */}
 
           <button
             type="button"

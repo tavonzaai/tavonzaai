@@ -221,6 +221,14 @@ export const cashierService = {
     return (res as any)?.data || res;
   },
 
+  getOrder: async (orderId: string): Promise<any> => {
+    if (!orderId) return null;
+    const res = await baseApiFetch<any>(`/orders/${encodeURIComponent(orderId)}`, {
+      method: 'GET',
+    });
+    return (res as any)?.data || res;
+  },
+
   getTables: async (branchId: string): Promise<any[]> => {
     if (!branchId) return [];
     const res = await baseApiFetch<any[]>(`/tables?branchId=${encodeURIComponent(branchId)}`, {
