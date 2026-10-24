@@ -9,6 +9,7 @@ Every AI assistant or developer working on the **Tavonza AI Restaurant Platform*
 Before implementing any feature, bug fix, schema change, or endpoint, inspect the relevant document in [`.agent/`](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent):
 
 - [**`.agent/RULES.md`**](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent/RULES.md) — 25 Non-Negotiable Architectural Rules (Modular monolith, backend authorization authority, tenant isolation, domain boundary separation, etc.).
+- [**`.agent/PRD.md`**](file:///home/euhan/projects/tavonzaai/.agent/PRD.md) — Product requirements: users, surfaces, functional requirements, acceptance scenarios, and success metrics.
 - [**`.agent/OVERVIEW.md`**](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent/OVERVIEW.md) — System purpose, product surfaces (Customer, Staff, Admin), business hierarchy, and tech stack.
 - [**`.agent/HIERARCHY.md`**](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent/HIERARCHY.md) — Platform Owner → Organization → Restaurant → Branch breakdown, table sessions, guest sessions, and kitchen/bar station routing.
 - [**`.agent/AUTHORIZATION.md`**](file:///c:/Users/MD_Kayesur/Desktop/All_web/tavonzaai/.agent/AUTHORIZATION.md) — Capability and scope-based RBAC engine, `GlobalRole`, `StaffAssignment`, and `permissionActionEnum`.
