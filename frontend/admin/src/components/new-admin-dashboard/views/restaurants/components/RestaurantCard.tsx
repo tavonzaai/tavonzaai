@@ -22,7 +22,20 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
     <div className="p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col justify-start items-start gap-4 transition-all hover:border-neutral-700 shadow-xl">
       {/* Card Top: Title & Status Badge */}
       <div className="self-stretch inline-flex justify-between items-center">
-        <div className="flex-1 flex justify-start items-center gap-2">
+        <div className="flex-1 flex justify-start items-center gap-3">
+          {restaurant.logoUrl && (
+            <div className="w-10 h-10 rounded-lg border border-neutral-800 bg-neutral-950 overflow-hidden shrink-0 flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={restaurant.logoUrl}
+                alt={restaurant.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            </div>
+          )}
           <div className="flex-1 inline-flex flex-col justify-start items-start gap-0.5">
             <div className="self-stretch flex flex-col justify-start items-start gap-1">
               <div className="self-stretch flex flex-col justify-start items-start gap-0.5">
@@ -32,8 +45,13 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
                   onClick={() => onSelect(restaurant)}
                   className="text-left group cursor-pointer"
                 >
-                  <h2 className="self-stretch text-white text-lg font-medium font-sans leading-5 group-hover:text-amber-400 transition-colors">
-                    {restaurant.name}
+                  <h2 className="self-stretch text-white text-lg font-medium font-sans leading-5 group-hover:text-amber-400 transition-colors flex items-center gap-2">
+                    <span>{restaurant.name}</span>
+                    {restaurant.slug && (
+                      <span className="text-[10px] font-mono font-normal text-zinc-500 bg-neutral-800/80 px-1.5 py-0.5 rounded border border-neutral-700/60">
+                        /{restaurant.slug}
+                      </span>
+                    )}
                   </h2>
                 </button>
               </div>

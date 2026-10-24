@@ -1919,7 +1919,7 @@ export default function CashierDashboardView({
           </div>
         ) : (
           /* ========================================================================= */
-          /* TABLE VIEW / DEFAULT MODE (Figma Snippets 1 & 2)                          */
+          /* TABLE VIEW / DEFAULT MODE (Figma Snippets 1 & 2)                           */
           /* ========================================================================= */
           <div className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1 max-w-[1600px] w-full mx-auto">
             {isLoading ? (
@@ -1946,7 +1946,7 @@ export default function CashierDashboardView({
                       <div className="h-5 w-36 bg-neutral-800 rounded" />
                       <div className="h-4 w-16 bg-neutral-800/60 rounded" />
                     </div>
-                    {[1, 2, 3].map((idx) => (
+                    {[1, 2, 3].map((idx) =>(
                       <div
                         key={idx}
                         className="p-4 bg-neutral-900 rounded-xl border border-neutral-800 space-y-3.5"

@@ -39,7 +39,10 @@ export interface BusinessHealthMetric {
 
 export interface RestaurantItem {
   id: string;
+  organizationId?: string;
   name: string;
+  slug?: string;
+  logoUrl?: string;
   description?: string;
   tagline?: string;
   cuisine?: string;

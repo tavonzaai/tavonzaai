@@ -90,11 +90,14 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
       toast.error('Please enter a restaurant name.');
       return;
     }
+    const targetOrgId = form.organizationId?.trim() || organizationId;
     try {
       await createRestaurant({
-        ...(organizationId ? { organizationId } : {}),
+        ...(targetOrgId ? { organizationId: targetOrgId } : {}),
         name: form.name.trim(),
-        description: form.description.trim() || undefined,
+        ...(form.slug?.trim() ? { slug: form.slug.trim().toLowerCase() } : {}),
+        ...(form.logoUrl?.trim() ? { logoUrl: form.logoUrl.trim() } : {}),
+        ...(form.description?.trim() ? { description: form.description.trim() } : {}),
       }).unwrap();
       setIsCreateOpen(false);
       toast.success(`Restaurant "${form.name.trim()}" created successfully!`);
@@ -114,7 +117,9 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
         id: editingRestaurant.id,
         body: {
           name: form.name.trim(),
-          description: form.description.trim() || undefined,
+          ...(form.slug?.trim() ? { slug: form.slug.trim().toLowerCase() } : {}),
+          ...(form.logoUrl !== undefined ? { logoUrl: form.logoUrl.trim() || null } : {}),
+          ...(form.description?.trim() ? { description: form.description.trim() } : {}),
           isActive: form.status !== 'Closed',
         },
       }).unwrap();
@@ -212,6 +217,7 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
 
       {isCreateOpen && (
         <CreateRestaurantModal
+          defaultOrganizationId={organizationId || undefined}
           onClose={() => setIsCreateOpen(false)}
           onSubmit={handleCreateSubmit}
           submitting={creating}

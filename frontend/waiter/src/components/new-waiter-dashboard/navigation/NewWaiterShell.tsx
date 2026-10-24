@@ -1,11 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { usePathname } from 'next/navigation';
 import BottomDock from './BottomDock';
 import NewWaiterShellContext from './NewWaiterShellContext';
-import AskAiModal from '../modals/AskAiModal';
-import DraggableAiButton from '../../common/DraggableAiButton';
 
 interface NewWaiterShellProps {
   children: React.ReactNode;
@@ -13,7 +11,6 @@ interface NewWaiterShellProps {
 
 export default function NewWaiterShell({ children }: NewWaiterShellProps) {
   const pathname = usePathname();
-  const [isAskAiOpen, setIsAskAiOpen] = useState(false);
 
   // Login page has its own standalone full-screen splash layout
   const isLoginPage = pathname === '/new-waiter-dashboard/login';
@@ -38,18 +35,6 @@ export default function NewWaiterShell({ children }: NewWaiterShellProps) {
           {/* The ONE and ONLY Persistent Bottom Dock with smooth hide/show animation across all pages */}
           <BottomDock showFloorLabel={true} forceVisible={false} />
         </div>
-
-        {/* Draggable Floating Ask AI Assistant Button */}
-        <DraggableAiButton
-          isOpen={isAskAiOpen}
-          onToggle={() => setIsAskAiOpen((prev) => !prev)}
-          defaultBottom={96}
-          defaultRight={24}
-          storageKey="new_waiter_ask_ai_pos"
-        />
-
-        {/* Ask AI Assistant Floating Chat Modal */}
-        <AskAiModal isOpen={isAskAiOpen} onClose={() => setIsAskAiOpen(false)} />
       </div>
     </NewWaiterShellContext.Provider>
   );

@@ -28,7 +28,10 @@ export function mapRestaurant(
 ): RestaurantItem {
   return {
     id: restaurant.id,
+    organizationId: restaurant.organizationId,
     name: restaurant.name,
+    slug: restaurant.slug,
+    logoUrl: restaurant.logoUrl ?? undefined,
     description: restaurant.description ?? undefined,
     branchesCount,
     status: restaurant.isActive ? 'Active' : 'Closed',
