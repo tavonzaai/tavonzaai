@@ -26,6 +26,7 @@ import { mapRestaurant } from '@/lib/admin-mappers';
 import { EmptyState, ErrorState, LoadingState, PaginationBar } from '@/components/common';
 import { ApiError } from '@/redux/api/baseApi';
 import { useClampPage, useListPagination } from '@/hooks/useListPagination';
+import { isValidHttpUrl } from '@/lib/utils';
 
 interface RestaurantsViewProps {
   initialRestaurantId?: string;
@@ -86,47 +87,130 @@ export default function RestaurantsView({ initialRestaurantId }: RestaurantsView
   };
 
   const handleCreateSubmit = async (form: RestaurantFormData) => {
-    if (!form.name.trim()) {
-      toast.error('Please enter a restaurant name.');
+    if (!form.name.trim() || form.name.trim().length < 2) {
+      toast.error('Restaurant name must be at least 2 characters.');
       return;
     }
-    const targetOrgId = form.organizationId?.trim() || organizationId;
+
+    // Build strictly whitelisted payload matching backend CreateRestaurantDto
+    const payload: {
+      name: string;
+      organizationId?: string;
+      slug?: string;
+      logoUrl?: string;
+      description?: string;
+    } = {
+      name: form.name.trim(),
+    };
+
+    // 1. organizationId: must be a valid UUID, otherwise omit so backend auto-assigns
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const requestedOrgId = (form.organizationId || '').trim();
+    if (requestedOrgId && uuidRegex.test(requestedOrgId)) {
+      payload.organizationId = requestedOrgId;
+    } else if (organizationId && uuidRegex.test(organizationId)) {
+      payload.organizationId = organizationId;
+    }
+
+    // 2. slug: must be lowercase alphanumeric and hyphens only
+    if (form.slug?.trim()) {
+      const cleanSlug = form.slug
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      if (cleanSlug.length > 0 && /^[a-z0-9-]+$/.test(cleanSlug)) {
+        payload.slug = cleanSlug;
+      }
+    }
+
+    // 3. logoUrl: must be valid public URL starting with http:// or https:// with a valid domain
+    if (form.logoUrl && typeof form.logoUrl === 'string') {
+      const cleanUrl = form.logoUrl.trim();
+      if (cleanUrl.length > 0 && isValidHttpUrl(cleanUrl)) {
+        payload.logoUrl = cleanUrl;
+      }
+    }
+
+    // 4. description: only if non-empty string
+    if (form.description?.trim()) {
+      payload.description = form.description.trim();
+    }
+
     try {
-      await createRestaurant({
-        ...(targetOrgId ? { organizationId: targetOrgId } : {}),
-        name: form.name.trim(),
-        ...(form.slug?.trim() ? { slug: form.slug.trim().toLowerCase() } : {}),
-        ...(form.logoUrl?.trim() ? { logoUrl: form.logoUrl.trim() } : {}),
-        ...(form.description?.trim() ? { description: form.description.trim() } : {}),
-      }).unwrap();
+      await createRestaurant(payload).unwrap();
       setIsCreateOpen(false);
-      toast.success(`Restaurant "${form.name.trim()}" created successfully!`);
+      toast.success(`Restaurant "${payload.name}" created successfully!`);
     } catch (err: any) {
-      toast.error(err?.data?.message || err?.message || 'Unable to create restaurant.');
+      const fieldError = Array.isArray(err?.data?.errorMessages)
+        ? err.data.errorMessages.map((m: any) => m.message).join('. ')
+        : null;
+      const errMsg =
+        fieldError ||
+        err?.data?.message ||
+        err?.message ||
+        'Unable to create restaurant.';
+      toast.error(errMsg);
     }
   };
 
   const handleEditSubmit = async (form: RestaurantFormData) => {
     if (!editingRestaurant) return;
-    if (!form.name.trim()) {
-      toast.error('Restaurant name cannot be empty.');
+    if (!form.name.trim() || form.name.trim().length < 2) {
+      toast.error('Restaurant name must be at least 2 characters.');
       return;
     }
+
+    const body: {
+      name: string;
+      slug?: string;
+      logoUrl?: string;
+      description?: string;
+      isActive?: boolean;
+    } = {
+      name: form.name.trim(),
+      isActive: form.status !== 'Closed',
+    };
+
+    if (form.slug?.trim()) {
+      const cleanSlug = form.slug
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      if (cleanSlug.length > 0 && /^[a-z0-9-]+$/.test(cleanSlug)) {
+        body.slug = cleanSlug;
+      }
+    }
+
+    if (form.logoUrl && typeof form.logoUrl === 'string') {
+      const cleanUrl = form.logoUrl.trim();
+      if (cleanUrl.length > 0 && isValidHttpUrl(cleanUrl)) {
+        body.logoUrl = cleanUrl;
+      }
+    }
+
+    if (form.description?.trim()) {
+      body.description = form.description.trim();
+    }
+
     try {
       await updateRestaurant({
         id: editingRestaurant.id,
-        body: {
-          name: form.name.trim(),
-          ...(form.slug?.trim() ? { slug: form.slug.trim().toLowerCase() } : {}),
-          ...(form.logoUrl !== undefined ? { logoUrl: form.logoUrl.trim() || null } : {}),
-          ...(form.description?.trim() ? { description: form.description.trim() } : {}),
-          isActive: form.status !== 'Closed',
-        },
+        body,
       }).unwrap();
-      toast.success(`Restaurant "${form.name}" updated successfully!`);
+      toast.success(`Restaurant "${body.name}" updated successfully!`);
       setEditingRestaurant(null);
     } catch (err: any) {
-      toast.error(err?.data?.message || err?.message || 'Unable to update restaurant.');
+      const fieldError = Array.isArray(err?.data?.errorMessages)
+        ? err.data.errorMessages.map((m: any) => m.message).join('. ')
+        : null;
+      const errMsg =
+        fieldError ||
+        err?.data?.message ||
+        err?.message ||
+        'Unable to update restaurant.';
+      toast.error(errMsg);
     }
   };
 

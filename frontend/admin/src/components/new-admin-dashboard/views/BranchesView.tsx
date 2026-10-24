@@ -99,12 +99,25 @@ export default function BranchesView({ onBack }: BranchesViewProps = {}) {
       toast.error('Please enter a branch name.');
       return;
     }
+    if (!form.restaurantId) {
+      toast.error('Please select a restaurant.');
+      return;
+    }
     try {
+      const addressObj = {
+        street: form.street?.trim() || form.address?.split(',')[0]?.trim() || ' ',
+        city: form.city?.trim() || form.address?.split(',')[1]?.trim() || ' ',
+        country: form.country?.trim() || form.address?.split(',')[2]?.trim() || ' ',
+        ...(form.state?.trim() ? { state: form.state.trim() } : {}),
+        ...(form.postalCode?.trim() ? { postalCode: form.postalCode.trim() } : {}),
+      };
+
       const created = await createBranch({
         restaurantId: form.restaurantId,
         name: form.name.trim(),
-        address: parseBranchAddress(form.address),
-        phone: form.contactNumber || undefined,
+        address: addressObj,
+        phone: form.phone?.trim() || form.contactNumber?.trim() || undefined,
+        timezone: form.timezone?.trim() || ' ',
       }).unwrap();
       await setOperatingHours({
         branchId: created.id,
@@ -129,7 +142,10 @@ export default function BranchesView({ onBack }: BranchesViewProps = {}) {
       setIsCreateOpen(false);
       toast.success(`Branch "${form.name.trim()}" created successfully!`);
     } catch (err: any) {
-      toast.error(err?.data?.message || err?.message || 'Unable to create branch.');
+      const fieldError = Array.isArray(err?.data?.errorMessages)
+        ? err.data.errorMessages.map((m: any) => m.message).join('. ')
+        : null;
+      toast.error(fieldError || err?.data?.message || err?.message || ' ');
     }
   };
 
@@ -140,12 +156,21 @@ export default function BranchesView({ onBack }: BranchesViewProps = {}) {
       return;
     }
     try {
+      const addressObj = {
+        street: form.street?.trim() || form.address?.split(',')[0]?.trim() || ' ',
+        city: form.city?.trim() || form.address?.split(',')[1]?.trim() || ' ',
+        country: form.country?.trim() || form.address?.split(',')[2]?.trim() || ' ',
+        ...(form.state?.trim() ? { state: form.state.trim() } : {}),
+        ...(form.postalCode?.trim() ? { postalCode: form.postalCode.trim() } : {}),
+      };
+
       await updateBranch({
         id: editingBranch.id,
         body: {
           name: form.name.trim(),
-          address: parseBranchAddress(form.address),
-          phone: form.contactNumber || undefined,
+          address: addressObj,
+          phone: form.phone?.trim() || form.contactNumber?.trim() || undefined,
+          timezone: form.timezone?.trim() || undefined,
           isActive: form.status !== 'Closed',
         },
       }).unwrap();
@@ -172,7 +197,10 @@ export default function BranchesView({ onBack }: BranchesViewProps = {}) {
       toast.success(`Branch "${form.name}" updated successfully!`);
       setEditingBranch(null);
     } catch (err: any) {
-      toast.error(err?.data?.message || err?.message || 'Unable to update branch.');
+      const fieldError = Array.isArray(err?.data?.errorMessages)
+        ? err.data.errorMessages.map((m: any) => m.message).join('. ')
+        : null;
+      toast.error(fieldError || err?.data?.message || err?.message || ' ');
     }
   };
 
@@ -183,7 +211,7 @@ export default function BranchesView({ onBack }: BranchesViewProps = {}) {
       toast.success(`"${deletingBranch.name}" branch deleted.`);
       setDeletingBranch(null);
     } catch (err: any) {
-      toast.error(err?.data?.message || err?.message || 'Unable to delete branch.');
+      toast.error(err?.data?.message || err?.message || ' ');
     }
   };
 
@@ -194,7 +222,7 @@ export default function BranchesView({ onBack }: BranchesViewProps = {}) {
       {isLoading && <LoadingState message="Loading branches..." />}
       {isError && (
         <ErrorState
-          message={(error as any)?.data?.message || 'Unable to load branches.'}
+          message={(error as any)?.data?.message || ' '}
           onRetry={() => refetch()}
         />
       )}

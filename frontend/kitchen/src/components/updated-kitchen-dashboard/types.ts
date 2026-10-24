@@ -17,6 +17,7 @@ export interface KitchenOrder {
   orderType: string;
   waiter: string;
   status: OrderStatus;
+  rawBackendStatus?: string;
   items: OrderItem[];
   timeElapsedMinutes: number;
   estimatedPrepTime?: number;

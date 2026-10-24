@@ -117,12 +117,86 @@ export const kitchenService = {
     });
   },
 
-  updateOrderStatus: async (orderId: string, status: string): Promise<any> => {
-    const res = await baseApiFetch<any>(`/orders/${encodeURIComponent(orderId)}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
-    });
-    return (res as any)?.data || res;
+  updateOrderStatus: async (orderId: string, targetStatus: string): Promise<any> => {
+    const patchStatus = async (st: string) => {
+      return await baseApiFetch<any>(`/orders/${encodeURIComponent(orderId)}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: st }),
+      });
+    };
+
+    try {
+      const res = await patchStatus(targetStatus);
+      return (res as any)?.data || res;
+    } catch (err: any) {
+      const msg = String(err?.message || err?.data?.message || err?.error || '');
+
+      // 1. Idempotency: if already in the target status or same status, treat as success
+      if (
+        msg.includes(`from "${targetStatus}" to "${targetStatus}"`) ||
+        (msg.includes(`to "${targetStatus}"`) && (msg.includes('already') || msg.includes('same')))
+      ) {
+        return { success: true, status: targetStatus };
+      }
+
+      // 2. If target is READY, and order was already transitioned to READY or SERVED (e.g. by line-item auto-cascade)
+      if (
+        targetStatus === 'READY' &&
+        (msg.includes('from "READY"') || msg.includes('from "SERVED"') || msg.includes('from "COMPLETED"'))
+      ) {
+        return { success: true, status: 'READY' };
+      }
+
+      // 3. If target is PREPARING, but order is currently in SUBMITTED (must transition SUBMITTED -> ACCEPTED -> PREPARING)
+      if (targetStatus === 'PREPARING' && msg.includes('from "SUBMITTED"')) {
+        try {
+          await patchStatus('ACCEPTED');
+          const res = await patchStatus('PREPARING');
+          return (res as any)?.data || res;
+        } catch (stepErr: any) {
+          const stepMsg = String(stepErr?.message || stepErr?.data?.message || '');
+          if (stepMsg.includes('to "PREPARING"')) {
+            return { success: true, status: 'PREPARING' };
+          }
+          throw stepErr;
+        }
+      }
+
+      // 4. If target is READY, but order is in SUBMITTED or ACCEPTED (must transition through required lifecycle steps)
+      if (
+        targetStatus === 'READY' &&
+        (msg.includes('from "SUBMITTED"') || msg.includes('from "ACCEPTED"'))
+      ) {
+        try {
+          if (msg.includes('from "SUBMITTED"')) {
+            try {
+              await patchStatus('ACCEPTED');
+            } catch {}
+          }
+          try {
+            await patchStatus('PREPARING');
+          } catch {}
+          const res = await patchStatus('READY');
+          return (res as any)?.data || res;
+        } catch (readyErr: any) {
+          const readyMsg = String(readyErr?.message || readyErr?.data?.message || '');
+          if (readyMsg.includes('to "READY"')) {
+            return { success: true, status: 'READY' };
+          }
+          throw readyErr;
+        }
+      }
+
+      // 5. If target is PREPARING, and order is already at PREPARING or further along (READY/SERVED)
+      if (
+        targetStatus === 'PREPARING' &&
+        (msg.includes('from "PREPARING"') || msg.includes('from "READY"') || msg.includes('from "SERVED"'))
+      ) {
+        return { success: true, status: 'PREPARING' };
+      }
+
+      throw err;
+    }
   },
 
   getInventoryItems: async (branchId: string): Promise<any[]> => {

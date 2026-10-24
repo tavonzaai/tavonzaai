@@ -1,5 +1,6 @@
 import { rtkBaseApi } from '../api/baseApi';
-import { unwrapList } from '@/lib/admin-mappers';
+import { unwrapList, parseBranchAddress } from '@/lib/admin-mappers';
+import { isValidHttpUrl } from '@/lib/utils';
 import type { BackendBranch, BackendRestaurant } from './restaurantApi';
 
 export const adminApi = rtkBaseApi.injectEndpoints({
@@ -30,11 +31,33 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: 'RESTAURANT', id }],
     }),
     createRestaurant: builder.mutation<BackendRestaurant, Record<string, unknown>>({
-      query: (body) => ({ url: '/restaurants', method: 'POST', body }),
+      query: (body) => {
+        const sanitized: Record<string, unknown> = { ...body };
+        if ('logoUrl' in sanitized) {
+          const val = sanitized.logoUrl;
+          if (typeof val !== 'string' || !isValidHttpUrl(val)) {
+            delete sanitized.logoUrl;
+          } else {
+            sanitized.logoUrl = val.trim();
+          }
+        }
+        return { url: '/restaurants', method: 'POST', body: sanitized };
+      },
       invalidatesTags: ['RESTAURANT', 'ANALYTICS', 'DASHBOARD'],
     }),
     updateRestaurant: builder.mutation<BackendRestaurant, { id: string; body: Record<string, unknown> }>({
-      query: ({ id, body }) => ({ url: `/restaurants/${id}`, method: 'PATCH', body }),
+      query: ({ id, body }) => {
+        const sanitized: Record<string, unknown> = { ...body };
+        if ('logoUrl' in sanitized) {
+          const val = sanitized.logoUrl;
+          if (typeof val !== 'string' || !isValidHttpUrl(val)) {
+            delete sanitized.logoUrl;
+          } else {
+            sanitized.logoUrl = val.trim();
+          }
+        }
+        return { url: `/restaurants/${id}`, method: 'PATCH', body: sanitized };
+      },
       invalidatesTags: ['RESTAURANT', 'ANALYTICS', 'DASHBOARD'],
     }),
     deleteRestaurant: builder.mutation<unknown, string>({
@@ -58,11 +81,46 @@ export const adminApi = rtkBaseApi.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: 'BRANCH', id }],
     }),
     createBranch: builder.mutation<BackendBranch, Record<string, unknown>>({
-      query: (body) => ({ url: '/branches', method: 'POST', body }),
+      query: (body) => {
+        const cleanPayload: Record<string, unknown> = {
+          restaurantId: body.restaurantId,
+          name: typeof body.name === 'string' ? body.name.trim() : body.name,
+          address: parseBranchAddress(body.address),
+        };
+        const phoneVal = body.phone || body.contactNumber;
+        if (typeof phoneVal === 'string' && phoneVal.trim()) {
+          cleanPayload.phone = phoneVal.trim();
+        }
+        if (typeof body.timezone === 'string' && body.timezone.trim()) {
+          cleanPayload.timezone = body.timezone.trim();
+        }
+        return { url: '/branches', method: 'POST', body: cleanPayload };
+      },
       invalidatesTags: ['BRANCH', 'RESTAURANT', 'ANALYTICS', 'DASHBOARD'],
     }),
     updateBranch: builder.mutation<BackendBranch, { id: string; body: Record<string, unknown> }>({
-      query: ({ id, body }) => ({ url: `/branches/${id}`, method: 'PATCH', body }),
+      query: ({ id, body }) => {
+        const cleanPayload: Record<string, unknown> = {};
+        if (typeof body.name === 'string' && body.name.trim()) {
+          cleanPayload.name = body.name.trim();
+        }
+        if (body.address) {
+          cleanPayload.address = parseBranchAddress(body.address);
+        }
+        const phoneVal = body.phone || body.contactNumber;
+        if (typeof phoneVal === 'string' && phoneVal.trim()) {
+          cleanPayload.phone = phoneVal.trim();
+        }
+        if (typeof body.timezone === 'string' && body.timezone.trim()) {
+          cleanPayload.timezone = body.timezone.trim();
+        }
+        if (typeof body.isActive === 'boolean') {
+          cleanPayload.isActive = body.isActive;
+        } else if (typeof body.status === 'string') {
+          cleanPayload.isActive = body.status !== 'Closed';
+        }
+        return { url: `/branches/${id}`, method: 'PATCH', body: cleanPayload };
+      },
       invalidatesTags: ['BRANCH', 'ANALYTICS'],
     }),
     deleteBranch: builder.mutation<unknown, string>({

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X, ChevronDown, Building2, Link as LinkIcon, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, ChevronDown, Building2, Link as LinkIcon, Image as ImageIcon, AlertCircle } from 'lucide-react';
 import { RestaurantItem } from '../../../types';
 import { RestaurantFormData } from '../types';
+import { isValidHttpUrl } from '@/lib/utils';
 
 interface EditRestaurantModalProps {
   restaurant: RestaurantItem;
@@ -25,8 +26,27 @@ export const EditRestaurantModal: React.FC<EditRestaurantModalProps> = ({
     description: restaurant.description || restaurant.tagline || '',
   });
 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const isLogoUrlValid = useMemo(() => {
+    if (!form.logoUrl || !form.logoUrl.trim()) return true; // optional
+    return isValidHttpUrl(form.logoUrl.trim());
+  }, [form.logoUrl]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+
+    if (!form.name.trim() || form.name.trim().length < 2) {
+      setErrorMsg('Restaurant name must be at least 2 characters.');
+      return;
+    }
+
+    if (form.logoUrl?.trim() && !isValidHttpUrl(form.logoUrl.trim())) {
+      setErrorMsg('Logo URL must be a valid public web address (e.g. https://cdn.example.com/logo.png). Localhost or relative paths are not accepted. Or leave blank.');
+      return;
+    }
+
     onSubmit(form);
   };
 
@@ -53,6 +73,13 @@ export const EditRestaurantModal: React.FC<EditRestaurantModalProps> = ({
         </div>
 
         <div className="w-full h-0 outline outline-1 outline-offset-[-0.50px] outline-neutral-800" />
+
+        {errorMsg && (
+          <div className="w-full p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-center gap-2 animate-fadeIn">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
           <div className="w-full p-4 bg-neutral-950/70 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800/80 flex flex-col gap-4">
@@ -116,23 +143,43 @@ export const EditRestaurantModal: React.FC<EditRestaurantModalProps> = ({
 
             {/* 3. Logo URL */}
             <div className="flex flex-col justify-start items-start gap-1.5">
-              <label className="text-stone-300 text-xs font-medium font-sans flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Logo URL</span>
-              </label>
+              <div className="flex items-center justify-between w-full">
+                <label className="text-stone-300 text-xs font-medium font-sans flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Logo URL</span>
+                  <span className="text-[10px] text-zinc-500 font-normal">(Optional public URL)</span>
+                </label>
+                {form.logoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMsg(null);
+                      setForm({ ...form, logoUrl: '' });
+                    }}
+                    className="text-[11px] text-amber-400 hover:underline cursor-pointer"
+                  >
+                    Clear URL
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2 w-full">
                 <input
-                  type="url"
+                  type="text"
                   placeholder="e.g. https://cdn.example.com/logo.png"
                   value={form.logoUrl || ''}
-                  onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
-                  className="flex-1 h-10 px-3.5 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-xs font-mono focus:outline-none focus:border-amber-400 placeholder:text-zinc-600"
+                  onChange={(e) => {
+                    setErrorMsg(null);
+                    setForm({ ...form, logoUrl: e.target.value });
+                  }}
+                  className={`flex-1 h-10 px-3.5 bg-neutral-900 rounded-lg border text-stone-200 text-xs font-mono focus:outline-none placeholder:text-zinc-600 ${
+                    !isLogoUrlValid ? 'border-red-500 focus:border-red-400' : 'border-neutral-800 focus:border-amber-400'
+                  }`}
                 />
-                {form.logoUrl && form.logoUrl.startsWith('http') && (
+                {form.logoUrl && isValidHttpUrl(form.logoUrl) && (
                   <div className="w-10 h-10 rounded-lg border border-neutral-700 bg-neutral-900 overflow-hidden flex items-center justify-center shrink-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={form.logoUrl}
+                      src={form.logoUrl.trim()}
                       alt="Logo preview"
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -142,6 +189,16 @@ export const EditRestaurantModal: React.FC<EditRestaurantModalProps> = ({
                   </div>
                 )}
               </div>
+              {!isLogoUrlValid ? (
+                <span className="text-[11px] text-red-400 font-sans flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  Must be a full public URL with domain (e.g. <code className="text-amber-400/90">https://cdn.example.com/logo.png</code>). Localhost or relative paths are not accepted. Or leave blank.
+                </span>
+              ) : (
+                <span className="text-[11px] text-zinc-500 font-sans">
+                  Must be a valid web address starting with <code className="text-amber-400/90">http://</code> or <code className="text-amber-400/90">https://</code>. Leave blank if no logo is available.
+                </span>
+              )}
             </div>
 
             {/* 4. Description */}
