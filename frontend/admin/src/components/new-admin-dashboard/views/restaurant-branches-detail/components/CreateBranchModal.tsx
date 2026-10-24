@@ -1,13 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { X, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  X,
+  ChevronDown,
+  Building2,
+  MapPin,
+  Phone,
+  Globe,
+  Clock,
+  UserCheck,
+  AlertCircle,
+} from 'lucide-react';
 import { BranchFormData } from '../types';
 import { useBranchManagers } from '@/lib/useBranchManagers';
+import { getAvailableTimezones, getDefaultClientTimezone } from '@/lib/utils';
 
 interface CreateBranchModalProps {
   restaurantName: string;
   branchId?: string;
   onClose: () => void;
   onSubmit: (form: BranchFormData) => void;
+  submitting?: boolean;
 }
 
 export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
@@ -15,18 +27,30 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
   branchId,
   onClose,
   onSubmit,
+  submitting = false,
 }) => {
   const { managerUsers, isLoading: loadingManagers } = useBranchManagers(branchId);
+  const availableTimezones = useMemo(() => getAvailableTimezones(), []);
+  const detectedTimezone = useMemo(() => getDefaultClientTimezone(), []);
+
   const [createForm, setCreateForm] = useState<BranchFormData>({
+    restaurantName,
     name: '',
-    address: 'Cusseta, Georgia',
-    contactNumber: '992548756',
+    street: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: '',
+    phone: '',
+    timezone: detectedTimezone || '',
     manager: '',
     managerId: '',
     status: 'Active',
     openingTime: '09:00',
     closingTime: '23:00',
   });
+
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (managerUsers.length > 0 && !createForm.manager) {
@@ -40,112 +64,250 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(createForm);
+    setErrorMsg(null);
+
+    if (!createForm.name.trim() || createForm.name.trim().length < 2) {
+      setErrorMsg('Branch name must be at least 2 characters long.');
+      return;
+    }
+
+    if (!createForm.street.trim()) {
+      setErrorMsg('Street address is required by the backend API.');
+      return;
+    }
+
+    if (!createForm.city.trim()) {
+      setErrorMsg('City is required by the backend API.');
+      return;
+    }
+
+    if (!createForm.country.trim()) {
+      setErrorMsg('Country is required by the backend API.');
+      return;
+    }
+
+    const fullAddress = [
+      createForm.street.trim(),
+      createForm.city.trim(),
+      createForm.state?.trim(),
+      createForm.postalCode?.trim(),
+      createForm.country.trim(),
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    onSubmit({
+      ...createForm,
+      address: fullAddress,
+      contactNumber: createForm.phone || createForm.contactNumber,
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="w-[560px] max-w-full p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col justify-start items-end gap-4 shadow-2xl animate-in fade-in scale-95 duration-150">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="w-[660px] max-w-full my-auto p-5 bg-neutral-900 rounded-2xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col justify-start items-end gap-4 shadow-2xl animate-in fade-in scale-95 duration-150">
         {/* Modal Header */}
         <div className="w-full flex justify-between items-start">
           <div className="flex flex-col justify-start items-start gap-1">
-            <h3 className="text-white text-lg font-medium font-sans leading-5">
-              Create Branch
+            <h3 className="text-white text-lg font-semibold font-sans leading-5 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-yellow-400" />
+              <span>Create Branch for {restaurantName}</span>
             </h3>
             <p className="text-neutral-400 text-xs font-normal font-sans leading-4">
-              Complete the details below, then save your changes.
+              Enter branch details matching Tavonza backend specification (<code className="text-amber-400/90">POST /branches</code>).
             </p>
           </div>
 
           <button
             onClick={onClose}
-            className="w-9 h-9 p-2 bg-gray-300/10 hover:bg-gray-300/20 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 flex justify-center items-center text-gray-200 transition-colors cursor-pointer"
+            className="w-9 h-9 p-2 bg-neutral-800 hover:bg-neutral-750 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 flex justify-center items-center text-gray-200 transition-colors cursor-pointer"
             aria-label="Close modal"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        {/* Divider */}
         <div className="w-full h-0 outline outline-1 outline-offset-[-0.50px] outline-neutral-800" />
 
-        {/* Form Container */}
+        {errorMsg && (
+          <div className="w-full p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-center gap-2 animate-fadeIn">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
-          <div className="w-full p-4 bg-neutral-900 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800 flex flex-col justify-start items-center gap-4">
-            {/* Row 1: Restaurant & Branch Name */}
-            <div className="self-stretch grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex flex-col justify-start items-start gap-2">
-                <label className="text-white text-sm font-normal font-sans leading-4">
-                  Restaurant
-                </label>
-                <div className="self-stretch px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 flex justify-between items-center">
-                  <span className="text-stone-300 text-sm font-normal font-sans leading-4">
-                    {restaurantName}
-                  </span>
-                  <ChevronDown className="size-4 text-stone-300 pointer-events-none" />
-                </div>
+          <div className="w-full p-4 bg-neutral-950/70 rounded-xl outline outline-1 outline-offset-[-1px] outline-neutral-800/80 flex flex-col gap-4 max-h-[70vh] overflow-y-auto pr-2">
+            {/* 1. Branch Name */}
+            <div className="flex flex-col justify-start items-start gap-1.5">
+              <label className="text-stone-300 text-xs font-medium font-sans flex items-center gap-1">
+                <span>Branch Name</span>
+                <span className="text-amber-400">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                minLength={2}
+                data-testid="branch-name"
+                placeholder="e.g. Patio & Lounge"
+                value={createForm.name}
+                onChange={(e) => {
+                  setErrorMsg(null);
+                  setCreateForm({ ...createForm, name: e.target.value });
+                }}
+                className="w-full h-10 px-3.5 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-sans placeholder:text-zinc-600"
+              />
+            </div>
+
+            {/* 2. Physical Address Section (CreateBranchDto.address) */}
+            <div className="w-full p-3.5 bg-neutral-900/80 rounded-xl border border-neutral-800/90 flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-stone-300 text-xs font-semibold font-sans">
+                <MapPin className="w-4 h-4 text-amber-400" />
+                <span>Physical Address</span>
+                <span className="text-[10px] text-zinc-500 font-normal">(Required object)</span>
               </div>
 
-              <div className="flex flex-col justify-start items-start gap-2">
-                <label className="text-white text-sm font-normal font-sans leading-4">
-                  Branch Name
+              {/* Street */}
+              <div className="flex flex-col justify-start items-start gap-1">
+                <label className="text-stone-400 text-[11px] font-sans flex items-center gap-1">
+                  <span>Street Address</span>
+                  <span className="text-amber-400">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Georgia Flagship"
-                  value={createForm.name}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, name: e.target.value })
-                  }
-                  className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-sans"
+                  placeholder="e.g. 123 Main Street, Suite 400"
+                  value={createForm.street}
+                  onChange={(e) => {
+                    setErrorMsg(null);
+                    setCreateForm({ ...createForm, street: e.target.value });
+                  }}
+                  className="w-full h-9 px-3 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-xs focus:outline-none focus:border-amber-400 font-sans placeholder:text-zinc-600"
                 />
+              </div>
+
+              {/* City & State */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col justify-start items-start gap-1">
+                  <label className="text-stone-400 text-[11px] font-sans flex items-center gap-1">
+                    <span>City</span>
+                    <span className="text-amber-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Austin"
+                    value={createForm.city}
+                    onChange={(e) => {
+                      setErrorMsg(null);
+                      setCreateForm({ ...createForm, city: e.target.value });
+                    }}
+                    className="w-full h-9 px-3 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-xs focus:outline-none focus:border-amber-400 font-sans placeholder:text-zinc-600"
+                  />
+                </div>
+
+                <div className="flex flex-col justify-start items-start gap-1">
+                  <label className="text-stone-400 text-[11px] font-sans">
+                    <span>State / Province</span>
+                    <span className="text-[10px] text-zinc-500 font-normal ml-1">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. TX"
+                    value={createForm.state || ''}
+                    onChange={(e) => setCreateForm({ ...createForm, state: e.target.value })}
+                    className="w-full h-9 px-3 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-xs focus:outline-none focus:border-amber-400 font-sans placeholder:text-zinc-600"
+                  />
+                </div>
+              </div>
+
+              {/* Postal Code & Country */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col justify-start items-start gap-1">
+                  <label className="text-stone-400 text-[11px] font-sans">
+                    <span>Postal / ZIP Code</span>
+                    <span className="text-[10px] text-zinc-500 font-normal ml-1">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 78701"
+                    value={createForm.postalCode || ''}
+                    onChange={(e) => setCreateForm({ ...createForm, postalCode: e.target.value })}
+                    className="w-full h-9 px-3 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-xs font-mono focus:outline-none focus:border-amber-400 placeholder:text-zinc-600"
+                  />
+                </div>
+
+                <div className="flex flex-col justify-start items-start gap-1">
+                  <label className="text-stone-400 text-[11px] font-sans flex items-center gap-1">
+                    <span>Country</span>
+                    <span className="text-amber-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. USA"
+                    value={createForm.country}
+                    onChange={(e) => {
+                      setErrorMsg(null);
+                      setCreateForm({ ...createForm, country: e.target.value });
+                    }}
+                    className="w-full h-9 px-3 bg-neutral-950 rounded-lg border border-neutral-800 text-stone-200 text-xs focus:outline-none focus:border-amber-400 font-sans placeholder:text-zinc-600"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Row 2: Address & Contact Number */}
-            <div className="self-stretch grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex flex-col justify-start items-start gap-2">
-                <label className="text-white text-sm font-normal font-sans leading-4">
-                  Address
+            {/* 3. Phone & Timezone */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col justify-start items-start gap-1.5">
+                <label className="text-stone-300 text-xs font-medium font-sans flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Phone Number</span>
+                  <span className="text-[10px] text-zinc-500 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Cusseta, Georgia"
-                  value={createForm.address}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, address: e.target.value })
-                  }
-                  className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-sans"
+                  placeholder="e.g. +1-512-555-0199"
+                  value={createForm.phone || ''}
+                  onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                  className="w-full h-10 px-3.5 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-xs font-mono focus:outline-none focus:border-amber-400 placeholder:text-zinc-600"
                 />
               </div>
 
-              <div className="flex flex-col justify-start items-start gap-2">
-                <label className="text-white text-sm font-normal font-sans leading-4">
-                  Contact Number
+              <div className="flex flex-col justify-start items-start gap-1.5">
+                <label className="text-stone-300 text-xs font-medium font-sans flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Timezone</span>
+                  <span className="text-[10px] text-zinc-500 font-normal">(Optional)</span>
                 </label>
-                <input
-                  type="text"
-                  placeholder="992548756"
-                  value={createForm.contactNumber}
-                  onChange={(e) =>
-                    setCreateForm({
-                      ...createForm,
-                      contactNumber: e.target.value,
-                    })
-                  }
-                  className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-sm focus:outline-none focus:border-amber-400 font-sans"
-                />
+                <div className="w-full relative">
+                  <input
+                    list="dynamic-timezones-restaurant-create"
+                    type="text"
+                    placeholder={detectedTimezone ? `Detected: ${detectedTimezone}` : 'Type or select timezone (e.g. UTC)'}
+                    value={createForm.timezone || ''}
+                    onChange={(e) => setCreateForm({ ...createForm, timezone: e.target.value })}
+                    className="w-full h-10 px-3.5 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-xs font-sans focus:outline-none focus:border-amber-400 placeholder:text-zinc-600"
+                  />
+                  {availableTimezones.length > 0 && (
+                    <datalist id="dynamic-timezones-restaurant-create">
+                      {availableTimezones.map((tz) => (
+                        <option key={tz} value={tz} />
+                      ))}
+                    </datalist>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Row 3: Manager & Status */}
-            <div className="self-stretch grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex flex-col justify-start items-start gap-2">
-                <label className="text-white text-sm font-normal font-sans leading-4">
-                  Manager
+            {/* 4. Branch Manager & Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col justify-start items-start gap-1.5">
+                <label className="text-stone-300 text-xs font-medium font-sans flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Branch Manager</span>
                 </label>
-                <div className="self-stretch relative">
+                <div className="w-full relative">
                   <select
                     value={createForm.manager}
                     onChange={(e) => {
@@ -158,7 +320,7 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
                         managerId: selected ? selected.id : undefined,
                       });
                     }}
-                    className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-sans appearance-none focus:outline-none focus:border-amber-400"
+                    className="w-full h-10 px-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-300 text-xs font-sans appearance-none focus:outline-none focus:border-amber-400 cursor-pointer"
                   >
                     {loadingManagers ? (
                       <option value="" disabled>Loading managers from API...</option>
@@ -172,15 +334,13 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
                       ))
                     )}
                   </select>
-                  <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <ChevronDown className="size-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
 
-              <div className="flex flex-col justify-start items-start gap-2">
-                <label className="text-white text-sm font-normal font-sans leading-4">
-                  Status
-                </label>
-                <div className="self-stretch relative">
+              <div className="flex flex-col justify-start items-start gap-1.5">
+                <label className="text-stone-300 text-xs font-medium font-sans">Status</label>
+                <div className="w-full relative">
                   <select
                     value={createForm.status}
                     onChange={(e) =>
@@ -189,54 +349,42 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
                         status: e.target.value as 'Active' | 'Setup' | 'Closed',
                       })
                     }
-                    className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-sans appearance-none focus:outline-none focus:border-amber-400"
+                    className="w-full h-10 px-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-300 text-xs font-sans appearance-none focus:outline-none focus:border-amber-400 cursor-pointer"
                   >
                     <option value="Active">Active</option>
                     <option value="Setup">Setup</option>
                     <option value="Closed">Closed</option>
                   </select>
-                  <ChevronDown className="size-4 text-stone-300 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <ChevronDown className="size-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
             </div>
 
-            {/* Row 4: Opening Time & Closing Time */}
-            <div className="self-stretch grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex flex-col justify-start items-start gap-2">
-                <label className="text-white text-sm font-normal font-sans leading-4">
-                  Opening Time
-                </label>
-                <div className="self-stretch relative">
-                  <input
-                    type="text"
-                    value={createForm.openingTime}
-                    onChange={(e) =>
-                      setCreateForm({
-                        ...createForm,
-                        openingTime: e.target.value,
-                      })
-                    }
-                    placeholder="09:00"
-                    className="w-full h-11 px-3.5 py-3 bg-neutral-900 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-800 text-stone-300 text-sm font-normal font-sans focus:outline-none focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col justify-start items-start gap-2">
-                <label className="text-white text-sm font-normal font-sans leading-4">
-                  Closing Time
+            {/* 5. Operating Hours */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col justify-start items-start gap-1.5">
+                <label className="text-stone-300 text-xs font-medium font-sans flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Opening Time</span>
                 </label>
                 <input
-                  type="text"
+                  type="time"
+                  value={createForm.openingTime}
+                  onChange={(e) => setCreateForm({ ...createForm, openingTime: e.target.value })}
+                  className="w-full h-10 px-3.5 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-xs font-sans focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div className="flex flex-col justify-start items-start gap-1.5">
+                <label className="text-stone-300 text-xs font-medium font-sans flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Closing Time</span>
+                </label>
+                <input
+                  type="time"
                   value={createForm.closingTime}
-                  onChange={(e) =>
-                    setCreateForm({
-                      ...createForm,
-                      closingTime: e.target.value,
-                    })
-                  }
-                  placeholder="23:00"
-                  className="self-stretch h-11 px-3.5 py-3 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-300 text-sm font-normal font-sans focus:outline-none focus:border-amber-400"
+                  onChange={(e) => setCreateForm({ ...createForm, closingTime: e.target.value })}
+                  className="w-full h-10 px-3.5 bg-neutral-900 rounded-lg border border-neutral-800 text-stone-200 text-xs font-sans focus:outline-none focus:border-amber-400"
                 />
               </div>
             </div>
@@ -247,15 +395,17 @@ export const CreateBranchModal: React.FC<CreateBranchModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-white text-base font-medium font-sans leading-5 transition-colors cursor-pointer"
+              className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-white text-sm font-medium font-sans transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-3 py-2.5 bg-yellow-400 hover:bg-yellow-300 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-neutral-800 text-base font-medium font-sans leading-5 transition-colors cursor-pointer shadow-sm"
+              disabled={submitting}
+              data-testid="branch-submit"
+              className="px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 rounded-lg outline outline-1 outline-offset-[-1px] outline-neutral-700 text-neutral-900 text-sm font-semibold font-sans transition-colors cursor-pointer shadow-sm disabled:opacity-60"
             >
-              Save
+              {submitting ? 'Creating Branch…' : 'Create Branch'}
             </button>
           </div>
         </form>

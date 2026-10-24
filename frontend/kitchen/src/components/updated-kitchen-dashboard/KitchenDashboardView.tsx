@@ -101,6 +101,8 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
         const mapped: KitchenOrder[] = rawOrders
           .filter(
             (o: any) =>
+              o.status === "SUBMITTED" ||
+              o.status === "PENDING" ||
               o.status === "ACCEPTED" ||
               o.status === "KITCHEN_QUEUE" ||
               o.status === "CONFIRMED" ||
@@ -145,6 +147,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
               orderType: "DINE_IN",
               waiter: o.waiterName || "Staff Assigned",
               status,
+              rawBackendStatus: o.status,
               timeElapsedMinutes: elapsed,
               estimatedPrepTime,
               prepStartedAt: o.prepStartedAt,
@@ -354,11 +357,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     // If all items are completed, mark order READY via backend API
     if (allCompleted && targetOrder.status !== "READY") {
       try {
-        if (targetOrder.status === "NEW") {
-          try {
-            await kitchenService.updateOrderStatus(orderId, "PREPARING");
-          } catch {}
-        }
         await kitchenService.updateOrderStatus(orderId, "READY");
         const nowIso = new Date().toISOString();
         setOrders((prev) =>
@@ -368,6 +366,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
                   ...order,
                   items: updatedItems,
                   status: "READY" as OrderStatus,
+                  rawBackendStatus: "READY",
                   readyAt: order.readyAt || nowIso,
                 }
               : order
@@ -405,6 +404,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
               ...order,
               items: updatedItems,
               status: newStatus,
+              rawBackendStatus: newStatus === "PREPARING" ? "PREPARING" : order.rawBackendStatus,
             }
           : order
       )
@@ -421,14 +421,6 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
     }
 
     try {
-      // Transition through PREPARING first if currently NEW/ACCEPTED
-      if (targetOrder.status === "NEW") {
-        try {
-          await kitchenService.updateOrderStatus(orderId, "PREPARING");
-        } catch (e) {
-          // If already in PREPARING in backend, continue to READY
-        }
-      }
       await kitchenService.updateOrderStatus(orderId, "READY");
       const nowIso = new Date().toISOString();
       setOrders((prev) =>
@@ -439,6 +431,7 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
             ...order,
             items: updatedItems,
             status: "READY" as OrderStatus,
+            rawBackendStatus: "READY",
             readyAt: order.readyAt || nowIso,
           };
         })

@@ -1,6 +1,8 @@
 import { baseApiFetch } from '../api/baseApi';
 import { buildQueryString } from '@tavonza/shared';
 import { PaginationMeta } from '@tavonza/contracts';
+import { isValidHttpUrl } from '@/lib/utils';
+import { parseBranchAddress } from '@/lib/admin-mappers';
 
 export interface BackendRestaurant {
   id: string;
@@ -118,9 +120,18 @@ export const restaurantService = {
   },
 
   createRestaurant: async (payload: CreateRestaurantPayload): Promise<BackendRestaurant> => {
+    const sanitized: Record<string, any> = { ...payload };
+    if ('logoUrl' in sanitized) {
+      const val = sanitized.logoUrl;
+      if (!val || typeof val !== 'string' || !isValidHttpUrl(val)) {
+        delete sanitized.logoUrl;
+      } else {
+        sanitized.logoUrl = val.trim();
+      }
+    }
     const res = await baseApiFetch<BackendRestaurant>('/restaurants', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(sanitized),
     });
     return (res as any)?.data || res;
   },
@@ -129,9 +140,18 @@ export const restaurantService = {
     id: string,
     payload: UpdateRestaurantPayload
   ): Promise<BackendRestaurant> => {
+    const sanitized: Record<string, any> = { ...payload };
+    if ('logoUrl' in sanitized) {
+      const val = sanitized.logoUrl;
+      if (!val || typeof val !== 'string' || !isValidHttpUrl(val)) {
+        delete sanitized.logoUrl;
+      } else {
+        sanitized.logoUrl = val.trim();
+      }
+    }
     const res = await baseApiFetch<BackendRestaurant>(`/restaurants/${encodeURIComponent(id)}`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(sanitized),
     });
     return (res as any)?.data || res;
   },
@@ -168,18 +188,47 @@ export const restaurantService = {
     return (res as any)?.data || res;
   },
 
-  createBranch: async (payload: CreateBranchPayload): Promise<BackendBranch> => {
+  createBranch: async (payload: CreateBranchPayload | any): Promise<BackendBranch> => {
+    const cleanPayload: Record<string, any> = {
+      restaurantId: payload.restaurantId,
+      name: typeof payload.name === 'string' ? payload.name.trim() : payload.name,
+      address: parseBranchAddress(payload.address),
+    };
+    const phoneVal = payload.phone || payload.contactNumber;
+    if (typeof phoneVal === 'string' && phoneVal.trim()) {
+      cleanPayload.phone = phoneVal.trim();
+    }
+    if (typeof payload.timezone === 'string' && payload.timezone.trim()) {
+      cleanPayload.timezone = payload.timezone.trim();
+    }
     const res = await baseApiFetch<BackendBranch>('/branches', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
     return (res as any)?.data || res;
   },
 
-  updateBranch: async (id: string, payload: UpdateBranchPayload): Promise<BackendBranch> => {
+  updateBranch: async (id: string, payload: UpdateBranchPayload | any): Promise<BackendBranch> => {
+    const cleanPayload: Record<string, any> = {};
+    if (typeof payload.name === 'string' && payload.name.trim()) {
+      cleanPayload.name = payload.name.trim();
+    }
+    if (payload.address) {
+      cleanPayload.address = parseBranchAddress(payload.address);
+    }
+    const phoneVal = payload.phone || payload.contactNumber;
+    if (typeof phoneVal === 'string' && phoneVal.trim()) {
+      cleanPayload.phone = phoneVal.trim();
+    }
+    if (typeof payload.timezone === 'string' && payload.timezone.trim()) {
+      cleanPayload.timezone = payload.timezone.trim();
+    }
+    if (typeof payload.isActive === 'boolean') {
+      cleanPayload.isActive = payload.isActive;
+    }
     const res = await baseApiFetch<BackendBranch>(`/branches/${encodeURIComponent(id)}`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
     return (res as any)?.data || res;
   },

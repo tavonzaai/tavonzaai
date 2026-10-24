@@ -236,9 +236,9 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
                 <Check className="w-3 h-3" /> Station Active
               </span>
             </div>
-            <p className="text-xs text-zinc-400 font-mono pt-1">
+            {/* <p className="text-xs text-zinc-400 font-mono pt-1">
               ID: <span className="text-zinc-300">{user?.id || '—'}</span>
-            </p>
+            </p> */}
           </div>
         </div>
 
@@ -253,7 +253,7 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
             <div className="p-3 bg-zinc-950 rounded-xl border border-white/10 space-y-1">
               <span className="text-zinc-500 text-[10px] uppercase font-semibold block">Branch Name</span>
               <span className="text-amber-300 font-semibold text-sm block">{branchName}</span>
-              <span className="text-zinc-500 font-mono text-[10px] truncate block">ID: {branchId}</span>
+              {/* <span className="text-zinc-500 font-mono text-[10px] truncate block">ID: {branchId}</span> */}
             </div>
 
             <div className="p-3 bg-zinc-950 rounded-xl border border-white/10 space-y-1">
@@ -269,9 +269,9 @@ export default function ProfileView({ onBack }: { onBack?: () => void }) {
               <span className="text-emerald-400 font-semibold text-sm flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Station Active
               </span>
-              <span className="text-zinc-500 font-mono text-[10px] truncate block">
+              {/* <span className="text-zinc-500 font-mono text-[10px] truncate block">
                 ID: {user?.assignments?.[0]?.id || '—'}
-              </span>
+              </span> */}
             </div>
           </div>
 
