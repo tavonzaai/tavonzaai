@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { KitchenService } from './application/kitchen.service';
-import { KitchenController } from './presentation/http/kitchen.controller';
-import { DrizzleKitchenRepository } from './infrastructure/persistence/drizzle-kitchen.repository';
+import { KitchenService } from './services/kitchen.service';
+import { KitchenController } from './controllers/kitchen.controller';
+import { DrizzleKitchenRepository } from './repositories/drizzle-kitchen.repository';
 
 import { NotificationsModule } from '../notifications/notifications.module';
 

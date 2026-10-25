@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ShiftService } from './application/shift.service';
-import { ShiftController } from './presentation/shift.controller';
-import { DrizzleShiftRepository } from './infrastructure/persistence/drizzle-shift.repository';
+import { ShiftService } from './services/shift.service';
+import { ShiftController } from './controllers/shift.controller';
+import { DrizzleShiftRepository } from './repositories/drizzle-shift.repository';
 
 @Module({
   controllers: [ShiftController],

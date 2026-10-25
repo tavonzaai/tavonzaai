@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { InventoryService } from './application/inventory.service';
-import { InventoryController } from './presentation/inventory.controller';
-import { DrizzleInventoryRepository } from './infrastructure/persistence/drizzle-inventory.repository';
+import { InventoryService } from './services/inventory.service';
+import { InventoryController } from './controllers/inventory.controller';
+import { DrizzleInventoryRepository } from './repositories/drizzle-inventory.repository';
 
 @Module({
   controllers: [InventoryController],

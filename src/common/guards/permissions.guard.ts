@@ -26,7 +26,7 @@ import {
   SCOPE_KEY,
   type RequiredScopeMetadata,
 } from '../decorators/require-scope.decorator';
-import { DrizzleRbacRepository } from '../../modules/authorization/infrastructure/persistence/drizzle-rbac.repository';
+import { DrizzleRbacRepository } from '../../modules/authorization/repositories/drizzle-rbac.repository';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {

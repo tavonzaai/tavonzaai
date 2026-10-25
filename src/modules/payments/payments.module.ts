@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { PaymentService } from './application/payment.service';
-import { PaymentController } from './presentation/payment.controller';
-import { DrizzlePaymentRepository } from './infrastructure/persistence/drizzle-payment.repository';
+import { PaymentService } from './services/payment.service';
+import { PaymentController } from './controllers/payment.controller';
+import { DrizzlePaymentRepository } from './repositories/drizzle-payment.repository';
 
-import { StripeAdapter } from './infrastructure/adapters/stripe.adapter';
+import { StripeAdapter } from './adapters/stripe.adapter';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthorizationModule } from '../authorization/authorization.module';
 import { IdentityModule } from '../identity/identity.module';

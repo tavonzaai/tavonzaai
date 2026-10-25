@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { InternalAiController } from './presentation/http/internal-ai.controller';
-import { InternalAiService } from './application/internal-ai.service';
+import { InternalAiController } from './controllers/internal-ai.controller';
+import { InternalAiService } from './services/internal-ai.service';
 import { InternalServiceGuard } from '../../common/guards/internal-service.guard';
 import { InventoryModule } from '../inventory/inventory.module';
 import { PaymentsModule } from '../payments/payments.module';

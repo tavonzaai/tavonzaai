@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@/database';
 import { OrganizationsModule } from '../organizations/organizations.module';
-import { RestaurantController } from './presentation/http/restaurant.controller';
-import { RestaurantService } from './application/services/restaurant.service';
-import { DrizzleRestaurantRepository } from './infrastructure/persistence/drizzle-restaurant.repository';
+import { RestaurantController } from './controllers/restaurant.controller';
+import { RestaurantService } from './services/restaurant.service';
+import { DrizzleRestaurantRepository } from './repositories/drizzle-restaurant.repository';
 
 @Module({
   imports: [DatabaseModule, OrganizationsModule],

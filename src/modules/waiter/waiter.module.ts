@@ -4,17 +4,17 @@
 
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module';
-import { WaiterService } from './application/services/waiter.service';
-import { DrizzleWaiterRepository } from './infrastructure/persistence/drizzle-waiter.repository';
-import { DrizzleWaiterOrderRepository } from './infrastructure/persistence/drizzle-waiter-order.repository';
-import { DrizzleAlertRepository } from './infrastructure/persistence/drizzle-alert.repository';
-import { DrizzleUserRepository } from '../identity/infrastructure/persistence/drizzle-user.repository';
+import { WaiterService } from './services/waiter.service';
+import { DrizzleWaiterRepository } from './repositories/drizzle-waiter.repository';
+import { DrizzleWaiterOrderRepository } from './repositories/drizzle-waiter-order.repository';
+import { DrizzleAlertRepository } from './repositories/drizzle-alert.repository';
+import { DrizzleUserRepository } from '../identity/repositories/drizzle-user.repository';
 import {
   WaiterTablesController,
   WaiterOrdersController,
   WaiterAlertsController,
   CustomerAlertsController,
-} from './presentation/http/waiter.controller';
+} from './controllers/waiter.controller';
 
 @Module({
   imports: [

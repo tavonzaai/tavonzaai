@@ -233,6 +233,7 @@ src/modules/<module-name>/
 2. [x] Remove empty shell `src/modules/audit/audit.module.ts`.
 3. [x] Update `src/app.module.ts` (replaced `CustomerSessionsModule` with `FeedbackModule`, removed `AuditModule`).
 4. [x] Clean `src/common/shared/index.ts`: Remove all browser DOM functions (`getCookie`, `setCookie`, `resolveApiBaseUrl`).
+5. [x] Flatten all 20 business modules to clean depth-1 structure (`controllers/`, `services/`, `dto/`, `repositories/`, `domain/`), migrating 116 files and rewriting 396 import paths with 100% type safety.
 
 ### [x] Phase C: Unified WorkersModule in Single AppModule
 * **Goal**: Integrate background jobs cleanly into NestJS without creating a separate root module.

@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { MailService } from './application/mail.service';
-import { MailController } from './presentation/http/mail.controller';
+import { MailService } from './services/mail.service';
+import { MailController } from './controllers/mail.controller';
 
-import { NotificationService } from './application/services/notification.service';
-import { NotificationController } from './presentation/http/notification.controller';
+import { NotificationService } from './services/notification.service';
+import { NotificationController } from './controllers/notification.controller';
 
 @Module({
   imports: [],

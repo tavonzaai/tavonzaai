@@ -1,6 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { GlobalRole } from '@/authorization';
-import type { JwtPayload } from '../../modules/identity/infrastructure/adapters/jwt.strategy';
+import type { JwtPayload } from '../../modules/identity/adapters/jwt.strategy';
 
 const ADMIN_ALIASES = new Set([
   GlobalRole.ADMIN,

@@ -8,7 +8,7 @@
 // ============================================================================
 
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import type { JwtPayload } from '../../modules/identity/infrastructure/adapters/jwt.strategy';
+import type { JwtPayload } from '../../modules/identity/adapters/jwt.strategy';
 
 export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): JwtPayload => {

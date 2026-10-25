@@ -7,17 +7,17 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
-import { AuthService } from './application/services/auth.service';
-import { UserService } from './application/services/user.service';
-import { CustomerPrincipalService } from './application/services/customer-principal.service';
-import { DrizzleUserRepository } from './infrastructure/persistence/drizzle-user.repository';
-import { DrizzleAuthSessionRepository } from './infrastructure/persistence/drizzle-auth-session.repository';
-import { DrizzleGuestPrincipalRepository } from './infrastructure/persistence/drizzle-guest-principal.repository';
-import { JwtStrategy } from './infrastructure/adapters/jwt.strategy';
-import { AuthController } from './presentation/http/auth.controller';
-import { UserController } from './presentation/http/user.controller';
-import { MeController } from './presentation/http/me.controller';
-import { ACCESS_TOKEN_TTL_SECONDS, accessTokenSecret } from './domain/token-policy';
+import { AuthService } from './services/auth.service';
+import { UserService } from './services/user.service';
+import { CustomerPrincipalService } from './services/customer-principal.service';
+import { DrizzleUserRepository } from './repositories/drizzle-user.repository';
+import { DrizzleAuthSessionRepository } from './repositories/drizzle-auth-session.repository';
+import { DrizzleGuestPrincipalRepository } from './repositories/drizzle-guest-principal.repository';
+import { JwtStrategy } from './adapters/jwt.strategy';
+import { AuthController } from './controllers/auth.controller';
+import { UserController } from './controllers/user.controller';
+import { MeController } from './controllers/me.controller';
+import { ACCESS_TOKEN_TTL_SECONDS, accessTokenSecret } from './services/token-policy';
 
 @Module({
   imports: [

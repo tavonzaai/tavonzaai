@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from '@/database';
-import { OrganizationController } from './presentation/http/organization.controller';
-import { OrganizationService } from './application/services/organization.service';
-import { DrizzleOrganizationRepository } from './infrastructure/persistence/drizzle-organization.repository';
+import { OrganizationController } from './controllers/organization.controller';
+import { OrganizationService } from './services/organization.service';
+import { DrizzleOrganizationRepository } from './repositories/drizzle-organization.repository';
 
 @Module({
   imports: [DatabaseModule],
