@@ -7,155 +7,31 @@ on:
     branches: [main, prod]
 
 jobs:
-  # ─── Step 1: Security & Root Hygiene Scan (Mandatory First Gate) ────────────
+  # ─── Step 1: Security & Root Hygiene Scan ───────────────────────────────────
   security-scan:
     name: Security & Root Scan
     uses: ./.github/workflows/security-scan.yml
 
-  # ─── Step 2: Detect which parts of the repo actually changed ────────────────
-  changes:
-    name: Detect Changes
+  # ─── Step 2: Quality Gates (Typecheck, Schema Check, Tests & Build) ─────────
+  backend-qa:
+    name: Backend QA & Build
     needs: [security-scan]
     runs-on: ubuntu-latest
-    outputs:
-      packages:                ${{ steps.filter.outputs.packages }}
-      api:                     ${{ steps.filter.outputs.api }}
-      ai:                      ${{ steps.filter.outputs.ai }}
-      realtime:                ${{ steps.filter.outputs.realtime }}
-      worker:                  ${{ steps.filter.outputs.worker }}
-      frontend-admin:          ${{ steps.filter.outputs.frontend-admin }}
-      frontend-customer:       ${{ steps.filter.outputs.frontend-customer }}
-      frontend-waiter:         ${{ steps.filter.outputs.frontend-waiter }}
-      frontend-manager:        ${{ steps.filter.outputs.frontend-manager }}
-      frontend-cashier:        ${{ steps.filter.outputs.frontend-cashier }}
-      frontend-kitchen:        ${{ steps.filter.outputs.frontend-kitchen }}
-      ci-config:               ${{ steps.filter.outputs.ci-config }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            packages:
-              - 'packages/**'
-            api:
-              - 'apps/api/**'
-              - 'packages/**'
-            ai:
-              - 'apps/ai/**'
-              - 'packages/**'
-            realtime:
-              - 'apps/realtime/**'
-              - 'packages/**'
-            worker:
-              - 'apps/worker/**'
-              - 'packages/**'
-            frontend-admin:
-              - 'frontend/admin/**'
-              - 'packages/contracts/**'
-              - 'packages/shared/**'
-            frontend-customer:
-              - 'frontend/customer/**'
-              - 'packages/contracts/**'
-              - 'packages/shared/**'
-            frontend-waiter:
-              - 'frontend/waiter/**'
-              - 'packages/contracts/**'
-              - 'packages/shared/**'
-            frontend-manager:
-              - 'frontend/manager/**'
-              - 'packages/contracts/**'
-              - 'packages/shared/**'
-            frontend-cashier:
-              - 'frontend/cashier/**'
-              - 'packages/contracts/**'
-              - 'packages/shared/**'
-            frontend-kitchen:
-              - 'frontend/kitchen/**'
-              - 'packages/contracts/**'
-              - 'packages/shared/**'
-            ci-config:
-              - '.github/workflows/**'
-              - '.github/actions/**'
-              - 'turbo.json'
-              - 'pnpm-workspace.yaml'
-              - 'package.json'
-              - 'tsconfig*.json'
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-  # ─── Step 3: Typecheck Backend Apps & Workers ───────────────────────────────
-  typecheck-apps:
-    name: "Typecheck › ${{ matrix.pkg.name }}"
-    needs: [security-scan, changes]
-    if: |
-      needs.changes.outputs.api == 'true' ||
-      needs.changes.outputs.realtime == 'true' ||
-      needs.changes.outputs.worker == 'true' ||
-      needs.changes.outputs['ci-config'] == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        pkg:
-          - { id: 'api', name: 'API (@tavonza/api)', filter: '@tavonza/api' }
-          - { id: 'realtime', name: 'Realtime (@tavonza/realtime)', filter: '@tavonza/realtime' }
-          - { id: 'worker', name: 'Worker (@tavonza/worker)', filter: '@tavonza/worker' }
-    steps:
-      - uses: actions/checkout@v4
-        if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
-      - uses: ./.github/actions/setup-pnpm
-        if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
-      - name: Build shared dependencies
-        if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
-        run: pnpm turbo run build --filter=${{ matrix.pkg.filter }}^...
-      - name: Run Typecheck
-        if: needs.changes.outputs[matrix.pkg.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
-        run: pnpm turbo run typecheck --filter=${{ matrix.pkg.filter }}
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-pnpm
 
-  # ─── Step 4: Typecheck Frontend Applications ────────────────────────────────
-  typecheck-frontends:
-    name: "Typecheck › ${{ matrix.app.name }}"
-    needs: [security-scan, changes]
-    if: |
-      needs.changes.outputs['frontend-admin'] == 'true' ||
-      needs.changes.outputs['frontend-customer'] == 'true' ||
-      needs.changes.outputs['frontend-waiter'] == 'true' ||
-      needs.changes.outputs['frontend-manager'] == 'true' ||
-      needs.changes.outputs['frontend-cashier'] == 'true' ||
-      needs.changes.outputs['frontend-kitchen'] == 'true' ||
-      needs.changes.outputs['ci-config'] == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        app:
-          - { id: 'frontend-admin', name: 'Admin', filter: '@frontend/admin' }
-          - { id: 'frontend-customer', name: 'Customer', filter: '@frontend/customer' }
-          - { id: 'frontend-waiter', name: 'Waiter', filter: '@frontend/waiter' }
-          - { id: 'frontend-manager', name: 'Manager', filter: '@frontend/manager' }
-          - { id: 'frontend-cashier', name: 'Cashier', filter: '@frontend/cashier' }
-          - { id: 'frontend-kitchen', name: 'Kitchen', filter: '@frontend/kitchen' }
-    steps:
-      - uses: actions/checkout@v4
-        if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
-      - uses: ./.github/actions/setup-pnpm
-        if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
-      - name: Build shared dependencies
-        if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
-        run: pnpm turbo run build --filter=${{ matrix.app.filter }}^...
-      - name: Run Typecheck
-        if: needs.changes.outputs[matrix.app.id] == 'true' || needs.changes.outputs['ci-config'] == 'true'
-        run: pnpm turbo run typecheck --filter=${{ matrix.app.filter }}
+      - name: TypeScript Typecheck
+        run: pnpm typecheck
 
-  # ─── Step 5: Unit & Integration Tests ────────────────────────────────────────
-  test-api:
-    name: "Tests › API"
-    needs: [security-scan, changes]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs['ci-config'] == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-pnpm
-      - name: Build shared dependencies
-        run: pnpm turbo run build --filter=@tavonza/api^...
-      - name: Run API Tests
-        run: pnpm turbo run test --filter=@tavonza/api
+      - name: Drizzle Schema Verification
+        run: pnpm drizzle-kit check
+
+      - name: Run Domain & Unit Tests
+        run: pnpm test
+
+      - name: Build Dual-Target Application
+        run: pnpm build

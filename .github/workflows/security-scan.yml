@@ -27,7 +27,7 @@ jobs:
           fi
 
           if [ -d "public" ]; then
-            echo "::error file=public,title=High Priority Architecture Violation::Forbidden folder 'public' detected in repository root. In this monorepo, static public assets must reside in their respective frontend workspace (e.g. frontend/*/public)."
+            echo "::error file=public,title=High Priority Architecture Violation::Forbidden folder 'public' detected in repository root. Static public assets belong in frontend repositories."
             VIOLATIONS=1
           fi
 
@@ -52,25 +52,4 @@ jobs:
 
       - name: Audit Node.js dependencies
         run: pnpm audit --audit-level=high
-        continue-on-error: true
-
-  # ─── 3. Python Dependency Security Audit ─────────────────────────────────────
-  python-security-audit:
-    name: "Audit › Python Dependencies"
-    needs: [forbidden-folders-scan]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install pip-audit
-        run: pip install pip-audit
-
-      - name: Audit Python dependencies
-        run: pip-audit -r apps/ai/requirements.txt
         continue-on-error: true

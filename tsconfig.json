@@ -1,13 +1,50 @@
 {
-  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2022",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false,
+    "esModuleInterop": true,
+    "paths": {
+      "@/*": ["src/*"],
+      "@/common/*": ["src/common/*"],
+      "@/config/*": ["src/config/*"],
+      "@/config": ["src/config/index.ts"],
+      "@/database/*": ["src/database/*"],
+      "@/database": ["src/database/index.ts"],
+      "@/authorization/*": ["src/authorization/*"],
+      "@/authorization": ["src/authorization/index.ts"],
+      "@/infrastructure/*": ["src/infrastructure/*"],
+      "@/modules/*": ["src/modules/*"],
+      "@/workers/*": ["src/workers/*"],
+      "@tavonza/database": ["src/database/index.ts"],
+      "@tavonza/database/*": ["src/database/*"],
+      "@tavonza/authorization": ["src/authorization/index.ts"],
+      "@tavonza/authorization/*": ["src/authorization/*"],
+      "@tavonza/config": ["src/config/index.ts"],
+      "@tavonza/contracts": ["src/common/contracts/index.ts"],
+      "@tavonza/events": ["src/common/events/index.ts"],
+      "@tavonza/observability": ["src/infrastructure/observability/index.ts"],
+      "@tavonza/queue": ["src/infrastructure/queue/index.ts"],
+      "@tavonza/shared": ["src/common/shared/index.ts"],
+      "@tavonza/storage": ["src/infrastructure/storage/index.ts"]
+    }
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".turbo",
-    "**/dist",
-    "**/.next"
-  ]
+  "include": ["src/**/*", "drizzle.config.ts"],
+  "exclude": ["node_modules", "dist", "src/**/*.spec.ts"]
 }

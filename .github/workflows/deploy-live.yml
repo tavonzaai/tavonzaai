@@ -1,7 +1,7 @@
 name: Deploy (Live Production Environment)
 
 # Manual deployment workflow via workflow_dispatch.
-# Finds EC2 instances by tag, pulls the new Docker image from GHCR, and restarts containers via AWS SSM.
+# Pulls the new Docker image from GHCR, and restarts containers via AWS SSM.
 
 on:
   workflow_dispatch:
@@ -15,13 +15,6 @@ on:
           - all
           - backend
           - worker
-          - customer
-          - admin
-          - kitchen
-          - cashier
-          - manager
-          - branch-manager
-          - waiter
 
 permissions:
   id-token: write
@@ -34,9 +27,9 @@ env:
   IMAGE_PREFIX: ghcr.io/tavonzaai
 
 jobs:
-  # ─── 1. Deploy Backend ──────────────────────────────────────────────────────
+  # ─── 1. Deploy Backend API ──────────────────────────────────────────────────
   deploy-backend:
-    name: Deploy Backend (api.tavonza.com)
+    name: Deploy Backend API (api.tavonza.com)
     if: inputs.service == 'all' || inputs.service == 'backend'
     runs-on: ubuntu-latest
     steps:
@@ -63,7 +56,8 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/api.Dockerfile
+          file: docker/Dockerfile
+          target: api
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/tavonzaai-live-backend:${{ github.sha }}
@@ -93,7 +87,7 @@ jobs:
               "docker pull ghcr.io/tavonzaai/tavonzaai-live-backend:latest",
               "docker stop tavonzaai-backend 2>/dev/null || true",
               "docker rm tavonzaai-backend 2>/dev/null || true",
-              "docker run -d --name tavonzaai-backend --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env -p 5000:5000 ghcr.io/tavonzaai/tavonzaai-live-backend:latest",
+              "docker run -d --name tavonzaai-backend --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env -p 3000:3000 ghcr.io/tavonzaai/tavonzaai-live-backend:latest",
               "docker image prune -af 2>/dev/null || true"
             ]' \
             --query "Command.CommandId" --output text)
@@ -112,7 +106,7 @@ jobs:
           }
           echo "✅ Backend deployed!"
 
-  # ─── 2. Deploy Worker ────────────────────────────────────────────────────────
+  # ─── 2. Deploy Background Worker ─────────────────────────────────────────────
   deploy-worker:
     name: Deploy Worker (email/outbox/notifications)
     needs: [deploy-backend]
@@ -142,7 +136,8 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/worker.Dockerfile
+          file: docker/Dockerfile
+          target: worker
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/tavonzaai-live-worker:${{ github.sha }}
@@ -190,133 +185,3 @@ jobs:
             exit 1
           }
           echo "✅ Worker deployed!"
-
-  # ─── 3. Deploy Frontend Apps ─────────────────────────────────────────────────
-  deploy-frontend:
-    name: Deploy Frontend (${{ matrix.app }})
-    if: inputs.service != 'backend' && inputs.service != 'worker'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - app: customer
-            ecr_name: frontend
-            container: tavonzaai-customer
-            port: 3000
-          - app: admin
-            ecr_name: admin-dashboard
-            container: tavonzaai-admin
-            port: 3043
-          - app: kitchen
-            ecr_name: kitchen
-            container: tavonzaai-kitchen
-            port: 3105
-          - app: cashier
-            ecr_name: cashier
-            container: tavonzaai-cashier
-            port: 3104
-          - app: manager
-            ecr_name: manager
-            container: tavonzaai-manager
-            port: 3103
-          - app: waiter
-            ecr_name: waiter
-            container: tavonzaai-waiter
-            port: 3101
-    steps:
-      - name: Check if deploy needed
-        id: check
-        run: |
-          SHOULD_DEPLOY="false"
-          if [ "${{ inputs.service }}" = "all" ] || [ "${{ inputs.service }}" = "${{ matrix.app }}" ] || [ "${{ inputs.service }}" = "branch-manager" -a "${{ matrix.app }}" = "manager" ]; then
-            SHOULD_DEPLOY="true"
-          fi
-          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
-          echo "${{ matrix.app }} -> deploy: $SHOULD_DEPLOY"
-
-      - uses: actions/checkout@v4
-        if: steps.check.outputs.should_deploy == 'true'
-
-      - name: Configure AWS Credentials
-        if: steps.check.outputs.should_deploy == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Log in to GitHub Container Registry
-        if: steps.check.outputs.should_deploy == 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        if: steps.check.outputs.should_deploy == 'true'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build & Push Image
-        if: steps.check.outputs.should_deploy == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: docker/frontend-app.Dockerfile
-          build-args: |
-            APP_NAME=${{ matrix.app }}
-            APP_PORT=${{ matrix.port }}
-            NEXT_PUBLIC_API_URL=https://api.tavonza.com
-            NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}/tavonzaai-live-${{ matrix.ecr_name }}:${{ github.sha }}
-            ${{ env.IMAGE_PREFIX }}/tavonzaai-live-${{ matrix.ecr_name }}:latest
-          labels: |
-            org.opencontainers.image.source=https://github.com/tavonzaai/tavonzaai
-            org.opencontainers.image.description=Tavonza AI Live Frontend (${{ matrix.app }})
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Deploy to EC2 via SSM
-        if: steps.check.outputs.should_deploy == 'true'
-        env:
-          IMAGE: ${{ env.IMAGE_PREFIX }}/tavonzaai-live-${{ matrix.ecr_name }}:latest
-          CONTAINER: ${{ matrix.container }}
-          PORT: ${{ matrix.port }}
-        run: |
-          INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=tavonzaai-live-frontend" "Name=instance-state-name,Values=running" \
-            --region ${{ env.AWS_REGION }} \
-            --query "Reservations[0].Instances[0].InstanceId" \
-            --output text)
-
-          echo "Instance: $INSTANCE_ID  App: ${{ matrix.app }}  Port: $PORT"
-
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --region ${{ env.AWS_REGION }} \
-            --parameters "commands=[
-              \"docker pull $IMAGE\",
-              \"docker stop $CONTAINER 2>/dev/null || true\",
-              \"docker rm $CONTAINER 2>/dev/null || true\",
-              \"docker run -d --name $CONTAINER --restart always --log-opt max-size=20m --log-opt max-file=3 -e NODE_ENV=production -e PORT=$PORT -e NEXT_PUBLIC_API_URL=https://api.tavonza.com -e API_BASE_URL=https://api.tavonza.com -e NEXT_PUBLIC_AI_API_URL=https://ai.tavonza.com -p $PORT:$PORT $IMAGE\",
-              \"docker image prune -f 2>/dev/null || true\"
-            ]" \
-            --query "Command.CommandId" --output text)
-
-          aws ssm wait command-executed \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID" \
-            --region ${{ env.AWS_REGION }} || {
-            echo "::error::SSM command failed. Fetching execution details..."
-            aws ssm get-command-invocation \
-              --command-id "$COMMAND_ID" \
-              --instance-id "$INSTANCE_ID" \
-              --region ${{ env.AWS_REGION }} \
-              --query "{Status: Status, Output: StandardOutputContent, Error: StandardErrorContent}"
-            exit 1
-          }
-          echo "✅ ${{ matrix.app }} deployed on port $PORT!"

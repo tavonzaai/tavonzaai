@@ -1,42 +1,37 @@
 services:
-  # ─── Backend Platform Applications ─────────────────────────────────────
+  # ─── 1. Web API & Socket.IO Gateway ─────────────────────────────────────
   api:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-api:latest
-    container_name: tavonzaai-dev-api
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: api
+    container_name: tavonza-api
     restart: unless-stopped
     ports:
-      - "5000:3000"
+      - "3000:3000"
     env_file:
-      - .env
+      - ../.env
     environment:
       PORT: 3000
       API_PORT: 3000
 
+  # ─── 2. Background Queue & Outbox Worker ────────────────────────────────
   worker:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-worker:latest
-    container_name: tavonzaai-dev-worker
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: worker
+    container_name: tavonza-worker
     restart: unless-stopped
     env_file:
-      - .env
+      - ../.env
     depends_on:
-      api:
-        condition: service_started
+      - api
 
-  realtime:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-realtime:latest
-    container_name: tavonzaai-dev-realtime
-    restart: unless-stopped
-    ports:
-      - "3001:3001"
-    env_file:
-      - .env
-    environment:
-      REALTIME_PORT: 3001
-
-  # ─── Reverse Proxy & SSL ───────────────────────────────────────────────
+  # ─── 3. Reverse Proxy & SSL ─────────────────────────────────────────────
   caddy:
     image: caddy:2-alpine
-    container_name: tavonzaai-dev-caddy
+    container_name: tavonza-caddy
     restart: unless-stopped
     ports:
       - "80:80"
@@ -47,16 +42,16 @@ services:
       - caddy_dev_data:/data
       - caddy_dev_config:/config
     env_file:
-      - .env
+      - ../.env
     depends_on:
       - api
 
 volumes:
   caddy_dev_data:
-    name: tavonzaai_caddy_dev_data
+    name: tavonza_caddy_dev_data
   caddy_dev_config:
-    name: tavonzaai_caddy_dev_config
+    name: tavonza_caddy_dev_config
 
 networks:
   default:
-    name: tavonzaai_dev_network
+    name: tavonza_dev_network

@@ -2,18 +2,9 @@
     email {$ACME_EMAIL:admin@tavonza.com}
 }
 
-# apps/api -> api.tavonza.com
+# apps/api -> api.tavonza.com (REST API & Socket.IO Gateway)
 api.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy api:3000 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-    }
-}
-
-# apps/realtime -> realtime.tavonza.com
-realtime.{$BASE_DOMAIN:tavonza.com} {
-    reverse_proxy realtime:3001 {
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
         header_up X-Forwarded-Proto {scheme}
