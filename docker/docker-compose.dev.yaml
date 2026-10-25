@@ -1,5 +1,5 @@
 services:
-  # ─── 2. Backend Platform Applications ─────────────────────────────────────
+  # ─── Backend Platform Applications ─────────────────────────────────────
   api:
     image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-api:latest
     container_name: tavonzaai-dev-api
@@ -33,106 +33,7 @@ services:
     environment:
       REALTIME_PORT: 3001
 
-  ai:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-ai:latest
-    container_name: tavonzaai-dev-ai
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    environment:
-      AI_SERVICE_PORT: 8000
-    depends_on:
-      api:
-        condition: service_started
-
-  # ─── 3. Frontend Applications ─────────────────────────────────────────────
-  customer:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-customer:latest
-    container_name: tavonzaai-dev-customer
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    environment:
-      PORT: 3000
-    depends_on:
-      api:
-        condition: service_started
-
-  admin:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-admin:latest
-    container_name: tavonzaai-dev-admin
-    restart: unless-stopped
-    ports:
-      - "3043:3043"
-    env_file:
-      - .env
-    environment:
-      PORT: 3043
-    depends_on:
-      api:
-        condition: service_started
-
-  kitchen:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-kitchen:latest
-    container_name: tavonzaai-dev-kitchen
-    restart: unless-stopped
-    ports:
-      - "3105:3105"
-    env_file:
-      - .env
-    environment:
-      PORT: 3105
-    depends_on:
-      api:
-        condition: service_started
-
-  cashier:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-cashier:latest
-    container_name: tavonzaai-dev-cashier
-    restart: unless-stopped
-    ports:
-      - "3104:3104"
-    env_file:
-      - .env
-    environment:
-      PORT: 3104
-    depends_on:
-      api:
-        condition: service_started
-
-  manager:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-manager:latest
-    container_name: tavonzaai-dev-manager
-    restart: unless-stopped
-    ports:
-      - "3103:3103"
-    env_file:
-      - .env
-    environment:
-      PORT: 3103
-    depends_on:
-      api:
-        condition: service_started
-
-  waiter:
-    image: ${IMAGE_PREFIX:-ghcr.io/tavonzaai}/tavonzaai-dev-waiter:latest
-    container_name: tavonzaai-dev-waiter
-    restart: unless-stopped
-    ports:
-      - "3101:3101"
-    env_file:
-      - .env
-    environment:
-      PORT: 3101
-    depends_on:
-      api:
-        condition: service_started
-
-  # ─── 4. Reverse Proxy & SSL ───────────────────────────────────────────────
+  # ─── Reverse Proxy & SSL ───────────────────────────────────────────────
   caddy:
     image: caddy:2-alpine
     container_name: tavonzaai-dev-caddy
@@ -149,7 +50,6 @@ services:
       - .env
     depends_on:
       - api
-      - customer
 
 volumes:
   caddy_dev_data:

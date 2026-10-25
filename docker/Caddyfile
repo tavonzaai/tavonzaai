@@ -1,9 +1,6 @@
 {
-    # Global options
     email {$ACME_EMAIL:admin@tavonza.com}
 }
-
-# ─── Apps (apps/*) ──────────────────────────────────────────────────────────
 
 # apps/api -> api.tavonza.com
 api.{$BASE_DOMAIN:tavonza.com} {
@@ -14,16 +11,6 @@ api.{$BASE_DOMAIN:tavonza.com} {
     }
 }
 
-# apps/ai -> ai.tavonza.com
-ai.{$BASE_DOMAIN:tavonza.com} {
-    reverse_proxy ai:8000 {
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-        flush_interval -1
-    }
-}
-
 # apps/realtime -> realtime.tavonza.com
 realtime.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy realtime:3001 {
@@ -31,36 +18,4 @@ realtime.{$BASE_DOMAIN:tavonza.com} {
         header_up X-Forwarded-For {remote_host}
         header_up X-Forwarded-Proto {scheme}
     }
-}
-
-# ─── Frontends (frontend/*) ─────────────────────────────────────────────────
-
-# frontend/customer -> tavonza.com, www.tavonza.com, customer.tavonza.com
-customer.{$BASE_DOMAIN:tavonza.com}, {$BASE_DOMAIN:tavonza.com}, www.{$BASE_DOMAIN:tavonza.com} {
-    reverse_proxy customer:3000
-}
-
-# frontend/admin -> admin.tavonza.com
-admin.{$BASE_DOMAIN:tavonza.com} {
-    reverse_proxy admin:3043
-}
-
-# frontend/kitchen -> kitchen.tavonza.com
-kitchen.{$BASE_DOMAIN:tavonza.com} {
-    reverse_proxy kitchen:3105
-}
-
-# frontend/cashier -> cashier.tavonza.com
-cashier.{$BASE_DOMAIN:tavonza.com} {
-    reverse_proxy cashier:3104
-}
-
-# frontend/manager -> manager.tavonza.com
-manager.{$BASE_DOMAIN:tavonza.com} {
-    reverse_proxy manager:3103
-}
-
-# frontend/waiter -> waiter.tavonza.com
-waiter.{$BASE_DOMAIN:tavonza.com} {
-    reverse_proxy waiter:3101
 }
