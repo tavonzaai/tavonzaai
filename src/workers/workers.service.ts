@@ -15,24 +15,29 @@ export class WorkersService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit() {
-    // Only launch background queue workers if explicitly in worker mode or non-production dev
-    const isWorker = process.env.IS_WORKER === 'true';
-    const isDev = process.env.NODE_ENV !== 'production';
-
-    if (!isWorker && !isDev) {
-      return;
-    }
-
     console.log('[WorkersService] Starting background workers and maintenance jobs...');
 
-    const emailWorker = createEmailWorker();
-    const notificationWorker = createNotificationWorker();
-    this.activeWorkers = [emailWorker, notificationWorker];
+    try {
+      const emailWorker = createEmailWorker();
+      const notificationWorker = createNotificationWorker();
+      this.activeWorkers = [emailWorker, notificationWorker];
+    } catch (err: any) {
+      console.warn(`[WorkersService] Queue worker initialization failed: ${err.message}. Queue processing will remain idle.`);
+    }
 
-    await this.outboxProcessor.start();
-    await this.idleSessionJob.start();
+    try {
+      await this.outboxProcessor.start();
+    } catch (err: any) {
+      console.warn(`[WorkersService] Outbox processor initialization failed: ${err.message}`);
+    }
 
-    console.log('✅ Background workers (FIFO queues, Outbox, Idle Sessions) are active.');
+    try {
+      await this.idleSessionJob.start();
+    } catch (err: any) {
+      console.warn(`[WorkersService] Idle session job initialization failed: ${err.message}`);
+    }
+
+    console.log('✅ Background workers (FIFO queues, Outbox, Idle Sessions) initialized.');
   }
 
   async onModuleDestroy() {
@@ -40,7 +45,7 @@ export class WorkersService implements OnModuleInit, OnModuleDestroy {
     this.outboxProcessor.stop();
     this.idleSessionJob.stop();
 
-    const shutdownPromises = this.activeWorkers.map((w) => w.close());
+    const shutdownPromises = this.activeWorkers.map((w) => w.close().catch(() => {}));
     await Promise.allSettled(shutdownPromises);
     await closeSharedRedisConnection();
     console.log('👋 Background workers cleanly halted.');

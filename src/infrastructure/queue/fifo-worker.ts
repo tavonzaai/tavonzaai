@@ -48,7 +48,17 @@ export class FifoWorker<T = unknown, R = void> {
       );
     });
 
+    let lastErrorMsg = '';
+    let lastErrorTime = 0;
+
     this.worker.on('error', (err: Error) => {
+      const now = Date.now();
+      // Throttle identical error spam to once every 30 seconds
+      if (err.message === lastErrorMsg && now - lastErrorTime < 30000) {
+        return;
+      }
+      lastErrorMsg = err.message;
+      lastErrorTime = now;
       console.error(`[FifoWorker:${this.name}] Worker internal error: ${err.message}`);
     });
   }

@@ -5,20 +5,17 @@
 import { config } from 'dotenv';
 config();
 
-// Declare worker runtime execution flag
-process.env.IS_WORKER = 'true';
-
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { WorkersModule } from './workers/workers.module';
 
 async function bootstrapWorker() {
   console.log('====================================================');
-  console.log('  🚀 Tavonza AI Background Worker Starting (NestJS Context)');
+  console.log('  🚀 Tavonza AI Background Worker Starting (Dedicated Context)');
   console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`  Redis URL:   ${(process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL) ? '[CONFIGURED]' : 'redis://localhost:6379'}`);
   console.log('====================================================');
 
-  const app = await NestFactory.createApplicationContext(AppModule, {
+  const app = await NestFactory.createApplicationContext(WorkersModule, {
     logger: ['error', 'warn', 'log'],
   });
 

@@ -20,7 +20,6 @@ import { InventoryModule } from "./modules/inventory/inventory.module";
 import { AiModule } from "./modules/ai/ai.module";
 import { ApiStorageModule } from "./modules/storage/storage.module";
 import { RealtimeModule } from "./modules/realtime/realtime.module";
-import { WorkersModule } from "./workers/workers.module";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 
 import { AppController } from "./app.controller";
@@ -31,9 +30,8 @@ import { AppController } from "./app.controller";
     DatabaseModule,
     ApiStorageModule,
     RealtimeModule,
-    WorkersModule,
 
-    // Business Modules
+    // Business Modules (Pure HTTP & WebSockets)
     IdentityModule,
     AuthorizationModule,
     OrganizationsModule,
