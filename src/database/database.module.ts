@@ -41,10 +41,9 @@ import { OutboxService } from './outbox.service';
       useFactory: async (db: DrizzleDatabase) => {
         const logger = new Logger('DatabaseMigration');
         const candidates = [
-          resolve(__dirname, '../drizzle'),
-          resolve(__dirname, '../../packages/database/drizzle'),
-          resolve(process.cwd(), 'packages/database/drizzle'),
           resolve(process.cwd(), 'drizzle'),
+          resolve(__dirname, '../../drizzle'),
+          resolve(__dirname, '../drizzle'),
         ];
         const migrationsFolder = candidates.find((dir) => existsSync(dir));
         if (migrationsFolder) {

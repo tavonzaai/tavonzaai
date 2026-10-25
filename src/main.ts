@@ -8,6 +8,7 @@ import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { createValidationException } from "./common/errors/validation-exception.factory";
 
 async function bootstrap() {
+  process.env.IS_WORKER = 'false';
   const logger = new AppLogger('Bootstrap');
 
   const app = await NestFactory.create(AppModule, {
@@ -63,7 +64,6 @@ async function bootstrap() {
   });
 }
 
-// test file
 // Global safety net for unhandled asynchronous errors
 process.on('unhandledRejection', (reason: any) => {
   const logger = new AppLogger('Process');

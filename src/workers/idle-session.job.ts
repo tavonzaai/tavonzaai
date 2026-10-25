@@ -1,3 +1,4 @@
+import { Injectable, Optional, Inject } from '@nestjs/common';
 import { eq, and, sql, lte } from 'drizzle-orm';
 import {
   createDrizzleDatabase,
@@ -5,20 +6,34 @@ import {
   tables,
   branchSettings,
   OutboxService,
+  DRIZZLE,
+  type DrizzleDatabase,
 } from '@/database';
 
+@Injectable()
 export class IdleSessionJob {
   private isRunning = false;
   private timerId: NodeJS.Timeout | null = null;
-  private db: ReturnType<typeof createDrizzleDatabase> | null = null;
+  private db: DrizzleDatabase | null = null;
   private outboxService: OutboxService | null = null;
 
-  async start(intervalMs = 120000): Promise<void> {
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) return;
+  constructor(
+    @Optional() @Inject(DRIZZLE) injectedDb?: DrizzleDatabase,
+    @Optional() injectedOutboxService?: OutboxService,
+  ) {
+    if (injectedDb) this.db = injectedDb;
+    if (injectedOutboxService) this.outboxService = injectedOutboxService;
+  }
 
-    this.db = createDrizzleDatabase(dbUrl);
-    this.outboxService = new OutboxService(this.db);
+  async start(intervalMs = 120000): Promise<void> {
+    if (!this.db) {
+      const dbUrl = process.env.DATABASE_URL;
+      if (!dbUrl) return;
+      this.db = createDrizzleDatabase(dbUrl);
+    }
+    if (!this.outboxService) {
+      this.outboxService = new OutboxService(this.db);
+    }
     this.isRunning = true;
 
     console.log('[IdleSessionJob] Scheduled idle table session cleanup job running every 2 minutes');

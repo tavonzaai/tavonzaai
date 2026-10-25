@@ -1,6 +1,6 @@
 /**
- * @tavonza/shared
- * Generic utilities, common errors, and primitives (strictly domain-agnostic)
+ * Shared Utilities
+ * Generic utilities, common formatters, and primitives (strictly server-side, domain-agnostic)
  */
 
 export interface QuerySerializerOptions {
@@ -53,54 +53,7 @@ export function buildQueryString(options?: QuerySerializerOptions | null): strin
 }
 
 /**
- * 🍪 Universal Browser Cookie Helpers
- */
-export function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-  return match && match[1] ? decodeURIComponent(match[1]) : null;
-}
-
-export function setCookie(name: string, value: string, days = 7) {
-  if (typeof document === 'undefined') return;
-  const maxAge = days * 24 * 60 * 60;
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
-}
-
-export function removeCookie(name: string) {
-  if (typeof document === 'undefined') return;
-  document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
-}
-
-/**
- * 🌐 Standard API Base URL Resolution
- * Automatically resolves localhost:3000 in local development and production URL otherwise.
- */
-export function resolveApiBaseUrl(): string {
-  // 1. Explicit env variables
-  const envUrl =
-    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL) ||
-    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
-    (typeof process !== 'undefined' && process.env?.API_BASE_URL);
-
-  if (envUrl) {
-    return String(envUrl).trim().replace(/\/docs(-json)?\/?$/, '').replace(/\/$/, '');
-  }
-
-  // 2. Client-side browser inspection
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return 'http://localhost:3000';
-    }
-  }
-
-  // 3. Production Default
-  return 'https://api.tavonza.com';
-}
-
-/**
- * 💲 Currency Formatter
+ * Currency Formatter
  */
 export function formatCurrency(amount: number | string | null | undefined, currency = '$'): string {
   const numeric = typeof amount === 'number' ? amount : parseFloat(String(amount || 0));
@@ -109,7 +62,7 @@ export function formatCurrency(amount: number | string | null | undefined, curre
 }
 
 /**
- * 🕒 Relative Time Ago Formatter
+ * Relative Time Ago Formatter
  */
 export function formatTimeAgo(timestamp: string | number | Date | null | undefined): string {
   if (!timestamp) return 'Just now';
@@ -127,7 +80,7 @@ export function formatTimeAgo(timestamp: string | number | Date | null | undefin
 }
 
 /**
- * 🆔 UUID Validation Helper
+ * UUID Validation Helper
  */
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function isUUID(val?: string | null): boolean {

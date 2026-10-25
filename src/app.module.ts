@@ -8,30 +8,32 @@ import { BranchesModule } from "./modules/branches/branches.module";
 import { WaiterModule } from "./modules/waiter/waiter.module";
 import { TablesModule } from "./modules/tables/tables.module";
 import { MenusModule } from "./modules/menus/menus.module";
-import { CustomerSessionsModule } from "./modules/customer-sessions/customer-sessions.module";
+import { FeedbackModule } from "./modules/feedback/feedback.module";
 import { TableSessionsModule } from "./modules/table-sessions/table-sessions.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { KitchenModule } from "./modules/kitchen/kitchen.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
-import { AuditModule } from "./modules/audit/audit.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { ShiftsModule } from "./modules/shifts/shifts.module";
 import { InventoryModule } from "./modules/inventory/inventory.module";
 import { AiModule } from "./modules/ai/ai.module";
 import { ApiStorageModule } from "./modules/storage/storage.module";
 import { RealtimeModule } from "./modules/realtime/realtime.module";
+import { WorkersModule } from "./workers/workers.module";
 import { RequestIdMiddleware } from "./common/middleware/request-id.middleware";
 
 import { AppController } from "./app.controller";
 
 @Module({
   imports: [
-    // Infrastructure — must be first (provides Drizzle DB globally)
+    // Core Infrastructure — provides Drizzle DB globally
     DatabaseModule,
     ApiStorageModule,
     RealtimeModule,
+    WorkersModule,
 
+    // Business Modules
     IdentityModule,
     AuthorizationModule,
     OrganizationsModule,
@@ -40,7 +42,7 @@ import { AppController } from "./app.controller";
     WaiterModule,
     TablesModule,
     MenusModule,
-    CustomerSessionsModule,
+    FeedbackModule,
     TableSessionsModule,
     OrdersModule,
     KitchenModule,
@@ -48,7 +50,6 @@ import { AppController } from "./app.controller";
     ShiftsModule,
     InventoryModule,
     NotificationsModule,
-    AuditModule,
     AnalyticsModule,
     AiModule,
   ],
@@ -60,4 +61,3 @@ export class AppModule implements NestModule {
     consumer.apply(RequestIdMiddleware).forRoutes('*');
   }
 }
-

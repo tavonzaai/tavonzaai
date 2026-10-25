@@ -1,24 +1,31 @@
+import { Injectable, Optional, Inject } from '@nestjs/common';
 import { Redis } from 'ioredis';
 import { normalizeRedisUrl } from '@/infrastructure/queue';
 import {
   createDrizzleDatabase,
   OutboxService,
+  DRIZZLE,
+  type DrizzleDatabase,
 } from '@/database';
 import { RealtimeChannels } from '@/common/events';
 
+@Injectable()
 export class OutboxProcessor {
   private redis: Redis | null = null;
   private outboxService: OutboxService | null = null;
   private isRunning = false;
   private timeoutId: NodeJS.Timeout | null = null;
 
-  async start(): Promise<void> {
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) {
-      console.warn('[OutboxProcessor] DATABASE_URL not configured. Outbox processing disabled.');
-      return;
+  constructor(
+    @Optional() @Inject(DRIZZLE) private readonly injectedDb?: DrizzleDatabase,
+    @Optional() private readonly injectedOutboxService?: OutboxService,
+  ) {
+    if (injectedOutboxService) {
+      this.outboxService = injectedOutboxService;
     }
+  }
 
+  async start(): Promise<void> {
     const redisUrl = normalizeRedisUrl();
     try {
       this.redis = new Redis(redisUrl, {
@@ -31,10 +38,19 @@ export class OutboxProcessor {
       console.warn(`[OutboxProcessor] Redis unavailable: ${err.message}. Events will be recorded in DB but not published in realtime.`);
     }
 
-    const db = createDrizzleDatabase(dbUrl);
-    this.outboxService = new OutboxService(db);
-    this.isRunning = true;
+    if (!this.outboxService) {
+      const db = this.injectedDb || (process.env.DATABASE_URL ? createDrizzleDatabase(process.env.DATABASE_URL) : null);
+      if (db) {
+        this.outboxService = new OutboxService(db);
+      }
+    }
 
+    if (!this.outboxService) {
+      console.warn('[OutboxProcessor] Database not configured. Outbox processing disabled.');
+      return;
+    }
+
+    this.isRunning = true;
     console.log('[OutboxProcessor] Transactional Outbox processor started.');
     this.poll();
   }
@@ -58,103 +74,72 @@ export class OutboxProcessor {
 
       if (events.length > 0) {
         for (const event of events) {
-          await this.processEvent(event);
-        }
-      }
-    } catch (err: any) {
-      console.error(`[OutboxProcessor] Error polling outbox events: ${err.message}`);
-    } finally {
-      if (this.isRunning) {
-        this.timeoutId = setTimeout(() => this.poll(), 500);
-      }
-    }
-  }
-
-  private async processEvent(event: any): Promise<void> {
-    if (!this.outboxService) return;
-
-    try {
-      const { id, eventType, branchId, payload } = event;
-      const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
-
-      const channels = this.resolveDestinationChannels(eventType, branchId, data);
-
-      if (this.redis && channels.length > 0) {
-        const payloadString = JSON.stringify({
-          eventId: id,
-          eventType,
-          data,
-          occurredAt: event.occurredAt,
-        });
-
-        for (const channel of channels) {
-          await this.redis.publish(channel, payloadString);
-        }
-      }
-
-      await this.outboxService.markPublished(id);
-    } catch (err: any) {
-      console.error(`[OutboxProcessor] Failed to publish event ${event.id}: ${err.message}`);
-      await this.outboxService.markFailed(event.id, err.message);
-    }
-  }
-
-  private resolveDestinationChannels(
-    eventType: string,
-    branchId: string | null,
-    payload: Record<string, any>
-  ): string[] {
-    const channels: string[] = [];
-
-    // Session-specific room
-    if (payload.tableSessionId) {
-      channels.push(RealtimeChannels.session(payload.tableSessionId));
-    }
-
-    if (branchId) {
-      switch (eventType) {
-        case 'OrderSubmitted':
-          channels.push(RealtimeChannels.waiter(branchId));
-          channels.push(RealtimeChannels.kitchenStation(branchId, 'KITCHEN'));
-          channels.push(RealtimeChannels.kitchenStation(branchId, 'BAR'));
-          break;
-
-        case 'OrderAccepted':
-          channels.push(RealtimeChannels.kitchenStation(branchId, 'KITCHEN'));
-          channels.push(RealtimeChannels.kitchenStation(branchId, 'BAR'));
-          break;
-
-        case 'OrderRejected':
-          channels.push(RealtimeChannels.waiter(branchId));
-          break;
-
-        case 'OrderKitchenStatusChanged':
-          channels.push(RealtimeChannels.waiter(branchId));
-          if (payload.stationType) {
-            channels.push(RealtimeChannels.kitchenStation(branchId, payload.stationType));
+          try {
+            await this.publishEvent(event);
+            await this.outboxService.markPublished(event.id);
+          } catch (err: any) {
+            console.error(`[OutboxProcessor] Failed to publish event ${event.id}:`, err.message);
+            await this.outboxService.markFailed(event.id, err.message);
           }
-          break;
-
-        case 'TableStatusChanged':
-          channels.push(RealtimeChannels.waiter(branchId));
-          channels.push(RealtimeChannels.manager(branchId));
-          break;
-
-        case 'PaymentCompleted':
-          channels.push(RealtimeChannels.cashier(branchId));
-          channels.push(RealtimeChannels.waiter(branchId));
-          break;
-
-        case 'WaiterCallAlert':
-        case 'AlertAcknowledged':
-          channels.push(RealtimeChannels.waiter(branchId));
-          break;
-
-        default:
-          channels.push(RealtimeChannels.manager(branchId));
+        }
       }
+    } catch (err: any) {
+      console.error('[OutboxProcessor] Polling loop error:', err.message);
     }
 
-    return channels;
+    // Schedule next poll interval (1.5 seconds)
+    if (this.isRunning) {
+      this.timeoutId = setTimeout(() => this.poll(), 1500);
+    }
+  }
+
+  private async publishEvent(event: any): Promise<void> {
+    if (!this.redis) return;
+
+    // 1. Publish to branch-scoped topic if branchId is present
+    if (event.branchId) {
+      const branchChannel = RealtimeChannels.branch(event.branchId);
+      await this.redis.publish(
+        branchChannel,
+        JSON.stringify({
+          eventType: event.eventType,
+          aggregateType: event.aggregateType,
+          aggregateId: event.aggregateId,
+          data: event.payload,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+
+    // 2. Publish to specific functional channels based on aggregateType
+    switch (event.aggregateType) {
+      case 'ORDER': {
+        if (event.branchId) {
+          await this.redis.publish(
+            RealtimeChannels.kitchenStation(event.branchId, 'KITCHEN'),
+            JSON.stringify({ eventType: event.eventType, order: event.payload })
+          );
+        }
+        break;
+      }
+      case 'TABLE_SESSION': {
+        if (event.aggregateId) {
+          await this.redis.publish(
+            RealtimeChannels.session(event.aggregateId),
+            JSON.stringify({ eventType: event.eventType, session: event.payload })
+          );
+        }
+        break;
+      }
+      case 'PAYMENT': {
+        if (event.branchId) {
+          await this.redis.publish(
+            RealtimeChannels.cashier(event.branchId),
+            JSON.stringify({ eventType: event.eventType, payment: event.payload })
+          );
+        }
+        break;
+      }
+    }
   }
 }
