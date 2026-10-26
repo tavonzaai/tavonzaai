@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { FileSpreadsheet, Clock, CheckCircle2, AlertTriangle, Users, RefreshCw } from 'lucide-react';
 import { DataTable, ColumnDef, LoadingState, EmptyState } from '../common';
 import { kitchenService, getActiveBranchId } from '@/redux/features/kitchenApi';
-import { SHIFT_STATS } from './data';
 
 interface ShiftRecord {
   id: string;
@@ -18,37 +17,57 @@ interface ShiftRecord {
 export default function KitchenShiftReportView({ onBack }: { onBack: () => void }) {
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    completedTickets: 0,
+    avgPrepTimeMinutes: 0,
+    flaggedIssuesCount: 0,
+  });
 
   const loadShifts = async () => {
     setIsLoading(true);
     try {
       const branchId = getActiveBranchId();
-      const raw = await kitchenService.getShifts(branchId);
-      if (Array.isArray(raw) && raw.length > 0) {
-        const mapped: ShiftRecord[] = raw.map((s: any, idx: number) => ({
+      const [rawShifts, analytics, rawOrders] = await Promise.all([
+        kitchenService.getShifts(branchId).catch(() => []),
+        kitchenService.getKitchenDashboardAnalytics(branchId).catch(() => null),
+        kitchenService.getOrders(branchId).catch(() => []),
+      ]);
+
+      if (Array.isArray(rawShifts) && rawShifts.length > 0) {
+        const mapped: ShiftRecord[] = rawShifts.map((s: any, idx: number) => ({
           id: s.id || `shift-${idx}`,
-          staffName: s.staffName || s.user?.name || 'Chef Staff',
-          role: s.role || 'Cook',
-          station: s.station || 'Grill Station',
-          startTime: s.startTime ? new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:00 AM',
+          staffName: s.staffName || s.user?.name || s.name || 'Staff Member',
+          role: s.role || 'Kitchen Staff',
+          station: s.station || '',
+          startTime: s.startTime
+            ? new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : '',
           status: s.status === 'COMPLETED' ? 'COMPLETED' : 'ACTIVE',
         }));
         setShifts(mapped);
       } else {
-        setShifts([
-          { id: 'sh-1', staffName: 'Marco Vance', role: 'Head Chef', station: 'Grill Station', startTime: '08:00 AM', status: 'ACTIVE' },
-          { id: 'sh-2', staffName: 'Chef Antonio', role: 'Line Cook', station: 'Fryer Station', startTime: '09:00 AM', status: 'ACTIVE' },
-          { id: 'sh-3', staffName: 'Chef Maria', role: 'Prep Cook', station: 'Salad & Cold Prep', startTime: '08:30 AM', status: 'ACTIVE' },
-          { id: 'sh-4', staffName: 'Bartender Alex', role: 'Mixologist', station: 'Bar & Beverages', startTime: '10:00 AM', status: 'ACTIVE' },
-        ]);
+        setShifts([]);
       }
+
+      const ordersList = Array.isArray(rawOrders) ? rawOrders : [];
+      const readyOrders = ordersList.filter((o: any) => o.status === 'READY' || o.status === 'READY_TO_SERVE');
+      const flaggedOrders = ordersList.filter((o: any) => !!o.flaggedIssue);
+      const avgPrep = ordersList.length > 0
+        ? Math.round(ordersList.reduce((acc: number, o: any) => acc + (Number(o.estimatedPrepTime) || 0), 0) / ordersList.length)
+        : 0;
+
+      setStats({
+        completedTickets: analytics?.readyOrders ?? readyOrders.length,
+        avgPrepTimeMinutes: avgPrep,
+        flaggedIssuesCount: flaggedOrders.length,
+      });
     } catch {
-      setShifts([
-        { id: 'sh-1', staffName: 'Marco Vance', role: 'Head Chef', station: 'Grill Station', startTime: '08:00 AM', status: 'ACTIVE' },
-        { id: 'sh-2', staffName: 'Chef Antonio', role: 'Line Cook', station: 'Fryer Station', startTime: '09:00 AM', status: 'ACTIVE' },
-        { id: 'sh-3', staffName: 'Chef Maria', role: 'Prep Cook', station: 'Salad & Cold Prep', startTime: '08:30 AM', status: 'ACTIVE' },
-        { id: 'sh-4', staffName: 'Bartender Alex', role: 'Mixologist', station: 'Bar & Beverages', startTime: '10:00 AM', status: 'ACTIVE' },
-      ]);
+      setShifts([]);
+      setStats({
+        completedTickets: 0,
+        avgPrepTimeMinutes: 0,
+        flaggedIssuesCount: 0,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -73,12 +92,12 @@ export default function KitchenShiftReportView({ onBack }: { onBack: () => void 
     {
       key: 'station',
       header: 'Assigned Station',
-      render: (item) => <span className="text-zinc-200">{item.station}</span>,
+      render: (item) => <span className="text-zinc-200">{item.station || '—'}</span>,
     },
     {
       key: 'startTime',
       header: 'Clock In',
-      render: (item) => <span className="text-zinc-300 font-mono text-xs">{item.startTime}</span>,
+      render: (item) => <span className="text-zinc-300 font-mono text-xs">{item.startTime || '—'}</span>,
     },
     {
       key: 'status',
@@ -136,8 +155,8 @@ export default function KitchenShiftReportView({ onBack }: { onBack: () => void 
             <span>Completed Tickets</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           </div>
-          <span className="text-2xl font-bold text-white block">{SHIFT_STATS.ticketsCompleted}</span>
-          <span className="text-[11px] text-emerald-400 font-medium">+12% vs yesterday</span>
+          <span className="text-2xl font-bold text-white block">{stats.completedTickets}</span>
+          <span className="text-[11px] text-zinc-400 font-medium">Ready to serve</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-[#18181b] border border-zinc-800 space-y-1">
@@ -145,8 +164,10 @@ export default function KitchenShiftReportView({ onBack }: { onBack: () => void 
             <span>Avg. Prep Time</span>
             <Clock className="w-4 h-4 text-yellow-400" />
           </div>
-          <span className="text-2xl font-bold text-white block">{SHIFT_STATS.avgPrepTimeMinutes}m</span>
-          <span className="text-[11px] text-zinc-400">Target: &lt; 10 mins</span>
+          <span className="text-2xl font-bold text-white block">
+            {stats.avgPrepTimeMinutes > 0 ? `${stats.avgPrepTimeMinutes}m` : '—'}
+          </span>
+          <span className="text-[11px] text-zinc-400">Target: &lt; 15 mins</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-[#18181b] border border-zinc-800 space-y-1">
@@ -154,8 +175,8 @@ export default function KitchenShiftReportView({ onBack }: { onBack: () => void 
             <span>Flagged Issues</span>
             <AlertTriangle className="w-4 h-4 text-rose-400" />
           </div>
-          <span className="text-2xl font-bold text-white block">{SHIFT_STATS.flaggedIssuesCount}</span>
-          <span className="text-[11px] text-rose-400 font-medium">All resolved</span>
+          <span className="text-2xl font-bold text-white block">{stats.flaggedIssuesCount}</span>
+          <span className="text-[11px] text-zinc-400 font-medium">Needs attention</span>
         </div>
 
         <div className="p-4 rounded-2xl bg-[#18181b] border border-zinc-800 space-y-1">
@@ -164,7 +185,7 @@ export default function KitchenShiftReportView({ onBack }: { onBack: () => void 
             <Users className="w-4 h-4 text-blue-400" />
           </div>
           <span className="text-2xl font-bold text-white block">{shifts.length}</span>
-          <span className="text-[11px] text-zinc-400">All stations covered</span>
+          <span className="text-[11px] text-zinc-400">Clocked in staff</span>
         </div>
       </div>
 

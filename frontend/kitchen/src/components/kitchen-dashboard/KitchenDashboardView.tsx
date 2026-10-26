@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { NotificationCenter } from "../common/NotificationCenter";
 import { toast } from "sonner";
-import { KITCHEN_STATIONS, INITIAL_INVENTORY, RECIPES, SHIFT_STATS, FLAG_REASONS } from "./data";
+import { FLAG_REASONS } from "./data";
 import { KitchenOrder, OrderStatus } from "./types";
 import { kitchenService, getActiveBranchId } from "@/redux/features/kitchenApi";
 
@@ -143,16 +143,15 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
               id: o.orderId || o.id,
               orderNumber: o.orderNumber,
               table: tableLabel,
-              tableId: o.tableId,
-              orderType: "DINE_IN",
-              waiter: o.waiterName || "Staff Assigned",
+              orderType: o.orderType || '',
+              waiter: o.waiterName || '',
               status,
               rawBackendStatus: o.status,
               timeElapsedMinutes: elapsed,
               estimatedPrepTime,
               prepStartedAt: o.prepStartedAt,
               readyAt: o.readyAt,
-              station: "Grill Station",
+              station: o.station || '',
               createdAt: o.createdAt,
               items: (o.items || []).map((it: any, idx: number) => ({
                 id: it.id || `item-${idx}`,
@@ -226,8 +225,8 @@ export default function KitchenDashboardView({ initialNav = "Dashboard" }: Kitch
   const [readyNotification, setReadyNotification] = useState<string | null>(null);
 
   // Live Real-Time Clock
-  const [currentTime, setCurrentTime] = useState<string>("3:50:07 PM");
-  const [currentDate, setCurrentDate] = useState<string>("SEP 23,2026");
+  const [currentTime, setCurrentTime] = useState<string>("");
+  const [currentDate, setCurrentDate] = useState<string>("");
 
   useEffect(() => {
     const updateTime = () => {

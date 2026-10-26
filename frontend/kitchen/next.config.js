@@ -34,6 +34,20 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/updated-kitchen-dashboard',
+        destination: '/kitchen-dashboard/dashboard',
+        permanent: true,
+      },
+      {
+        source: '/updated-kitchen-dashboard/:path*',
+        destination: '/kitchen-dashboard/:path*',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

@@ -5,7 +5,6 @@ import { Package, Plus, Minus, AlertTriangle, CheckCircle, RefreshCw } from 'luc
 import { toast } from 'sonner';
 import { DataTable, ColumnDef, SearchInput, LoadingState, EmptyState, ErrorState } from '../common';
 import { kitchenService, getActiveBranchId } from '@/redux/features/kitchenApi';
-import { INITIAL_INVENTORY } from './data';
 
 interface InventoryRow {
   id: string;
@@ -32,10 +31,10 @@ export default function KitchenInventoryView({ onBack }: { onBack: () => void })
       if (Array.isArray(raw) && raw.length > 0) {
         const mapped: InventoryRow[] = raw.map((item: any) => ({
           id: item.id,
-          name: item.name || item.ingredientName || 'Inventory Item',
-          category: item.category || item.categoryName || 'General',
+          name: item.name || item.ingredientName || '',
+          category: item.category || item.categoryName || '',
           stock: Number(item.currentStock ?? item.stock ?? 0),
-          unit: item.unit || 'units',
+          unit: item.unit || '',
           status:
             Number(item.currentStock ?? item.stock ?? 0) <= 0
               ? 'OUT_OF_STOCK'
@@ -45,11 +44,11 @@ export default function KitchenInventoryView({ onBack }: { onBack: () => void })
         }));
         setItems(mapped);
       } else {
-        setItems(INITIAL_INVENTORY as InventoryRow[]);
+        setItems([]);
       }
     } catch (err: any) {
-      console.warn('Falling back to default kitchen inventory:', err);
-      setItems(INITIAL_INVENTORY as InventoryRow[]);
+      console.warn('Failed to load kitchen inventory:', err);
+      setItems([]);
     } finally {
       setIsLoading(false);
     }

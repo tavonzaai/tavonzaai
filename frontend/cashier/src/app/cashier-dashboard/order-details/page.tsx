@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import CashierDashboardView from '@/components/updated-cashier-dashboard/CashierDashboardView';
+import CashierDashboardView from '@/components/cashier-dashboard/CashierDashboardView';
 import AuthGuard from '@/components/auth/AuthGuard';
 
 export const dynamic = 'force-dynamic';

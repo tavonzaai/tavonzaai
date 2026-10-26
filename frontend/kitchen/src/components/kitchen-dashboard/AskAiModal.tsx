@@ -29,7 +29,7 @@ interface AskAiModalProps {
 }
 
 const QUICK_KITCHEN_PROMPTS = [
-  '🔥 Check Grill Station load',
+  '🔥 Check active station load',
   '⚡ Overdue Tickets in queue',
   '⚠️ Critical inventory / 86 items',
   '📋 Dinner rush prep suggestions',
@@ -38,13 +38,15 @@ const QUICK_KITCHEN_PROMPTS = [
 export default function AskAiModal({
   isOpen,
   onClose,
-  activeStation = 'Grill Station',
+  activeStation = '',
 }: AskAiModalProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'init-1',
       sender: 'ai',
-      text: `Chef Marco, Tavonza Kitchen Co-pilot is online for ${activeStation}. I am tracking station line speed, order hold times, and ingredient pars. What do you need right now?`,
+      text: activeStation
+        ? `Tavonza Kitchen Co-pilot is online for ${activeStation}. What do you need right now?`
+        : 'Tavonza Kitchen Co-pilot is online. What do you need right now?',
       timestamp: 'Just now',
     },
   ]);

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import ProfileView from '@/components/updated-kitchen-dashboard/ProfileView';
+import ProfileView from '@/components/kitchen-dashboard/ProfileView';
 import AuthGuard from '@/components/auth/AuthGuard';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +11,7 @@ export default function KitchenProfilePage() {
   const router = useRouter();
 
   const handleBack = () => {
-    router.push('/updated-kitchen-dashboard/dashboard');
+    router.push('/kitchen-dashboard/dashboard');
   };
 
   return (

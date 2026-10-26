@@ -1567,7 +1567,7 @@ export default function CashierDashboardView({
                   type="button"
                   onClick={() => {
                     setActiveNav("Table View");
-                    router.push("/updated-cashier-dashboard/table-view");
+                    router.push("/cashier-dashboard/table-view");
                   }}
                   className="p-2 bg-neutral-900 hover:bg-neutral-800 rounded-lg border border-neutral-800 text-neutral-300 hover:text-white transition flex items-center gap-2 text-sm font-medium cursor-pointer print:hidden"
                 >
@@ -1892,7 +1892,7 @@ export default function CashierDashboardView({
                       type="button"
                       onClick={() => {
                         setActiveNav("Table View");
-                        router.push("/updated-cashier-dashboard/table-view");
+                        router.push("/cashier-dashboard/table-view");
                       }}
                       className="w-full py-2.5 px-4 border border-neutral-700 hover:bg-neutral-800 text-neutral-300 hover:text-white rounded-lg font-medium text-sm transition cursor-pointer text-center"
                     >
@@ -1908,7 +1908,7 @@ export default function CashierDashboardView({
                   type="button"
                   onClick={() => {
                     setActiveNav("Table View");
-                    router.push("/updated-cashier-dashboard/table-view");
+                    router.push("/cashier-dashboard/table-view");
                   }}
                   className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-black font-semibold rounded-lg text-sm transition cursor-pointer"
                 >
@@ -2330,7 +2330,7 @@ export default function CashierDashboardView({
                             setSelectedOrderId(ord.id);
                             setActiveNav("Order Details");
                             router.push(
-                              `/updated-cashier-dashboard/order-details?orderId=${encodeURIComponent(
+                              `/cashier-dashboard/order-details?orderId=${encodeURIComponent(
                                 ord.id
                               )}`
                             );

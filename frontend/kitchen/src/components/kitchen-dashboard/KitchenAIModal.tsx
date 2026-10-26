@@ -44,7 +44,7 @@ export default function KitchenAIModal({
   const [liveTranscript, setLiveTranscript] = useState<string>('');
   const [lastUserVoice, setLastUserVoice] = useState<string>('');
   const [lastAiResponse, setLastAiResponse] = useState<string>(
-    `I am ready on ${activeStation}. Speak any command hands-free.`
+    activeStation ? `I am ready on ${activeStation}. Speak any command hands-free.` : 'I am ready. Speak any command hands-free.'
   );
   const [isAiOnline, setIsAiOnline] = useState<boolean | null>(null);
   const [autoListenNext, setAutoListenNext] = useState<boolean>(true);
@@ -468,7 +468,7 @@ export default function KitchenAIModal({
       setLiveTranscript('');
       setVoiceState('processing');
 
-      const currentStation = activeStationRef.current || 'Grill Station';
+      const currentStation = (activeStationRef.current || '').trim();
       const aiBaseUrl =
         (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_AI_API_URL) ||
         'https://ai.tavonza.com';
@@ -671,7 +671,9 @@ export default function KitchenAIModal({
     if (isOpen) {
       setSessionId(`kitchen_${activeStation.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`);
       setLastUserVoice('');
-      setLastAiResponse('Chef Marco, I am ready on the Grill Station. Speak any command hands-free.');
+      setLastAiResponse(
+        activeStation ? `I am ready on ${activeStation}. Speak any command hands-free.` : 'I am ready. Speak any command hands-free.'
+      );
       const timer = setTimeout(() => {
         startListening();
       }, 350);
@@ -737,7 +739,9 @@ export default function KitchenAIModal({
                 stopSpeaking();
                 setSessionId(`kitchen_${activeStation.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`);
                 setLastUserVoice('');
-                setLastAiResponse('Chef Marco, I am ready on the Grill Station. Speak any command hands-free.');
+                setLastAiResponse(
+                  activeStation ? `I am ready on ${activeStation}. Speak any command hands-free.` : 'I am ready. Speak any command hands-free.'
+                );
                 toast.success('Conversation reset');
               }}
               className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-yellow-400 hover:border-yellow-400/60 transition cursor-pointer"

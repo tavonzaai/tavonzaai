@@ -39,7 +39,7 @@ export interface KitchenSidebarProps {
   setSidebarOpen: (open: boolean) => void;
 }
 
-export const updatedKitchenNavItems = [
+export const kitchenNavItems = [
   { name: "Dashboard", icon: LayoutDashboard },
   { name: "Kitchen Queue", icon: Clock, badge: "8", badgeColor: "text-amber-400 bg-amber-500/10" },
   { name: "Active Orders", icon: UtensilsCrossed, badge: "4", badgeColor: "text-yellow-400 bg-yellow-500/10" },
@@ -142,7 +142,7 @@ export default function Sidebar({
 
         {/* Navigation Links List */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1 no-scrollbar">
-          {updatedKitchenNavItems.map((item) => {
+          {kitchenNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeNav === item.name;
 

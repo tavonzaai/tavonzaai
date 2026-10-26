@@ -1,6 +1,6 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
-import KitchenDashboardView from '@/components/updated-kitchen-dashboard/KitchenDashboardView';
+import KitchenDashboardView from '@/components/kitchen-dashboard/KitchenDashboardView';
 import AuthGuard from '@/components/auth/AuthGuard';
 
 export const dynamic = 'force-dynamic';
@@ -27,12 +27,12 @@ export async function generateMetadata({
   const tabParam = resolvedParams?.tab?.toLowerCase() || '';
   const tabName = tabMap[tabParam] || 'Dashboard';
   return {
-    title: `${tabName} | Updated Kitchen Display | Tavonza AI`,
-    description: `Updated Kitchen ${tabName} command center for dish preparation, ticket fulfillment, and station monitoring.`,
+    title: `${tabName} | Kitchen Display | Tavonza AI`,
+    description: `Kitchen ${tabName} command center for dish preparation, ticket fulfillment, and station monitoring.`,
   };
 }
 
-export default async function UpdatedKitchenTabPage({
+export default async function KitchenTabPage({
   params,
 }: {
   params: { tab: string };

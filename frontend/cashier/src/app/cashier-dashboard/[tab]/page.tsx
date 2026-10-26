@@ -1,5 +1,5 @@
 import React from 'react';
-import CashierDashboardView from '@/components/updated-cashier-dashboard/CashierDashboardView';
+import CashierDashboardView from '@/components/cashier-dashboard/CashierDashboardView';
 import AuthGuard from '@/components/auth/AuthGuard';
 
 export const dynamic = 'force-dynamic';
@@ -24,12 +24,12 @@ export async function generateMetadata({
   const tabParam = resolvedParams?.tab?.toLowerCase() || '';
   const tabName = tabMap[tabParam] || 'Table View';
   return {
-    title: `${tabName} | Updated Cashier Terminal | Tavonza AI`,
-    description: `Updated Cashier ${tabName} terminal command center for counter POS orders, table billing, and settlement workflow.`,
+    title: `${tabName} | Cashier Terminal | Tavonza AI`,
+    description: `Cashier ${tabName} terminal command center for counter POS orders, table billing, and settlement workflow.`,
   };
 }
 
-export default async function UpdatedCashierTabPage({
+export default async function CashierTabPage({
   params,
 }: {
   params: { tab: string };

@@ -35,10 +35,10 @@ export interface CashierSidebarProps {
 }
 
 export const cashierNavItems = [
-  { name: "Table View", icon: LayoutGrid, href: "/updated-cashier-dashboard/table-view" },
-  { name: "Create Order", icon: PlusCircle, href: "/updated-cashier-dashboard/create-order" },
-  { name: "Bill Queue", icon: Receipt, href: "/updated-cashier-dashboard/bill-queue" },
-  { name: "Profile", icon: User, href: "/updated-cashier-dashboard/profile" },
+  { name: "Table View", icon: LayoutGrid, href: "/cashier-dashboard/table-view" },
+  { name: "Create Order", icon: PlusCircle, href: "/cashier-dashboard/create-order" },
+  { name: "Bill Queue", icon: Receipt, href: "/cashier-dashboard/bill-queue" },
+  { name: "Profile", icon: User, href: "/cashier-dashboard/profile" },
 ];
 
 export default function CashierSidebar({
@@ -84,7 +84,7 @@ export default function CashierSidebar({
       >
         {/* Brand Logo Header */}
         <div className="h-[77px] px-6 border-b border-neutral-800 flex items-center justify-between shrink-0 bg-black">
-          <Link href="/updated-cashier-dashboard/table-view" title="Back to Dashboard" className="flex items-center gap-3 group cursor-pointer">
+          <Link href="/cashier-dashboard/table-view" title="Back to Dashboard" className="flex items-center gap-3 group cursor-pointer">
             <div className="w-10 h-10 bg-zinc-900 border border-neutral-800 rounded-xl flex items-center justify-center overflow-hidden p-1 shrink-0 shadow-inner group-hover:border-amber-500/50 transition-colors">
               <TavonzaLogoIcon className="w-full h-full text-yellow-400" />
             </div>
@@ -149,7 +149,7 @@ export default function CashierSidebar({
         <div className="p-4 border-t border-neutral-800 bg-black shrink-0">
           <div className="flex items-center justify-between gap-2 p-2 bg-zinc-900 hover:bg-zinc-800/80 transition rounded-lg border border-neutral-800">
             <Link
-              href="/updated-cashier-dashboard/profile"
+              href="/cashier-dashboard/profile"
               onClick={() => {
                 setActiveNav("Profile");
                 setSidebarOpen(false);
