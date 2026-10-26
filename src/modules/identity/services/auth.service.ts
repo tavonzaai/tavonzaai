@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomInt, randomUUID } from 'node:crypto';
-import * as argon2 from 'argon2';
+import * as argon2 from '@node-rs/argon2';
 import { GlobalRole, resolvePermissions, type Scope } from '@/authorization';
 import { DrizzleUserRepository } from '../repositories/drizzle-user.repository';
 import { DrizzleAuthSessionRepository } from '../repositories/drizzle-auth-session.repository';

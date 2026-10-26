@@ -2,7 +2,7 @@
     import { drizzle } from 'drizzle-orm/node-postgres';
     import { Pool } from 'pg';
     import * as schema from '@tavonza/database';
-    import * as argon2 from 'argon2';
+    import * as argon2 from '@node-rs/argon2';
 
     const pool = new Pool({ connectionString: 'postgresql://postgres:postgres@localhost:5432/platform_dev' });
     const db = drizzle(pool, { schema });

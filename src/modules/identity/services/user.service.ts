@@ -10,7 +10,7 @@ import {
   BadRequestException,
   Optional,
 } from '@nestjs/common';
-import * as argon2 from 'argon2';
+import * as argon2 from '@node-rs/argon2';
 import { StorageService, generateKey } from '@/infrastructure/storage';
 import { actorHoldsPermission, isPrivilegedGlobalRole } from '@/authorization';
 import { DrizzleUserRepository } from '../repositories/drizzle-user.repository';

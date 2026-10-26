@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { eq, and, or, ilike, sql, desc } from 'drizzle-orm';
 import { DrizzleQueryBuilder } from '../../../common/database';
-import * as argon2 from 'argon2';
+import * as argon2 from '@node-rs/argon2';
 import {
   DRIZZLE,
   type DrizzleDatabase,

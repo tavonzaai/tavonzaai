@@ -16,7 +16,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import * as argon2 from 'argon2';
+import * as argon2 from '@node-rs/argon2';
 import { DrizzleWaiterRepository } from '../repositories/drizzle-waiter.repository';
 import { DrizzleWaiterOrderRepository } from '../repositories/drizzle-waiter-order.repository';
 import { DrizzleAlertRepository } from '../repositories/drizzle-alert.repository';
