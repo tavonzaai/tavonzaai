@@ -13,6 +13,7 @@ import {
 import * as argon2 from '@node-rs/argon2';
 import { StorageService, generateKey } from '@/infrastructure/storage';
 import { actorHoldsPermission, isPrivilegedGlobalRole } from '@/authorization';
+import { DrizzleRbacRepository } from '../../authorization/repositories/drizzle-rbac.repository';
 import { DrizzleUserRepository } from '../repositories/drizzle-user.repository';
 import { DrizzleAuthSessionRepository } from '../repositories/drizzle-auth-session.repository';
 import { DrizzleOrganizationRepository } from '../../organizations/repositories/drizzle-organization.repository';
@@ -36,6 +37,7 @@ export class UserService {
     private readonly userRepo: DrizzleUserRepository,
     private readonly orgRepo: DrizzleOrganizationRepository,
     private readonly sessionRepo: DrizzleAuthSessionRepository,
+    @Optional() private readonly rbacRepo?: DrizzleRbacRepository,
     @Optional() private readonly storageService?: StorageService,
   ) {}
 
@@ -313,7 +315,24 @@ export class UserService {
   }
 
   private async toUserDetail(user: any): Promise<UserDetailResponseDto> {
-    const dto = UserDetailResponseDto.fromRecord(user, user.customer, user.assignments);
+    let permissions: string[] | undefined = undefined;
+    let scopes: any[] | undefined = undefined;
+    if (this.rbacRepo) {
+      try {
+        const live = await this.rbacRepo.getEffectivePermissions(user.id);
+        permissions = live.permissions;
+        scopes = live.scopes;
+      } catch {
+        // Fall back gracefully if live lookup fails
+      }
+    }
+    const dto = UserDetailResponseDto.fromRecord(
+      user,
+      user.customer,
+      user.assignments,
+      permissions,
+      scopes,
+    );
     if (user.role === 'ADMIN' || user.role === 'RESTAURANT_OWNER') {
       const owned = await this.orgRepo.findByOwnerId(user.id);
       dto.organizationId = owned[0]?.id ?? null;

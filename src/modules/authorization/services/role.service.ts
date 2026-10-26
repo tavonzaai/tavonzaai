@@ -178,6 +178,10 @@ export class RoleService {
     return this.rbacRepo.getUserPermissions(userId);
   }
 
+  async getEffectivePermissions(userId: string) {
+    return this.rbacRepo.getEffectivePermissions(userId);
+  }
+
   async removeUserRole(userId: string) {
     return this.rbacRepo.removeUserRole(userId);
   }
