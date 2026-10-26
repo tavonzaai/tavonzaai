@@ -38,8 +38,12 @@ describe('staff assignment policy helpers', () => {
     assert.equal(isAssignableStaffRole('ADMIN'), false);
   });
 
-  it('stores only known permission actions', () => {
+  it('stores only known permission actions and canonical system permissions', () => {
     assert.equal(toStoredPermissionAction('menu.manage'), 'MANAGE_MENU');
+    assert.equal(toStoredPermissionAction('menu:read'), 'menu:read');
+    assert.equal(toStoredPermissionAction('tables:read'), 'tables:read');
+    assert.equal(toStoredPermissionAction('VIEW_ORDERS'), 'VIEW_ORDERS');
+    assert.equal(toStoredPermissionAction('orders:read'), 'VIEW_ORDERS');
     assert.equal(toStoredPermissionAction('not-a-real-permission'), null);
   });
 
@@ -50,6 +54,8 @@ describe('staff assignment policy helpers', () => {
     );
     assert.equal(actorCanGrantPermissions(['MANAGE_STAFF'], ['staff:manage']), true);
     assert.equal(actorCanGrantPermissions(['*'], ['MANAGE_MENU']), true);
+    assert.equal(actorCanGrantPermissions(['*'], ['menu:read', 'tables:read']), true);
+    assert.equal(actorCanGrantPermissions(['menu:manage'], ['menu:read']), true);
   });
 });
 

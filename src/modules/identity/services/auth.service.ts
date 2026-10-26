@@ -237,6 +237,24 @@ export class AuthService {
     const ownedOrgs = await this.orgRepo.findByOwnerId(user.id);
     const organizationId = ownedOrgs[0]?.id ?? null;
 
+    let permissions: string[] = [];
+    let scopes: Scope[] = [];
+    if (this.rbacRepo) {
+      try {
+        const live = await this.rbacRepo.getEffectivePermissions(user.id);
+        permissions = live.permissions;
+        scopes = live.scopes;
+      } catch {
+        // Fallback gracefully
+      }
+    }
+    if (permissions.length === 0) {
+      permissions = resolvePermissions(
+        effectiveRole,
+        (primaryAssignment?.permissions as any) ?? [],
+      ) as string[];
+    }
+
     return {
       id: user.id,
       email: user.email,
@@ -247,6 +265,8 @@ export class AuthService {
       branchId,
       branchName,
       assignments,
+      permissions,
+      scopes,
       phone: user.contactNo ?? null,
       isEmailVerified: user.isEmailVerified,
       createdAt: user.createdAt,
@@ -352,13 +372,16 @@ export class AuthService {
     let effectiveRole = user.role;
     let effectivePermissions: string[] = [];
 
-    // 1. Resolve dynamic database-backed role & permissions if assigned
+    // 1. Resolve dynamic database-backed role & permissions
     if (this.rbacRepo) {
       try {
+        const live = await this.rbacRepo.getEffectivePermissions(user.id);
+        if (live.permissions.length > 0) {
+          effectivePermissions = live.permissions;
+        }
         const dynamicRole = await this.rbacRepo.getUserRole(user.id);
         if (dynamicRole) {
           effectiveRole = dynamicRole.roleName.toUpperCase().replace(/\s+/g, '_');
-          effectivePermissions = await this.rbacRepo.getUserPermissions(user.id);
         }
       } catch {
         // Fallback to legacy assignments on error
@@ -374,6 +397,8 @@ export class AuthService {
         effectiveRole,
         (primaryAssignment?.permissions as any) ?? [],
       ) as string[];
+    } else if (primaryAssignment?.role && user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+      effectiveRole = primaryAssignment.role;
     }
 
     const branchId = primaryAssignment?.branchId ?? null;

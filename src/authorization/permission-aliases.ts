@@ -1,4 +1,5 @@
 import { StaffRole } from './role';
+import { Permission } from './permission';
 
 /**
  * Database `permission_action` values stored on `staff_assignments.permissions`.
@@ -42,6 +43,8 @@ const CANONICAL_TO_ACTION: Record<string, StaffPermissionAction> = Object.fromEn
   ]),
 ) as Record<string, StaffPermissionAction>;
 
+const KNOWN_PERMISSIONS = new Set<string>(Object.values(Permission) as string[]);
+
 const MANAGE_IMPLIES = new Set([
   'read',
   'write',
@@ -75,13 +78,36 @@ export function normalizePermissionKey(raw: string): string {
   return trimmed.toLowerCase().replace(/[._]/g, ':');
 }
 
-export function toStoredPermissionAction(raw: string): StaffPermissionAction | null {
-  const canonical = normalizePermissionKey(raw);
-  return CANONICAL_TO_ACTION[canonical] ?? null;
+export function toStoredPermissionAction(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // 1. Direct match for legacy action
+  if (STAFF_PERMISSION_ACTIONS.includes(trimmed as any)) {
+    return trimmed;
+  }
+
+  // 2. Map legacy spelling to action if present in canonical mapping
+  const canonical = normalizePermissionKey(trimmed);
+  if (CANONICAL_TO_ACTION[canonical]) {
+    return CANONICAL_TO_ACTION[canonical];
+  }
+
+  // 3. Known canonical system permissions (e.g. menu:read, tables:read, inventory:write)
+  if (KNOWN_PERMISSIONS.has(canonical)) {
+    return canonical;
+  }
+
+  // 4. Any valid module:action permission format
+  if (/^[a-z0-9_-]+:[a-z0-9_*]+$/.test(canonical)) {
+    return canonical;
+  }
+
+  return null;
 }
 
-export function toStoredPermissionActions(raw: string[]): StaffPermissionAction[] {
-  const next: StaffPermissionAction[] = [];
+export function toStoredPermissionActions(raw: string[]): string[] {
+  const next: string[] = [];
   for (const value of raw) {
     const stored = toStoredPermissionAction(value);
     if (stored && !next.includes(stored)) {

@@ -3,9 +3,9 @@
 // ============================================================================
 
 import { Injectable, Inject, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, or, ilike, sql } from 'drizzle-orm';
 import { DRIZZLE, schema } from '@/database';
-import { resolvePermissions, type Scope } from '@/authorization';
+import { resolvePermissions, normalizePermissionKey, type Scope } from '@/authorization';
 import type { DeclaredPermission, SystemRoleDefinition } from '../domain/system-permissions';
 
 type DrizzleDb = any;
@@ -109,8 +109,11 @@ export class DrizzleRbacRepository {
         }
       }
 
-      // 3. Sync role_permissions
-      await this.setRolePermissions(role.id, targetPermissionIds);
+      // 3. Sync role_permissions (only seed if role has NO existing permissions assigned, protecting admin customizations)
+      const existingRolePerms = await this.findPermissionsByRoleId(role.id);
+      if (existingRolePerms.length === 0) {
+        await this.setRolePermissions(role.id, targetPermissionIds);
+      }
     }
   }
 
@@ -453,13 +456,57 @@ export class DrizzleRbacRepository {
       if (assignment.isActive === false) {
         continue;
       }
+
+      // 1. Resolve dynamic database-backed role permissions for the assigned staff role
+      if (assignment.role) {
+        const dynamicSlug = assignment.role.toLowerCase().replace(/_/g, '-');
+        const roleNameLike = assignment.role.replace(/_/g, ' ');
+        try {
+          const [dbRole] = await this.db
+            .select({ id: schema.roles.id })
+            .from(schema.roles)
+            .where(
+              or(
+                eq(schema.roles.slug, dynamicSlug),
+                ilike(schema.roles.slug, assignment.role),
+                ilike(schema.roles.name, roleNameLike),
+              ),
+            )
+            .limit(1);
+
+          if (dbRole) {
+            const dynamicPerms = await this.findPermissionsByRoleId(dbRole.id);
+            for (const p of dynamicPerms) {
+              permissions.add(p.permissionKey);
+              const canonical = normalizePermissionKey(p.permissionKey);
+              if (canonical) permissions.add(canonical);
+            }
+          }
+        } catch {
+          // Fall back gracefully if role lookup fails
+        }
+      }
+
+      // 2. Resolve default baseline permissions + explicit permissions
       const resolved = resolvePermissions(
         assignment.role,
         (assignment.permissions as string[]) ?? [],
       ) as string[];
       for (const key of resolved) {
         permissions.add(key);
+        const canonical = normalizePermissionKey(key);
+        if (canonical) permissions.add(canonical);
       }
+
+      // 3. Include any extra permissions attached to the assignment
+      if (Array.isArray(assignment.permissions)) {
+        for (const extra of assignment.permissions as string[]) {
+          permissions.add(extra);
+          const canonical = normalizePermissionKey(extra);
+          if (canonical) permissions.add(canonical);
+        }
+      }
+
       if (assignment.branchId) {
         scopes.push({ type: 'branch', id: assignment.branchId });
       }
