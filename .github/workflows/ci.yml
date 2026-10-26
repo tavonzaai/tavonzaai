@@ -29,6 +29,8 @@ jobs:
 
       - name: Drizzle Schema Verification
         run: pnpm drizzle-kit check
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/platform_dev"
 
       - name: Run Domain & Unit Tests
         run: pnpm test

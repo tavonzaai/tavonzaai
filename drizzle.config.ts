@@ -6,12 +6,9 @@ import { resolve } from 'path';
 config({ path: resolve(__dirname, '.env') });
 config();
 
-const dbUrl = process.env.DATABASE_URL;
+const dbUrl = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/platform_dev';
 
 function getDbCredentials() {
-  if (!dbUrl) {
-    throw new Error('DATABASE_URL is not defined in environment variables');
-  }
   try {
     const parsed = new URL(dbUrl);
     const sslParam = parsed.searchParams.get('ssl');
