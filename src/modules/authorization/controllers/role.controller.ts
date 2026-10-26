@@ -57,13 +57,14 @@ export class RoleController {
   })
   async getMyRole(@CurrentUser() user: any) {
     const role = await this.roleService.getUserRole(user.sub);
-    const permissions = await this.roleService.getUserPermissions(user.sub);
+    const live = await this.roleService.getEffectivePermissions(user.sub);
     return {
       userId: user.sub,
       email: user.email,
       globalRole: user.role,
       role,
-      permissions,
+      permissions: live.permissions,
+      scopes: live.scopes,
     };
   }
 

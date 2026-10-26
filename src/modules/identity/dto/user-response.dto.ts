@@ -96,13 +96,25 @@ export class UserDetailResponseDto {
   @ApiPropertyOptional({ type: () => [StaffAssignmentSummaryDto] })
   assignments?: StaffAssignmentSummaryDto[];
 
+  @ApiPropertyOptional({ type: [String], description: 'Effective capabilities and permissions' })
+  permissions?: string[];
+
+  @ApiPropertyOptional({ type: 'array', description: 'Assigned authorization scopes' })
+  scopes?: any[];
+
   @ApiProperty()
   createdAt!: Date;
 
   @ApiProperty()
   updatedAt!: Date;
 
-  static fromRecord(user: any, customer?: any, assignments?: any[]): UserDetailResponseDto {
+  static fromRecord(
+    user: any,
+    customer?: any,
+    assignments?: any[],
+    permissions?: string[],
+    scopes?: any[],
+  ): UserDetailResponseDto {
     const dto = new UserDetailResponseDto();
     dto.id = user.id;
     dto.email = user.email;
@@ -151,6 +163,9 @@ export class UserDetailResponseDto {
       dto.branchId = null;
       dto.branchName = null;
     }
+
+    dto.permissions = permissions ?? user.permissions ?? [];
+    dto.scopes = scopes ?? user.scopes ?? [];
 
     return dto;
   }

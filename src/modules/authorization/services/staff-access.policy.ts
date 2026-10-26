@@ -25,7 +25,7 @@ export function assertAssignableStaffRole(role: string): void {
   }
 }
 
-export function assertAssignablePermissions(permissions?: string[]): StaffPermissionAction[] {
+export function assertAssignablePermissions(permissions?: string[]): string[] {
   if (!permissions || permissions.length === 0) {
     return [];
   }
@@ -68,7 +68,7 @@ export function assertStaffAssignmentInput(
     /** When false, only BRANCH_MANAGER_CREATABLE_ROLES may be assigned (never BRANCH_MANAGER). */
     privilegedActor?: boolean;
   },
-): { role?: string; permissions?: StaffPermissionAction[] } {
+): { role?: string; permissions?: string[] } {
   if (input.role) {
     if (isPrivilegedGlobalRole(input.role) || input.role === 'CUSTOMER' || input.role === 'STAFF') {
       throw new ForbiddenException('Cannot assign a privileged or non-staff role through staff management');
