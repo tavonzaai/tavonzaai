@@ -2,9 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, prod, feature/backend-standalone]
-  push:
-    branches: [main, prod, feature/backend-standalone]
+    branches: [main, production]
 
 jobs:
   # ─── Step 1: Security & Root Hygiene Scan ───────────────────────────────────

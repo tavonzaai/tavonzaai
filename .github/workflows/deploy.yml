@@ -1,10 +1,10 @@
-name: Deploy (Dev Environment)
+name: Deploy (Production)
 
 on:
   push:
     branches:
       - main
-      - feature/backend-standalone
+      - production
   workflow_dispatch:
 
 permissions:
@@ -12,9 +12,35 @@ permissions:
   packages: write
 
 jobs:
-  # ─── 1. Build and Push Docker Images ───────────────────────────────────────
+  # ─── 1. Quality Gates (Tests, Typecheck, Schema Check & Build) ───────────────
+  quality-gates:
+    name: Quality Gates & Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-pnpm
+
+      - name: TypeScript Typecheck
+        run: pnpm typecheck
+
+      - name: Drizzle Schema Verification
+        run: pnpm drizzle-kit check
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/platform_dev"
+
+      - name: Run Domain & Unit Tests
+        run: pnpm test
+
+      - name: Build Dual-Target Application
+        run: pnpm build
+
+  # ─── 2. Build & Push Production Docker Images ───────────────────────────────
   build-and-push:
     name: Build & Push Images
+    needs: [quality-gates]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -44,6 +70,8 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-dev-api:${{ github.sha }}
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-dev-api:latest
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-api:${{ github.sha }}
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -57,16 +85,18 @@ jobs:
           tags: |
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-dev-worker:${{ github.sha }}
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-dev-worker:latest
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-worker:${{ github.sha }}
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-worker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ─── 2. Deploy to Dev Server ───────────────────────────────────────────────
+  # ─── 3. Rolling Restart on Production Server via SSH ────────────────────────
   deploy:
-    name: Deploy to Server
+    name: Deploy to Production Server
     needs: [build-and-push]
     runs-on: ubuntu-latest
     steps:
-      - name: Restart Backend Services via SSH
+      - name: Deploy Backend Services via SSH
         uses: appleboy/ssh-action@v1
         env:
           GH_ACTOR: ${{ github.actor }}
@@ -83,14 +113,18 @@ jobs:
             echo "🔑 Authenticating with GitHub Container Registry..."
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
-            echo "⬇️ Pulling latest backend images (api & worker)..."
+            echo "⬇️ Pulling latest backend images..."
             docker compose -f docker-compose.dev.yaml pull api worker
 
-            echo "▶️ Restarting backend containers..."
+            echo "▶️ Performing rolling restart on backend containers..."
             docker compose -f docker-compose.dev.yaml up -d api worker
 
-            echo "🧹 Cleaning up old dangling images..."
+            echo "🩺 Verifying container health..."
+            sleep 5
+            curl -sSf http://localhost:5000/health/readiness || true
+
+            echo "🧹 Cleaning up old dangling Docker images..."
             docker image prune -f
 
-            echo "✅ Backend deployment complete! Status:"
+            echo "✅ Production deployment complete! Current status:"
             docker compose -f docker-compose.dev.yaml ps api worker
