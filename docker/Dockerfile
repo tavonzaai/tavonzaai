@@ -1,10 +1,9 @@
-ARG BASE_IMAGE=node:20-alpine
+ARG BASE_IMAGE=node:20-slim
 
 # --- 1. Base Runtime Layer ---
 FROM ${BASE_IMAGE} AS base
-RUN apk add --no-cache libc6-compat
-RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
 WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
 
 # --- 2. Dependencies Layer ---
 FROM base AS dependencies
@@ -27,14 +26,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nestjs
+COPY --chown=node:node --from=builder /app/package.json ./package.json
+COPY --chown=node:node --from=dependencies /app/node_modules ./node_modules
+COPY --chown=node:node --from=builder /app/dist ./dist
+COPY --chown=node:node --from=builder /app/drizzle ./drizzle
 
-COPY --from=builder /app/package.json ./package.json
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/drizzle ./drizzle
-
-USER nestjs
+USER node
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
@@ -47,13 +44,11 @@ FROM base AS worker
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 workerjs
+COPY --chown=node:node --from=builder /app/package.json ./package.json
+COPY --chown=node:node --from=dependencies /app/node_modules ./node_modules
+COPY --chown=node:node --from=builder /app/dist ./dist
+COPY --chown=node:node --from=builder /app/drizzle ./drizzle
 
-COPY --from=builder /app/package.json ./package.json
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/drizzle ./drizzle
-
-USER workerjs
+USER node
 
 CMD ["node", "dist/src/worker.js"]
