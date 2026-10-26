@@ -4,95 +4,23 @@ on:
   push:
     branches:
       - main
+      - feature/backend-standalone
   workflow_dispatch:
-    inputs:
-      service:
-        description: "Service to build and deploy"
-        required: false
-        default: "all"
-        type: choice
-        options:
-          - all
-          - api
-          - worker
 
 permissions:
   contents: read
   packages: write
 
-env:
-  REGISTRY: ghcr.io
-
 jobs:
-  # ─── 1. Detect Changes ──────────────────────────────────────────────────────
-  detect-changes:
-    name: Detect Changes
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      config: ${{ steps.filter.outputs.config }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'src/**'
-              - 'drizzle/**'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'tsconfig.json'
-              - 'nest-cli.json'
-              - 'docker/Dockerfile'
-            config:
-              - 'docker/docker-compose.dev.yaml'
-              - 'docker/Caddyfile'
-              - '.github/workflows/deploy-dev.yaml'
-
-  # ─── 2. Build & Push Images ────────────────────────────────────────────────
+  # ─── 1. Build and Push Docker Images ───────────────────────────────────────
   build-and-push:
-    name: Build & Push (${{ matrix.service }})
-    needs: [detect-changes]
+    name: Build & Push Images
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - service: api
-            target: api
-            image_name: tavonzaai-dev-api
-            live_name: tavonzaai-live-backend
-          - service: worker
-            target: worker
-            image_name: tavonzaai-dev-worker
-            live_name: tavonzaai-live-worker
     steps:
-      - name: Check if build needed
-        id: check
-        env:
-          SERVICE: ${{ matrix.service }}
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_SERVICE: ${{ inputs.service }}
-          BACKEND_CHANGED: ${{ needs.detect-changes.outputs.backend }}
-          CONFIG_CHANGED: ${{ needs.detect-changes.outputs.config }}
-        run: |
-          SHOULD_BUILD="false"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$INPUT_SERVICE" = "all" ] || [ "$INPUT_SERVICE" = "$SERVICE" ]; then
-              SHOULD_BUILD="true"
-            fi
-          elif [ "$CONFIG_CHANGED" = "true" ] || [ "$BACKEND_CHANGED" = "true" ]; then
-            SHOULD_BUILD="true"
-          fi
-          echo "should_build=$SHOULD_BUILD" >> $GITHUB_OUTPUT
-          echo "$SERVICE -> build required: $SHOULD_BUILD"
-
-      - uses: actions/checkout@v4
-        if: steps.check.outputs.should_build == 'true'
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Log in to GitHub Container Registry
-        if: steps.check.outputs.should_build == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -100,122 +28,69 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        if: steps.check.outputs.should_build == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Lowercase Repository Owner
-        if: steps.check.outputs.should_build == 'true'
         id: repo-owner
         run: echo "owner=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
-      - name: Build & Push Image
-        if: steps.check.outputs.should_build == 'true'
+      - name: Build & Push API Image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: docker/Dockerfile
-          target: ${{ matrix.target }}
+          target: api
           push: true
-          provenance: false
           tags: |
-            ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.image_name }}:${{ github.sha }}
-            ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.image_name }}:latest
-            ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.live_name }}:${{ github.sha }}
-            ghcr.io/${{ steps.repo-owner.outputs.owner }}/${{ matrix.live_name }}:latest
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.description=Tavonza AI ${{ matrix.service }}
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-dev-api:${{ github.sha }}
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-dev-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ─── 3. Deploy via SSH to /home/admin/server ──────────────────────────────
-  deploy:
-    name: Deploy to Server (/home/admin/server)
-    needs: [detect-changes, build-and-push]
-    runs-on: ubuntu-latest
-    if: always() && !cancelled() && !contains(needs.*.result, 'failure')
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Determine Services to Update
-        id: target-services
-        env:
-          INPUT_SERVICE: ${{ inputs.service }}
-          EVENT_NAME: ${{ github.event_name }}
-          BACKEND_CHANGED: ${{ needs.detect-changes.outputs.backend }}
-          CONFIG_CHANGED: ${{ needs.detect-changes.outputs.config }}
-        run: |
-          SERVICES=""
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$INPUT_SERVICE" = "all" ]; then
-              SERVICES="api worker"
-            else
-              SERVICES="$INPUT_SERVICE"
-            fi
-          elif [ "$BACKEND_CHANGED" = "true" ] || [ "$CONFIG_CHANGED" = "true" ]; then
-            SERVICES="api worker"
-          fi
-
-          SERVICES=$(echo "$SERVICES" | xargs)
-          echo "services=$SERVICES" >> $GITHUB_OUTPUT
-          echo "Services to update: $SERVICES"
-
-          SHOULD_DEPLOY="false"
-          if [ -n "$SERVICES" ] || [ "$CONFIG_CHANGED" = "true" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            SHOULD_DEPLOY="true"
-          fi
-          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
-          echo "Should execute deployment: $SHOULD_DEPLOY"
-
-      - name: Copy Docker Configs to Server
-        if: steps.target-services.outputs.should_deploy == 'true'
-        uses: appleboy/scp-action@v0.1.7
+      - name: Build & Push Worker Image
+        uses: docker/build-push-action@v5
         with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USER != '' && secrets.USER || 'admin' }}
-          key: ${{ secrets.KEY }}
-          source: "docker/docker-compose.dev.yaml,docker/Caddyfile"
-          target: "/home/admin/server"
-          strip_components: 1
+          context: .
+          file: docker/Dockerfile
+          target: worker
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-dev-worker:${{ github.sha }}
+            ghcr.io/${{ steps.repo-owner.outputs.owner }}/tavonzaai-dev-worker:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Deploy Services via SSH
-        if: steps.target-services.outputs.should_deploy == 'true'
+  # ─── 2. Deploy to Dev Server ───────────────────────────────────────────────
+  deploy:
+    name: Deploy to Server
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restart Backend Services via SSH
         uses: appleboy/ssh-action@v1
         env:
           GH_ACTOR: ${{ github.actor }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SERVICES: ${{ steps.target-services.outputs.services }}
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USER != '' && secrets.USER || 'admin' }}
           key: ${{ secrets.KEY }}
-          envs: GH_ACTOR,GH_TOKEN,SERVICES
+          envs: GH_ACTOR,GH_TOKEN
           script_stop: true
           script: |
             cd /home/admin/server
-            [ -f .env ] || touch .env
 
+            echo "🔑 Authenticating with GitHub Container Registry..."
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
-            docker compose -f docker-compose.dev.yaml up -d caddy
+            echo "⬇️ Pulling latest backend images (api & worker)..."
+            docker compose -f docker-compose.dev.yaml pull api worker
 
-            if [ -n "$SERVICES" ]; then
-              echo "🛑 Stopping updated services: $SERVICES"
-              docker compose -f docker-compose.dev.yaml stop $SERVICES 2>/dev/null || true
-              docker compose -f docker-compose.dev.yaml rm -f $SERVICES 2>/dev/null || true
+            echo "▶️ Restarting backend containers..."
+            docker compose -f docker-compose.dev.yaml up -d api worker
 
-              echo "⬇️ Pulling latest images for: $SERVICES"
-              docker compose -f docker-compose.dev.yaml pull $SERVICES
+            echo "🧹 Cleaning up old dangling images..."
+            docker image prune -f
 
-              echo "▶️ Launching updated services: $SERVICES"
-              docker compose -f docker-compose.dev.yaml up -d --no-build $SERVICES
-
-              echo "🔄 Restarting Caddy reverse proxy..."
-              docker compose -f docker-compose.dev.yaml restart caddy
-
-              docker image prune -f 2>/dev/null || true
-              echo "✅ Deployment completed successfully for: $SERVICES"
-            else
-              docker compose -f docker-compose.dev.yaml exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || docker compose -f docker-compose.dev.yaml restart caddy
-              echo "✅ Configurations updated and Caddy proxy reloaded successfully."
-            fi
+            echo "✅ Backend deployment complete! Status:"
+            docker compose -f docker-compose.dev.yaml ps api worker

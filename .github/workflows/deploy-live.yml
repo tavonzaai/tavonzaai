@@ -1,46 +1,24 @@
 name: Deploy (Live Production Environment)
 
-# Manual deployment workflow via workflow_dispatch.
-# Pulls the new Docker image from GHCR, and restarts containers via AWS SSM.
-
 on:
   workflow_dispatch:
-    inputs:
-      service:
-        description: "Service to deploy"
-        required: false
-        default: "all"
-        type: choice
-        options:
-          - all
-          - backend
-          - worker
 
 permissions:
-  id-token: write
   contents: read
   packages: write
 
 env:
   AWS_REGION: eu-west-2
-  REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/tavonzaai
 
 jobs:
-  # ─── 1. Deploy Backend API ──────────────────────────────────────────────────
-  deploy-backend:
-    name: Deploy Backend API (api.tavonza.com)
-    if: inputs.service == 'all' || inputs.service == 'backend'
+  # ─── 1. Build and Push Production Images ────────────────────────────────────
+  build-and-push:
+    name: Build & Push Production Images
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -52,7 +30,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build & Push Backend Image
+      - name: Build & Push API Image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -62,75 +40,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/tavonzaai-live-backend:${{ github.sha }}
             ${{ env.IMAGE_PREFIX }}/tavonzaai-live-backend:latest
-          labels: |
-            org.opencontainers.image.source=https://github.com/tavonzaai/tavonzaai
-            org.opencontainers.image.description=Tavonza AI Live Backend API
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Deploy to EC2 via SSM
-        run: |
-          INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=tavonzaai-live-backend" "Name=instance-state-name,Values=running" \
-            --region ${{ env.AWS_REGION }} \
-            --query "Reservations[0].Instances[0].InstanceId" \
-            --output text)
-
-          echo "Instance: $INSTANCE_ID"
-
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --region ${{ env.AWS_REGION }} \
-            --parameters 'commands=[
-              "docker system prune -af --volumes=false 2>/dev/null || true",
-              "docker pull ghcr.io/tavonzaai/tavonzaai-live-backend:latest",
-              "docker stop tavonzaai-backend 2>/dev/null || true",
-              "docker rm tavonzaai-backend 2>/dev/null || true",
-              "docker run -d --name tavonzaai-backend --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env -p 3000:3000 ghcr.io/tavonzaai/tavonzaai-live-backend:latest",
-              "docker image prune -af 2>/dev/null || true"
-            ]' \
-            --query "Command.CommandId" --output text)
-
-          aws ssm wait command-executed \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID" \
-            --region ${{ env.AWS_REGION }} || {
-            echo "::error::SSM command failed. Fetching execution details..."
-            aws ssm get-command-invocation \
-              --command-id "$COMMAND_ID" \
-              --instance-id "$INSTANCE_ID" \
-              --region ${{ env.AWS_REGION }} \
-              --query "{Status: Status, Output: StandardOutputContent, Error: StandardErrorContent}"
-            exit 1
-          }
-          echo "✅ Backend deployed!"
-
-  # ─── 2. Deploy Background Worker ─────────────────────────────────────────────
-  deploy-worker:
-    name: Deploy Worker (email/outbox/notifications)
-    needs: [deploy-backend]
-    if: always() && (inputs.service == 'all' || inputs.service == 'backend' || inputs.service == 'worker')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Build & Push Worker Image
         uses: docker/build-push-action@v5
@@ -142,13 +53,23 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/tavonzaai-live-worker:${{ github.sha }}
             ${{ env.IMAGE_PREFIX }}/tavonzaai-live-worker:latest
-          labels: |
-            org.opencontainers.image.source=https://github.com/tavonzaai/tavonzaai
-            org.opencontainers.image.description=Tavonza AI Live Worker
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy Worker to EC2 via SSM
+  # ─── 2. Deploy to Live EC2 via AWS Systems Manager ─────────────────────────
+  deploy:
+    name: Deploy to Production EC2 via SSM
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Execute Rolling Restart via AWS SSM
         run: |
           INSTANCE_ID=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=tavonzaai-live-backend" "Name=instance-state-name,Values=running" \
@@ -156,27 +77,36 @@ jobs:
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text)
 
-          echo "Instance: $INSTANCE_ID"
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
+            echo "::error::No running EC2 instance found with tag Name=tavonzaai-live-backend in ${{ env.AWS_REGION }}"
+            exit 1
+          fi
+
+          echo "🚀 Found Target EC2 Instance: $INSTANCE_ID"
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --region ${{ env.AWS_REGION }} \
             --parameters 'commands=[
-              "docker system prune -af --volumes=false 2>/dev/null || true",
-              "docker pull ghcr.io/tavonzaai/tavonzaai-live-worker:latest",
-              "docker stop tavonzaai-worker 2>/dev/null || true",
-              "docker rm tavonzaai-worker 2>/dev/null || true",
-              "docker run -d --name tavonzaai-worker --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env ghcr.io/tavonzaai/tavonzaai-live-worker:latest",
-              "docker image prune -af 2>/dev/null || true"
+              "docker pull ${{ env.IMAGE_PREFIX }}/tavonzaai-live-backend:latest",
+              "docker pull ${{ env.IMAGE_PREFIX }}/tavonzaai-live-worker:latest",
+              "docker stop tavonzaai-backend tavonzaai-worker 2>/dev/null || true",
+              "docker rm tavonzaai-backend tavonzaai-worker 2>/dev/null || true",
+              "docker run -d --name tavonzaai-backend --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env -e PORT=5000 -e API_PORT=5000 -p 5000:5000 -p 3000:5000 ${{ env.IMAGE_PREFIX }}/tavonzaai-live-backend:latest",
+              "docker run -d --name tavonzaai-worker --restart always --log-opt max-size=20m --log-opt max-file=3 --env-file /opt/tavonzaai/backend.env ${{ env.IMAGE_PREFIX }}/tavonzaai-live-worker:latest",
+              "docker image prune -af 2>/dev/null || true",
+              "sleep 5 && docker ps --filter name=tavonzaai --format \"table {{.Names}}\t{{.Status}}\t{{.Ports}}\""
             ]' \
             --query "Command.CommandId" --output text)
+
+          echo "📡 SSM Command Dispatched: $COMMAND_ID. Waiting for completion..."
 
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
             --instance-id "$INSTANCE_ID" \
             --region ${{ env.AWS_REGION }} || {
-            echo "::error::SSM command failed. Fetching execution details..."
+            echo "::error::SSM command execution failed. Details:"
             aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" \
               --instance-id "$INSTANCE_ID" \
@@ -184,4 +114,5 @@ jobs:
               --query "{Status: Status, Output: StandardOutputContent, Error: StandardErrorContent}"
             exit 1
           }
-          echo "✅ Worker deployed!"
+
+          echo "✅ Production deployment completed successfully!"

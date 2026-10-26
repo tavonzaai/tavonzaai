@@ -5,15 +5,20 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: api
-    container_name: tavonza-api
+    container_name: tavonzaai-dev-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "5000:3000"
     env_file:
       - ../.env
     environment:
       PORT: 3000
       API_PORT: 3000
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # ─── 2. Background Queue & Outbox Worker ────────────────────────────────
   worker:
@@ -21,12 +26,17 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: worker
-    container_name: tavonza-worker
+    container_name: tavonzaai-dev-worker
     restart: unless-stopped
     env_file:
       - ../.env
     depends_on:
       - api
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # ─── 3. Reverse Proxy & SSL ─────────────────────────────────────────────
   caddy:
@@ -45,6 +55,11 @@ services:
       - ../.env
     depends_on:
       - api
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
 volumes:
   caddy_dev_data:

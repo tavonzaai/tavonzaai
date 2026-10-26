@@ -6,102 +6,22 @@ on:
   workflow_dispatch:
     inputs:
       dev_api:
-        description: Delete tavonzaai-dev-api
-        required: false
-        type: boolean
-        default: true
-      dev_customer:
-        description: Delete tavonzaai-dev-customer
-        required: false
-        type: boolean
-        default: true
-      dev_manager:
-        description: Delete tavonzaai-dev-manager
-        required: false
-        type: boolean
-        default: true
-      dev_kitchen:
-        description: Delete tavonzaai-dev-kitchen
-        required: false
-        type: boolean
-        default: true
-      dev_realtime:
-        description: Delete tavonzaai-dev-realtime
+        description: Prune tavonzaai-dev-api
         required: false
         type: boolean
         default: true
       dev_worker:
-        description: Delete tavonzaai-dev-worker
-        required: false
-        type: boolean
-        default: true
-      dev_ai:
-        description: Delete tavonzaai-dev-ai
-        required: false
-        type: boolean
-        default: true
-      dev_waiter:
-        description: Delete tavonzaai-dev-waiter
-        required: false
-        type: boolean
-        default: true
-      dev_cashier:
-        description: Delete tavonzaai-dev-cashier
-        required: false
-        type: boolean
-        default: true
-      dev_admin:
-        description: Delete tavonzaai-dev-admin
-        required: false
-        type: boolean
-        default: true
-      live_ai:
-        description: Delete tavonzaai-live-ai
-        required: false
-        type: boolean
-        default: true
-      live_admin_dashboard:
-        description: Delete tavonzaai-live-admin-dashboard
-        required: false
-        type: boolean
-        default: true
-      live_worker:
-        description: Delete tavonzaai-live-worker
-        required: false
-        type: boolean
-        default: true
-      live_kitchen:
-        description: Delete tavonzaai-live-kitchen
-        required: false
-        type: boolean
-        default: true
-      live_realtime:
-        description: Delete tavonzaai-live-realtime
-        required: false
-        type: boolean
-        default: true
-      live_manager:
-        description: Delete tavonzaai-live-manager
+        description: Prune tavonzaai-dev-worker
         required: false
         type: boolean
         default: true
       live_backend:
-        description: Delete tavonzaai-live-backend
+        description: Prune tavonzaai-live-backend
         required: false
         type: boolean
         default: true
-      live_cashier:
-        description: Delete tavonzaai-live-cashier
-        required: false
-        type: boolean
-        default: true
-      live_waiter:
-        description: Delete tavonzaai-live-waiter
-        required: false
-        type: boolean
-        default: true
-      live_frontend:
-        description: Delete tavonzaai-live-frontend
+      live_worker:
+        description: Prune tavonzaai-live-worker
         required: false
         type: boolean
         default: true
@@ -121,47 +41,15 @@ jobs:
         id: selection
         env:
           DEV_API: ${{ github.event_name == 'schedule' || inputs.dev_api }}
-          DEV_CUSTOMER: ${{ github.event_name == 'schedule' || inputs.dev_customer }}
-          DEV_MANAGER: ${{ github.event_name == 'schedule' || inputs.dev_manager }}
-          DEV_KITCHEN: ${{ github.event_name == 'schedule' || inputs.dev_kitchen }}
-          DEV_REALTIME: ${{ github.event_name == 'schedule' || inputs.dev_realtime }}
           DEV_WORKER: ${{ github.event_name == 'schedule' || inputs.dev_worker }}
-          DEV_AI: ${{ github.event_name == 'schedule' || inputs.dev_ai }}
-          DEV_WAITER: ${{ github.event_name == 'schedule' || inputs.dev_waiter }}
-          DEV_CASHIER: ${{ github.event_name == 'schedule' || inputs.dev_cashier }}
-          DEV_ADMIN: ${{ github.event_name == 'schedule' || inputs.dev_admin }}
-          LIVE_AI: ${{ github.event_name == 'schedule' || inputs.live_ai }}
-          LIVE_ADMIN_DASHBOARD: ${{ github.event_name == 'schedule' || inputs.live_admin_dashboard }}
-          LIVE_WORKER: ${{ github.event_name == 'schedule' || inputs.live_worker }}
-          LIVE_KITCHEN: ${{ github.event_name == 'schedule' || inputs.live_kitchen }}
-          LIVE_REALTIME: ${{ github.event_name == 'schedule' || inputs.live_realtime }}
-          LIVE_MANAGER: ${{ github.event_name == 'schedule' || inputs.live_manager }}
           LIVE_BACKEND: ${{ github.event_name == 'schedule' || inputs.live_backend }}
-          LIVE_CASHIER: ${{ github.event_name == 'schedule' || inputs.live_cashier }}
-          LIVE_WAITER: ${{ github.event_name == 'schedule' || inputs.live_waiter }}
-          LIVE_FRONTEND: ${{ github.event_name == 'schedule' || inputs.live_frontend }}
+          LIVE_WORKER: ${{ github.event_name == 'schedule' || inputs.live_worker }}
         run: |
           packages=()
           [[ "$DEV_API" == "true" ]] && packages+=('"tavonzaai-dev-api"')
-          [[ "$DEV_CUSTOMER" == "true" ]] && packages+=('"tavonzaai-dev-customer"')
-          [[ "$DEV_MANAGER" == "true" ]] && packages+=('"tavonzaai-dev-manager"')
-          [[ "$DEV_KITCHEN" == "true" ]] && packages+=('"tavonzaai-dev-kitchen"')
-          [[ "$DEV_REALTIME" == "true" ]] && packages+=('"tavonzaai-dev-realtime"')
           [[ "$DEV_WORKER" == "true" ]] && packages+=('"tavonzaai-dev-worker"')
-          [[ "$DEV_AI" == "true" ]] && packages+=('"tavonzaai-dev-ai"')
-          [[ "$DEV_WAITER" == "true" ]] && packages+=('"tavonzaai-dev-waiter"')
-          [[ "$DEV_CASHIER" == "true" ]] && packages+=('"tavonzaai-dev-cashier"')
-          [[ "$DEV_ADMIN" == "true" ]] && packages+=('"tavonzaai-dev-admin"')
-          [[ "$LIVE_AI" == "true" ]] && packages+=('"tavonzaai-live-ai"')
-          [[ "$LIVE_ADMIN_DASHBOARD" == "true" ]] && packages+=('"tavonzaai-live-admin-dashboard"')
-          [[ "$LIVE_WORKER" == "true" ]] && packages+=('"tavonzaai-live-worker"')
-          [[ "$LIVE_KITCHEN" == "true" ]] && packages+=('"tavonzaai-live-kitchen"')
-          [[ "$LIVE_REALTIME" == "true" ]] && packages+=('"tavonzaai-live-realtime"')
-          [[ "$LIVE_MANAGER" == "true" ]] && packages+=('"tavonzaai-live-manager"')
           [[ "$LIVE_BACKEND" == "true" ]] && packages+=('"tavonzaai-live-backend"')
-          [[ "$LIVE_CASHIER" == "true" ]] && packages+=('"tavonzaai-live-cashier"')
-          [[ "$LIVE_WAITER" == "true" ]] && packages+=('"tavonzaai-live-waiter"')
-          [[ "$LIVE_FRONTEND" == "true" ]] && packages+=('"tavonzaai-live-frontend"')
+          [[ "$LIVE_WORKER" == "true" ]] && packages+=('"tavonzaai-live-worker"')
 
           if ((${#packages[@]} == 0)); then
             echo 'packages=[]' >> "$GITHUB_OUTPUT"
@@ -182,11 +70,11 @@ jobs:
       matrix:
         package: ${{ fromJSON(needs.select-packages.outputs.packages) }}
     steps:
-      - name: Delete old versions for ${{ matrix.package }}
+      - name: Delete old untagged versions for ${{ matrix.package }}
         uses: actions/delete-package-versions@v5
         with:
           package-name: ${{ matrix.package }}
           package-type: 'container'
-          min-versions-to-keep: 0
+          min-versions-to-keep: 5
           delete-only-untagged-versions: 'false'
         continue-on-error: true

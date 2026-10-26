@@ -91,6 +91,12 @@ export class HealthCheckResponseDto {
   @ApiProperty({ example: 'ok', description: 'Application operational status' })
   status!: string;
 
+  @ApiProperty({ example: 'connected', required: false, description: 'Database connection state' })
+  database?: string;
+
+  @ApiProperty({ example: 120, required: false, description: 'Process uptime in seconds' })
+  uptime?: number;
+
   @ApiProperty({ example: '2026-10-08T14:30:00.000Z', description: 'Current server UTC ISO timestamp' })
   timestamp!: string;
 }
