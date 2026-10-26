@@ -10,7 +10,7 @@ import { isRoleAllowedForKitchen } from '@/redux/ReduxProvider';
 
 function LoginContent() {
   const router = useRouter();
-  const returnUrl = '/updated-kitchen-dashboard/dashboard';
+  const returnUrl = '/kitchen-dashboard/dashboard';
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
 
   // Check if session exists in Redux state or in cookies

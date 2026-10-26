@@ -34,6 +34,20 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/updated-cashier-dashboard',
+        destination: '/cashier-dashboard/table-view',
+        permanent: true,
+      },
+      {
+        source: '/updated-cashier-dashboard/:path*',
+        destination: '/cashier-dashboard/:path*',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

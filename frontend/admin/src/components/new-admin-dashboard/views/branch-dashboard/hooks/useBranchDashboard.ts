@@ -356,25 +356,59 @@ export function useBranchDashboard({
   };
 
   const handleRegenerateQr = async () => {
-    if (!viewingQrTable) return;
-    setIsRegenerating(true);
-    try {
-      const result: any = await regenerateQr(viewingQrTable.id).unwrap();
-      const joinUrl =
-        result?.qrJoinUrl ||
-        (result?.qrCodeToken ? `${getCustomerAppUrl()}/t/${result.qrCodeToken}` : viewingQrTable.qrCodeUrl);
-      setViewingQrTable({
-        ...viewingQrTable,
-        qrCodeToken: result?.qrCodeToken,
-        qrJoinUrl: joinUrl,
-        qrCodeUrl: joinUrl,
-      });
-      toast.success('QR code regenerated. Print a new standee.');
-    } catch (err: any) {
-      toast.error(err?.data?.message || err?.message || 'Unable to regenerate QR code.');
-    } finally {
-      setIsRegenerating(false);
-      setQrSeed((prev) => prev + 1);
+    if (viewingQrTable) {
+      setIsRegenerating(true);
+      try {
+        const result: any = await regenerateQr(viewingQrTable.id).unwrap();
+        const joinUrl =
+          result?.qrJoinUrl ||
+          (result?.qrCodeToken ? `${getCustomerAppUrl()}/t/${result.qrCodeToken}` : viewingQrTable.qrCodeUrl);
+        setViewingQrTable({
+          ...viewingQrTable,
+          qrCodeToken: result?.qrCodeToken,
+          qrJoinUrl: joinUrl,
+          qrCodeUrl: joinUrl,
+        });
+        toast.success('QR code regenerated. Print a new standee.');
+      } catch (err: any) {
+        toast.error(err?.data?.message || err?.message || 'Unable to regenerate QR code.');
+      } finally {
+        setIsRegenerating(false);
+        setQrSeed((prev) => prev + 1);
+      }
+      return;
+    }
+
+    if (editingTable) {
+      setIsRegenerating(true);
+      try {
+        const result: any = await regenerateQr(editingTable.id).unwrap();
+        const joinUrl =
+          result?.qrJoinUrl ||
+          (result?.qrCodeToken ? `${getCustomerAppUrl()}/t/${result.qrCodeToken}` : editingTable.qrCodeUrl);
+        setEditingTable({
+          ...editingTable,
+          qrCodeToken: result?.qrCodeToken,
+          qrJoinUrl: joinUrl,
+          qrCodeUrl: joinUrl,
+        });
+        toast.success(`QR code regenerated for ${editingTable.number}!`);
+      } catch (err: any) {
+        toast.error(err?.data?.message || err?.message || 'Unable to regenerate QR code.');
+      } finally {
+        setIsRegenerating(false);
+        setQrSeed((prev) => prev + 1);
+      }
+      return;
+    }
+
+    if (isAddTableOpen) {
+      setIsRegenerating(true);
+      setTimeout(() => {
+        setQrSeed((prev) => prev + 1);
+        setIsRegenerating(false);
+        toast.success('Generated new QR code preview!');
+      }, 300);
     }
   };
 

@@ -9,8 +9,7 @@ import { isCashierAuthenticated } from '@/lib/auth';
 
 function LoginContent() {
   const router = useRouter();
-  // const returnUrl = '/cashier-dashboard/dashboard';
-  const returnUrl = '/updated-cashier-dashboard/table-view';
+  const returnUrl = '/cashier-dashboard/table-view';
   const { isAuthenticated } = useAppSelector((state) => state.auth);
   const isAuth = isAuthenticated || isCashierAuthenticated();
 

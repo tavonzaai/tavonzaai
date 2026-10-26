@@ -1,7 +1,8 @@
-import React from 'react';
-import { X, ChevronDown, RefreshCw } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { X, ChevronDown, RefreshCw, QrCode } from 'lucide-react';
 import { TableFormData } from '../types';
 import { TableQrMatrix } from '../TableQrMatrix';
+import { getCustomerAppUrl } from '@/redux/api/baseApi';
 
 interface AddTableModalProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ interface AddTableModalProps {
   onRegenerateQr: () => void;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
+  branchId?: string;
+  branchName?: string;
 }
 
 export const AddTableModal: React.FC<AddTableModalProps> = ({
@@ -23,7 +26,16 @@ export const AddTableModal: React.FC<AddTableModalProps> = ({
   onRegenerateQr,
   onClose,
   onSubmit,
+  branchId,
+  branchName,
 }) => {
+  const qrTargetUrl = useMemo(() => {
+    const tableNum = (tableForm.number || 'T-01').trim();
+    const branchParam = branchId ? `&branchId=${encodeURIComponent(branchId)}` : '';
+    const seedParam = qrSeed > 1 ? `&token=gen-${qrSeed}` : '';
+    return `${getCustomerAppUrl()}/menu?table=${encodeURIComponent(tableNum)}${branchParam}${seedParam}`;
+  }, [tableForm.number, branchId, qrSeed]);
+
   if (!isOpen) return null;
 
   return (
@@ -111,28 +123,41 @@ export const AddTableModal: React.FC<AddTableModalProps> = ({
           </div>
 
           {/* Automatic Generate QR Section */}
-          <div className="w-full flex flex-col justify-start items-center gap-3 py-1">
-            <span className="text-stone-500 text-sm font-normal font-['Inter'] leading-4">
+          <div className="w-full flex flex-col justify-start items-center gap-2.5 py-1">
+            <span className="text-stone-400 text-sm font-normal font-['Inter'] leading-4">
               Automatic Generate
             </span>
 
-            <div className="relative size-28 bg-neutral-950 rounded-[4px] p-2 flex items-center justify-center border border-neutral-800/80 shadow-inner">
+            <div className="relative size-28 bg-neutral-950 rounded-[4px] p-2 flex items-center justify-center border border-neutral-800/80 shadow-inner group">
               <div className="absolute top-1 left-1 size-3.5 border-t-2 border-l-2 border-yellow-400 rounded-tl-[2px] pointer-events-none" />
               <div className="absolute top-1 right-1 size-3.5 border-t-2 border-r-2 border-yellow-400 rounded-tr-[2px] pointer-events-none" />
               <div className="absolute bottom-1 left-1 size-3.5 border-b-2 border-l-2 border-yellow-400 rounded-bl-[2px] pointer-events-none" />
               <div className="absolute bottom-1 right-1 size-3.5 border-b-2 border-r-2 border-yellow-400 rounded-br-[2px] pointer-events-none" />
 
-              <TableQrMatrix seed={qrSeed} size={88} lightColor="#facc15" darkColor="#0a0a0a" />
+              <div className="p-1 bg-white rounded-sm shadow-md flex items-center justify-center overflow-hidden">
+                <TableQrMatrix
+                  value={qrTargetUrl}
+                  seed={qrSeed}
+                  size={84}
+                  lightColor="#ffffff"
+                  darkColor="#000000"
+                />
+              </div>
             </div>
 
             <button
               type="button"
               onClick={onRegenerateQr}
               className="inline-flex justify-center items-center gap-1.5 text-yellow-400 hover:text-yellow-300 text-sm font-normal font-['Inter'] leading-4 transition-colors cursor-pointer"
+              title="Generate a new QR token"
             >
               <RefreshCw className={`size-3.5 text-yellow-400 ${isRegenerating ? 'animate-spin' : ''}`} />
               <span>Re-generate</span>
             </button>
+            <span className="text-[11px] text-neutral-400 text-center font-['Inter'] flex items-center gap-1">
+              <span className="inline-block size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Scannable QR for Table {tableForm.number || 'T-01'}
+            </span>
           </div>
 
           {/* Modal Action Buttons: Cancel & Save */}

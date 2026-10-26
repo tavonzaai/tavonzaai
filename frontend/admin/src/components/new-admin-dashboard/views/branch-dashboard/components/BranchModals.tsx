@@ -166,6 +166,8 @@ export const BranchModals: React.FC<BranchModalsProps> = ({
         onRegenerateQr={onRegenerateQr}
         onClose={onCloseAddTable}
         onSubmit={onSaveAddTable}
+        branchId={branch.id}
+        branchName={branch.name}
       />
 
       <EditTableModal
@@ -177,6 +179,8 @@ export const BranchModals: React.FC<BranchModalsProps> = ({
         onRegenerateQr={onRegenerateQr}
         onClose={onCloseEditTable}
         onSubmit={onSaveEditTable}
+        editingTable={editingTable}
+        branchId={branch.id}
       />
 
       <DeleteTableModal

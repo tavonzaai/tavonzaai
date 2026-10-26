@@ -3,6 +3,7 @@ import { X, Copy, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { TableItem } from '../types';
 import { TableQrMatrix } from '../TableQrMatrix';
+import { getCustomerAppUrl } from '@/redux/api/baseApi';
 
 interface ViewQrModalProps {
   table: TableItem | null;
@@ -45,21 +46,13 @@ export const ViewQrModal: React.FC<ViewQrModalProps> = ({
           </span>
 
           <div className="relative p-3 bg-white rounded-lg shadow-xl">
-            {table.qrCodeUrl ? (
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(table.qrCodeUrl)}`}
-                alt={`QR code for table ${table.number}`}
-                width={160}
-                height={160}
-              />
-            ) : (
-              <TableQrMatrix
-                seed={(table.number.charCodeAt(1) || 42) * 7}
-                size={160}
-                lightColor="#000000"
-                darkColor="#ffffff"
-              />
-            )}
+            <TableQrMatrix
+              value={table.qrCodeUrl || (table.qrCodeToken ? `${getCustomerAppUrl()}/t/${table.qrCodeToken}` : undefined)}
+              seed={(table.number.charCodeAt(1) || 42) * 7}
+              size={160}
+              lightColor="#ffffff"
+              darkColor="#000000"
+            />
           </div>
 
           <div className="text-center">

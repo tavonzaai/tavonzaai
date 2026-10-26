@@ -51,14 +51,14 @@ console.log('\n=== 1) Analytics APIs for all roles ===');
     ok('manager dashboard does not call getOrders/getTables');
   } else fail('manager dashboard still calls getOrders/getTables');
 
-  const cashier = read('frontend/cashier/src/components/updated-cashier-dashboard/CashierDashboardView.tsx') || '';
+  const cashier = read('frontend/cashier/src/components/cashier-dashboard/CashierDashboardView.tsx') || '';
   if (cashier.includes('getCashierDashboardAnalytics') && cashier.includes('dashboardKpis')) {
     ok('cashier KPIs from analytics API');
   } else fail('cashier KPIs not wired to analytics');
   if (cashier.includes('$9,860')) fail('cashier still shows hardcoded fake revenue');
   else ok('cashier fake KPI placeholders removed');
 
-  const kitchen = read('frontend/kitchen/src/components/updated-kitchen-dashboard/KitchenDashboardView.tsx') || '';
+  const kitchen = read('frontend/kitchen/src/components/kitchen-dashboard/KitchenDashboardView.tsx') || '';
   if (kitchen.includes('getKitchenDashboardAnalytics') && kitchen.includes('analyticsCounts')) {
     ok('kitchen filter counts from analytics API');
   } else fail('kitchen counts not wired to analytics');

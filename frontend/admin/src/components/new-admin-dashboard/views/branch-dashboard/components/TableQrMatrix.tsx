@@ -1,73 +1,100 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import QRCode from 'qrcode';
+import { getCustomerAppUrl } from '@/redux/api/baseApi';
 
-/**
- * Authentic SVG QR Code Matrix generator with classic finder patterns and deterministic seed
- */
-export function TableQrMatrix({
-  seed = 1,
-  size = 96,
-  lightColor = '#f3f4f6',
-  darkColor = '#171717',
-}: {
+export interface TableQrMatrixProps {
+  value?: string;
   seed?: number;
   size?: number;
   lightColor?: string;
   darkColor?: string;
-}) {
-  const gridSize = 17;
-  const cellSize = size / gridSize;
+  className?: string;
+  margin?: number;
+}
 
-  const isFinder = (r: number, c: number) => {
-    if (r < 7 && c < 7) return true;
-    if (r < 7 && c >= gridSize - 7) return true;
-    if (r >= gridSize - 7 && c < 7) return true;
-    return false;
-  };
+/**
+ * Authentic, spec-compliant SVG QR Code Matrix generator with standard Reed-Solomon
+ * error correction, finder patterns, and high-contrast scannability for all smartphone cameras.
+ */
+export function TableQrMatrix({
+  value,
+  seed = 1,
+  size = 96,
+  lightColor = '#ffffff',
+  darkColor = '#000000',
+  className = '',
+  margin = 2,
+}: TableQrMatrixProps) {
+  const qrData = useMemo(() => {
+    const text =
+      value && value.trim()
+        ? value.trim()
+        : `${getCustomerAppUrl()}/menu?table=T-${String(seed || 1).padStart(2, '0')}&seed=${seed}`;
 
-  const isFinderFilled = (r: number, c: number) => {
-    const checkCorner = (or: number, oc: number) => {
-      const dr = r - or;
-      const dc = c - oc;
-      if (dr === 0 || dr === 6 || dc === 0 || dc === 6) return true;
-      if (dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4) return true;
-      return false;
-    };
+    try {
+      const qr = QRCode.create(text, {
+        errorCorrectionLevel: 'M',
+      });
+      return { qr, error: null };
+    } catch (err: any) {
+      console.error('Error generating QR code:', err);
+      try {
+        const fallback = QRCode.create('https://tavonza.com', {
+          errorCorrectionLevel: 'M',
+        });
+        return { qr: fallback, error: null };
+      } catch (fallbackErr: any) {
+        return { qr: null, error: fallbackErr };
+      }
+    }
+  }, [value, seed]);
 
-    if (r < 7 && c < 7) return checkCorner(0, 0);
-    if (r < 7 && c >= gridSize - 7) return checkCorner(0, gridSize - 7);
-    if (r >= gridSize - 7 && c < 7) return checkCorner(gridSize - 7, 0);
-    return false;
-  };
+  if (!qrData.qr) {
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className={`flex items-center justify-center bg-zinc-900 text-neutral-400 text-xs ${className}`}
+      >
+        QR Error
+      </div>
+    );
+  }
 
-  const cells: { r: number; c: number; filled: boolean }[] = [];
-  for (let r = 0; r < gridSize; r++) {
-    for (let c = 0; c < gridSize; c++) {
-      if (isFinder(r, c)) {
-        cells.push({ r, c, filled: isFinderFilled(r, c) });
-      } else {
-        const val = (r * 19 + c * 31 + seed * 13) % 100;
-        const filled = val > 42;
-        cells.push({ r, c, filled });
+  const { qr } = qrData;
+  const numModules = qr.modules.size;
+  const totalUnits = numModules + margin * 2;
+
+  const rects: React.ReactNode[] = [];
+  for (let r = 0; r < numModules; r++) {
+    for (let c = 0; c < numModules; c++) {
+      if (qr.modules.get(r, c)) {
+        rects.push(
+          <rect
+            key={`${r}-${c}`}
+            x={c + margin}
+            y={r + margin}
+            width={1}
+            height={1}
+            fill={darkColor}
+          />
+        );
       }
     }
   }
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="rounded-sm">
-      <rect width={size} height={size} fill={darkColor} />
-      {cells.map(({ r, c, filled }) =>
-        filled ? (
-          <rect
-            key={`${r}-${c}`}
-            x={c * cellSize + 0.4}
-            y={r * cellSize + 0.4}
-            width={cellSize - 0.8}
-            height={cellSize - 0.8}
-            rx={0.5}
-            fill={lightColor}
-          />
-        ) : null
-      )}
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${totalUnits} ${totalUnits}`}
+      shapeRendering="crispEdges"
+      className={`rounded-sm select-none ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Table QR Code"
+    >
+      <rect width={totalUnits} height={totalUnits} fill={lightColor} />
+      {rects}
     </svg>
   );
 }

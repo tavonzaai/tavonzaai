@@ -1,1 +1,1 @@
-export { default } from '../updated-cashier-dashboard/AskAiModal';
+export { default } from '../cashier-dashboard/AskAiModal';
