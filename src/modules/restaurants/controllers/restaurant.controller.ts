@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,6 +20,7 @@ import {
   ApiOkResponse,
   ApiCreatedResponse,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -29,6 +31,7 @@ import {
   UpdateRestaurantDto,
   RestaurantResponseDto,
   QueryRestaurantDto,
+  CheckSlugResponseDto,
 } from '../dto/restaurant.dto';
 import { ApiStandardErrors } from '../../../common/swagger';
 
@@ -66,6 +69,20 @@ export class RestaurantController {
       return this.restaurantService.findByOrganizationId(user, query.organizationId, query.includeDeleted);
     }
     return this.restaurantService.findAll(user, query);
+  }
+
+  @Get('check-slug')
+  @ApiOperation({ summary: 'Check live slug availability' })
+  @ApiQuery({ name: 'slug', description: 'Restaurant slug to verify', example: 'tasty-bites' })
+  @ApiOkResponse({ description: 'Slug availability status and alternative suggestion if taken', type: CheckSlugResponseDto })
+  @ApiStandardErrors(400, 401, 500)
+  async checkSlug(
+    @Query('slug') slug: string,
+  ): Promise<CheckSlugResponseDto> {
+    if (!slug || !slug.trim()) {
+      throw new BadRequestException('Query parameter "slug" is required');
+    }
+    return this.restaurantService.checkSlugAvailability(slug);
   }
 
   @Get(':id')
