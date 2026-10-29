@@ -5,19 +5,30 @@ on:
     branches: [main, production]
 
 jobs:
-  # ─── Step 1: Security & Root Hygiene Scan ───────────────────────────────────
-  security-scan:
-    name: Security & Root Scan
-    uses: ./.github/workflows/security-scan.yml
-
-  # ─── Step 2: Quality Gates (Typecheck, Schema Check, Tests & Build) ─────────
   backend-qa:
     name: Backend QA & Build
-    needs: [security-scan]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Enforce No Forbidden Root Folders
+        run: |
+          VIOLATIONS=0
+
+          if [ -d ".vscode" ]; then
+            echo "::error file=.vscode,title=Forbidden Root Folder::'.vscode' must not be committed."
+            VIOLATIONS=1
+          fi
+
+          if [ -d "public" ]; then
+            echo "::error file=public,title=Forbidden Root Folder::'public' must not exist at the repository root."
+            VIOLATIONS=1
+          fi
+
+          if [ $VIOLATIONS -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Setup Node & pnpm
         uses: ./.github/actions/setup-pnpm
@@ -27,8 +38,6 @@ jobs:
 
       - name: Drizzle Schema Verification
         run: pnpm drizzle-kit check
-        env:
-          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/platform_dev"
 
       - name: Run Domain & Unit Tests
         run: pnpm test
