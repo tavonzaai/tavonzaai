@@ -34,12 +34,14 @@ export class DrizzleAlertRepository {
     return alert;
   }
 
-  async findPendingForBranch(branchId: string): Promise<CustomerAlert[]> {
+  async findPendingForBranch(branchId: string, tableIds?: string[]): Promise<CustomerAlert[]> {
+    const allowed = tableIds ? new Set(tableIds) : null;
     const branchAlerts: CustomerAlert[] = [];
     for (const alert of this.alerts.values()) {
-      if (alert.branchId === branchId && (alert.status === 'pending' || alert.status === 'acknowledged')) {
-        branchAlerts.push(alert);
-      }
+      if (alert.branchId !== branchId) continue;
+      if (alert.status !== 'pending' && alert.status !== 'acknowledged') continue;
+      if (allowed && !allowed.has(alert.tableId)) continue;
+      branchAlerts.push(alert);
     }
     return branchAlerts.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }

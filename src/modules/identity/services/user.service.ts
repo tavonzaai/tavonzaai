@@ -17,7 +17,12 @@ import { DrizzleRbacRepository } from '../../authorization/repositories/drizzle-
 import { DrizzleUserRepository } from '../repositories/drizzle-user.repository';
 import { DrizzleAuthSessionRepository } from '../repositories/drizzle-auth-session.repository';
 import { DrizzleOrganizationRepository } from '../../organizations/repositories/drizzle-organization.repository';
-import { isSuperAdmin } from '../../../common/auth/actor.util';
+import {
+  isOrgAdmin,
+  isSuperAdmin,
+  organizationIdsFromActor,
+  resolveRequestedOrganizationId,
+} from '../../../common/auth/actor.util';
 import type { JwtPayload } from '../adapters/jwt.strategy';
 import type {
   UpdateUserProfileDto,
@@ -333,9 +338,10 @@ export class UserService {
       permissions,
       scopes,
     );
-    if (user.role === 'ADMIN' || user.role === 'RESTAURANT_OWNER') {
-      const owned = await this.orgRepo.findByOwnerId(user.id);
-      dto.organizationId = owned[0]?.id ?? null;
+    if (user.role === 'ADMIN' || user.role === 'RESTAURANT_OWNER' || user.role === 'STAFF') {
+      const accessible = await this.orgRepo.findAccessibleByUserId(user.id);
+      const owned = accessible.filter((org) => org.ownerId === user.id);
+      dto.organizationId = owned[0]?.id ?? accessible[0]?.id ?? dto.organizationId ?? null;
     }
     return dto;
   }
@@ -352,15 +358,20 @@ export class UserService {
   }
 
   private async resolveManagedOrganizationId(currentUser: JwtPayload): Promise<string> {
-    if (currentUser.organizationId) {
+    if (isSuperAdmin(currentUser) && currentUser.organizationId) {
       return currentUser.organizationId;
     }
-    const owned = await this.orgRepo.findByOwnerId(currentUser.sub);
-    const organizationId = owned[0]?.id;
-    if (!organizationId) {
-      throw new ForbiddenException('No organization is associated with this account');
+    const accessible = await this.orgRepo.findAccessibleByUserId(currentUser.sub);
+    const ids = [
+      ...accessible.map((org) => org.id),
+      ...organizationIdsFromActor(currentUser),
+    ];
+    if (isOrgAdmin(currentUser)) {
+      ids.push(...organizationIdsFromActor(currentUser));
     }
-    return organizationId;
+    return resolveRequestedOrganizationId(currentUser, ids, currentUser.organizationId ?? undefined, {
+      requireForSuperAdmin: false,
+    });
   }
 
   private async assertCanAccessUserRecord(

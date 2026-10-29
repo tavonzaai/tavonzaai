@@ -57,6 +57,8 @@ export interface IOrderRepository {
     filters?: {
       status?: OrderStatus;
       tableId?: string;
+      tableIds?: string[];
+      stationType?: 'KITCHEN' | 'BAR';
       search?: string;
       guestSessionId?: string;
       tableSessionId?: string;

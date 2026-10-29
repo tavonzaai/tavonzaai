@@ -20,6 +20,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ORDER_REPOSITORY,
@@ -42,9 +43,15 @@ import { and, eq, or, sql } from 'drizzle-orm';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { NotificationService } from '../../notifications/services/notification.service';
 import { BranchAccessService } from '../../authorization/services/branch-access.service';
+import { WaiterService } from '../../waiter/services/waiter.service';
 import type { CustomerPrincipal } from '../../identity/services/customer-principal.service';
 import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
 import { isOrderOwnedBy } from '../domain/order-access';
+import {
+  isBartenderActor,
+  isKitchenActor,
+  isWaiterActor,
+} from '../../../common/auth/actor.util';
 
 @Injectable()
 export class OrderService {
@@ -57,6 +64,7 @@ export class OrderService {
     private readonly realtimeGateway: RealtimeGateway,
     private readonly notificationService: NotificationService,
     private readonly branchAccess: BranchAccessService,
+    private readonly waiterService: WaiterService,
   ) {}
 
   // ══════════════════════════════════════════════════════════════════════
@@ -284,6 +292,7 @@ export class OrderService {
   async getOrderForStaff(user: JwtPayload, orderId: string): Promise<Order> {
     const order = await this.findOrderOrFail(orderId);
     await this.branchAccess.assertAccess(user, order.branchId);
+    await this.assertStaffOrderScope(user, order);
     return order;
   }
 
@@ -304,8 +313,24 @@ export class OrderService {
       guestSessionId?: string;
       tableSessionId?: string;
     },
+    user?: JwtPayload,
   ): Promise<Order[]> {
-    return this.orderRepository.findByBranch(branchId, filters);
+    const scoped = { ...filters };
+    if (user && isWaiterActor(user)) {
+      const assigned = await this.waiterService.getAssignedTableIds(user.sub, branchId);
+      if (scoped.tableId && !assigned.includes(scoped.tableId)) {
+        return [];
+      }
+      (scoped as any).tableIds = scoped.tableId ? undefined : assigned;
+      if (!scoped.tableId && assigned.length === 0) return [];
+    }
+    if (user && isKitchenActor(user)) {
+      (scoped as any).stationType = 'KITCHEN';
+    }
+    if (user && isBartenderActor(user)) {
+      (scoped as any).stationType = 'BAR';
+    }
+    return this.orderRepository.findByBranch(branchId, scoped);
   }
 
   /**
@@ -546,5 +571,35 @@ export class OrderService {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
     return order;
+  }
+
+  private async assertStaffOrderScope(user: JwtPayload, order: Order): Promise<void> {
+    if (isWaiterActor(user)) {
+      const assigned = await this.waiterService.isTableAssigned(
+        user.sub,
+        order.tableId,
+        order.branchId,
+      );
+      if (!assigned) {
+        throw new ForbiddenException('You are not assigned to this table');
+      }
+      return;
+    }
+
+    const station = isKitchenActor(user)
+      ? 'KITCHEN'
+      : isBartenderActor(user)
+        ? 'BAR'
+        : null;
+    if (!station) return;
+
+    const [row] = await this.db
+      .select({ id: orderItems.id })
+      .from(orderItems)
+      .where(and(eq(orderItems.orderId, order.id), eq(orderItems.stationType, station)))
+      .limit(1);
+    if (!row) {
+      throw new ForbiddenException(`This order has no ${station.toLowerCase()} items`);
+    }
   }
 }

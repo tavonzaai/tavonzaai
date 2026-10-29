@@ -15,6 +15,7 @@ import { seedBilling } from './modules/billing.seed';
 import { seedOperations } from './modules/operations.seed';
 import { seedNotifications } from './modules/notifications.seed';
 import { seedAudit } from './modules/audit.seed';
+import { seedSubscriptions } from './modules/subscriptions.seed';
 
 export async function runModularSeed(): Promise<void> {
   if (!process.env.DATABASE_URL) {
@@ -40,6 +41,8 @@ export async function runModularSeed(): Promise<void> {
 
     // Step 3: Multi-Tenant Hierarchy (2 Orgs, 2 Restaurants, 3 Branches, Settings & Assignments)
     const hierarchy = await seedHierarchy(db, users, staff);
+
+    await seedSubscriptions(db, { org1: hierarchy.org1, org2: hierarchy.org2 });
 
     // Step 4: Tables, Floor Layout, Waiter Assignments & Dining Sessions
     const tables = await seedTables(

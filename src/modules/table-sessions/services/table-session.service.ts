@@ -19,7 +19,11 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ServiceUnavailableException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
+import { randomInt } from 'node:crypto';
 import { eq, and, gt, desc, inArray } from 'drizzle-orm';
 import { JwtService } from '@nestjs/jwt';
 import { InternalOperationException } from '../../../common/errors/app.exception';
@@ -38,6 +42,7 @@ import {
 } from '@/database';
 import { RealtimeGateway } from '../../realtime/realtime.gateway';
 import { NotificationService } from '../../notifications/services/notification.service';
+import { MailService } from '../../notifications/services/mail.service';
 import { DrizzleQueryBuilder } from '../../../common/database';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -47,9 +52,37 @@ import { BranchAccessService } from '../../authorization/services/branch-access.
 import { isSessionParticipant, isStaffActor, type SessionActor } from '../domain/session-access';
 import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
 
+const JOIN_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const JOIN_CODE_TTL_MS = 4 * 60 * 60 * 1000;
+const OTP_RESEND_WINDOW_MS = 60 * 1000;
+const JOIN_ATTEMPT_WINDOW_MS = 60 * 1000;
+const JOIN_ATTEMPT_LIMIT = 5;
+const joinAttempts = new Map<string, number[]>();
+
 function generateJoinCode(): string {
-  // 6-char alphanumeric code — displayed on "Share Code" screen
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  let code = '';
+  for (let i = 0; i < 6; i += 1) {
+    code += JOIN_CODE_ALPHABET[randomInt(0, JOIN_CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
+function joinCodeExpiry(from = new Date()): Date {
+  return new Date(from.getTime() + JOIN_CODE_TTL_MS);
+}
+
+function assertJoinRateLimit(code: string): void {
+  const now = Date.now();
+  const recent = (joinAttempts.get(code) ?? []).filter((ts) => now - ts < JOIN_ATTEMPT_WINDOW_MS);
+  if (recent.length >= JOIN_ATTEMPT_LIMIT) {
+    throw new HttpException('Too many join attempts. Try again shortly.', HttpStatus.TOO_MANY_REQUESTS);
+  }
+  recent.push(now);
+  joinAttempts.set(code, recent);
+}
+
+function looksLikeEmail(value: string): boolean {
+  return value.includes('@');
 }
 
 @Injectable()
@@ -61,6 +94,7 @@ export class TableSessionService {
     private readonly branchAccess: BranchAccessService,
     private readonly realtimeGateway: RealtimeGateway,
     private readonly notificationService: NotificationService,
+    private readonly mailService: MailService,
   ) {}
 
   /**
@@ -73,11 +107,34 @@ export class TableSessionService {
     contact: string;
     tableSessionId?: string;
   }) {
-    const code = Math.floor(10000 + Math.random() * 90000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await this.assertTableOrderable(dto.branchId, dto.tableId);
+
+    const contact = dto.contact.trim();
+    if (!contact) {
+      throw new BadRequestException('Contact is required');
+    }
+
+    const [recent] = await this.db
+      .select({ createdAt: tableAuthOtps.createdAt })
+      .from(tableAuthOtps)
+      .where(
+        and(
+          eq(tableAuthOtps.contact, contact),
+          eq(tableAuthOtps.tableId, dto.tableId),
+          gt(tableAuthOtps.createdAt, new Date(Date.now() - OTP_RESEND_WINDOW_MS)),
+        ),
+      )
+      .orderBy(desc(tableAuthOtps.createdAt))
+      .limit(1);
+    if (recent) {
+      throw new HttpException('Please wait before requesting another code', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    const code = randomInt(10000, 100000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await this.db.insert(tableAuthOtps).values({
-      contact: dto.contact,
+      contact,
       tableId: dto.tableId,
       tableSessionId: dto.tableSessionId ?? null,
       purpose: 'TABLE_AUTH',
@@ -86,8 +143,21 @@ export class TableSessionService {
       verified: false,
     });
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[TableSessionService] 🔑 Dev OTP generated for ${dto.contact}: ${code}`);
+    if (looksLikeEmail(contact)) {
+      const mailResult = await this.mailService.sendVerificationCode(contact, 'Guest', code);
+      if (!mailResult.success && process.env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableException('Unable to send the verification code. Please try again.');
+      }
+    } else {
+      await this.notificationService.create({
+        branchId: dto.branchId,
+        targetRole: 'WAITER',
+        type: 'TABLE_OTP_REQUESTED',
+        title: 'Table verification requested',
+        message: `A diner at this table requested a verification code for ${contact}.`,
+        entityType: 'TABLE',
+        entityId: dto.tableId,
+      });
     }
 
     return {
@@ -113,14 +183,16 @@ export class TableSessionService {
   }) {
     await this.assertTableOrderable(dto.branchId, dto.tableId);
 
+    const contact = dto.contact.trim();
+    const code = dto.code.trim();
     const [otpRecord] = await this.db
       .select()
       .from(tableAuthOtps)
       .where(
         and(
-          eq(tableAuthOtps.contact, dto.contact),
+          eq(tableAuthOtps.contact, contact),
           eq(tableAuthOtps.tableId, dto.tableId),
-          eq(tableAuthOtps.otp, dto.code),
+          eq(tableAuthOtps.otp, code),
           eq(tableAuthOtps.verified, false),
           gt(tableAuthOtps.expiresAt, new Date()),
         ),
@@ -160,6 +232,7 @@ export class TableSessionService {
           branchId: dto.branchId,
           tableId: dto.tableId,
           joinCode: generateJoinCode(),
+          joinCodeExpiresAt: joinCodeExpiry(),
           status: 'ACTIVE',
         })
         .returning();
@@ -230,7 +303,7 @@ export class TableSessionService {
       });
     }
 
-    const customerId = await this.resolveCustomerId(dto.userId, dto.contact);
+    const customerId = await this.resolveCustomerId(dto.userId, contact);
 
     const [guest] = await this.db
       .insert(guestSessions)
@@ -238,7 +311,7 @@ export class TableSessionService {
         tableSessionId: session.id,
         customerId,
         displayName: dto.displayName ?? (isHost ? 'Host' : 'Guest'),
-        contact: dto.contact,
+        contact,
         otpVerifiedAt: new Date(),
         isHostGuest: isHost,
         status: 'ACTIVE',
@@ -315,6 +388,7 @@ export class TableSessionService {
           branchId: data.branchId,
           tableId: data.tableId,
           joinCode: generateJoinCode(),
+          joinCodeExpiresAt: joinCodeExpiry(),
           status: 'ACTIVE',
         })
         .returning();
@@ -440,13 +514,14 @@ export class TableSessionService {
     await this.assertCanAccessSession(actor, session, guests);
 
     const code = generateJoinCode();
+    const expiresAt = joinCodeExpiry();
 
     await this.db
       .update(tableSessions)
-      .set({ joinCode: code, updatedAt: new Date() })
+      .set({ joinCode: code, joinCodeExpiresAt: expiresAt, updatedAt: new Date() })
       .where(eq(tableSessions.id, sessionId));
 
-    return { code };
+    return { code, expiresAt };
   }
 
   /**
@@ -454,18 +529,34 @@ export class TableSessionService {
    * Figma: Guest enters Join Code → joins active session without collision
    */
   async joinByCode(data: { code: string; displayName?: string; userId?: string }) {
+    const code = data.code.trim().toUpperCase();
+    if (!code) {
+      throw new BadRequestException('Join code is required');
+    }
+    assertJoinRateLimit(code);
+
     const [session] = await this.db
       .select()
       .from(tableSessions)
       .where(
         and(
-          eq(tableSessions.joinCode, data.code.toUpperCase()),
+          eq(tableSessions.joinCode, code),
           eq(tableSessions.status, 'ACTIVE'),
         ),
       )
       .limit(1);
 
     if (!session) {
+      throw new BadRequestException('Invalid or expired join code');
+    }
+    const expiresAt =
+      session.joinCodeExpiresAt ??
+      (session.updatedAt
+        ? new Date(session.updatedAt.getTime() + JOIN_CODE_TTL_MS)
+        : session.startedAt
+          ? new Date(session.startedAt.getTime() + JOIN_CODE_TTL_MS)
+          : null);
+    if (!expiresAt || expiresAt.getTime() < Date.now()) {
       throw new BadRequestException('Invalid or expired join code');
     }
 

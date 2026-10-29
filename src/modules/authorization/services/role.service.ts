@@ -7,6 +7,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { STAFF_PERMISSION_TEMPLATES } from '@/authorization';
 import { DrizzleRbacRepository } from '../repositories/drizzle-rbac.repository';
 
 export interface ModuleActionMatrix {
@@ -86,6 +87,14 @@ export class RoleService {
       createdAt: role.createdAt,
       updatedAt: role.updatedAt,
     };
+  }
+
+  getPermissionTemplates() {
+    return Object.entries(STAFF_PERMISSION_TEMPLATES).map(([key, permissions]) => ({
+      key,
+      role: key === 'ASSISTANT_MANAGER' ? 'BRANCH_MANAGER' : key,
+      permissions,
+    }));
   }
 
   async getAllPermissions() {

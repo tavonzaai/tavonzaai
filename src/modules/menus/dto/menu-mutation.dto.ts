@@ -113,6 +113,11 @@ export class CreateMenuItemDto {
   @IsOptional()
   @IsBoolean()
   isStockTracked?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Mark as a popular / recommended item' })
+  @IsOptional()
+  @IsBoolean()
+  isPopular?: boolean;
 }
 
 export class UpdateMenuItemDto {
@@ -160,4 +165,9 @@ export class UpdateMenuItemDto {
   @IsOptional()
   @IsBoolean()
   isStockTracked?: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Mark as a popular / recommended item' })
+  @IsOptional()
+  @IsBoolean()
+  isPopular?: boolean;
 }

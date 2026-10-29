@@ -31,6 +31,7 @@ export const menuItems = pgTable('menu_items', {
   imageUrl: text('image_url'),
   basePrice: doublePrecision('base_price').notNull(),
   isAvailable: boolean('is_available').default(true),
+  isPopular: boolean('is_popular').default(false).notNull(),
   isVegetarian: boolean('is_vegetarian').default(false),
   spiceLevel: integer('spice_level'),
   displayOrder: integer('display_order').default(0),

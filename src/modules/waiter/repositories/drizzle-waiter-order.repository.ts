@@ -243,6 +243,11 @@ export class DrizzleWaiterOrderRepository {
     taxRate?: string | number;
     tax?: string | number;
     total: string | number;
+    customerId?: string | null;
+    guestSessionId?: string | null;
+    guestName?: string | null;
+    guestPhone?: string | null;
+    specialInstructions?: string | null;
   }): Promise<any> {
     const subtotal = Number(data.subtotal);
     const serviceCharge = Number(data.serviceCharge ?? 0);
@@ -256,11 +261,17 @@ export class DrizzleWaiterOrderRepository {
         branchId: data.branchId,
         tableId: data.tableId,
         tableSessionId: data.tableSessionId,
+        customerId: data.customerId ?? null,
+        guestSessionId: data.guestSessionId ?? null,
+        guestName: data.guestName ?? null,
+        guestPhone: data.guestPhone ?? null,
+        specialInstructions: data.specialInstructions ?? null,
         status: 'CONFIRMED',
         subtotal,
         serviceCharge,
         taxAmount: tax,
         totalAmount,
+        inventoryDeducted: true,
         placedByStaffId: data.waiterId,
         acceptedById: data.waiterId,
         acceptedAt: new Date(),
@@ -277,6 +288,7 @@ export class DrizzleWaiterOrderRepository {
     unitPrice: string | number;
     quantity: number;
     stationType?: 'KITCHEN' | 'BAR';
+    estimatedPrepTime?: number;
   }>): Promise<any[]> {
     if (items.length === 0) return [];
     return this.db
@@ -291,6 +303,7 @@ export class DrizzleWaiterOrderRepository {
           subtotal: Number(item.unitPrice) * item.quantity,
           stationType: (item.stationType ?? 'KITCHEN') as 'KITCHEN' | 'BAR',
           status: 'PENDING' as const,
+          estimatedPrepTime: item.estimatedPrepTime ?? 15,
         })),
       )
       .returning();

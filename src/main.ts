@@ -54,7 +54,14 @@ async function bootstrap() {
   const port = process.env.API_PORT || process.env.PORT || 3000;
   const env  = process.env.NODE_ENV || 'development';
 
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port, '0.0.0.0', () => {
+    logger.info(`API server started`, {
+      port,
+      env,
+      swagger: `http://localhost:${port}/docs`,
+      pid: process.pid,
+    });
+  });
 
   logger.info(`API server started`, {
     port,

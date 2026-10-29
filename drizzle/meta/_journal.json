@@ -64,6 +64,20 @@
       "when": 1792303597082,
       "tag": "0008_backfill_customer_carts",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793300000000,
+      "tag": "0010_menu_item_popular",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793310000000,
+      "tag": "0011_join_codes_and_subscriptions",
+      "breakpoints": true
     }
   ]
 }

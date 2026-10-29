@@ -50,6 +50,7 @@ import { ACCESS_TOKEN_TTL_SECONDS, accessTokenSecret } from './services/token-po
     DrizzleGuestPrincipalRepository,
     JwtModule,
     PassportModule,
+    JwtStrategy,
   ],
 })
 export class IdentityModule {}

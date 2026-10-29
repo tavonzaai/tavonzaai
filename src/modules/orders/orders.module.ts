@@ -14,9 +14,10 @@ import { ORDER_REPOSITORY } from './repositories/order-repository.interface';
 import { MenusModule } from '../menus/menus.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { IdentityModule } from '../identity/identity.module';
+import { WaiterModule } from '../waiter/waiter.module';
 
 @Module({
-  imports: [MenusModule, NotificationsModule, IdentityModule],
+  imports: [MenusModule, NotificationsModule, IdentityModule, WaiterModule],
   controllers: [CartController, OrderController],
   providers: [
     OrderService,

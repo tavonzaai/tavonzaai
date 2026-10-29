@@ -17,6 +17,7 @@ export const tableSessions = pgTable('table_sessions', {
   tableId: uuid('table_id').notNull().references(() => tables.id, { onDelete: 'cascade' }),
   branchId: uuid('branch_id').notNull().references(() => branches.id, { onDelete: 'cascade' }),
   joinCode: varchar('join_code', { length: 20 }),
+  joinCodeExpiresAt: timestamp('join_code_expires_at', { withTimezone: true }),
   partySize: integer('party_size'),
   startedAt: timestamp('started_at', { withTimezone: true }).defaultNow(),
   endedAt: timestamp('ended_at', { withTimezone: true }),

@@ -223,10 +223,13 @@ export class UserController {
 
   /**
    * POST /users/create-customer
-   * Public or admin endpoint to create a customer account.
+   * Authenticated endpoint to create a customer account.
+   * Public diner signup remains POST /auth/register.
    */
   @Post('create-customer')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Create a customer user account' })
   @ApiCreatedResponse({ type: UserDetailResponseDto })
   @ApiConflictResponse({ description: 'Email or phone already in use' })

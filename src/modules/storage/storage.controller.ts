@@ -3,16 +3,19 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   NotFoundException,
   Post,
   Query,
   Res,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiOkResponse,
@@ -42,6 +45,26 @@ import {
   PresignedUploadUrlDto,
 } from "./dtos/storage.dto";
 import { ApiStandardErrors } from "../../common/swagger";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import type { JwtPayload } from "../identity/adapters/jwt.strategy";
+import { isSuperAdmin, organizationIdsFromActor } from "../../common/auth/actor.util";
+
+function assertStorageTenant(user: JwtPayload): string | null {
+  if (isSuperAdmin(user)) {
+    return user.organizationId ?? null;
+  }
+  const organizationId = user.organizationId || organizationIdsFromActor(user)[0];
+  if (!organizationId) {
+    throw new ForbiddenException("No organization is associated with this account");
+  }
+  return organizationId;
+}
+
+function tenantFolder(organizationId: string | null, folder?: string): string | undefined {
+  if (!organizationId) return folder;
+  return folder ? `${organizationId}/${folder}` : organizationId;
+}
 
 @ApiTags("System | Storage")
 @ApiStandardErrors(400, 404, 500)
@@ -54,6 +77,8 @@ export class StorageController {
    * Multipart single-file upload
    */
   @Post("upload")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("access-token")
   @ApiOperation({
     summary: "Upload a file directly via multipart/form-data",
     description:
@@ -76,6 +101,7 @@ export class StorageController {
   @ApiOkResponse({ type: FileUploadResponseDto })
   @UseInterceptors(FileInterceptor("file"))
   async uploadFile(
+    @CurrentUser() user: JwtPayload,
     @UploadedFile() file: Express.Multer.File,
     @Query() query: FileUploadQueryDto,
   ): Promise<FileUploadResponseDto> {
@@ -83,8 +109,9 @@ export class StorageController {
       throw new BadRequestException('No file provided in form field "file"');
     }
 
+    const organizationId = assertStorageTenant(user);
     const key = generateKey(query.category || "temp", file.originalname, {
-      folder: query.folder,
+      folder: tenantFolder(organizationId, query.folder),
       addTimestamp: true,
       addRandomSuffix: true,
     });
@@ -113,6 +140,8 @@ export class StorageController {
    * Base64 data upload
    */
   @Post("upload/base64")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("access-token")
   @ApiOperation({
     summary: "Upload a base64 encoded image or document",
     description:
@@ -120,13 +149,15 @@ export class StorageController {
   })
   @ApiOkResponse({ type: FileUploadResponseDto })
   async uploadBase64(
+    @CurrentUser() user: JwtPayload,
     @Body() dto: Base64UploadDto,
   ): Promise<FileUploadResponseDto> {
+    const organizationId = assertStorageTenant(user);
     const key = generateKey(
       dto.category || "temp",
       dto.filename || "upload.bin",
       {
-        folder: dto.folder,
+        folder: tenantFolder(organizationId, dto.folder),
         addTimestamp: true,
         addRandomSuffix: true,
       },
@@ -153,6 +184,8 @@ export class StorageController {
    * Generate Presigned PUT URL for direct client-to-S3 upload
    */
   @Post("presigned-upload-url")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("access-token")
   @ApiOperation({
     summary: "Generate a presigned PUT URL for direct client-to-S3 upload",
     description:
@@ -160,10 +193,12 @@ export class StorageController {
   })
   @ApiOkResponse({ type: PresignedUploadResponseDto })
   async getPresignedUploadUrl(
+    @CurrentUser() user: JwtPayload,
     @Body() dto: PresignedUploadUrlDto,
   ): Promise<PresignedUploadResponseDto> {
+    const organizationId = assertStorageTenant(user);
     const key = generateKey(dto.category || "temp", dto.filename, {
-      folder: dto.folder,
+      folder: tenantFolder(organizationId, dto.folder),
       addTimestamp: true,
       addRandomSuffix: true,
     });
@@ -191,6 +226,8 @@ export class StorageController {
    * Generate Presigned POST policy for direct browser HTML form upload
    */
   @Post("presigned-post")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth("access-token")
   @ApiOperation({
     summary: "Generate a presigned POST policy for direct browser form uploads",
     description:
@@ -198,10 +235,12 @@ export class StorageController {
   })
   @ApiOkResponse({ type: PresignedPostResponseDto })
   async getPresignedPost(
+    @CurrentUser() user: JwtPayload,
     @Body() dto: PresignedPostDto,
   ): Promise<PresignedPostResponseDto> {
+    const organizationId = assertStorageTenant(user);
     const key = generateKey(dto.category || "temp", dto.filename, {
-      folder: dto.folder,
+      folder: tenantFolder(organizationId, dto.folder),
       addTimestamp: true,
       addRandomSuffix: true,
     });

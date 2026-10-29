@@ -14,7 +14,13 @@ import type {
 } from '../dto/restaurant.dto';
 import type { Restaurant } from '../domain/restaurant.entity';
 import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
-import { assertCanAccessOrganization, isSuperAdmin } from '../../../common/auth/actor.util';
+import {
+  assertCanAccessOrganization,
+  isOrgAdmin,
+  isSuperAdmin,
+  organizationIdsFromActor,
+  resolveRequestedOrganizationId,
+} from '../../../common/auth/actor.util';
 
 @Injectable()
 export class RestaurantService {
@@ -242,17 +248,11 @@ export class RestaurantService {
     }
 
     const owned = await this.orgRepo.findByOwnerId(user.sub);
-    if (owned.length === 0) {
-      throw new ForbiddenException('No organization is associated with this account');
+    const ids = owned.map((org) => org.id);
+    if (isOrgAdmin(user)) {
+      ids.push(...organizationIdsFromActor(user));
     }
-    if (requestedId && !owned.some((org) => org.id === requestedId)) {
-      throw new ForbiddenException('You do not have access to this organization');
-    }
-    const fallbackId = owned[0]?.id;
-    if (!requestedId && !user.organizationId && !fallbackId) {
-      throw new ForbiddenException('No organization is associated with this account');
-    }
-    return requestedId || user.organizationId || fallbackId!;
+    return resolveRequestedOrganizationId(user, ids, requestedId);
   }
 
   private async resolveReadableOrganizationId(
@@ -262,7 +262,12 @@ export class RestaurantService {
     if (isSuperAdmin(user)) {
       return requestedId;
     }
-    return this.resolveWritableOrganizationId(user, requestedId);
+    const accessible = await this.orgRepo.findAccessibleByUserId(user.sub);
+    const ids = [
+      ...accessible.map((org) => org.id),
+      ...organizationIdsFromActor(user),
+    ];
+    return resolveRequestedOrganizationId(user, ids, requestedId);
   }
 
   private generateSlug(name: string): string {

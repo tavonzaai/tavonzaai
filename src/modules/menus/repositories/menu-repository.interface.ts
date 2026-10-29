@@ -33,6 +33,12 @@ export interface IMenuRepository {
   /** Get a single category by ID. */
   findCategoryById(id: string): Promise<MenuCategory | null>;
 
+  /** Restaurant that owns a category, used for tenant checks on writes. */
+  findCategoryRestaurantId(id: string): Promise<string | null>;
+
+  /** Restaurant that owns a menu item, used for tenant checks on writes. */
+  findItemRestaurantId(id: string): Promise<string | null>;
+
   /** Create a menu category. */
   createCategory?(data: { restaurantId: string; name: string; description?: string; displayOrder?: number }): Promise<MenuCategory>;
 
@@ -69,6 +75,7 @@ export interface IMenuRepository {
     estimatedPrepTime?: number;
     stockQuantity?: number;
     isStockTracked?: boolean;
+    isPopular?: boolean;
   }): Promise<MenuItem>;
 
   /** Update a menu item. */
@@ -83,6 +90,7 @@ export interface IMenuRepository {
       estimatedPrepTime: number;
       stockQuantity: number;
       isStockTracked: boolean;
+      isPopular: boolean;
     }>,
   ): Promise<MenuItem | null>;
 

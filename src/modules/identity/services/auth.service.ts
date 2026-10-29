@@ -234,8 +234,9 @@ export class AuthService {
     const effectiveRole = primaryAssignment?.role || user.role;
     const branchId = primaryAssignment?.branchId ?? null;
     const branchName = primaryAssignment?.branchName ?? null;
-    const ownedOrgs = await this.orgRepo.findByOwnerId(user.id);
-    const organizationId = ownedOrgs[0]?.id ?? null;
+    const accessibleOrgs = await this.orgRepo.findAccessibleByUserId(user.id);
+    const ownedOrgs = accessibleOrgs.filter((org) => org.ownerId === user.id);
+    const organizationId = ownedOrgs[0]?.id ?? accessibleOrgs[0]?.id ?? null;
 
     let permissions: string[] = [];
     let scopes: Scope[] = [];
@@ -254,6 +255,7 @@ export class AuthService {
         (primaryAssignment?.permissions as any) ?? [],
       ) as string[];
     }
+    scopes = this.mergeOrganizationScopes(scopes, accessibleOrgs.map((org) => org.id));
 
     return {
       id: user.id,
@@ -274,19 +276,16 @@ export class AuthService {
   }
 
   async verifyOtp(dto: VerifyOtpDto): Promise<void> {
-    if (dto.type === 'phone_verification') {
-      throw new BadRequestException('Phone verification is not supported');
-    }
-
-    const email = dto.email.trim().toLowerCase();
-    const otp = await this.userRepo.findValidAuthOtp(email, dto.type);
+    const identifier = this.normalizeOtpIdentifier(dto.email, dto.type);
+    const otp = await this.userRepo.findValidAuthOtp(identifier, dto.type);
     if (!otp) throw new BadRequestException('OTP code is invalid or has expired');
-    if (otp.otp !== dto.code) throw new BadRequestException('Incorrect verification code');
+    if (otp.otp !== dto.code.trim()) throw new BadRequestException('Incorrect verification code');
+
+    const consumed = await this.userRepo.consumeAuthOtp(identifier, dto.type, dto.code.trim());
+    if (!consumed) throw new BadRequestException('OTP code is invalid or has expired');
 
     if (dto.type === 'email_verification') {
-      const consumed = await this.userRepo.consumeAuthOtp(email, dto.type, dto.code);
-      if (!consumed) throw new BadRequestException('OTP code is invalid or has expired');
-      await this.userRepo.markEmailVerified(email);
+      await this.userRepo.markEmailVerified(identifier);
     }
   }
 
@@ -325,14 +324,16 @@ export class AuthService {
     identifier: string,
     type: 'email_verification' | 'phone_verification' | 'password_reset',
   ): Promise<void> {
-    if (type === 'phone_verification') {
-      throw new BadRequestException('Phone verification is not supported');
-    }
     const user = await this.userRepo.findByEmailOrPhone(identifier);
     if (!user) return;
 
+    const destination =
+      type === 'phone_verification'
+        ? user.contactNo || this.normalizeOtpIdentifier(identifier, type)
+        : user.email;
+
     await this.generateAndSendOtp(
-      user.email,
+      destination,
       type,
       user.name.split(' ')[0],
     );
@@ -403,15 +404,16 @@ export class AuthService {
 
     const branchId = primaryAssignment?.branchId ?? null;
     const branchName = primaryAssignment?.branchName ?? null;
-    const ownedOrgs = await this.orgRepo.findByOwnerId(user.id);
-    const organizationId = ownedOrgs[0]?.id ?? null;
+    const accessibleOrgs = await this.orgRepo.findAccessibleByUserId(user.id);
+    const ownedOrgs = accessibleOrgs.filter((org) => org.ownerId === user.id);
+    const organizationId = ownedOrgs[0]?.id ?? accessibleOrgs[0]?.id ?? null;
 
     const scopes: Scope[] = [];
     if (user.role === GlobalRole.SUPER_ADMIN) {
       scopes.push({ type: 'global' });
     }
-    if (organizationId) {
-      scopes.push({ type: 'organization', id: organizationId });
+    for (const org of accessibleOrgs) {
+      scopes.push({ type: 'organization', id: org.id });
     }
     for (const assignment of assignments) {
       if (assignment?.isActive === false || !assignment?.branchId) {
@@ -457,34 +459,69 @@ export class AuthService {
     };
   }
 
+  private normalizeOtpIdentifier(
+    identifier: string,
+    type: 'email_verification' | 'phone_verification' | 'password_reset',
+  ): string {
+    const trimmed = identifier.trim();
+    if (type === 'phone_verification' && !trimmed.includes('@')) {
+      return trimmed;
+    }
+    return trimmed.toLowerCase();
+  }
+
   private async generateAndSendOtp(
-    email: string,
+    identifier: string,
     type: 'email_verification' | 'phone_verification' | 'password_reset',
     firstName: string,
   ): Promise<string> {
-    if (type === 'phone_verification') {
-      throw new BadRequestException('Phone verification is not supported');
-    }
-
+    const destination = this.normalizeOtpIdentifier(identifier, type);
     const code = randomInt(10000, 100000).toString();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    await this.userRepo.createAuthOtp(email, code, type, expiresAt);
+    await this.userRepo.createAuthOtp(destination, code, type, expiresAt);
 
-    const mailResult = type === 'password_reset'
-      ? await this.mailService.sendPasswordResetCode(email, firstName, code)
-      : await this.mailService.sendVerificationCode(email, firstName, code);
+    const mailTarget = destination.includes('@')
+      ? destination
+      : (await this.userRepo.findByEmailOrPhone(destination))?.email;
 
-    if (!mailResult.success) {
-      if (process.env.NODE_ENV !== 'production') {
-        this.logger.warn(`Mail delivery failed in dev mode, but OTP was generated: ${code}`);
-        return code;
+    if (mailTarget) {
+      const mailResult = type === 'password_reset'
+        ? await this.mailService.sendPasswordResetCode(mailTarget, firstName, code)
+        : await this.mailService.sendVerificationCode(mailTarget, firstName, code);
+
+      if (!mailResult.success) {
+        if (process.env.NODE_ENV !== 'production') {
+          this.logger.warn(`Mail delivery failed in dev mode, but OTP was generated: ${code}`);
+          return code;
+        }
+        await this.userRepo.deleteAuthOtp(destination, type, code);
+        throw new ServiceUnavailableException('Unable to send the OTP email. Please try again.');
       }
-      await this.userRepo.deleteAuthOtp(email, type, code);
-      throw new ServiceUnavailableException('Unable to send the OTP email. Please try again.');
+    } else if (process.env.NODE_ENV === 'production') {
+      await this.userRepo.deleteAuthOtp(destination, type, code);
+      throw new ServiceUnavailableException('Unable to deliver the verification code. Please try again.');
+    } else {
+      this.logger.warn(`No email destination for ${type} OTP; code generated in dev: ${code}`);
     }
 
     return code;
+  }
+
+  private mergeOrganizationScopes(scopes: Scope[], organizationIds: string[]): Scope[] {
+    const merged = [...scopes];
+    const existing = new Set(
+      merged
+        .filter((scope) => scope.type === 'organization' && scope.id)
+        .map((scope) => scope.id as string),
+    );
+    for (const organizationId of organizationIds) {
+      if (!existing.has(organizationId)) {
+        merged.push({ type: 'organization', id: organizationId });
+        existing.add(organizationId);
+      }
+    }
+    return merged;
   }
 
   private validatePassword(password: string): void {

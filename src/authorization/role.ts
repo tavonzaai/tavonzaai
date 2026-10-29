@@ -31,9 +31,10 @@ export const STAFF_ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
   [StaffRole.BRANCH_MANAGER]: Object.values(Permission),
   [StaffRole.HOST]: [
     Permission.MANAGE_RESERVATIONS,
-    Permission.MANAGE_TABLES,
     Permission.TABLES_READ,
-    Permission.TABLES_UPDATE,
+    Permission.RESERVATIONS_READ,
+    Permission.RESERVATIONS_WRITE,
+    Permission.RESERVATIONS_UPDATE,
   ],
   [StaffRole.WAITER]: [
     Permission.VIEW_ORDERS,
@@ -45,8 +46,6 @@ export const STAFF_ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
     Permission.ORDERS_SERVE,
     Permission.UPDATE_ORDER_STATUS,
     Permission.TABLES_READ,
-    Permission.TABLES_UPDATE,
-    Permission.MANAGE_TABLES,
     Permission.ALERTS_READ,
     Permission.ALERTS_ACKNOWLEDGE,
     Permission.ALERTS_RESOLVE,
@@ -80,13 +79,44 @@ export const STAFF_ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
   ],
 };
 
+/** Reduced BRANCH_MANAGER template — no staff creation or branch settings. */
+export const ASSISTANT_MANAGER_PERMISSIONS: Permission[] = [
+  Permission.MANAGE_MENU,
+  Permission.MANAGE_TABLES,
+  Permission.MANAGE_RESERVATIONS,
+  Permission.VIEW_ORDERS,
+  Permission.UPDATE_ORDER_STATUS,
+  Permission.MANAGE_PAYMENTS,
+  Permission.APPLY_DISCOUNTS,
+  Permission.VIEW_REPORTS,
+  Permission.ORDERS_READ,
+  Permission.ORDERS_CREATE,
+  Permission.ORDERS_UPDATE,
+  Permission.TABLES_READ,
+  Permission.MENU_READ,
+  Permission.MENU_WRITE,
+  Permission.PAYMENTS_READ,
+  Permission.ALERTS_READ,
+];
+
+export const STAFF_PERMISSION_TEMPLATES: Record<string, Permission[]> = {
+  BRANCH_MANAGER: STAFF_ROLE_DEFAULT_PERMISSIONS[StaffRole.BRANCH_MANAGER],
+  ASSISTANT_MANAGER: ASSISTANT_MANAGER_PERMISSIONS,
+  HOST: STAFF_ROLE_DEFAULT_PERMISSIONS[StaffRole.HOST],
+  WAITER: STAFF_ROLE_DEFAULT_PERMISSIONS[StaffRole.WAITER],
+  KITCHEN_STAFF: STAFF_ROLE_DEFAULT_PERMISSIONS[StaffRole.KITCHEN_STAFF],
+  BARTENDER: STAFF_ROLE_DEFAULT_PERMISSIONS[StaffRole.BARTENDER],
+  CASHIER: STAFF_ROLE_DEFAULT_PERMISSIONS[StaffRole.CASHIER],
+};
+
 export function resolveStaffPermissions(
   role: StaffRole,
   explicitPermissions: Permission[] = []
 ): Permission[] {
-  const roleDefaults = STAFF_ROLE_DEFAULT_PERMISSIONS[role] ?? [];
-  const set = new Set<Permission>([...roleDefaults, ...explicitPermissions]);
-  return Array.from(set);
+  if (explicitPermissions.length > 0) {
+    return Array.from(new Set(explicitPermissions));
+  }
+  return [...(STAFF_ROLE_DEFAULT_PERMISSIONS[role] ?? [])];
 }
 
 export function resolvePermissions(

@@ -80,6 +80,17 @@ export class RoleController {
     return this.roleService.getAllPermissions();
   }
 
+  @Get('permission-templates')
+  @RequirePermissions(Permission.ROLES_READ)
+  @ApiOperation({
+    summary: 'Staff permission templates including Assistant Manager',
+    description:
+      'Starting templates for staff assignments. Assistant Manager is BRANCH_MANAGER with a reduced permissions[] set.',
+  })
+  async getPermissionTemplates() {
+    return this.roleService.getPermissionTemplates();
+  }
+
   // ── Roles Management ──────────────────────────────────────────────────────
 
   @Get('roles')

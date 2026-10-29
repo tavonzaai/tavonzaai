@@ -243,7 +243,7 @@ export async function seedHierarchy(
     staffId: staff.waiter1.id,
     branchId: branch1.id,
     role: 'WAITER',
-    permissions: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS', 'MANAGE_TABLES'],
+    permissions: [],
     isActive: true,
   }).returning();
 
@@ -251,7 +251,7 @@ export async function seedHierarchy(
     staffId: staff.waiter2.id,
     branchId: branch2.id,
     role: 'WAITER',
-    permissions: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS', 'MANAGE_TABLES'],
+    permissions: [],
     isActive: true,
   }).returning();
 
@@ -259,7 +259,7 @@ export async function seedHierarchy(
     staffId: staff.kitchen1.id,
     branchId: branch1.id,
     role: 'KITCHEN_STAFF',
-    permissions: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'],
+    permissions: [],
     isActive: true,
   }).returning();
 
@@ -267,7 +267,7 @@ export async function seedHierarchy(
     staffId: staff.kitchen2.id,
     branchId: branch2.id,
     role: 'KITCHEN_STAFF',
-    permissions: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'],
+    permissions: [],
     isActive: true,
   });
 
@@ -275,7 +275,7 @@ export async function seedHierarchy(
     staffId: staff.bartender1.id,
     branchId: branch1.id,
     role: 'BARTENDER',
-    permissions: ['VIEW_ORDERS', 'UPDATE_ORDER_STATUS'],
+    permissions: [],
     isActive: true,
   }).returning();
 
@@ -283,7 +283,7 @@ export async function seedHierarchy(
     staffId: staff.cashier1.id,
     branchId: branch1.id,
     role: 'CASHIER',
-    permissions: ['MANAGE_PAYMENTS', 'VIEW_ORDERS', 'APPLY_DISCOUNTS'],
+    permissions: [],
     isActive: true,
   }).returning();
 
@@ -291,7 +291,7 @@ export async function seedHierarchy(
     staffId: staff.cashier2.id,
     branchId: branch2.id,
     role: 'CASHIER',
-    permissions: ['MANAGE_PAYMENTS', 'VIEW_ORDERS', 'APPLY_DISCOUNTS'],
+    permissions: [],
     isActive: true,
   });
 
@@ -299,7 +299,7 @@ export async function seedHierarchy(
     staffId: staff.host1.id,
     branchId: branch1.id,
     role: 'HOST',
-    permissions: ['MANAGE_RESERVATIONS', 'MANAGE_TABLES'],
+    permissions: [],
     isActive: true,
   });
 

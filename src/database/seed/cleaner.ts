@@ -50,6 +50,9 @@ export async function purgeDatabase(db: DrizzleDatabase): Promise<void> {
   await db.delete(schema.branchSettings);
   await db.delete(schema.branches);
   await db.delete(schema.restaurants);
+  await db.delete(schema.subscriptionInvoices);
+  await db.delete(schema.organizationSubscriptions);
+  await db.delete(schema.platformPlans);
   await db.delete(schema.organizations);
   await db.delete(schema.users);
   console.log('✓ Database cleaned cleanly.');
