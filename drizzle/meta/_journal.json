@@ -68,12 +68,19 @@
     {
       "idx": 9,
       "version": "7",
+      "when": 1793200000000,
+      "tag": "0009_restaurant_fields_enhancement",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
       "when": 1793300000000,
       "tag": "0010_menu_item_popular",
       "breakpoints": true
     },
     {
-      "idx": 10,
+      "idx": 11,
       "version": "7",
       "when": 1793310000000,
       "tag": "0011_join_codes_and_subscriptions",

@@ -46,15 +46,15 @@ import { OutboxService } from './outbox.service';
           resolve(__dirname, '../drizzle'),
         ];
         const migrationsFolder = candidates.find((dir) => existsSync(dir));
-        if (migrationsFolder) {
-          try {
-            logger.log(`Running database migrations from ${migrationsFolder}...`);
-            await migrate(db, { migrationsFolder });
-            logger.log('Database migrations completed successfully');
-          } catch (error) {
-            logger.error('Database migration failed:', error);
-          }
+        if (!migrationsFolder) {
+          throw new Error(
+            `Database migrations folder not found. Looked in: ${candidates.join(', ')}`,
+          );
         }
+
+        logger.log(`Running database migrations from ${migrationsFolder}...`);
+        await migrate(db, { migrationsFolder });
+        logger.log('Database migrations completed successfully');
         return true;
       },
     },
