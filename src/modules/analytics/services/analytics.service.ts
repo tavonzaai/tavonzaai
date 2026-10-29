@@ -1,5 +1,5 @@
 import { Inject, Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -14,18 +14,31 @@ import {
   customers,
 } from '@/database';
 import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
-import { isSuperAdmin } from '../../../common/auth/actor.util';
+import {
+  isOrgAdmin,
+  isSuperAdmin,
+  organizationIdsFromActor,
+  resolveRequestedOrganizationId,
+} from '../../../common/auth/actor.util';
+import { BranchAccessService } from '../../authorization/services/branch-access.service';
 
 @Injectable()
 export class AnalyticsService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDatabase) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDatabase,
+    private readonly branchAccess: BranchAccessService,
+  ) {}
 
   async getOverview(
     user: JwtPayload,
-    query: { organizationId?: string; branchId?: string },
+    query: { organizationId?: string; branchId?: string; from?: string; to?: string },
   ) {
     const organizationId = this.resolveOrganizationId(user, query.organizationId);
+    if (query.branchId) {
+      await this.branchAccess.assertAccess(user, query.branchId);
+    }
     const tenant = this.tenantFilter(organizationId, query.branchId);
+    const range = this.parseDateRange(query.from, query.to);
 
     const [[restaurantCount], [branchCount], [tableCount], [staffCount], [orderStats], [occupied]] =
       await Promise.all([
@@ -70,6 +83,7 @@ export class AnalyticsService {
 
     const tablesTotal = tableCount?.total ?? 0;
     const occupiedTables = occupied?.total ?? 0;
+    const series = await this.loadOrderRevenueSeries(tenant.branchWhere, range);
 
     return {
       restaurantsCount: restaurantCount?.total ?? 0,
@@ -80,6 +94,9 @@ export class AnalyticsService {
       pendingOrders: orderStats?.pending ?? 0,
       paidRevenue: Number(orderStats?.revenue ?? 0),
       occupancyPercent: tablesTotal > 0 ? Math.round((occupiedTables / tablesTotal) * 100) : 0,
+      from: range.from.toISOString(),
+      to: range.to.toISOString(),
+      series,
     };
   }
 
@@ -89,11 +106,12 @@ export class AnalyticsService {
    */
   async getBranchDashboard(
     user: JwtPayload,
-    query: { branchId: string },
+    query: { branchId: string; from?: string; to?: string },
   ) {
     if (!query.branchId) {
       throw new ForbiddenException('branchId is required');
     }
+    await this.branchAccess.assertAccess(user, query.branchId);
 
     const organizationId = this.resolveOrganizationId(user, undefined);
     const tenant = this.tenantFilter(organizationId, query.branchId);
@@ -155,6 +173,8 @@ export class AnalyticsService {
 
     const tablesTotal = tableStats?.total ?? 0;
     const occupiedTables = tableStats?.occupied ?? 0;
+    const range = this.parseDateRange(query.from, query.to);
+    const series = await this.loadOrderRevenueSeries(tenant.branchWhere, range);
 
     return {
       branchId: query.branchId,
@@ -173,12 +193,16 @@ export class AnalyticsService {
       paidRevenue: Number(orderStats?.paidRevenue ?? 0),
       todayOrders: orderStats?.todayOrders ?? 0,
       todayRevenue: Number(orderStats?.todayRevenue ?? 0),
+      from: range.from.toISOString(),
+      to: range.to.toISOString(),
+      series,
     };
   }
 
   /** Waiter KPIs — counts only for tables assigned to this waiter. */
   async getWaiterDashboard(user: JwtPayload, query: { branchId: string }) {
     const branchId = this.requireBranchId(query.branchId);
+    await this.assertBranchAccessHint(user, branchId);
     const tableIds = await this.resolveWaiterAssignedTableIds(user.sub, branchId);
     if (tableIds.length === 0) {
       return {
@@ -221,7 +245,7 @@ export class AnalyticsService {
   /** Cashier KPIs — revenue / unpaid / refunds (never client-side getAll aggregation). */
   async getCashierDashboard(user: JwtPayload, query: { branchId: string }) {
     const branchId = this.requireBranchId(query.branchId);
-    this.assertBranchAccessHint(user, branchId);
+    await this.assertBranchAccessHint(user, branchId);
 
     const [[orderStats], [paymentStats]] = await Promise.all([
       this.db
@@ -274,8 +298,9 @@ export class AnalyticsService {
   }
 
   /** Kitchen / station queue KPIs. */
-  async getKitchenDashboard(_user: JwtPayload, query: { branchId: string }) {
+  async getKitchenDashboard(user: JwtPayload, query: { branchId: string }) {
     const branchId = this.requireBranchId(query.branchId);
+    await this.assertBranchAccessHint(user, branchId);
     const delayCutoff = sql`now() - interval '20 minutes'`;
 
     const [[stats]] = await Promise.all([
@@ -373,10 +398,22 @@ export class AnalyticsService {
       )
       .groupBy(branches.id, branches.name, restaurants.name);
 
-    return rows.map((row) => ({
+    const mapped = rows.map((row) => ({
       ...row,
       revenue: Number(row.revenue ?? 0),
     }));
+
+    if (isSuperAdmin(user) || isOrgAdmin(user)) {
+      return mapped;
+    }
+
+    const allowed = new Set(
+      (user.scopes ?? [])
+        .filter((scope) => scope.type === 'branch' && scope.id)
+        .map((scope) => scope.id as string),
+    );
+    if (user.branchId) allowed.add(user.branchId);
+    return mapped.filter((row) => allowed.has(row.branchId));
   }
 
   private requireBranchId(branchId?: string): string {
@@ -386,11 +423,8 @@ export class AnalyticsService {
     return branchId.trim();
   }
 
-  private assertBranchAccessHint(user: JwtPayload, branchId: string): void {
-    if (isSuperAdmin(user)) return;
-    if (user.branchId && user.branchId !== branchId) {
-      throw new ForbiddenException('You are not assigned to this branch');
-    }
+  private async assertBranchAccessHint(user: JwtPayload, branchId: string): Promise<void> {
+    await this.branchAccess.assertAccess(user, branchId);
   }
 
   private async resolveWaiterAssignedTableIds(
@@ -422,7 +456,72 @@ export class AnalyticsService {
 
   private resolveOrganizationId(user: JwtPayload, requested?: string): string | undefined {
     if (isSuperAdmin(user)) return requested;
-    return requested || user.organizationId || undefined;
+    const ids = organizationIdsFromActor(user);
+    if (!requested && ids.length === 0) {
+      throw new ForbiddenException('No organization is associated with this account');
+    }
+    if (!requested) {
+      return user.organizationId || ids[0];
+    }
+    return resolveRequestedOrganizationId(user, ids, requested);
+  }
+
+  private parseDateRange(from?: string, to?: string): { from: Date; to: Date } {
+    const end = to ? new Date(to) : new Date();
+    const start = from ? new Date(from) : new Date(end.getTime() - 13 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new BadRequestException('Invalid date range');
+    }
+    if (start > end) {
+      throw new BadRequestException('from must be before to');
+    }
+    const maxMs = 90 * 24 * 60 * 60 * 1000;
+    if (end.getTime() - start.getTime() > maxMs) {
+      throw new BadRequestException('Date range cannot exceed 90 days');
+    }
+    return { from: start, to: end };
+  }
+
+  private async loadOrderRevenueSeries(
+    branchWhere: ReturnType<typeof and>,
+    range: { from: Date; to: Date },
+  ) {
+    const rows = await this.db
+      .select({
+        date: sql<string>`to_char(date_trunc('day', ${orders.createdAt}), 'YYYY-MM-DD')`,
+        orders: sql<number>`count(*)::int`,
+        revenue: sql<number>`coalesce(sum(${orders.totalAmount}) FILTER (WHERE ${orders.paymentStatus} = 'PAID'), 0)`,
+      })
+      .from(orders)
+      .innerJoin(branches, eq(orders.branchId, branches.id))
+      .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+      .where(
+        and(
+          branchWhere,
+          gte(orders.createdAt, range.from),
+          lte(orders.createdAt, range.to),
+        ),
+      )
+      .groupBy(sql`date_trunc('day', ${orders.createdAt})`)
+      .orderBy(sql`date_trunc('day', ${orders.createdAt})`);
+
+    const byDate = new Map(
+      rows.map((row) => [row.date, { orders: Number(row.orders ?? 0), revenue: Number(row.revenue ?? 0) }]),
+    );
+    const series: { date: string; orders: number; revenue: number }[] = [];
+    const cursor = new Date(Date.UTC(range.from.getUTCFullYear(), range.from.getUTCMonth(), range.from.getUTCDate()));
+    const end = new Date(Date.UTC(range.to.getUTCFullYear(), range.to.getUTCMonth(), range.to.getUTCDate()));
+    while (cursor <= end) {
+      const date = cursor.toISOString().slice(0, 10);
+      const point = byDate.get(date);
+      series.push({
+        date,
+        orders: point?.orders ?? 0,
+        revenue: point?.revenue ?? 0,
+      });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return series;
   }
 
   private tenantFilter(organizationId?: string, branchId?: string) {

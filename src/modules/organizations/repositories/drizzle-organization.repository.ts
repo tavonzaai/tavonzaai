@@ -1,6 +1,14 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
-import { DRIZZLE, type DrizzleDatabase, organizations } from '@/database';
+import { and, eq } from 'drizzle-orm';
+import {
+  DRIZZLE,
+  type DrizzleDatabase,
+  organizations,
+  restaurants,
+  branches,
+  staff,
+  staffAssignments,
+} from '@/database';
 import { DrizzleQueryBuilder } from '../../../common/database';
 import type { Organization } from '../domain/organization.entity';
 
@@ -63,6 +71,36 @@ export class DrizzleOrganizationRepository {
       .filterExact({ ownerId })
       .sort(organizations.createdAt, 'desc')
       .executePlain((r) => this.mapToEntity(r));
+  }
+
+  async findAccessibleByUserId(userId: string): Promise<Organization[]> {
+    const owned = await this.findByOwnerId(userId);
+    const assignedRows = await this.db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        ownerId: organizations.ownerId,
+        slug: organizations.slug,
+        createdAt: organizations.createdAt,
+        updatedAt: organizations.updatedAt,
+      })
+      .from(staff)
+      .innerJoin(staffAssignments, eq(staffAssignments.staffId, staff.id))
+      .innerJoin(branches, eq(staffAssignments.branchId, branches.id))
+      .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+      .innerJoin(organizations, eq(restaurants.organizationId, organizations.id))
+      .where(and(eq(staff.userId, userId), eq(staffAssignments.isActive, true)));
+
+    const byId = new Map<string, Organization>();
+    for (const org of owned) {
+      byId.set(org.id, org);
+    }
+    for (const row of assignedRows) {
+      if (!byId.has(row.id)) {
+        byId.set(row.id, this.mapToEntity(row));
+      }
+    }
+    return Array.from(byId.values());
   }
 
   async update(id: string, data: Partial<{ name: string; slug: string }>): Promise<Organization | null> {

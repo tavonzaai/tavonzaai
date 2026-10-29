@@ -15,6 +15,7 @@ import { KitchenModule } from "./modules/kitchen/kitchen.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
+import { SubscriptionsModule } from "./modules/subscriptions/subscriptions.module";
 import { ShiftsModule } from "./modules/shifts/shifts.module";
 import { InventoryModule } from "./modules/inventory/inventory.module";
 import { AiModule } from "./modules/ai/ai.module";
@@ -49,6 +50,7 @@ import { AppController } from "./app.controller";
     InventoryModule,
     NotificationsModule,
     AnalyticsModule,
+    SubscriptionsModule,
     AiModule,
   ],
   controllers: [AppController],

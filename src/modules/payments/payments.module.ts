@@ -7,9 +7,10 @@ import { StripeAdapter } from './adapters/stripe.adapter';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthorizationModule } from '../authorization/authorization.module';
 import { IdentityModule } from '../identity/identity.module';
+import { WaiterModule } from '../waiter/waiter.module';
 
 @Module({
-  imports: [NotificationsModule, AuthorizationModule, IdentityModule],
+  imports: [NotificationsModule, AuthorizationModule, IdentityModule, WaiterModule],
   controllers: [PaymentController],
   providers: [PaymentService, DrizzlePaymentRepository, StripeAdapter],
   exports: [PaymentService, DrizzlePaymentRepository, StripeAdapter],

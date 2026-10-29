@@ -194,7 +194,6 @@ export const SYSTEM_DEFAULT_ROLES: SystemRoleDefinition[] = [
       'orders:reject',
       'orders:serve',
       'tables:read',
-      'tables:update',
       'alerts:read',
       'alerts:acknowledge',
       'alerts:resolve',
@@ -250,7 +249,6 @@ export const SYSTEM_DEFAULT_ROLES: SystemRoleDefinition[] = [
     isSystem: true,
     permissionKeys: [
       'tables:read',
-      'tables:update',
       'reservations:read',
       'reservations:write',
       'reservations:update',

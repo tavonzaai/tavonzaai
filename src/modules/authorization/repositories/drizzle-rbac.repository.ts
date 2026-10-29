@@ -432,8 +432,20 @@ export class DrizzleRbacRepository {
       .select({ id: schema.organizations.id })
       .from(schema.organizations)
       .where(eq(schema.organizations.ownerId, userId));
-    for (const org of ownedOrgs) {
-      scopes.push({ type: 'organization', id: org.id });
+    const assignedOrgs = await this.db
+      .select({ id: schema.organizations.id })
+      .from(schema.staff)
+      .innerJoin(schema.staffAssignments, eq(schema.staffAssignments.staffId, schema.staff.id))
+      .innerJoin(schema.branches, eq(schema.staffAssignments.branchId, schema.branches.id))
+      .innerJoin(schema.restaurants, eq(schema.branches.restaurantId, schema.restaurants.id))
+      .innerJoin(schema.organizations, eq(schema.restaurants.organizationId, schema.organizations.id))
+      .where(and(eq(schema.staff.userId, userId), eq(schema.staffAssignments.isActive, true)));
+    const organizationIds = new Set<string>([
+      ...ownedOrgs.map((org: { id: string }) => org.id),
+      ...assignedOrgs.map((org: { id: string }) => org.id),
+    ]);
+    for (const organizationId of organizationIds) {
+      scopes.push({ type: 'organization', id: organizationId });
     }
 
     const rolePerms = await this.getUserPermissions(userId);
@@ -457,8 +469,14 @@ export class DrizzleRbacRepository {
         continue;
       }
 
-      // 1. Resolve dynamic database-backed role permissions for the assigned staff role
-      if (assignment.role) {
+      const explicit = Array.isArray(assignment.permissions)
+        ? (assignment.permissions as string[]).filter(Boolean)
+        : [];
+      const hasTemplate = explicit.length > 0;
+
+      // Dynamic DB role grants only apply when the assignment has no explicit template.
+      // A reduced assistant-manager permissions[] must replace the full BRANCH_MANAGER set.
+      if (!hasTemplate && assignment.role) {
         const dynamicSlug = assignment.role.toLowerCase().replace(/_/g, '-');
         const roleNameLike = assignment.role.replace(/_/g, ' ');
         try {
@@ -487,24 +505,14 @@ export class DrizzleRbacRepository {
         }
       }
 
-      // 2. Resolve default baseline permissions + explicit permissions
       const resolved = resolvePermissions(
         assignment.role,
-        (assignment.permissions as string[]) ?? [],
+        hasTemplate ? explicit : [],
       ) as string[];
       for (const key of resolved) {
         permissions.add(key);
         const canonical = normalizePermissionKey(key);
         if (canonical) permissions.add(canonical);
-      }
-
-      // 3. Include any extra permissions attached to the assignment
-      if (Array.isArray(assignment.permissions)) {
-        for (const extra of assignment.permissions as string[]) {
-          permissions.add(extra);
-          const canonical = normalizePermissionKey(extra);
-          if (canonical) permissions.add(canonical);
-        }
       }
 
       if (assignment.branchId) {

@@ -167,11 +167,15 @@ export class OrderController {
     @Query('search') search?: string,
   ): Promise<OrderListResponseDto[]> {
     await this.branchAccess.assertAccess(user, branchId);
-    const orders = await this.orderService.getOrdersByBranch(branchId, {
-      status: status as OrderStatus | undefined,
-      tableId,
-      search,
-    });
+    const orders = await this.orderService.getOrdersByBranch(
+      branchId,
+      {
+        status: status as OrderStatus | undefined,
+        tableId,
+        search,
+      },
+      user,
+    );
     return orders.map(OrderListResponseDto.fromEntity);
   }
 

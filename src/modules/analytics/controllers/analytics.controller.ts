@@ -21,14 +21,18 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Organization / branch operational overview for Admin dashboard' })
   @ApiQuery({ name: 'organizationId', required: false, type: String })
   @ApiQuery({ name: 'branchId', required: false, type: String })
+  @ApiQuery({ name: 'from', required: false, type: String })
+  @ApiQuery({ name: 'to', required: false, type: String })
   @ApiOkResponse({ description: 'Dashboard KPI snapshot' })
   @ApiStandardErrors(401, 403, 500)
   async overview(
     @CurrentUser() user: JwtPayload,
     @Query('organizationId') organizationId?: string,
     @Query('branchId') branchId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.analyticsService.getOverview(user, { organizationId, branchId });
+    return this.analyticsService.getOverview(user, { organizationId, branchId, from, to });
   }
 
   @Get('branch-dashboard')
@@ -39,13 +43,17 @@ export class AnalyticsController {
       'Aggregated analytics for a single branch. Frontends must use this instead of loading all orders/tables to compute KPIs.',
   })
   @ApiQuery({ name: 'branchId', required: true, type: String })
+  @ApiQuery({ name: 'from', required: false, type: String })
+  @ApiQuery({ name: 'to', required: false, type: String })
   @ApiOkResponse({ description: 'Branch dashboard KPI snapshot' })
   @ApiStandardErrors(401, 403, 500)
   async branchDashboard(
     @CurrentUser() user: JwtPayload,
     @Query('branchId') branchId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.analyticsService.getBranchDashboard(user, { branchId });
+    return this.analyticsService.getBranchDashboard(user, { branchId, from, to });
   }
 
   @Get('waiter-dashboard')

@@ -75,6 +75,9 @@ function createMockOrgRepo() {
     async findByOwnerId(userId: string) {
       return userId === org.ownerId ? [org] : [];
     },
+    async findAccessibleByUserId(userId: string) {
+      return userId === org.ownerId || userId === 'admin-2' ? [org] : [];
+    },
   };
 }
 
@@ -255,6 +258,28 @@ describe('RestaurantService - Enhanced Restaurant Creation & Management', () => 
     assert.equal(updated.coverImageUrl, 'https://cdn.example.com/banner-new.png');
     assert.equal(updated.bannerUrl, 'https://cdn.example.com/banner-new.png');
     assert.equal(updated.address, '456 High Street, London');
+  });
+
+  it('lets an organization admin create a restaurant without owning the org row', async () => {
+    const repo = createMockRepo();
+    const orgRepo = createMockOrgRepo();
+    const service = new RestaurantService(repo as any, orgRepo as any);
+    const admin: JwtPayload = {
+      sub: 'admin-2',
+      email: 'admin2@example.com',
+      globalRole: 'ADMIN' as any,
+      role: 'ADMIN',
+      organizationId: 'org-123',
+      scopes: [{ type: 'organization', id: 'org-123' }],
+    };
+
+    const result = await service.create(admin, {
+      name: 'Admin Brand',
+      organizationId: 'org-123',
+    });
+
+    assert.equal(result.organizationId, 'org-123');
+    assert.equal(result.name, 'Admin Brand');
   });
 });
 

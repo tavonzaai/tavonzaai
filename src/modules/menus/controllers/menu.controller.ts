@@ -6,6 +6,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
 import { Permission } from '@/authorization';
 import {
   ApiTags,
@@ -162,8 +164,11 @@ export class MenuController {
     },
   })
   @ApiStandardErrors(400, 401, 403, 500)
-  async createCategory(@Body() dto: CreateMenuCategoryDto) {
-    const category = await this.menuService.createCategory(dto);
+  async createCategory(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateMenuCategoryDto,
+  ) {
+    const category = await this.menuService.createCategory(user, dto);
     return {
       success: true,
       data: MenuCategoryResponseDto.fromEntity(category),
@@ -193,10 +198,11 @@ export class MenuController {
   })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async updateCategory(
+    @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
     @Body() dto: UpdateMenuCategoryDto,
   ) {
-    const category = await this.menuService.updateCategory(id, dto);
+    const category = await this.menuService.updateCategory(user, id, dto);
     return {
       success: true,
       data: MenuCategoryResponseDto.fromEntity(category),
@@ -226,8 +232,11 @@ export class MenuController {
     },
   })
   @ApiStandardErrors(400, 401, 403, 404, 500)
-  async deleteCategory(@Param('id') id: string) {
-    const category = await this.menuService.softDeleteCategory(id);
+  async deleteCategory(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    const category = await this.menuService.softDeleteCategory(user, id);
     return {
       success: true,
       message: 'Category soft-deleted successfully',
@@ -253,8 +262,11 @@ export class MenuController {
     },
   })
   @ApiStandardErrors(400, 401, 403, 500)
-  async createItem(@Body() dto: CreateMenuItemDto) {
-    const item = await this.menuService.createItem(dto);
+  async createItem(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateMenuItemDto,
+  ) {
+    const item = await this.menuService.createItem(user, dto);
     return {
       success: true,
       data: MenuItemDetailResponseDto.fromEntity(item),
@@ -284,10 +296,11 @@ export class MenuController {
   })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async updateItem(
+    @CurrentUser() user: JwtPayload,
     @Param('itemId') itemId: string,
     @Body() dto: UpdateMenuItemDto,
   ) {
-    const item = await this.menuService.updateItem(itemId, dto);
+    const item = await this.menuService.updateItem(user, itemId, dto);
     return {
       success: true,
       data: MenuItemDetailResponseDto.fromEntity(item),
@@ -317,8 +330,11 @@ export class MenuController {
     },
   })
   @ApiStandardErrors(400, 401, 403, 404, 500)
-  async deleteItem(@Param('itemId') itemId: string) {
-    const item = await this.menuService.softDeleteItem(itemId);
+  async deleteItem(
+    @CurrentUser() user: JwtPayload,
+    @Param('itemId') itemId: string,
+  ) {
+    const item = await this.menuService.softDeleteItem(user, itemId);
     return {
       success: true,
       message: 'Menu item soft-deleted successfully',

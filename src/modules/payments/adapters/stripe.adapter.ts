@@ -19,6 +19,11 @@ export interface PaymentIntentResult {
   status: string;
 }
 
+function isLocalStripeEnv(): boolean {
+  const env = process.env.NODE_ENV;
+  return !env || env === 'development' || env === 'test' || env === 'local';
+}
+
 @Injectable()
 export class StripeAdapter {
   private readonly logger = new Logger(StripeAdapter.name);
@@ -122,36 +127,36 @@ export class StripeAdapter {
         };
       } catch (err: any) {
         this.logger.warn(`Failed to retrieve live intent ${paymentIntentId}: ${err.message}`);
+        throw new Error(`Failed to retrieve Stripe payment intent: ${err.message}`);
       }
     }
 
-    // In mock/test mode: if ID starts with pi_test, treat as test intent
-    return {
-      id: paymentIntentId,
-      status: 'succeeded',
-      amount: 0,
-      currency: 'usd',
-      metadata: {},
-    };
+    if (this.isMockMode && isLocalStripeEnv() && paymentIntentId.startsWith('pi_test_')) {
+      return {
+        id: paymentIntentId,
+        status: 'succeeded',
+        amount: 0,
+        currency: 'usd',
+        metadata: {},
+      };
+    }
+
+    throw new Error('Stripe is not configured to retrieve payment intents');
   }
 
   /**
    * Construct and verify webhook event with cryptographic signature
    */
   constructWebhookEvent(rawBody: Buffer | string, signature: string, webhookSecret: string): Stripe.Event {
-    if (!this.isMockMode && this.stripeClient) {
-      return this.stripeClient.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    if (!signature) {
+      throw new Error('Missing Stripe-Signature header');
     }
-
-    // If Stripe SDK is instantiated or available
-    if (this.stripeClient) {
-      return this.stripeClient.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    if (!webhookSecret) {
+      throw new Error('Stripe webhook secret is not configured');
     }
-
-    // Fallback parser if secret is mock or running without Stripe client
-    if (typeof rawBody === 'string') {
-      return JSON.parse(rawBody) as Stripe.Event;
+    if (!this.stripeClient) {
+      throw new Error('Stripe webhook verification requires a configured secret key');
     }
-    return JSON.parse(rawBody.toString('utf8')) as Stripe.Event;
+    return this.stripeClient.webhooks.constructEvent(rawBody, signature, webhookSecret);
   }
 }

@@ -157,9 +157,10 @@ export class PaymentController {
   @ApiOkResponse({ type: PaymentRecordResponseDto, description: 'Payment verified and settled' })
   @ApiStandardErrors(400, 401, 404, 500)
   async verifyStripePayment(
+    @CurrentUser() user: JwtPayload,
     @Body() dto: VerifyStripePaymentDto,
   ): Promise<any> {
-    return this.paymentService.verifyStripePayment(dto.paymentIntentId);
+    return this.paymentService.verifyStripePayment(user, dto.paymentIntentId);
   }
 
   @Post('stripe/webhook')
@@ -334,6 +335,35 @@ export class PaymentController {
     });
   }
 
+  @Get('summary')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.PAYMENTS_READ)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Admin] Payment totals by status and method',
+    description: 'Organization or branch dine-in ledger summary. Distinct from platform SaaS invoices.',
+  })
+  @ApiQuery({ name: 'organizationId', required: false, type: String })
+  @ApiQuery({ name: 'branchId', required: false, type: String })
+  @ApiQuery({ name: 'from', required: false, type: String })
+  @ApiQuery({ name: 'to', required: false, type: String })
+  @ApiOkResponse({ description: 'Payment summary totals' })
+  @ApiStandardErrors(400, 401, 403, 500)
+  async summarizePayments(
+    @CurrentUser() user: JwtPayload,
+    @Query('organizationId') organizationId?: string,
+    @Query('branchId') branchId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.paymentService.summarizePayments(user, {
+      organizationId,
+      branchId,
+      from,
+      to,
+    });
+  }
+
   @Get('order/:orderId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
@@ -366,6 +396,23 @@ export class PaymentController {
     @Param('sessionId') sessionId: string,
   ): Promise<TableBillCalculationResponseDto> {
     return this.paymentService.calculateTableBill(user, sessionId);
+  }
+
+  @Get('table/:tableId/bill')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: '[Waiter/Cashier] Calculate bill for the active session on a table',
+    description: 'Resolves the active table session server-side and returns the consolidated bill.',
+  })
+  @ApiParam({ name: 'tableId', type: String, description: 'Table UUID' })
+  @ApiOkResponse({ type: TableBillCalculationResponseDto })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async getTableBill(
+    @CurrentUser() user: JwtPayload,
+    @Param('tableId') tableId: string,
+  ): Promise<TableBillCalculationResponseDto> {
+    return this.paymentService.calculateTableBillForTable(user, tableId);
   }
 
   @Post(':id/refund')

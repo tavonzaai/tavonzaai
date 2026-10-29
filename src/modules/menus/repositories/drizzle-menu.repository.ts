@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, ilike, or, sql } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -12,6 +12,7 @@ import {
   modifierGroups,
   modifiers,
   branches,
+  branchSettings,
 } from '@/database';
 import { DrizzleQueryBuilder } from '../../../common/database';
 import { IMenuRepository } from './menu-repository.interface';
@@ -66,6 +67,24 @@ export class DrizzleMenuRepository implements IMenuRepository {
       sortOrder: category.displayOrder ?? 0,
       itemCount: 0,
     });
+  }
+
+  async findCategoryRestaurantId(id: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ restaurantId: menuCategories.restaurantId })
+      .from(menuCategories)
+      .where(eq(menuCategories.id, id))
+      .limit(1);
+    return row?.restaurantId ?? null;
+  }
+
+  async findItemRestaurantId(id: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ restaurantId: menuItems.restaurantId })
+      .from(menuItems)
+      .where(eq(menuItems.id, id))
+      .limit(1);
+    return row?.restaurantId ?? null;
   }
 
   async createCategory(data: {
@@ -124,29 +143,53 @@ export class DrizzleMenuRepository implements IMenuRepository {
     },
   ): Promise<MenuItem[]> {
     const restaurantId = await this.resolveRestaurantId(branchId);
+    const [settings] = await this.db
+      .select({ hideUnavailableItems: branchSettings.hideUnavailableItems })
+      .from(branchSettings)
+      .where(eq(branchSettings.branchId, branchId))
+      .limit(1);
+    const hideUnavailable = settings?.hideUnavailableItems ?? false;
 
-    const qb = new DrizzleQueryBuilder<typeof menuItems>(this.db, menuItems)
-      .filterExact({
-        restaurantId,
-        ...(filters?.categoryId ? { categoryId: filters.categoryId } : {}),
-      })
-      .softDelete({ column: menuItems.isAvailable, activeValue: true })
-      .sort('displayOrder', 'asc');
-
+    const conditions = [eq(menuItems.restaurantId, restaurantId)];
+    if (filters?.categoryId) {
+      conditions.push(eq(menuItems.categoryId, filters.categoryId));
+    }
+    if (filters?.isPopular) {
+      conditions.push(eq(menuItems.isPopular, true));
+    }
     if (filters?.search) {
-      qb.search(filters.search, [menuItems.name, menuItems.description]);
+      const term = `%${filters.search.trim()}%`;
+      conditions.push(
+        or(ilike(menuItems.name, term), ilike(menuItems.description, term))!,
+      );
     }
 
-    const items = await qb.executePlain();
+    const inStock = sql`(
+      ${menuItems.isStockTracked} = false
+      OR coalesce(${menuItems.stockQuantity}, 0) > 0
+    )`;
+    const effectivelyAvailable = sql`${menuItems.isAvailable} = true AND ${inStock}`;
+    if (hideUnavailable) {
+      conditions.push(effectivelyAvailable);
+    }
 
-    return items.map((item) =>
-      this.toDomainItem({
+    const items = await this.db
+      .select()
+      .from(menuItems)
+      .where(and(...conditions))
+      .orderBy(menuItems.displayOrder);
+
+    return items.map((item) => {
+      const outOfStock = Boolean(item.isStockTracked) && (item.stockQuantity ?? 0) <= 0;
+      return this.toDomainItem({
         ...item,
         branchId,
         price: item.basePrice,
         addOns: [],
-      }),
-    );
+        isAvailable: Boolean(item.isAvailable) && !outOfStock,
+        isPopular: item.isPopular ?? false,
+      });
+    });
   }
 
   async createItem(data: {
@@ -160,6 +203,7 @@ export class DrizzleMenuRepository implements IMenuRepository {
     estimatedPrepTime?: number;
     stockQuantity?: number;
     isStockTracked?: boolean;
+    isPopular?: boolean;
   }): Promise<MenuItem> {
     const [record] = await this.db
       .insert(menuItems)
@@ -174,6 +218,7 @@ export class DrizzleMenuRepository implements IMenuRepository {
         estimatedPrepTime: data.estimatedPrepTime ?? 15,
         stockQuantity: data.stockQuantity ?? 0,
         isStockTracked: data.isStockTracked ?? false,
+        isPopular: data.isPopular ?? false,
         isAvailable: true,
         displayOrder: 0,
       })
@@ -195,6 +240,7 @@ export class DrizzleMenuRepository implements IMenuRepository {
       estimatedPrepTime: number;
       stockQuantity: number;
       isStockTracked: boolean;
+      isPopular: boolean;
     }>,
   ): Promise<MenuItem | null> {
     const updateData: any = { ...data, updatedAt: new Date() };

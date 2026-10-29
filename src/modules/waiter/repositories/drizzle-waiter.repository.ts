@@ -12,6 +12,8 @@ import {
   waiterTableAssignments,
   tables,
   users,
+  tableSessions,
+  guestSessions,
 } from '@/database';
 import { isUUID } from '@/common/shared';
 import { DrizzleQueryBuilder } from '../../../common/database';
@@ -525,16 +527,48 @@ export class DrizzleWaiterRepository {
       )
       .limit(1);
 
-    if (result.length > 0) return true;
+    return result.length > 0;
+  }
 
-    if (profile) {
-      const isAssigned = await this.isStaffAssignedToBranch(profile.id, branchId);
-      if (isAssigned) {
-        return true;
-      }
-    }
+  async findAssignedTableIds(waiterId: string, branchId: string): Promise<string[]> {
+    const rows = await this.findActiveTableAssignmentsForWaiter(waiterId, branchId);
+    return [...new Set(rows.map((row) => row.tableId).filter(Boolean))];
+  }
 
-    return false;
+  async findTableDetail(tableId: string) {
+    const [table] = await this.db
+      .select()
+      .from(tables)
+      .where(eq(tables.id, tableId))
+      .limit(1);
+    if (!table) return null;
+
+    const [session] = await this.db
+      .select()
+      .from(tableSessions)
+      .where(
+        and(
+          eq(tableSessions.tableId, tableId),
+          inArray(tableSessions.status, ['ACTIVE', 'BILL_REQUESTED']),
+        ),
+      )
+      .limit(1);
+
+    const guests = session
+      ? await this.db
+          .select({
+            id: guestSessions.id,
+            displayName: guestSessions.displayName,
+            seatLabel: guestSessions.seatLabel,
+            isHostGuest: guestSessions.isHostGuest,
+            status: guestSessions.status,
+            joinedAt: guestSessions.joinedAt,
+          })
+          .from(guestSessions)
+          .where(eq(guestSessions.tableSessionId, session.id))
+      : [];
+
+    return { table, session: session ?? null, guests };
   }
 
   async releaseTable(assignmentId: string): Promise<void> {

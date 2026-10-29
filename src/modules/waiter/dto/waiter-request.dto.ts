@@ -169,14 +169,15 @@ export class OrderItemDto {
   @IsUUID()
   menuItemId!: string;
 
-  @ApiProperty({ description: 'Display name (denormalized)' })
+  @ApiPropertyOptional({ description: 'Display name (ignored; catalog name is used)' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  name!: string;
+  name?: string;
 
-  @ApiProperty({ example: '12.99' })
+  @ApiPropertyOptional({ example: '12.99', description: 'Ignored; catalog price is used' })
+  @IsOptional()
   @IsString()
-  unitPrice!: string;
+  unitPrice?: string;
 
   @ApiProperty({ example: 2 })
   @IsInt()

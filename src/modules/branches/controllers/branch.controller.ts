@@ -170,6 +170,8 @@ export class BranchController {
   }
 
   @Put(':id/operating-hours')
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permission.MANAGE_BRANCH_SETTINGS)
   @ApiOperation({ summary: 'Set/replace branch weekly operating hours' })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'Updated operating hours', type: [BranchOperatingHoursResponseDto] })
@@ -200,6 +202,8 @@ export class BranchController {
 
   @Post(':id/holidays')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions(Permission.MANAGE_BRANCH_SETTINGS)
   @ApiOperation({ summary: 'Add a holiday or special schedule to branch' })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiCreatedResponse({ description: 'Holiday scheduled', type: BranchHolidayResponseDto })

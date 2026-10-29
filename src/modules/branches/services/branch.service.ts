@@ -7,7 +7,13 @@ import { DrizzleBranchRepository } from '../repositories/drizzle-branch.reposito
 import { DrizzleRestaurantRepository } from '../../restaurants/repositories/drizzle-restaurant.repository';
 import { DrizzleOrganizationRepository } from '../../organizations/repositories/drizzle-organization.repository';
 import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
-import { assertCanAccessOrganization, isSuperAdmin } from '../../../common/auth/actor.util';
+import {
+  assertCanAccessOrganization,
+  isOrgAdmin,
+  isSuperAdmin,
+  organizationIdsFromActor,
+  resolveRequestedOrganizationId,
+} from '../../../common/auth/actor.util';
 import { assertStaffAssignmentInput } from '../../authorization/services/staff-access.policy';
 import { BranchAccessService } from '../../authorization/services/branch-access.service';
 import type {
@@ -152,18 +158,15 @@ export class BranchService {
       }
       return requestedId;
     }
-    const owned = await this.orgRepo.findByOwnerId(user.sub);
-    if (owned.length === 0) {
-      throw new ForbiddenException('No organization is associated with this account');
+    const accessible = await this.orgRepo.findAccessibleByUserId(user.sub);
+    const ids = [
+      ...accessible.map((org) => org.id),
+      ...organizationIdsFromActor(user),
+    ];
+    if (isOrgAdmin(user)) {
+      ids.push(...organizationIdsFromActor(user));
     }
-    if (requestedId && !owned.some((org) => org.id === requestedId)) {
-      throw new ForbiddenException('You do not have access to this organization');
-    }
-    const fallbackId = owned[0]?.id;
-    if (!requestedId && !user.organizationId && !fallbackId) {
-      throw new ForbiddenException('No organization is associated with this account');
-    }
-    return requestedId || user.organizationId || fallbackId!;
+    return resolveRequestedOrganizationId(user, ids, requestedId);
   }
 
   // ── Branch Settings ───────────────────────────────────────────────────

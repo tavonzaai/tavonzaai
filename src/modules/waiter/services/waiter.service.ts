@@ -11,17 +11,45 @@
 // ============================================================================
 
 import {
+  Inject,
   Injectable,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import * as argon2 from '@node-rs/argon2';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DrizzleWaiterRepository } from '../repositories/drizzle-waiter.repository';
 import { DrizzleWaiterOrderRepository } from '../repositories/drizzle-waiter-order.repository';
 import { DrizzleAlertRepository } from '../repositories/drizzle-alert.repository';
 import { DrizzleUserRepository } from '../../identity/repositories/drizzle-user.repository';
 import { isUUID } from '@/common/shared';
+import {
+  DRIZZLE,
+  type DrizzleDatabase,
+  menuItems,
+  menuCategories,
+  modifiers,
+  modifierGroups,
+  branchSettings,
+  restaurants,
+  branches,
+  customers,
+  guestSessions,
+  tableSessions,
+} from '@/database';
+import {
+  assertItemOrderable,
+  assertQuantity,
+  computeTotals,
+  priceLine,
+  roundMoney,
+  snapshotName,
+  stationForCategory,
+  type CatalogItem,
+  type CatalogModifier,
+} from '../../orders/domain/cart-rules';
+import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
+import { isCustomerPayload } from '../../identity/services/customer-principal.service';
 import {
   canWaiterTransition,
   ORDER_STATUS,
@@ -47,6 +75,7 @@ export class WaiterService {
     private readonly alertRepo: DrizzleAlertRepository,
     private readonly userRepo: DrizzleUserRepository,
     private readonly outboxService: OutboxService,
+    @Inject(DRIZZLE) private readonly db: DrizzleDatabase,
   ) {}
 
   // ── Slice 2: Assigned Tables ────────────────────────────────────────
@@ -71,6 +100,56 @@ export class WaiterService {
     if (!isAssigned) throw new ForbiddenException('You are not assigned to this branch');
 
     return this.waiterRepo.findActiveTableAssignmentsForWaiter(waiterId, resolvedBranchId, profile.id);
+  }
+
+  async getAssignedTableIds(waiterId: string, branchId: string): Promise<string[]> {
+    return this.waiterRepo.findAssignedTableIds(waiterId, branchId);
+  }
+
+  async isTableAssigned(waiterId: string, tableId: string, branchId: string): Promise<boolean> {
+    return this.waiterRepo.isTableAssignedToWaiter(waiterId, tableId, branchId);
+  }
+
+  async getTableDetail(waiterId: string, tableId: string, branchId?: string) {
+    const detail = await this.waiterRepo.findTableDetail(tableId);
+    if (!detail) {
+      throw new NotFoundException(`Table with ID "${tableId}" not found`);
+    }
+
+    const resolvedBranchId = branchId || detail.table.branchId;
+    if (detail.table.branchId !== resolvedBranchId) {
+      throw new ForbiddenException('Table does not belong to this branch');
+    }
+
+    const assigned = await this.waiterRepo.isTableAssignedToWaiter(
+      waiterId,
+      tableId,
+      detail.table.branchId,
+    );
+    if (!assigned) {
+      throw new ForbiddenException('You are not assigned to this table');
+    }
+
+    return {
+      id: detail.table.id,
+      branchId: detail.table.branchId,
+      label: detail.table.label,
+      tableNumber: detail.table.label,
+      capacity: detail.table.capacity,
+      serviceStatus: detail.table.serviceStatus,
+      operationalFlag: detail.table.operationalFlag,
+      floor: detail.table.floor,
+      shape: detail.table.shape,
+      session: detail.session
+        ? {
+            id: detail.session.id,
+            status: detail.session.status,
+            partySize: detail.session.partySize,
+            startedAt: detail.session.startedAt,
+            guests: detail.guests,
+          }
+        : null,
+    };
   }
 
 
@@ -249,45 +328,150 @@ export class WaiterService {
   // ── Slice 5: Create Order on Behalf of Customer ─────────────────────
 
   async createOrderOnBehalf(dto: CreateOrderOnBehalfDto, waiterId: string): Promise<any> {
-    // Verify waiter owns this table
     await this.assertWaiterOwnsTable(waiterId, dto.tableId, dto.branchId);
 
-    // Resolve or auto-create the customer
-    let customer = await this.userRepo.findByEmailOrPhone(dto.customerIdentifier);
-    let customerAutoCreated = false;
-
-    if (!customer) {
-      // Auto-create thin account — waiter's JWT authorizes this action, no OTP gate
-      const isEmail = dto.customerIdentifier.includes('@');
-      const passwordHash = await argon2.hash('1234');
-
-      customer = await this.userRepo.create({
-        email: isEmail ? dto.customerIdentifier.toLowerCase() : `guest_${Date.now()}@tavonza.local`,
-        passwordHash,
-        name: 'Guest',
-        contactNo: isEmail ? undefined : dto.customerIdentifier,
-        role: GlobalRole.CUSTOMER,
-      });
-      customerAutoCreated = true;
-
-      console.log(
-        `[Waiter] Auto-created customer account: ${customer.id} for identifier: ${dto.customerIdentifier}`,
-      );
+    const [branch] = await this.db
+      .select({
+        id: branches.id,
+        restaurantId: branches.restaurantId,
+        organizationId: restaurants.organizationId,
+      })
+      .from(branches)
+      .innerJoin(restaurants, eq(restaurants.id, branches.restaurantId))
+      .where(eq(branches.id, dto.branchId))
+      .limit(1);
+    if (!branch) {
+      throw new NotFoundException('Branch not found');
     }
 
-    // Calculate totals
-    const subtotal = dto.items.reduce(
-      (sum: number, item: CreateOrderOnBehalfDto['items'][number]) =>
-        sum + parseFloat(item.unitPrice) * item.quantity,
-      0,
+    const menuItemIds = [...new Set(dto.items.map((item) => item.menuItemId))];
+    const catalogRows = await this.db
+      .select({
+        id: menuItems.id,
+        name: menuItems.name,
+        basePrice: menuItems.basePrice,
+        isAvailable: menuItems.isAvailable,
+        isStockTracked: menuItems.isStockTracked,
+        stockQuantity: menuItems.stockQuantity,
+        restaurantId: menuItems.restaurantId,
+        estimatedPrepTime: menuItems.estimatedPrepTime,
+        categoryName: menuCategories.name,
+      })
+      .from(menuItems)
+      .leftJoin(menuCategories, eq(menuCategories.id, menuItems.categoryId))
+      .where(inArray(menuItems.id, menuItemIds));
+
+    const catalogById = new Map(catalogRows.map((row) => [row.id, row]));
+    const pricedItems: Array<{
+      menuItemId: string;
+      name: string;
+      unitPrice: number;
+      quantity: number;
+      stationType: 'KITCHEN' | 'BAR';
+      estimatedPrepTime: number;
+      isStockTracked: boolean;
+      specialInstructions?: string;
+    }> = [];
+
+    for (const line of dto.items) {
+      assertQuantity(line.quantity);
+      const catalog = catalogById.get(line.menuItemId);
+      if (!catalog) {
+        throw new BadRequestException(`Menu item ${line.menuItemId} was not found`);
+      }
+      if (catalog.restaurantId !== branch.restaurantId) {
+        throw new BadRequestException(`"${catalog.name}" is not on this branch's menu`);
+      }
+      const item: CatalogItem = {
+        id: catalog.id,
+        name: catalog.name,
+        basePrice: Number(catalog.basePrice),
+        isAvailable: catalog.isAvailable,
+        isStockTracked: catalog.isStockTracked,
+        stockQuantity: catalog.stockQuantity,
+        restaurantId: catalog.restaurantId,
+      };
+      assertItemOrderable(item, line.quantity);
+
+      const availableModifiers = await this.loadItemModifiers(catalog.id);
+      const selected = this.resolveAddOns(item, line.addOns ?? [], availableModifiers);
+      const priced = priceLine(item, selected, line.quantity);
+      pricedItems.push({
+        menuItemId: catalog.id,
+        name: snapshotName(item, selected),
+        unitPrice: priced.unitPrice,
+        quantity: line.quantity,
+        stationType: stationForCategory(catalog.categoryName),
+        estimatedPrepTime: catalog.estimatedPrepTime ?? 15,
+        isStockTracked: Boolean(catalog.isStockTracked),
+        specialInstructions: line.specialInstructions,
+      });
+    }
+
+    const [settings] = await this.db
+      .select({
+        taxPercent: branchSettings.taxPercent,
+        serviceChargePct: branchSettings.serviceChargePct,
+      })
+      .from(branchSettings)
+      .where(eq(branchSettings.branchId, dto.branchId))
+      .limit(1);
+    const subtotal = roundMoney(
+      pricedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
     );
-    const serviceChargeRate = 0.05;
-    const taxRate = 0.08;
-    const serviceCharge = subtotal * serviceChargeRate;
-    const tax = subtotal * taxRate;
-    const total = subtotal + serviceCharge + tax;
+    const totals = computeTotals(subtotal, {
+      taxPercent: settings?.taxPercent ?? 0,
+      serviceChargePercent: settings?.serviceChargePct ?? 0,
+    });
+
+    let customerId: string | null = null;
+    const existingUser = await this.userRepo.findByEmailOrPhone(dto.customerIdentifier);
+    if (existingUser && existingUser.role === GlobalRole.CUSTOMER) {
+      customerId = await this.userRepo.ensureCustomerProfile(existingUser.id);
+    }
+    const identifier = dto.customerIdentifier.trim();
+    const guestPhone = identifier.includes('@') ? null : identifier;
+    const guestName = existingUser?.name ?? (identifier.includes('@') ? identifier.split('@')[0] : identifier);
+
+    const [sessionGuest] = await this.db
+      .select({ id: guestSessions.id })
+      .from(guestSessions)
+      .where(
+        and(
+          eq(guestSessions.tableSessionId, dto.tableSessionId),
+          eq(guestSessions.status, 'ACTIVE'),
+        ),
+      )
+      .limit(1);
+
+    await this.db.transaction(async (tx) => {
+      for (const line of pricedItems) {
+        if (!line.isStockTracked) continue;
+        const updated = await tx
+          .update(menuItems)
+          .set({
+            stockQuantity: sql`${menuItems.stockQuantity} - ${line.quantity}`,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(menuItems.id, line.menuItemId),
+              eq(menuItems.isStockTracked, true),
+              sql`${menuItems.stockQuantity} >= ${line.quantity}`,
+            ),
+          )
+          .returning({ id: menuItems.id });
+        if (updated.length === 0) {
+          throw new BadRequestException(`Not enough "${line.name}" left to fulfil this order`);
+        }
+      }
+    });
 
     const orderNumber = `W-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const notes = pricedItems
+      .filter((item) => item.specialInstructions)
+      .map((item) => `${item.name}: ${item.specialInstructions}`)
+      .join('\n') || null;
 
     const order = await this.orderRepo.createOrderOnBehalfOfCustomer({
       orderNumber,
@@ -295,27 +479,26 @@ export class WaiterService {
       tableId: dto.tableId,
       tableSessionId: dto.tableSessionId,
       waiterId,
-      subtotal: subtotal.toFixed(2),
-      serviceChargeRate: serviceChargeRate.toFixed(2),
-      serviceCharge: serviceCharge.toFixed(2),
-      taxRate: taxRate.toFixed(2),
-      tax: tax.toFixed(2),
-      total: total.toFixed(2),
+      customerId,
+      guestSessionId: sessionGuest?.id ?? null,
+      guestName,
+      guestPhone,
+      specialInstructions: notes,
+      subtotal: totals.subtotal.toFixed(2),
+      serviceCharge: totals.serviceCharge.toFixed(2),
+      tax: totals.tax.toFixed(2),
+      total: totals.total.toFixed(2),
     });
 
     await this.orderRepo.insertOrderItems(
-      dto.items.map((item: CreateOrderOnBehalfDto['items'][number]) => ({
+      pricedItems.map((item) => ({
         orderId: order.id,
         menuItemId: item.menuItemId,
         name: item.name,
         unitPrice: item.unitPrice,
         quantity: item.quantity,
-        specialInstructions: item.specialInstructions,
-        addOns: item.addOns,
-        addOnsTotal: item.addOns
-          ? item.addOns.reduce((s: number, a: { name: string; price: number }) => s + a.price, 0).toFixed(2)
-          : '0.00',
-        lineTotal: (parseFloat(item.unitPrice) * item.quantity).toFixed(2),
+        stationType: item.stationType,
+        estimatedPrepTime: item.estimatedPrepTime,
       })),
     );
 
@@ -331,15 +514,15 @@ export class WaiterService {
         tableId: dto.tableId,
         tableLabel: 'Table',
         tableSessionId: dto.tableSessionId,
-        itemsCount: dto.items.length,
-        subtotal,
-        totalAmount: total,
-        items: dto.items.map((i: any) => ({
-          id: i.menuItemId,
-          productName: i.name,
-          quantity: i.quantity,
-          stationType: 'KITCHEN',
-          specialInstructions: i.specialInstructions,
+        itemsCount: pricedItems.length,
+        subtotal: totals.subtotal,
+        totalAmount: totals.total,
+        items: pricedItems.map((item) => ({
+          id: item.menuItemId,
+          productName: item.name,
+          quantity: item.quantity,
+          stationType: item.stationType,
+          specialInstructions: item.specialInstructions,
         })),
         occurredAt: new Date().toISOString(),
       },
@@ -347,8 +530,8 @@ export class WaiterService {
 
     return {
       order,
-      customerAutoCreated,
-      customerId: customer.id,
+      customerAutoCreated: false,
+      customerId,
     };
   }
 
@@ -390,7 +573,7 @@ export class WaiterService {
 
   // ── Slice 6: Alerts ─────────────────────────────────────────────────
 
-  async createAlert(dto: CreateAlertDto): Promise<any> {
+  async createAlert(dto: CreateAlertDto, actor: JwtPayload): Promise<any> {
     if (!VALID_ALERT_TYPES.includes(dto.type as AlertType)) {
       throw new BadRequestException(
         `Invalid alert type. Must be one of: ${VALID_ALERT_TYPES.join(', ')}`,
@@ -399,6 +582,7 @@ export class WaiterService {
     if (dto.type === 'custom' && !dto.message) {
       throw new BadRequestException('A message is required for custom alerts');
     }
+    await this.assertCustomerCanAlert(actor, dto);
     const alert = await this.alertRepo.create(dto as any);
 
     await this.outboxService.publishEvent({
@@ -449,7 +633,8 @@ export class WaiterService {
     const isAssigned = await this.waiterRepo.isStaffAssignedToBranch(profile.id, branchId);
     if (!isAssigned) throw new ForbiddenException('You are not assigned to this branch');
 
-    return this.alertRepo.findPendingForBranch(branchId);
+    const tableIds = await this.getMyTableIds(waiterId, branchId);
+    return this.alertRepo.findPendingForBranch(branchId, tableIds);
   }
 
   async acknowledgeAlert(alertId: string, waiterId: string): Promise<void> {
@@ -458,6 +643,7 @@ export class WaiterService {
     if (alert.status === 'resolved') {
       throw new BadRequestException('Alert is already resolved');
     }
+    await this.assertWaiterOwnsTable(waiterId, alert.tableId, alert.branchId);
     await this.alertRepo.acknowledge(alertId, waiterId);
 
     await this.outboxService.publishEvent({
@@ -506,6 +692,83 @@ export class WaiterService {
     const owns = await this.waiterRepo.isTableAssignedToWaiter(waiterId, tableId, branchId);
     if (!owns) {
       throw new ForbiddenException('You are not assigned to this table');
+    }
+  }
+
+  private async loadItemModifiers(menuItemId: string): Promise<CatalogModifier[]> {
+    const rows = await this.db
+      .select({
+        id: modifiers.id,
+        name: modifiers.name,
+        priceDelta: modifiers.priceDelta,
+        isAvailable: modifiers.isAvailable,
+        menuItemId: modifierGroups.menuItemId,
+        groupName: modifierGroups.name,
+      })
+      .from(modifiers)
+      .innerJoin(modifierGroups, eq(modifierGroups.id, modifiers.modifierGroupId))
+      .where(eq(modifierGroups.menuItemId, menuItemId));
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      priceDelta: row.priceDelta,
+      isAvailable: row.isAvailable,
+      menuItemId: row.menuItemId,
+      groupName: row.groupName,
+    }));
+  }
+
+  private resolveAddOns(
+    item: CatalogItem,
+    requested: Array<{ name: string; price?: number }>,
+    available: CatalogModifier[],
+  ): CatalogModifier[] {
+    if (requested.length === 0) return [];
+    const byName = new Map(available.map((modifier) => [modifier.name.toLowerCase(), modifier]));
+    return requested.map((addon) => {
+      const match = byName.get(addon.name.toLowerCase());
+      if (!match || match.isAvailable === false) {
+        throw new BadRequestException(`Add-on "${addon.name}" is not available for "${item.name}"`);
+      }
+      return match;
+    });
+  }
+
+  private async assertCustomerCanAlert(actor: JwtPayload, dto: CreateAlertDto): Promise<void> {
+    const [session] = await this.db
+      .select()
+      .from(tableSessions)
+      .where(eq(tableSessions.id, dto.tableSessionId))
+      .limit(1);
+    if (!session) {
+      throw new NotFoundException('Table session not found');
+    }
+    if (session.branchId !== dto.branchId || session.tableId !== dto.tableId) {
+      throw new ForbiddenException('Alert does not match the table session');
+    }
+
+    if (actor.typ === 'guest') {
+      if (actor.tableSessionId !== dto.tableSessionId) {
+        throw new ForbiddenException('You do not have access to this table session');
+      }
+      return;
+    }
+
+    if (!isCustomerPayload(actor)) {
+      throw new ForbiddenException('Only seated customers can send table alerts');
+    }
+
+    const guests = await this.db
+      .select({ id: guestSessions.id, customerId: guestSessions.customerId })
+      .from(guestSessions)
+      .where(eq(guestSessions.tableSessionId, dto.tableSessionId));
+    const isParticipant = guests.some(
+      (guest) =>
+        guest.id === actor.guestSessionId ||
+        (actor.customerId && guest.customerId === actor.customerId),
+    );
+    if (!isParticipant) {
+      throw new ForbiddenException('You do not have access to this table session');
     }
   }
 }

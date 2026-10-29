@@ -333,7 +333,7 @@ export class DrizzleUserRepository {
   async createAuthOtp(
     email: string,
     code: string,
-    type: 'email_verification' | 'password_reset',
+    type: 'email_verification' | 'phone_verification' | 'password_reset',
     expiresAt: Date,
   ) {
     const result = await this.db
@@ -359,7 +359,7 @@ export class DrizzleUserRepository {
 
   async findValidAuthOtp(
     email: string,
-    type: 'email_verification' | 'password_reset',
+    type: 'email_verification' | 'phone_verification' | 'password_reset',
   ) {
     const result = await this.db
       .select()
@@ -377,7 +377,7 @@ export class DrizzleUserRepository {
 
   async deleteAuthOtp(
     email: string,
-    type: 'email_verification' | 'password_reset',
+    type: 'email_verification' | 'phone_verification' | 'password_reset',
     code: string,
   ): Promise<void> {
     await this.db
@@ -393,7 +393,7 @@ export class DrizzleUserRepository {
 
   async consumeAuthOtp(
     email: string,
-    type: 'email_verification' | 'password_reset',
+    type: 'email_verification' | 'phone_verification' | 'password_reset',
     code: string,
   ): Promise<boolean> {
     const result = await this.db

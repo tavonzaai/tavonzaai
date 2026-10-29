@@ -6,7 +6,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { eq, inArray, and, desc, sql, or, ilike } from 'drizzle-orm';
+import { eq, inArray, and, desc, sql, or, ilike, gte, lte } from 'drizzle-orm';
 import {
   DRIZZLE,
   type DrizzleDatabase,
@@ -22,7 +22,13 @@ import {
   OutboxService,
 } from '@/database';
 import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
-import { isSuperAdmin } from '../../../common/auth/actor.util';
+import {
+  isSuperAdmin,
+  isWaiterActor,
+  organizationIdsFromActor,
+  resolveRequestedOrganizationId,
+} from '../../../common/auth/actor.util';
+import { WaiterService } from '../../waiter/services/waiter.service';
 import { BranchAccessService } from '../../authorization/services/branch-access.service';
 import {
   CustomerPrincipalService,
@@ -71,6 +77,7 @@ export class PaymentService {
     private readonly notificationService: NotificationService,
     private readonly branchAccess: BranchAccessService,
     private readonly principals: CustomerPrincipalService,
+    private readonly waiterService: WaiterService,
   ) {}
 
   /**
@@ -96,6 +103,7 @@ export class PaymentService {
         .select({
           id: orders.id,
           branchId: orders.branchId,
+          tableId: orders.tableId,
           customerId: orders.customerId,
           guestSessionId: orders.guestSessionId,
           tableSessionId: orders.tableSessionId,
@@ -108,6 +116,16 @@ export class PaymentService {
 
       if (isStaffPaymentActor(user)) {
         await this.branchAccess.assertAccess(user, order.branchId);
+        if (isWaiterActor(user) && order.tableId) {
+          const assigned = await this.waiterService.isTableAssigned(
+            user.sub,
+            order.tableId,
+            order.branchId,
+          );
+          if (!assigned) {
+            throw new ForbiddenException('You are not assigned to this table');
+          }
+        }
         return { branchId: order.branchId };
       }
 
@@ -130,7 +148,11 @@ export class PaymentService {
 
     if (tableSessionId) {
       const [session] = await this.db
-        .select({ id: tableSessions.id, branchId: tableSessions.branchId })
+        .select({
+          id: tableSessions.id,
+          branchId: tableSessions.branchId,
+          tableId: tableSessions.tableId,
+        })
         .from(tableSessions)
         .where(eq(tableSessions.id, tableSessionId))
         .limit(1);
@@ -138,6 +160,16 @@ export class PaymentService {
 
       if (isStaffPaymentActor(user)) {
         await this.branchAccess.assertAccess(user, session.branchId);
+        if (isWaiterActor(user) && session.tableId) {
+          const assigned = await this.waiterService.isTableAssigned(
+            user.sub,
+            session.tableId,
+            session.branchId,
+          );
+          if (!assigned) {
+            throw new ForbiddenException('You are not assigned to this table');
+          }
+        }
         return { branchId: session.branchId };
       }
 
@@ -343,7 +375,7 @@ export class PaymentService {
   /**
    * 2. Authoritative Server-Side Verification of Stripe PaymentIntent
    */
-  async verifyStripePayment(paymentIntentId: string): Promise<PaymentEntity> {
+  async verifyStripePayment(user: JwtPayload, paymentIntentId: string): Promise<PaymentEntity> {
     if (!paymentIntentId) {
       throw new BadRequestException('PaymentIntent ID is required');
     }
@@ -353,11 +385,18 @@ export class PaymentService {
       throw new NotFoundException(`Payment record for transaction ${paymentIntentId} not found`);
     }
 
+    await this.assertPayableAccess(user, { paymentId: payment.id });
+
     if (payment.status === 'PAID') {
       return payment;
     }
 
-    const intent = await this.stripeAdapter.retrievePaymentIntent(paymentIntentId);
+    let intent: Awaited<ReturnType<StripeAdapter['retrievePaymentIntent']>>;
+    try {
+      intent = await this.stripeAdapter.retrievePaymentIntent(paymentIntentId);
+    } catch (err: any) {
+      throw new BadRequestException(err?.message || 'Unable to verify Stripe payment');
+    }
 
     if (intent.status === 'succeeded') {
       return this.completePaymentSettlement(payment, 'ONLINE_GATEWAY', paymentIntentId);
@@ -375,7 +414,10 @@ export class PaymentService {
    * 3. Idempotent Stripe Webhook Event Handler
    */
   async handleStripeWebhook(rawBody: Buffer | string, signature: string): Promise<{ received: boolean; processed?: boolean }> {
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_tavonza_dev';
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!signature || !webhookSecret) {
+      throw new BadRequestException('Stripe webhook is not configured');
+    }
 
     let event: any;
     try {
@@ -955,6 +997,23 @@ export class PaymentService {
     return this.computeTableBill(tableSessionId);
   }
 
+  async calculateTableBillForTable(user: JwtPayload, tableId: string) {
+    const [session] = await this.db
+      .select({ id: tableSessions.id })
+      .from(tableSessions)
+      .where(
+        and(
+          eq(tableSessions.tableId, tableId),
+          inArray(tableSessions.status, ['ACTIVE', 'BILL_REQUESTED']),
+        ),
+      )
+      .limit(1);
+    if (!session) {
+      throw new NotFoundException('No active table session found for this table');
+    }
+    return this.calculateTableBill(user, session.id);
+  }
+
   /**
    * Trusted internal callers (AI tool gateway after its own authz) — no JWT ownership check.
    * Do not expose on HTTP controllers.
@@ -1285,12 +1344,9 @@ export class PaymentService {
     const limit = Math.min(100, Math.max(1, query.limit || 12));
     const offset = (page - 1) * limit;
 
-    const organizationId = isSuperAdmin(user)
-      ? query.organizationId
-      : query.organizationId || user.organizationId;
-
-    if (!isSuperAdmin(user) && !organizationId) {
-      throw new BadRequestException('organizationId is required');
+    const organizationId = this.resolveLedgerOrganizationId(user, query.organizationId);
+    if (query.branchId) {
+      await this.branchAccess.assertAccess(user, query.branchId);
     }
 
     const conditions = [];
@@ -1370,6 +1426,107 @@ export class PaymentService {
         totalPages: Math.max(1, Math.ceil(total / limit)),
       },
     };
+  }
+
+  async summarizePayments(
+    user: JwtPayload,
+    query: {
+      organizationId?: string;
+      branchId?: string;
+      from?: string;
+      to?: string;
+    },
+  ) {
+    const organizationId = this.resolveLedgerOrganizationId(user, query.organizationId);
+    if (query.branchId) {
+      await this.branchAccess.assertAccess(user, query.branchId);
+    }
+
+    const range = this.parseLedgerDateRange(query.from, query.to);
+    const conditions = [];
+    if (organizationId) {
+      conditions.push(eq(restaurants.organizationId, organizationId));
+    }
+    if (query.branchId) {
+      conditions.push(eq(branches.id, query.branchId));
+    }
+    conditions.push(gte(payments.createdAt, range.from));
+    conditions.push(lte(payments.createdAt, range.to));
+    const whereClause = and(...conditions);
+
+    const rows = await this.db
+      .select({
+        status: payments.status,
+        method: payments.method,
+        count: sql<number>`count(*)::int`,
+        amount: sql<number>`coalesce(sum(${payments.amount}), 0)`,
+      })
+      .from(payments)
+      .leftJoin(orders, eq(payments.orderId, orders.id))
+      .leftJoin(tableSessions, eq(payments.tableSessionId, tableSessions.id))
+      .leftJoin(
+        branches,
+        sql`COALESCE(${orders.branchId}, ${tableSessions.branchId}) = ${branches.id}`,
+      )
+      .leftJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+      .where(whereClause)
+      .groupBy(payments.status, payments.method);
+
+    const byStatus: Record<string, { count: number; amount: number }> = {};
+    const byMethod: Record<string, { count: number; amount: number }> = {};
+    let totalCount = 0;
+    let paidAmount = 0;
+    let outstandingAmount = 0;
+    let refundedAmount = 0;
+
+    for (const row of rows) {
+      const count = Number(row.count ?? 0);
+      const amount = Number(row.amount ?? 0);
+      totalCount += count;
+      const statusKey = String(row.status ?? 'UNKNOWN');
+      const methodKey = String(row.method ?? 'UNKNOWN');
+      byStatus[statusKey] = byStatus[statusKey] ?? { count: 0, amount: 0 };
+      byStatus[statusKey].count += count;
+      byStatus[statusKey].amount += amount;
+      byMethod[methodKey] = byMethod[methodKey] ?? { count: 0, amount: 0 };
+      byMethod[methodKey].count += count;
+      byMethod[methodKey].amount += amount;
+      if (statusKey === 'PAID') paidAmount += amount;
+      if (statusKey === 'UNPAID' || statusKey === 'PARTIALLY_PAID') outstandingAmount += amount;
+      if (statusKey === 'REFUNDED') refundedAmount += amount;
+    }
+
+    return {
+      organizationId: organizationId ?? null,
+      branchId: query.branchId ?? null,
+      from: range.from.toISOString(),
+      to: range.to.toISOString(),
+      totalCount,
+      paidAmount,
+      outstandingAmount,
+      refundedAmount,
+      byStatus,
+      byMethod,
+    };
+  }
+
+  private resolveLedgerOrganizationId(user: JwtPayload, requested?: string): string | undefined {
+    if (isSuperAdmin(user)) {
+      return requested;
+    }
+    return resolveRequestedOrganizationId(user, organizationIdsFromActor(user), requested);
+  }
+
+  private parseLedgerDateRange(from?: string, to?: string): { from: Date; to: Date } {
+    const end = to ? new Date(to) : new Date();
+    const start = from ? new Date(from) : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new BadRequestException('Invalid date range');
+    }
+    if (start > end) {
+      throw new BadRequestException('from must be before to');
+    }
+    return { from: start, to: end };
   }
 
   private async validateDiscountInternal(code: string, amount: number) {

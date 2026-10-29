@@ -153,6 +153,8 @@ export class DrizzleOrderRepository implements IOrderRepository {
     filters?: {
       status?: OrderStatus;
       tableId?: string;
+      tableIds?: string[];
+      stationType?: 'KITCHEN' | 'BAR';
       search?: string;
       guestSessionId?: string;
       tableSessionId?: string;
@@ -165,6 +167,19 @@ export class DrizzleOrderRepository implements IOrderRepository {
     }
     if (filters?.tableId) {
       conditions.push(eq(orders.tableId, filters.tableId));
+    }
+    if (filters?.tableIds) {
+      if (filters.tableIds.length === 0) return [];
+      conditions.push(inArray(orders.tableId, filters.tableIds));
+    }
+    if (filters?.stationType) {
+      conditions.push(
+        sql`exists (
+          select 1 from order_items oi
+          where oi.order_id = ${orders.id}
+            and oi.station_type = ${filters.stationType}
+        )`,
+      );
     }
     if (filters?.guestSessionId) {
       conditions.push(eq(orders.guestSessionId, filters.guestSessionId));
@@ -517,18 +532,21 @@ export class DrizzleOrderRepository implements IOrderRepository {
   // ── Mapper (DB → Domain) ────────────────────────────────────────────
 
   private toDomain(record: any): Order {
-    const items: OrderItemProps[] = (record.items ?? []).map((item: any) => ({
-      id: item.id,
-      menuItemId: item.productId,
-      name: item.productNameSnapshot,
-      unitPrice: Number(item.unitPrice),
-      quantity: item.quantity,
-      specialInstructions: item.specialInstructions ?? null,
-      addOns: [] as OrderItemAddOn[],
-      addOnsTotal: 0,
-      lineTotal: Number(item.subtotal),
-      estimatedPrepTime: item.estimatedPrepTime ?? 15,
-    }));
+    const items: OrderItemProps[] = (record.items ?? []).map((item: any) => {
+      const parsed = parseItemSnapshot(item.productNameSnapshot ?? '');
+      return {
+        id: item.id,
+        menuItemId: item.productId,
+        name: parsed.name,
+        unitPrice: Number(item.unitPrice),
+        quantity: item.quantity,
+        specialInstructions: item.specialInstructions ?? record.specialInstructions ?? null,
+        addOns: parsed.addOns,
+        addOnsTotal: parsed.addOns.reduce((sum, addon) => sum + addon.price, 0),
+        lineTotal: Number(item.subtotal),
+        estimatedPrepTime: item.estimatedPrepTime ?? 15,
+      };
+    });
 
     const props: OrderProps = {
       id: record.id,
@@ -562,4 +580,19 @@ export class DrizzleOrderRepository implements IOrderRepository {
 
     return new Order(props);
   }
+}
+
+function parseItemSnapshot(snapshot: string): { name: string; addOns: OrderItemAddOn[] } {
+  const match = snapshot.match(/^(.*) \((.*)\)$/);
+  if (!match || !match[1] || !match[2]) {
+    return { name: snapshot, addOns: [] };
+  }
+  return {
+    name: match[1],
+    addOns: match[2]
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((name) => ({ name, price: 0 })),
+  };
 }

@@ -183,68 +183,86 @@ export class TableController {
   // ── Reservations ──────────────────────────────────────────────────────
 
   @Post('reservations')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.RESERVATIONS_WRITE)
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new table reservation' })
   @ApiCreatedResponse({ description: 'Reservation created successfully', type: ReservationResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
   async createReservation(
+    @CurrentUser() user: JwtPayload,
     @Body() dto: CreateReservationDto,
   ): Promise<ReservationResponseDto> {
+    await this.branchAccess.assertAccess(user, dto.branchId);
     return this.tableService.createReservation(dto);
   }
 
   @Get('reservations/branch/:branchId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.RESERVATIONS_READ)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List reservations for a branch' })
   @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'List of reservations', type: [ReservationResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
   async listReservations(
+    @CurrentUser() user: JwtPayload,
     @Param('branchId', new ParseUUIDPipe()) branchId: string,
   ): Promise<ReservationResponseDto[]> {
+    await this.branchAccess.assertAccess(user, branchId);
     return this.tableService.getReservations(branchId);
   }
 
   @Get('reservations/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.RESERVATIONS_READ)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get reservation details by ID' })
   @ApiParam({ name: 'id', description: 'Reservation UUID', example: 'fa01b2c3-d4e5-6789-0123-456789abcdef' })
   @ApiOkResponse({ description: 'Reservation details', type: ReservationResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async getReservationById(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<ReservationResponseDto> {
-    return this.tableService.getReservationById(id);
+    const reservation = await this.tableService.getReservationById(id);
+    await this.branchAccess.assertAccess(user, reservation.branchId);
+    return reservation;
   }
 
   @Patch('reservations/:id/status')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.RESERVATIONS_UPDATE)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update reservation status' })
   @ApiParam({ name: 'id', description: 'Reservation UUID', example: 'fa01b2c3-d4e5-6789-0123-456789abcdef' })
   @ApiOkResponse({ description: 'Reservation status updated', type: ReservationResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async updateReservationStatus(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateReservationStatusDto,
   ): Promise<ReservationResponseDto> {
+    const existing = await this.tableService.getReservationById(id);
+    await this.branchAccess.assertAccess(user, existing.branchId);
     return this.tableService.updateReservationStatus(id, dto.status);
   }
 
   @Delete('reservations/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.RESERVATIONS_DELETE)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Soft delete / cancel reservation' })
   @ApiParam({ name: 'id', description: 'Reservation UUID', example: 'fa01b2c3-d4e5-6789-0123-456789abcdef' })
   @ApiOkResponse({ description: 'Reservation cancelled', type: ReservationResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async deleteReservation(
+    @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<ReservationResponseDto> {
+    const existing = await this.tableService.getReservationById(id);
+    await this.branchAccess.assertAccess(user, existing.branchId);
     return this.tableService.softDeleteReservation(id);
   }
 }

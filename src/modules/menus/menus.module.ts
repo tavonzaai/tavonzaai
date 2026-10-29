@@ -17,8 +17,11 @@ import { MenuController } from './controllers/menu.controller';
 import { MenuCompatibilityController } from './controllers/menu-compatibility.controller';
 import { DrizzleMenuRepository } from './repositories/drizzle-menu.repository';
 import { MENU_REPOSITORY } from './repositories/menu-repository.interface';
+import { OrganizationsModule } from '../organizations/organizations.module';
+import { RestaurantsModule } from '../restaurants/restaurants.module';
 
 @Module({
+  imports: [OrganizationsModule, RestaurantsModule],
   controllers: [MenuController, MenuCompatibilityController],
   providers: [
     MenuService,

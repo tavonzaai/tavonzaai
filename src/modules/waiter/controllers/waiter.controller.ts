@@ -86,6 +86,32 @@ export class WaiterTablesController {
     return this.waiterService.getMyTables(user.sub, branchId);
   }
 
+  /**
+   * GET /waiter/tables/:tableId
+   * Assigned-table detail: occupancy, active session, and guests.
+   */
+  @Get(':tableId')
+  @RequirePermissions(Permission.TABLES_READ)
+  @ApiOperation({
+    summary: '[Waiter] Get details for an assigned table',
+    description: 'Returns table occupancy, active session, and guests. Restricted to tables assigned to the waiter.',
+  })
+  @ApiParam({ name: 'tableId', type: String, description: 'Table UUID' })
+  @ApiQuery({ name: 'branchId', required: false, type: String })
+  @ApiOkResponse({ description: 'Assigned table detail' })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async getMyTableDetail(
+    @CurrentUser() user: JwtPayload,
+    @Param('tableId') tableId: string,
+    @Query('branchId') qBranchId?: string,
+  ) {
+    if (!isUUID(tableId)) {
+      throw new BadRequestException('A valid table UUID is required');
+    }
+    const branchId = qBranchId && isUUID(qBranchId) ? qBranchId : user.branchId || undefined;
+    return this.waiterService.getTableDetail(user.sub, tableId, branchId);
+  }
+
 
   /**
    * POST /waiter/tables/assign
@@ -450,13 +476,18 @@ export class CustomerAlertsController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: '[Customer] Send an alert to your waiter',
     description: 'Submits an alert (call_waiter, request_bill, need_help, or custom) to floor staff.',
   })
   @ApiCreatedResponse({ type: CustomerAlertDto, description: 'Alert dispatched' })
-  @ApiStandardErrors(400, 404, 500)
-  async createAlert(@Body() dto: CreateAlertDto): Promise<CustomerAlertDto> {
-    return this.waiterService.createAlert(dto);
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async createAlert(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateAlertDto,
+  ): Promise<CustomerAlertDto> {
+    return this.waiterService.createAlert(dto, user);
   }
 }
