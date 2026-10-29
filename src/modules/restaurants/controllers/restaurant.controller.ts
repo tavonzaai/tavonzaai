@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Param,
   Body,
@@ -103,6 +104,19 @@ export class RestaurantController {
   @ApiOkResponse({ description: 'Restaurant updated successfully', type: RestaurantResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async update(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateRestaurantDto,
+  ): Promise<RestaurantResponseDto> {
+    return this.restaurantService.update(user, id, dto);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update restaurant details (PUT alias)' })
+  @ApiParam({ name: 'id', description: 'Restaurant UUID', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  @ApiOkResponse({ description: 'Restaurant updated successfully', type: RestaurantResponseDto })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async updatePut(
     @CurrentUser() user: JwtPayload,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateRestaurantDto,
