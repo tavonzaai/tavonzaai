@@ -1,15 +1,42 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsArray,
   IsBoolean,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
-  IsUrl,
-  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
+
+export class RestaurantAddressDto {
+  @ApiPropertyOptional({ example: '123 Main Street' })
+  @IsOptional()
+  @IsString()
+  street?: string;
+
+  @ApiPropertyOptional({ example: 'New York' })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({ example: 'NY' })
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  @ApiPropertyOptional({ example: '10001' })
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @ApiPropertyOptional({ example: 'USA' })
+  @IsOptional()
+  @IsString()
+  country?: string;
+}
 
 export class CreateRestaurantDto {
   @ApiPropertyOptional({ example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Organization ID owning this restaurant. Derived from the actor when omitted.' })
@@ -27,19 +54,93 @@ export class CreateRestaurantDto {
   @ApiPropertyOptional({ example: 'tasty-bites-grill' })
   @IsOptional()
   @IsString()
-  @Matches(/^[a-z0-9-]+$/, { message: 'Slug can only contain lowercase alphanumeric characters and hyphens' })
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value.toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+      : value
+  )
   @MaxLength(100)
   slug?: string;
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/logo.png' })
   @IsOptional()
-  @IsUrl()
+  @IsString()
   logoUrl?: string;
 
   @ApiPropertyOptional({ example: 'Artisanal burgers and craft cocktails.' })
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({
+    description: 'Physical or registered address (string or address object)',
+    example: { street: '123 Main St', city: 'New York', state: 'NY', postalCode: '10001', country: 'USA' },
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (typeof parsed === 'object' && parsed !== null) return parsed;
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
+  address?: RestaurantAddressDto | string | Record<string, any>;
+
+  @ApiPropertyOptional({ example: 'ACTIVE', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] })
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  status?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiPropertyOptional({ example: '+1-555-123-4567' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({ example: '+1-555-123-4567', description: 'Alias for phone' })
+  @IsOptional()
+  @IsString()
+  contactNo?: string;
+
+  @ApiPropertyOptional({ example: '+1-555-123-4567', description: 'Alias for phone' })
+  @IsOptional()
+  @IsString()
+  contactNumber?: string;
+
+  @ApiPropertyOptional({ example: 'contact@restaurant.com' })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional({ example: 'https://restaurant.com' })
+  @IsOptional()
+  @IsString()
+  websiteUrl?: string;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/cover.png' })
+  @IsOptional()
+  @IsString()
+  coverImageUrl?: string;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/banner.png' })
+  @IsOptional()
+  @IsString()
+  bannerUrl?: string;
+
+  @ApiPropertyOptional({ example: ['https://cdn.example.com/img1.png'], type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
 }
 
 export class UpdateRestaurantDto {
@@ -53,13 +154,17 @@ export class UpdateRestaurantDto {
   @ApiPropertyOptional({ example: 'tasty-bites-grill-lounge' })
   @IsOptional()
   @IsString()
-  @Matches(/^[a-z0-9-]+$/, { message: 'Slug can only contain lowercase alphanumeric characters and hyphens' })
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value.toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+      : value
+  )
   @MaxLength(100)
   slug?: string;
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/new-logo.png' })
   @IsOptional()
-  @IsUrl()
+  @IsString()
   logoUrl?: string;
 
   @ApiPropertyOptional({ example: 'Updated description' })
@@ -67,10 +172,75 @@ export class UpdateRestaurantDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({
+    description: 'Physical or registered address (string or address object)',
+    example: { street: '123 Main St', city: 'New York', state: 'NY', postalCode: '10001', country: 'USA' },
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (typeof parsed === 'object' && parsed !== null) return parsed;
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
+  address?: RestaurantAddressDto | string | Record<string, any>;
+
+  @ApiPropertyOptional({ example: 'ACTIVE', enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] })
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  status?: string;
+
   @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ example: '+1-555-123-4567' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({ example: '+1-555-123-4567', description: 'Alias for phone' })
+  @IsOptional()
+  @IsString()
+  contactNo?: string;
+
+  @ApiPropertyOptional({ example: '+1-555-123-4567', description: 'Alias for phone' })
+  @IsOptional()
+  @IsString()
+  contactNumber?: string;
+
+  @ApiPropertyOptional({ example: 'contact@restaurant.com' })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional({ example: 'https://restaurant.com' })
+  @IsOptional()
+  @IsString()
+  websiteUrl?: string;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/cover.png' })
+  @IsOptional()
+  @IsString()
+  coverImageUrl?: string;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/banner.png' })
+  @IsOptional()
+  @IsString()
+  bannerUrl?: string;
+
+  @ApiPropertyOptional({ example: ['https://cdn.example.com/img1.png'], type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
 }
 
 export class RestaurantResponseDto {
@@ -95,11 +265,49 @@ export class RestaurantResponseDto {
   @ApiProperty({ example: true, description: 'Active status' })
   isActive!: boolean;
 
+  @ApiProperty({ example: 'ACTIVE', description: 'Lifecycle status' })
+  status!: string;
+
+  @ApiPropertyOptional({
+    example: { street: '123 Main St', city: 'New York', state: 'NY', postalCode: '10001', country: 'USA' },
+    description: 'Physical or registered address',
+  })
+  address?: any | null;
+
+  @ApiPropertyOptional({ example: '+1-555-123-4567', description: 'Contact phone' })
+  phone?: string | null;
+
+  @ApiPropertyOptional({ example: 'contact@restaurant.com', description: 'Contact email' })
+  email?: string | null;
+
+  @ApiPropertyOptional({ example: 'https://restaurant.com', description: 'Website URL' })
+  websiteUrl?: string | null;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/cover.png', description: 'Cover image URL' })
+  coverImageUrl?: string | null;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/banner.png', description: 'Banner image URL' })
+  bannerUrl?: string | null;
+
+  @ApiPropertyOptional({ example: ['https://cdn.example.com/img1.png'], type: [String], description: 'Gallery image URLs' })
+  images?: string[] | null;
+
   @ApiProperty({ example: '2026-10-01T12:00:00.000Z', description: 'Creation timestamp' })
   createdAt!: Date;
 
   @ApiProperty({ example: '2026-10-01T12:00:00.000Z', description: 'Update timestamp' })
   updatedAt!: Date;
+}
+
+export class CheckSlugResponseDto {
+  @ApiProperty({ example: true, description: 'Whether the slug is available' })
+  available!: boolean;
+
+  @ApiProperty({ example: 'tasty-bites', description: 'The queried slug' })
+  slug!: string;
+
+  @ApiPropertyOptional({ example: 'tasty-bites-4x9a', description: 'Suggested alternative if unavailable' })
+  suggestedSlug?: string;
 }
 
 export class RestaurantPaginatedResponseDto {
@@ -150,4 +358,3 @@ export class QueryRestaurantDto {
   @IsOptional()
   includeDeleted?: boolean;
 }
-

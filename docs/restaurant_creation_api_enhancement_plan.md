@@ -254,3 +254,16 @@ Create an automated test script (`scripts/test-restaurant-creation.ts` or scratc
 2. Verifies all fields are correctly saved, retrieved, and returned in `RestaurantResponseDto`.
 3. Verifies slug collision auto-recovery.
 4. Verifies partial updates via `RestaurantService.update()`.
+
+---
+
+## Execution Status: COMPLETED
+- [x] Extended `restaurants` Drizzle schema in `src/database/schema/hierarchy.ts` with address, phone, email, websiteUrl, coverImageUrl, bannerUrl, images, status.
+- [x] Generated migration file `drizzle/0009_restaurant_fields_enhancement.sql`.
+- [x] Updated domain entity `Restaurant` in `src/modules/restaurants/domain/restaurant.entity.ts`.
+- [x] Added `RestaurantAddressDto` and updated `CreateRestaurantDto`, `UpdateRestaurantDto`, `RestaurantResponseDto`, and `CheckSlugResponseDto` in `src/modules/restaurants/dto/restaurant.dto.ts`.
+- [x] Updated repository `DrizzleRestaurantRepository` in `src/modules/restaurants/repositories/drizzle-restaurant.repository.ts`.
+- [x] Updated service `RestaurantService` in `src/modules/restaurants/services/restaurant.service.ts` with collision-safe slug generation, bidirectional status synchronization, phone alias support, and image fallbacks.
+- [x] Added `GET /restaurants/check-slug` endpoint in `src/modules/restaurants/controllers/restaurant.controller.ts`.
+- [x] Created unit tests in `src/modules/restaurants/services/restaurant.service.spec.ts`.
+

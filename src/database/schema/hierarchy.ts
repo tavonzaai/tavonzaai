@@ -30,6 +30,17 @@ export const restaurants = pgTable('restaurants', {
   logoUrl: text('logo_url'),
   description: text('description'),
   isActive: boolean('is_active').default(true),
+
+  // Extended restaurant fields
+  address: jsonb('address'),
+  phone: varchar('phone', { length: 50 }),
+  email: varchar('email', { length: 255 }),
+  websiteUrl: text('website_url'),
+  coverImageUrl: text('cover_image_url'),
+  bannerUrl: text('banner_url'),
+  images: text('images').array(),
+  status: varchar('status', { length: 50 }).default('ACTIVE'),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({

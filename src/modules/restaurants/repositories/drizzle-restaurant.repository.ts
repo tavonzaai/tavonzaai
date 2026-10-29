@@ -12,9 +12,21 @@ export class DrizzleRestaurantRepository {
     organizationId: string;
     name: string;
     slug: string;
-    logoUrl?: string;
-    description?: string;
+    logoUrl?: string | null;
+    description?: string | null;
+    isActive?: boolean;
+    status?: string;
+    address?: any | null;
+    phone?: string | null;
+    email?: string | null;
+    websiteUrl?: string | null;
+    coverImageUrl?: string | null;
+    bannerUrl?: string | null;
+    images?: string[] | null;
   }): Promise<Restaurant> {
+    const isActive = data.isActive ?? true;
+    const status = data.status ?? (isActive ? 'ACTIVE' : 'INACTIVE');
+
     const [created] = await this.db
       .insert(restaurants)
       .values({
@@ -23,6 +35,15 @@ export class DrizzleRestaurantRepository {
         slug: data.slug,
         logoUrl: data.logoUrl,
         description: data.description,
+        isActive,
+        status,
+        address: data.address,
+        phone: data.phone,
+        email: data.email,
+        websiteUrl: data.websiteUrl,
+        coverImageUrl: data.coverImageUrl,
+        bannerUrl: data.bannerUrl,
+        images: data.images,
       })
       .returning();
 
@@ -85,7 +106,7 @@ export class DrizzleRestaurantRepository {
   }
 
   async softDelete(id: string): Promise<Restaurant | null> {
-    return this.update(id, { isActive: false });
+    return this.update(id, { isActive: false, status: 'INACTIVE' });
   }
 
   async update(
@@ -96,6 +117,14 @@ export class DrizzleRestaurantRepository {
       logoUrl: string | null;
       description: string | null;
       isActive: boolean;
+      status: string;
+      address: any | null;
+      phone: string | null;
+      email: string | null;
+      websiteUrl: string | null;
+      coverImageUrl: string | null;
+      bannerUrl: string | null;
+      images: string[] | null;
     }>,
   ): Promise<Restaurant | null> {
     const [updated] = await this.db
@@ -120,14 +149,23 @@ export class DrizzleRestaurantRepository {
   }
 
   private mapToEntity(row: any): Restaurant {
+    const isActive = row.isActive ?? true;
     return {
       id: row.id,
       organizationId: row.organizationId,
       name: row.name,
       slug: row.slug,
-      logoUrl: row.logoUrl,
-      description: row.description,
-      isActive: row.isActive ?? true,
+      logoUrl: row.logoUrl ?? null,
+      description: row.description ?? null,
+      isActive,
+      status: row.status ?? (isActive ? 'ACTIVE' : 'INACTIVE'),
+      address: row.address ?? null,
+      phone: row.phone ?? null,
+      email: row.email ?? null,
+      websiteUrl: row.websiteUrl ?? null,
+      coverImageUrl: row.coverImageUrl ?? null,
+      bannerUrl: row.bannerUrl ?? null,
+      images: row.images ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
