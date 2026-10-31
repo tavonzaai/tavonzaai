@@ -85,6 +85,9 @@ jobs:
           script: |
             cd /home/admin/server
 
+            # Ensure shared Docker network exists
+            docker network create tavonza-net 2>/dev/null || true
+
             OWNER=$(echo "$IMAGE_OWNER" | tr '[:upper:]' '[:lower:]')
             API_IMAGE="ghcr.io/${OWNER}/tavonzaai-api:${IMAGE_SHA}"
             WORKER_IMAGE="ghcr.io/${OWNER}/tavonzaai-worker:${IMAGE_SHA}"
