@@ -6,8 +6,6 @@
 api.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy api:3000 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
     }
 }
 
@@ -15,8 +13,6 @@ api.{$BASE_DOMAIN:tavonza.com} {
 customer.{$BASE_DOMAIN:tavonza.com}, {$BASE_DOMAIN:tavonza.com} {
     reverse_proxy customer:3000 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
     }
 }
 
@@ -24,8 +20,6 @@ customer.{$BASE_DOMAIN:tavonza.com}, {$BASE_DOMAIN:tavonza.com} {
 admin.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy admin:3043 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
     }
 }
 
@@ -33,8 +27,6 @@ admin.{$BASE_DOMAIN:tavonza.com} {
 waiter.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy waiter:3101 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
     }
 }
 
@@ -42,8 +34,6 @@ waiter.{$BASE_DOMAIN:tavonza.com} {
 manager.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy manager:3103 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
     }
 }
 
@@ -51,8 +41,6 @@ manager.{$BASE_DOMAIN:tavonza.com} {
 cashier.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy cashier:3104 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
     }
 }
 
@@ -60,8 +48,6 @@ cashier.{$BASE_DOMAIN:tavonza.com} {
 kitchen.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy kitchen:3105 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
     }
 }
 
@@ -69,7 +55,5 @@ kitchen.{$BASE_DOMAIN:tavonza.com} {
 superadmin.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy superadmin:3106 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
     }
 }

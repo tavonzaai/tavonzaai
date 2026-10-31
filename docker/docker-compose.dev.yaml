@@ -10,7 +10,10 @@ services:
     ports:
       - "5000:3000"
     env_file:
-      - ../.env
+      - path: .env
+        required: false
+      - path: ../.env
+        required: false
     environment:
       PORT: 3000
       API_PORT: 3000
@@ -29,7 +32,10 @@ services:
     container_name: tavonzaai-dev-worker
     restart: unless-stopped
     env_file:
-      - ../.env
+      - path: .env
+        required: false
+      - path: ../.env
+        required: false
     depends_on:
       - api
     logging:
@@ -52,9 +58,10 @@ services:
       - caddy_dev_data:/data
       - caddy_dev_config:/config
     env_file:
-      - ../.env
-    depends_on:
-      - api
+      - path: .env
+        required: false
+      - path: ../.env
+        required: false
     logging:
       driver: "json-file"
       options:
