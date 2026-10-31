@@ -2,9 +2,72 @@
     email {$ACME_EMAIL:admin@tavonza.com}
 }
 
-# apps/api -> api.tavonza.com (REST API & Socket.IO Gateway)
+# Backend REST API & Socket.IO Gateway
 api.{$BASE_DOMAIN:tavonza.com} {
     reverse_proxy api:3000 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Customer Dining Web App (subdomain & root domain)
+customer.{$BASE_DOMAIN:tavonza.com}, {$BASE_DOMAIN:tavonza.com} {
+    reverse_proxy customer:3000 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Admin Portal
+admin.{$BASE_DOMAIN:tavonza.com} {
+    reverse_proxy admin:3043 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Waiter Terminal
+waiter.{$BASE_DOMAIN:tavonza.com} {
+    reverse_proxy waiter:3101 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Branch Manager Command Center
+manager.{$BASE_DOMAIN:tavonza.com} {
+    reverse_proxy manager:3103 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Cashier POS
+cashier.{$BASE_DOMAIN:tavonza.com} {
+    reverse_proxy cashier:3104 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Kitchen Display System (KDS)
+kitchen.{$BASE_DOMAIN:tavonza.com} {
+    reverse_proxy kitchen:3105 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# Platform Superadmin Console
+superadmin.{$BASE_DOMAIN:tavonza.com} {
+    reverse_proxy superadmin:3106 {
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
         header_up X-Forwarded-Proto {scheme}

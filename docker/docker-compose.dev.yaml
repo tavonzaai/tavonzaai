@@ -69,4 +69,5 @@ volumes:
 
 networks:
   default:
-    name: tavonza_dev_network
+    name: tavonza-net
+    external: true
