@@ -110,7 +110,7 @@ export class ResetPasswordDto {
   @IsNotEmpty()
   email!: string;
 
-  @ApiProperty({ example: '48291', description: '5-digit OTP from email' })
+  @ApiProperty({ example: '482910', description: '6-digit verification code from email' })
   @IsString()
   @IsNotEmpty()
   code!: string;

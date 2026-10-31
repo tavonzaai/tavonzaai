@@ -43,6 +43,7 @@ import {
   TableSessionRecordDto,
 } from '../dto/table-session.dto';
 import { ApiStandardErrors } from '../../../common/swagger';
+import { RateLimit } from '../../../common/decorators/rate-limit.decorator';
 
 @ApiTags('Customer | Sessions')
 @Controller('sessions')
@@ -54,10 +55,11 @@ export class TableSessionController {
    * Customer requests OTP after scanning QR code
    */
   @Post('table-otp/request')
+  @RateLimit(5, 60)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: '[Customer] Request OTP for table session authentication',
-    description: 'Sends a 5-digit verification code to the customer contact (SMS/email) to authenticate onto a table session.',
+    description: 'Sends a 6-digit verification code to the customer contact (SMS/email) to authenticate onto a table session.',
   })
   @ApiOkResponse({
     type: TableOtpRequestResponseDto,
@@ -73,10 +75,11 @@ export class TableSessionController {
    * Customer verifies OTP -> opens or joins table session, issues JWT token
    */
   @Post('table-otp/verify')
+  @RateLimit(5, 60)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: '[Customer] Verify OTP to create/join table session and receive JWT',
-    description: 'Verifies the 5-digit code, seats the guest, creates or connects to the table session, and returns an authorized JWT.',
+    description: 'Verifies the 6-digit code, seats the guest, creates or connects to the table session, and returns an authorized JWT.',
   })
   @ApiOkResponse({
     type: TableOtpVerifyResponseDto,

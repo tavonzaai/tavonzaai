@@ -8,7 +8,7 @@
 // Refresh tokens are never accepted here.
 // ============================================================================
 
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Optional } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
@@ -17,6 +17,7 @@ import { DrizzleUserRepository } from '../repositories/drizzle-user.repository';
 import { DrizzleAuthSessionRepository } from '../repositories/drizzle-auth-session.repository';
 import { DrizzleGuestPrincipalRepository } from '../repositories/drizzle-guest-principal.repository';
 import { TOKEN_TYPE, accessTokenSecret, isSessionUsable } from '../services/token-policy';
+import { AuthCacheService } from '../services/auth-cache.service';
 
 export interface JwtPayload {
   sub: string;
@@ -45,6 +46,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly userRepo: DrizzleUserRepository,
     private readonly sessionRepo: DrizzleAuthSessionRepository,
     private readonly guestRepo: DrizzleGuestPrincipalRepository,
+    @Optional() private readonly authCache?: AuthCacheService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -82,13 +84,27 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Invalid access token');
     }
 
-    const user = await this.userRepo.findById(payload.sub);
-    if (!user || user.status !== 'ACTIVE') {
+    // 1. Validate User Active status with Redis cache fallback
+    let isUserActive = await this.authCache?.isUserActive(payload.sub);
+    if (isUserActive === null || isUserActive === undefined) {
+      const user = await this.userRepo.findById(payload.sub);
+      isUserActive = !!user && user.status === 'ACTIVE';
+      await this.authCache?.setUserActive(payload.sub, isUserActive);
+    }
+
+    if (!isUserActive) {
       throw new UnauthorizedException('Account is inactive or no longer valid');
     }
 
-    const session = await this.sessionRepo.findSession(payload.sid);
-    if (!isSessionUsable(session, payload.sub, new Date())) {
+    // 2. Validate Session Usability with Redis cache fallback
+    let sessionUsable = await this.authCache?.isSessionUsable(payload.sid);
+    if (sessionUsable === null || sessionUsable === undefined) {
+      const session = await this.sessionRepo.findSession(payload.sid);
+      sessionUsable = isSessionUsable(session, payload.sub, new Date());
+      await this.authCache?.setSessionUsable(payload.sid, sessionUsable);
+    }
+
+    if (!sessionUsable) {
       throw new UnauthorizedException('Session has ended. Please sign in again.');
     }
 

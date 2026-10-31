@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, or, and, gt, inArray } from 'drizzle-orm';
+import { eq, or, and, gt, lt, inArray } from 'drizzle-orm';
 import { DRIZZLE, schema } from '@/database';
 import { DrizzleQueryBuilder } from '../../../common/database';
 
@@ -342,6 +342,7 @@ export class DrizzleUserRepository {
         email,
         otp: code,
         type,
+        attempts: 0,
         expiresAt,
       })
       .onConflictDoUpdate({
@@ -349,6 +350,7 @@ export class DrizzleUserRepository {
         set: {
           otp: code,
           type,
+          attempts: 0,
           expiresAt,
           createdAt: new Date(),
         },
@@ -368,11 +370,35 @@ export class DrizzleUserRepository {
         and(
           eq(schema.passwordResetOtps.email, email),
           eq(schema.passwordResetOtps.type, type),
-          gt(schema.passwordResetOtps.expiresAt, new Date())
-        )
+          gt(schema.passwordResetOtps.expiresAt, new Date()),
+          lt(schema.passwordResetOtps.attempts, 5),
+        ),
       )
       .limit(1);
     return result[0] ?? null;
+  }
+
+  async incrementAuthOtpAttempts(id: string): Promise<number> {
+    const [record] = await this.db
+      .select({ attempts: schema.passwordResetOtps.attempts })
+      .from(schema.passwordResetOtps)
+      .where(eq(schema.passwordResetOtps.id, id))
+      .limit(1);
+
+    if (!record) return 5;
+
+    const nextAttempts = (record.attempts ?? 0) + 1;
+    if (nextAttempts >= 5) {
+      await this.db
+        .delete(schema.passwordResetOtps)
+        .where(eq(schema.passwordResetOtps.id, id));
+    } else {
+      await this.db
+        .update(schema.passwordResetOtps)
+        .set({ attempts: nextAttempts })
+        .where(eq(schema.passwordResetOtps.id, id));
+    }
+    return nextAttempts;
   }
 
   async deleteAuthOtp(

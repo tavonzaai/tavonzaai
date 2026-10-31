@@ -27,12 +27,14 @@ import {
   type RequiredScopeMetadata,
 } from '../decorators/require-scope.decorator';
 import { DrizzleRbacRepository } from '../../modules/authorization/repositories/drizzle-rbac.repository';
+import { AuthCacheService } from '../../modules/identity/services/auth-cache.service';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     @Optional() private readonly rbacRepo?: DrizzleRbacRepository,
+    @Optional() private readonly authCache?: AuthCacheService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -58,22 +60,27 @@ export class PermissionsGuard implements CanActivate {
 
     let effectivePermissions: string[] = [];
     let scopes = user.scopes ?? [];
+    let liveLookupSucceeded = false;
 
     if (this.rbacRepo && user.sub) {
       try {
-        const live = await this.rbacRepo.getEffectivePermissions(user.sub);
-        if (live.permissions.length > 0) {
-          effectivePermissions = live.permissions;
+        let live = await this.authCache?.getEffectivePermissions(user.sub);
+        if (!live) {
+          live = await this.rbacRepo.getEffectivePermissions(user.sub);
+          if (live) {
+            await this.authCache?.setEffectivePermissions(user.sub, live);
+          }
         }
-        if (live.scopes.length > 0) {
-          scopes = live.scopes;
-        }
+        effectivePermissions = live?.permissions ?? [];
+        scopes = live?.scopes ?? [];
+        liveLookupSucceeded = true;
       } catch {
-        // Fall back to token permissions if the live lookup fails
+        // Fall back to token permissions if the live lookup fails (e.g. database down)
+        liveLookupSucceeded = false;
       }
     }
 
-    if (effectivePermissions.length === 0) {
+    if (!liveLookupSucceeded) {
       effectivePermissions =
         user.permissions?.length > 0
           ? user.permissions
@@ -97,7 +104,7 @@ export class PermissionsGuard implements CanActivate {
     const scopeCheck = requiredScope
       ? {
           type: requiredScope.type,
-          id: this.resolveScopeId(request, requiredScope.param),
+          id: this.resolveScopeId(request, requiredScope),
         }
       : undefined;
 
@@ -114,15 +121,34 @@ export class PermissionsGuard implements CanActivate {
     return true;
   }
 
-  private resolveScopeId(request: any, param = 'id'): string | undefined {
-    return (
-      request.params?.[param] ||
-      request.params?.branchId ||
-      request.query?.branchId ||
-      request.body?.branchId ||
-      request.params?.organizationId ||
-      request.query?.organizationId ||
-      request.body?.organizationId
-    );
+  private resolveScopeId(
+    request: any,
+    requiredScope?: RequiredScopeMetadata,
+  ): string | undefined {
+    if (!requiredScope) return undefined;
+    const param = requiredScope.param || 'id';
+
+    // 1. Explicit named parameter from route path params (e.g. :id or :branchId)
+    if (request.params?.[param]) {
+      return request.params[param];
+    }
+
+    // 2. Type-specific parameter from route path params
+    const typeKey = requiredScope.type === 'organization' ? 'organizationId' : 'branchId';
+    if (request.params?.[typeKey]) {
+      return request.params[typeKey];
+    }
+
+    // 3. Type-specific parameter from request body
+    if (request.body?.[typeKey]) {
+      return request.body[typeKey];
+    }
+
+    // 4. Type-specific parameter from query string
+    if (request.query?.[typeKey]) {
+      return request.query[typeKey];
+    }
+
+    return undefined;
   }
 }

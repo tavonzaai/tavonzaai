@@ -5,7 +5,7 @@
 // tokens issued here, so there is exactly one place lifetimes are defined.
 // ============================================================================
 
-export const ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes (short-lived access tokens, refreshed via rotating refresh tokens)
 export const REFRESH_TOKEN_TTL_SECONDS = 90 * 24 * 60 * 60;
 /** Window in which presenting an already-rotated refresh token is treated as a benign multi-tab race. */
 export const REFRESH_ROTATION_GRACE_SECONDS = 30;
@@ -41,10 +41,12 @@ export function refreshCookieName(client: AuthClient): string {
 export const REFRESH_COOKIE_PATH = '/auth';
 
 export function refreshCookieOptions(secure: boolean) {
+  const domain = process.env.COOKIE_DOMAIN?.trim();
   return {
     httpOnly: true,
     secure,
-    sameSite: 'strict' as const,
+    sameSite: (domain ? 'lax' : 'strict') as 'lax' | 'strict',
+    domain: domain || undefined,
     path: REFRESH_COOKIE_PATH,
     maxAge: REFRESH_TOKEN_TTL_SECONDS * 1000,
   };

@@ -9,7 +9,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { createHash, randomInt, randomUUID } from 'node:crypto';
+import { createHash, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import * as argon2 from '@node-rs/argon2';
 import { GlobalRole, resolvePermissions, type Scope } from '@/authorization';
 import { DrizzleUserRepository } from '../repositories/drizzle-user.repository';
@@ -26,6 +26,7 @@ import {
 import { DrizzleRbacRepository } from '../../authorization/repositories/drizzle-rbac.repository';
 import { DrizzleOrganizationRepository } from '../../organizations/repositories/drizzle-organization.repository';
 import { MailService } from '../../notifications/services/mail.service';
+import { AuthCacheService } from './auth-cache.service';
 import type {
   RegisterDto,
   LoginDto,
@@ -70,6 +71,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly sessionRepo: DrizzleAuthSessionRepository,
     @Optional() private readonly rbacRepo?: DrizzleRbacRepository,
+    @Optional() private readonly authCache?: AuthCacheService,
   ) {}
 
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
@@ -117,6 +119,12 @@ export class AuthService {
     const passwordMatch = await argon2.verify(user.password, dto.password);
     if (!passwordMatch) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (!user.isEmailVerified) {
+      throw new UnauthorizedException(
+        'Please verify your email address before logging in. If needed, request a new verification code.',
+      );
     }
 
     const sessionId = randomUUID();
@@ -201,6 +209,7 @@ export class AuthService {
     const session = await this.sessionRepo.findSession(sessionId);
     if (!session || (input.userId && session.userId !== input.userId)) return;
     await this.sessionRepo.revokeSession(sessionId, 'LOGOUT');
+    await this.authCache?.invalidateSession(sessionId);
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto, currentSessionId?: string): Promise<void> {
@@ -223,6 +232,7 @@ export class AuthService {
     const newHash = await argon2.hash(dto.newPassword);
     await this.userRepo.updatePassword(user.id, newHash);
     await this.sessionRepo.revokeAllForUser(user.id, 'PASSWORD_CHANGED', currentSessionId);
+    await this.authCache?.invalidateUser(user.id);
   }
 
   async getMe(userId: string): Promise<UserProfileDto> {
@@ -275,11 +285,28 @@ export class AuthService {
     } as any;
   }
 
+  private safeCompare(a: string, b: string): boolean {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) {
+      return false;
+    }
+    return timingSafeEqual(bufA, bufB);
+  }
+
   async verifyOtp(dto: VerifyOtpDto): Promise<void> {
     const identifier = this.normalizeOtpIdentifier(dto.email, dto.type);
     const otp = await this.userRepo.findValidAuthOtp(identifier, dto.type);
     if (!otp) throw new BadRequestException('OTP code is invalid or has expired');
-    if (otp.otp !== dto.code.trim()) throw new BadRequestException('Incorrect verification code');
+
+    const matches = this.safeCompare(otp.otp, dto.code.trim());
+    if (!matches) {
+      const attempts = await this.userRepo.incrementAuthOtpAttempts(otp.id);
+      if (attempts >= 5) {
+        throw new BadRequestException('Too many failed attempts. This verification code has been revoked.');
+      }
+      throw new BadRequestException(`Incorrect verification code. ${5 - attempts} attempt(s) remaining.`);
+    }
 
     const consumed = await this.userRepo.consumeAuthOtp(identifier, dto.type, dto.code.trim());
     if (!consumed) throw new BadRequestException('OTP code is invalid or has expired');
@@ -302,22 +329,31 @@ export class AuthService {
 
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
     const user = await this.userRepo.findByEmailOrPhone(dto.email);
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new BadRequestException('Invalid or expired verification code');
 
     const otp = await this.userRepo.findValidAuthOtp(user.email, 'password_reset');
-    if (!otp) throw new BadRequestException('OTP code is invalid or has expired');
-    if (otp.otp !== dto.code) throw new BadRequestException('Incorrect verification code');
+    if (!otp) throw new BadRequestException('Invalid or expired verification code');
+
+    const matches = this.safeCompare(otp.otp, dto.code.trim());
+    if (!matches) {
+      const attempts = await this.userRepo.incrementAuthOtpAttempts(otp.id);
+      if (attempts >= 5) {
+        throw new BadRequestException('Too many failed attempts. This verification code has been revoked.');
+      }
+      throw new BadRequestException(`Incorrect verification code. ${5 - attempts} attempt(s) remaining.`);
+    }
 
     this.validatePassword(dto.newPassword);
     const newHash = await argon2.hash(dto.newPassword);
     const consumed = await this.userRepo.consumeAuthOtp(
       user.email,
       'password_reset',
-      dto.code,
+      dto.code.trim(),
     );
-    if (!consumed) throw new BadRequestException('OTP code is invalid or has expired');
+    if (!consumed) throw new BadRequestException('Invalid or expired verification code');
     await this.userRepo.updatePassword(user.id, newHash);
     await this.sessionRepo.revokeAllForUser(user.id, 'PASSWORD_CHANGED');
+    await this.authCache?.invalidateUser(user.id);
   }
 
   async resendOtp(
@@ -476,7 +512,7 @@ export class AuthService {
     firstName: string,
   ): Promise<string> {
     const destination = this.normalizeOtpIdentifier(identifier, type);
-    const code = randomInt(10000, 100000).toString();
+    const code = randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     await this.userRepo.createAuthOtp(destination, code, type, expiresAt);
@@ -525,8 +561,20 @@ export class AuthService {
   }
 
   private validatePassword(password: string): void {
-    if (password.length < 8) {
-      throw new BadRequestException('Password must be at least 8 characters');
+    if (!password || password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters long');
+    }
+    if (password.length > 128) {
+      throw new BadRequestException('Password cannot exceed 128 characters');
+    }
+    if (!/[A-Z]/.test(password)) {
+      throw new BadRequestException('Password must contain at least one uppercase letter');
+    }
+    if (!/[a-z]/.test(password)) {
+      throw new BadRequestException('Password must contain at least one lowercase letter');
+    }
+    if (!/[0-9]/.test(password)) {
+      throw new BadRequestException('Password must contain at least one number');
     }
   }
 }

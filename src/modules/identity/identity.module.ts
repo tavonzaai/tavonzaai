@@ -10,6 +10,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuthService } from './services/auth.service';
 import { UserService } from './services/user.service';
 import { CustomerPrincipalService } from './services/customer-principal.service';
+import { AuthCacheService } from './services/auth-cache.service';
 import { DrizzleUserRepository } from './repositories/drizzle-user.repository';
 import { DrizzleAuthSessionRepository } from './repositories/drizzle-auth-session.repository';
 import { DrizzleGuestPrincipalRepository } from './repositories/drizzle-guest-principal.repository';
@@ -36,6 +37,7 @@ import { ACCESS_TOKEN_TTL_SECONDS, accessTokenSecret } from './services/token-po
     AuthService,
     UserService,
     CustomerPrincipalService,
+    AuthCacheService,
     DrizzleUserRepository,
     DrizzleAuthSessionRepository,
     DrizzleGuestPrincipalRepository,
@@ -45,6 +47,7 @@ import { ACCESS_TOKEN_TTL_SECONDS, accessTokenSecret } from './services/token-po
     AuthService,
     UserService,
     CustomerPrincipalService,
+    AuthCacheService,
     DrizzleUserRepository,
     DrizzleAuthSessionRepository,
     DrizzleGuestPrincipalRepository,

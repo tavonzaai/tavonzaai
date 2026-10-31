@@ -57,6 +57,7 @@ import { UserDetailResponseDto } from '../dto/user-response.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { RateLimit } from '../../../common/decorators/rate-limit.decorator';
 import type { JwtPayload } from '../adapters/jwt.strategy';
 import { ApiStandardErrors } from '../../../common/swagger';
 import {
@@ -126,6 +127,7 @@ export class AuthController {
    * Fields: email, password
    */
   @Post('login')
+  @RateLimit(5, 60)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '[Customer] Login with email and password' })
   @ApiOkResponse({ type: AuthTokensDto })
@@ -262,6 +264,7 @@ export class AuthController {
    * Figma: Verify screen — 5-digit code from email
    */
   @Post('verify-otp')
+  @RateLimit(5, 60)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '[Customer] Verify OTP code (email verification or password reset)' })
   @ApiOkResponse({ type: MessageResponseDto })
@@ -276,6 +279,7 @@ export class AuthController {
    * Sends OTP code to email for password reset
    */
   @Post('forgot-password')
+  @RateLimit(3, 60)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '[Customer] Send password reset OTP to email' })
   @ApiOkResponse({ type: MessageResponseDto })
@@ -291,6 +295,7 @@ export class AuthController {
    * Figma: New Pass screen — verify OTP then set new password
    */
   @Post('reset-password')
+  @RateLimit(5, 60)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '[Customer] Reset password using OTP code' })
   @ApiOkResponse({ type: MessageResponseDto })
@@ -305,6 +310,7 @@ export class AuthController {
    * Figma: "Resend ( 01.85 )" countdown on Verify screen
    */
   @Post('resend-otp')
+  @RateLimit(3, 60)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '[Customer] Resend OTP verification code' })
   @ApiOkResponse({ type: MessageResponseDto })

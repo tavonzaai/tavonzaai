@@ -49,7 +49,14 @@ async function bootstrap() {
   );
 
   // ── Swagger / OpenAPI ──────────────────────────────────────────────────────
-  setupSwagger(app);
+  const isProd = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+  const enableSwaggerInProd = process.env.ENABLE_SWAGGER_IN_PROD === 'true';
+
+  if (!isProd || enableSwaggerInProd) {
+    setupSwagger(app);
+  } else {
+    logger.info('Swagger documentation disabled in production mode (enable with ENABLE_SWAGGER_IN_PROD=true)');
+  }
 
   const port = process.env.API_PORT || process.env.PORT || 3000;
   const env  = process.env.NODE_ENV || 'development';

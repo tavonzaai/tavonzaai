@@ -23,8 +23,8 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { randomInt } from 'node:crypto';
-import { eq, and, gt, desc, inArray } from 'drizzle-orm';
+import { randomInt, timingSafeEqual } from 'node:crypto';
+import { eq, and, gt, lt, desc, inArray } from 'drizzle-orm';
 import { JwtService } from '@nestjs/jwt';
 import { InternalOperationException } from '../../../common/errors/app.exception';
 import {
@@ -130,7 +130,7 @@ export class TableSessionService {
       throw new HttpException('Please wait before requesting another code', HttpStatus.TOO_MANY_REQUESTS);
     }
 
-    const code = randomInt(10000, 100000).toString();
+    const code = randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await this.db.insert(tableAuthOtps).values({
@@ -139,6 +139,7 @@ export class TableSessionService {
       tableSessionId: dto.tableSessionId ?? null,
       purpose: 'TABLE_AUTH',
       otp: code,
+      attempts: 0,
       expiresAt,
       verified: false,
     });
@@ -167,6 +168,15 @@ export class TableSessionService {
     };
   }
 
+  private safeCompare(a: string, b: string): boolean {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) {
+      return false;
+    }
+    return timingSafeEqual(bufA, bufB);
+  }
+
   /**
    * POST /sessions/table-otp/verify
    * Step 2 & 3 of Customer Flow: Verify OTP -> Authenticated Guest Session bound to Table Session
@@ -192,9 +202,9 @@ export class TableSessionService {
         and(
           eq(tableAuthOtps.contact, contact),
           eq(tableAuthOtps.tableId, dto.tableId),
-          eq(tableAuthOtps.otp, code),
           eq(tableAuthOtps.verified, false),
           gt(tableAuthOtps.expiresAt, new Date()),
+          lt(tableAuthOtps.attempts, 5),
         ),
       )
       .orderBy(desc(tableAuthOtps.createdAt))
@@ -202,6 +212,23 @@ export class TableSessionService {
 
     if (!otpRecord) {
       throw new BadRequestException('Invalid or expired verification code');
+    }
+
+    const matches = this.safeCompare(otpRecord.otp, code);
+    if (!matches) {
+      const nextAttempts = (otpRecord.attempts ?? 0) + 1;
+      if (nextAttempts >= 5) {
+        await this.db
+          .delete(tableAuthOtps)
+          .where(eq(tableAuthOtps.id, otpRecord.id));
+        throw new BadRequestException('Too many failed attempts. This verification code has been revoked.');
+      } else {
+        await this.db
+          .update(tableAuthOtps)
+          .set({ attempts: nextAttempts })
+          .where(eq(tableAuthOtps.id, otpRecord.id));
+        throw new BadRequestException(`Incorrect verification code. ${5 - nextAttempts} attempt(s) remaining.`);
+      }
     }
 
     await this.db

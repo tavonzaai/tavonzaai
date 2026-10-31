@@ -17,6 +17,7 @@ import { DrizzleRbacRepository } from '../../authorization/repositories/drizzle-
 import { DrizzleUserRepository } from '../repositories/drizzle-user.repository';
 import { DrizzleAuthSessionRepository } from '../repositories/drizzle-auth-session.repository';
 import { DrizzleOrganizationRepository } from '../../organizations/repositories/drizzle-organization.repository';
+import { AuthCacheService } from './auth-cache.service';
 import {
   isOrgAdmin,
   isSuperAdmin,
@@ -44,6 +45,7 @@ export class UserService {
     private readonly sessionRepo: DrizzleAuthSessionRepository,
     @Optional() private readonly rbacRepo?: DrizzleRbacRepository,
     @Optional() private readonly storageService?: StorageService,
+    @Optional() private readonly authCache?: AuthCacheService,
   ) {}
 
   /**
@@ -211,6 +213,7 @@ export class UserService {
     if (status && status !== 'ACTIVE') {
       await this.sessionRepo.revokeAllForUser(targetId, 'ACCOUNT_DISABLED');
     }
+    await this.authCache?.invalidateUser(targetId);
     const updated = await this.userRepo.findByIdWithRelations(targetId);
     return UserDetailResponseDto.fromRecord(updated, updated.customer, updated.assignments);
   }
@@ -390,9 +393,20 @@ export class UserService {
   }
 
   private validatePassword(password: string): void {
-
     if (!password || password.length < 8) {
       throw new BadRequestException('Password must be at least 8 characters long');
+    }
+    if (password.length > 128) {
+      throw new BadRequestException('Password cannot exceed 128 characters');
+    }
+    if (!/[A-Z]/.test(password)) {
+      throw new BadRequestException('Password must contain at least one uppercase letter');
+    }
+    if (!/[a-z]/.test(password)) {
+      throw new BadRequestException('Password must contain at least one lowercase letter');
+    }
+    if (!/[0-9]/.test(password)) {
+      throw new BadRequestException('Password must contain at least one number');
     }
   }
 }

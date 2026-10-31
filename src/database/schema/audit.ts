@@ -96,6 +96,7 @@ export const passwordResetOtps = pgTable('password_reset_otps', {
   email: varchar('email', { length: 255 }).unique().notNull(),
   otp: varchar('otp', { length: 20 }).notNull(),
   type: varchar('type', { length: 32 }).default('password_reset').notNull(),
+  attempts: integer('attempts').default(0).notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
 });
@@ -107,6 +108,7 @@ export const tableAuthOtps = pgTable('table_auth_otps', {
   tableSessionId: uuid('table_session_id').references(() => tableSessions.id, { onDelete: 'set null' }),
   purpose: otpPurposeEnum('purpose').default('TABLE_AUTH'),
   otp: varchar('otp', { length: 20 }).notNull(),
+  attempts: integer('attempts').default(0).notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   verified: boolean('verified').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()

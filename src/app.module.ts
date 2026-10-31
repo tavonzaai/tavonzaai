@@ -1,6 +1,9 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { DatabaseModule } from "@/database";
+import { AuthCacheModule } from "./modules/identity/auth-cache.module";
 import { IdentityModule } from "./modules/identity/identity.module";
+import { RateLimitGuard } from "./common/guards/rate-limit.guard";
 import { AuthorizationModule } from "./modules/authorization/authorization.module";
 import { OrganizationsModule } from "./modules/organizations/organizations.module";
 import { RestaurantsModule } from "./modules/restaurants/restaurants.module";
@@ -29,6 +32,7 @@ import { AppController } from "./app.controller";
   imports: [
     // Core Infrastructure — provides Drizzle DB globally
     DatabaseModule,
+    AuthCacheModule,
     ApiStorageModule,
     RealtimeModule,
 
@@ -54,7 +58,12 @@ import { AppController } from "./app.controller";
     AiModule,
   ],
   controllers: [AppController],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: RateLimitGuard,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
