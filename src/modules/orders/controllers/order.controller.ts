@@ -230,6 +230,7 @@ export class OrderController {
     const order = await this.orderService.updateOrderStatus(
       existing.id,
       dto.status as OrderStatus,
+      user,
     );
     return OrderDetailResponseDto.fromEntity(order);
   }
@@ -247,7 +248,7 @@ export class OrderController {
     @Param('orderId') orderId: string,
   ): Promise<OrderDetailResponseDto> {
     const existing = await this.orderService.getOrderForStaff(user, orderId);
-    const order = await this.orderService.updateOrderStatus(existing.id, 'CANCELLED');
+    const order = await this.orderService.updateOrderStatus(existing.id, 'CANCELLED', user);
     return OrderDetailResponseDto.fromEntity(order);
   }
 

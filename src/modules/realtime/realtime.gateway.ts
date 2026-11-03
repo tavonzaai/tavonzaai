@@ -35,6 +35,7 @@ export interface AuthenticatedSocketUser {
   guestSessionId?: string | null;
   tableId?: string | null;
   typ?: string;
+  scopes?: Array<{ type: string; id?: string }>;
 }
 
 @WebSocketGateway({
@@ -207,8 +208,14 @@ export class RealtimeGateway
 
     if (room.startsWith('branch:')) {
       if (isCustomer) return false;
-      const branchId = room.split(':')[1];
-      return !!user.branchId && user.branchId === branchId;
+      const targetBranchId = room.split(':')[1];
+      if (user.branchId === targetBranchId) return true;
+      if (user.globalRole === 'SUPER_ADMIN' || user.globalRole === 'ADMIN') return true;
+      const hasBranchScope = user.scopes?.some(
+        (s) => (s.type === 'branch' && s.id === targetBranchId) || s.type === 'global' || s.type === 'organization'
+      );
+      if (hasBranchScope) return true;
+      return false;
     }
 
     if (room.startsWith('user:')) {

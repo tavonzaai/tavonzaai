@@ -259,6 +259,14 @@ export class KitchenService {
     }
   }
 
+  async getItemBranchId(itemId: string): Promise<string | null> {
+    return this.kitchenRepo.findItemBranchId(itemId);
+  }
+
+  async getMenuItemRestaurantId(menuItemId: string): Promise<string | null> {
+    return this.kitchenRepo.findMenuItemRestaurantId(menuItemId);
+  }
+
   async toggleMenuItemAvailability(
     menuItemId: string,
     dto: ToggleItemAvailabilityDto

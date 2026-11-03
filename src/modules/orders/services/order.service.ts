@@ -89,7 +89,9 @@ export class OrderService {
       .where(eq(branchSettings.branchId, updatedOrder.branchId))
       .limit(1);
 
-    const isAutoAccept = settings?.orderAcceptanceMode === 'AUTO_ACCEPT';
+    const mode = settings?.orderAcceptanceMode ?? 'WAITER_APPROVAL';
+    const isAutoAccept = mode === 'AUTO_ACCEPT';
+    const isManagerApproval = mode === 'MANAGER_APPROVAL';
 
     let finalOrder = updatedOrder;
 
@@ -207,6 +209,16 @@ export class OrderService {
         });
       }
 
+      const acceptanceMode = isManagerApproval ? 'MANAGER_APPROVAL' : 'WAITER_APPROVAL';
+
+      await this.db
+        .update(orders)
+        .set({
+          acceptanceMode,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, orderId));
+
       this.realtimeGateway.emitOrderCreated({
         eventType: 'ORDER_CREATED',
         eventId: updatedOrder.id,
@@ -218,18 +230,26 @@ export class OrderService {
         status: 'PENDING',
         paymentStatus: 'UNPAID',
         totalAmount: updatedOrder.total,
-        acceptanceMode: 'WAITER_APPROVAL',
+        acceptanceMode,
         itemsCount: updatedOrder.items.length,
         occurredAt: new Date().toISOString(),
       });
 
-      // Notify waitstaff about pending order
+      // Notify appropriate staff based on branch acceptance mode
+      const targetRole = isManagerApproval ? 'BRANCH_MANAGER' : 'WAITER';
+      const notificationTitle = isManagerApproval
+        ? `New Order ${updatedOrder.orderNumber} (Manager Approval)`
+        : `New Order ${updatedOrder.orderNumber}`;
+      const notificationMsg = isManagerApproval
+        ? `Order ${updatedOrder.orderNumber} placed and awaiting manager approval.`
+        : `Order ${updatedOrder.orderNumber} placed and awaiting approval.`;
+
       await this.notificationService.create({
         branchId: updatedOrder.branchId,
-        targetRole: 'WAITER',
+        targetRole: targetRole as any,
         type: 'ORDER_PENDING_APPROVAL',
-        title: `New Order ${updatedOrder.orderNumber}`,
-        message: `Order ${updatedOrder.orderNumber} placed and awaiting approval.`,
+        title: notificationTitle,
+        message: notificationMsg,
         entityType: 'ORDER',
         entityId: updatedOrder.id,
       });
@@ -357,8 +377,21 @@ export class OrderService {
   async updateOrderStatus(
     orderId: string,
     newStatus: OrderStatus,
+    user?: JwtPayload,
   ): Promise<Order> {
     const order = await this.findOrderOrFail(orderId);
+
+    if (newStatus === 'ACCEPTED' && user && isWaiterActor(user)) {
+      const [orderRow] = await this.db
+        .select({ acceptanceMode: orders.acceptanceMode })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .limit(1);
+
+      if (orderRow?.acceptanceMode === 'MANAGER_APPROVAL') {
+        throw new ForbiddenException('This order requires manager approval to be accepted');
+      }
+    }
 
     if (!order.canTransitionTo(newStatus)) {
       throw new BadRequestException(

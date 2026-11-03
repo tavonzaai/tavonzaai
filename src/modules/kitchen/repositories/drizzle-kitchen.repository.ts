@@ -236,6 +236,25 @@ export class DrizzleKitchenRepository {
       .where(eq(tables.id, tableId));
   }
 
+  async findItemBranchId(itemId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ branchId: orders.branchId })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(eq(orderItems.id, itemId))
+      .limit(1);
+    return row?.branchId ?? null;
+  }
+
+  async findMenuItemRestaurantId(menuItemId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ restaurantId: menuItems.restaurantId })
+      .from(menuItems)
+      .where(eq(menuItems.id, menuItemId))
+      .limit(1);
+    return row?.restaurantId ?? null;
+  }
+
   async toggleMenuItemAvailability(
     menuItemId: string,
     isAvailable: boolean

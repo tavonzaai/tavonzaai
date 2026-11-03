@@ -113,7 +113,14 @@ export class AnalyticsService {
     }
     await this.branchAccess.assertAccess(user, query.branchId);
 
-    const organizationId = this.resolveOrganizationId(user, undefined);
+    let organizationId: string | undefined;
+    try {
+      organizationId = this.resolveOrganizationId(user, undefined);
+    } catch {
+      // Branch-scoped managers might not hold corporate organization scopes.
+      // Branch access was already asserted above, so query directly by branchId.
+      organizationId = undefined;
+    }
     const tenant = this.tenantFilter(organizationId, query.branchId);
 
     const delayCutoff = sql`now() - interval '20 minutes'`;
