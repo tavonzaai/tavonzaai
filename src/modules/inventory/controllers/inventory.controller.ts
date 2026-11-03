@@ -39,7 +39,10 @@ import { ApiStandardErrors } from '../../../common/swagger';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permission } from '@/authorization';
+import { BranchAccessService } from '../../authorization/services/branch-access.service';
+import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
 
 @ApiTags('Operations | Inventory & Suppliers')
 @ApiSecurity('access-token')
@@ -47,7 +50,10 @@ import { Permission } from '@/authorization';
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('inventory')
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly branchAccess: BranchAccessService,
+  ) {}
 
   // ── Suppliers ─────────────────────────────────────────────────────────
 
@@ -60,7 +66,11 @@ export class InventoryController {
   })
   @ApiCreatedResponse({ description: 'Supplier registered', type: SupplierResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
-  async createSupplier(@Body() dto: CreateSupplierDto) {
+  async createSupplier(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateSupplierDto,
+  ) {
+    await this.branchAccess.assertAccess(user, dto.branchId);
     return this.inventoryService.createSupplier(dto);
   }
 
@@ -73,7 +83,11 @@ export class InventoryController {
   @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'List of suppliers', type: [SupplierResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
-  async getBranchSuppliers(@Param('branchId') branchId: string) {
+  async getBranchSuppliers(
+    @CurrentUser() user: JwtPayload,
+    @Param('branchId') branchId: string,
+  ) {
+    await this.branchAccess.assertAccess(user, branchId);
     return this.inventoryService.getBranchSuppliers(branchId);
   }
 
@@ -86,8 +100,13 @@ export class InventoryController {
   @ApiParam({ name: 'id', description: 'Supplier UUID', example: '33445566-7788-99aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Supplier details', type: SupplierResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
-  async getSupplier(@Param('id') id: string) {
-    return this.inventoryService.getSupplierById(id);
+  async getSupplier(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    const supplier = await this.inventoryService.getSupplierById(id);
+    await this.branchAccess.assertAccess(user, supplier.branchId);
+    return supplier;
   }
 
   @Patch('suppliers/:id')
@@ -100,9 +119,12 @@ export class InventoryController {
   @ApiOkResponse({ description: 'Supplier updated', type: SupplierResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async updateSupplier(
+    @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
     @Body() dto: UpdateSupplierDto,
   ) {
+    const supplier = await this.inventoryService.getSupplierById(id);
+    await this.branchAccess.assertAccess(user, supplier.branchId);
     return this.inventoryService.updateSupplier(id, dto);
   }
 
@@ -124,7 +146,12 @@ export class InventoryController {
     },
   })
   @ApiStandardErrors(401, 403, 404, 500)
-  async deleteSupplier(@Param('id') id: string) {
+  async deleteSupplier(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    const supplier = await this.inventoryService.getSupplierById(id);
+    await this.branchAccess.assertAccess(user, supplier.branchId);
     return this.inventoryService.deleteSupplier(id);
   }
 
@@ -139,7 +166,11 @@ export class InventoryController {
   })
   @ApiCreatedResponse({ description: 'Category created', type: InventoryCategoryResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
-  async createCategory(@Body() dto: CreateInventoryCategoryDto) {
+  async createCategory(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateInventoryCategoryDto,
+  ) {
+    await this.branchAccess.assertAccess(user, dto.branchId);
     return this.inventoryService.createCategory(dto);
   }
 
@@ -152,7 +183,11 @@ export class InventoryController {
   @ApiParam({ name: 'branchId', description: 'Branch UUID', example: 'ce7b4318-5e2e-4fcd-a459-0e1bc80a6f27' })
   @ApiOkResponse({ description: 'List of categories', type: [InventoryCategoryResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
-  async getBranchCategories(@Param('branchId') branchId: string) {
+  async getBranchCategories(
+    @CurrentUser() user: JwtPayload,
+    @Param('branchId') branchId: string,
+  ) {
+    await this.branchAccess.assertAccess(user, branchId);
     return this.inventoryService.getBranchCategories(branchId);
   }
 
@@ -165,8 +200,13 @@ export class InventoryController {
   @ApiParam({ name: 'id', description: 'Category UUID', example: '44556677-8899-00aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Category details', type: InventoryCategoryResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
-  async getCategory(@Param('id') id: string) {
-    return this.inventoryService.getCategoryById(id);
+  async getCategory(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    const category = await this.inventoryService.getCategoryById(id);
+    await this.branchAccess.assertAccess(user, category.branchId);
+    return category;
   }
 
   @Patch('categories/:id')
@@ -179,9 +219,12 @@ export class InventoryController {
   @ApiOkResponse({ description: 'Category updated', type: InventoryCategoryResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async updateCategory(
+    @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
     @Body() dto: UpdateInventoryCategoryDto,
   ) {
+    const category = await this.inventoryService.getCategoryById(id);
+    await this.branchAccess.assertAccess(user, category.branchId);
     return this.inventoryService.updateCategory(id, dto);
   }
 
@@ -203,7 +246,12 @@ export class InventoryController {
     },
   })
   @ApiStandardErrors(401, 403, 404, 500)
-  async deleteCategory(@Param('id') id: string) {
+  async deleteCategory(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    const category = await this.inventoryService.getCategoryById(id);
+    await this.branchAccess.assertAccess(user, category.branchId);
     return this.inventoryService.deleteCategory(id);
   }
 
@@ -218,7 +266,11 @@ export class InventoryController {
   })
   @ApiCreatedResponse({ description: 'Item created', type: InventoryItemResponseDto })
   @ApiStandardErrors(400, 401, 403, 409, 500)
-  async createItem(@Body() dto: CreateInventoryItemDto) {
+  async createItem(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateInventoryItemDto,
+  ) {
+    await this.branchAccess.assertAccess(user, dto.branchId);
     return this.inventoryService.createItem(dto);
   }
 
@@ -233,9 +285,11 @@ export class InventoryController {
   @ApiOkResponse({ description: 'List of inventory items', type: [InventoryItemResponseDto] })
   @ApiStandardErrors(401, 403, 404, 500)
   async getBranchItems(
+    @CurrentUser() user: JwtPayload,
     @Param('branchId') branchId: string,
-    @Query('lowStockOnly') lowStockOnly?: string
+    @Query('lowStockOnly') lowStockOnly?: string,
   ) {
+    await this.branchAccess.assertAccess(user, branchId);
     return this.inventoryService.getBranchItems(branchId, lowStockOnly === 'true');
   }
 
@@ -248,8 +302,13 @@ export class InventoryController {
   @ApiParam({ name: 'id', description: 'Item UUID', example: '55667788-8899-00aa-bbcc-ddeeff001122' })
   @ApiOkResponse({ description: 'Item details', type: InventoryItemResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
-  async getItem(@Param('id') id: string) {
-    return this.inventoryService.getItemById(id);
+  async getItem(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    const item = await this.inventoryService.getItemById(id);
+    await this.branchAccess.assertAccess(user, item.branchId);
+    return item;
   }
 
   @Patch('items/:id')
@@ -262,9 +321,12 @@ export class InventoryController {
   @ApiOkResponse({ description: 'Item updated', type: InventoryItemResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async updateItem(
+    @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
     @Body() dto: UpdateInventoryItemDto,
   ) {
+    const item = await this.inventoryService.getItemById(id);
+    await this.branchAccess.assertAccess(user, item.branchId);
     return this.inventoryService.updateItem(id, dto);
   }
 
@@ -286,7 +348,12 @@ export class InventoryController {
     },
   })
   @ApiStandardErrors(401, 403, 404, 500)
-  async deleteItem(@Param('id') id: string) {
+  async deleteItem(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    const item = await this.inventoryService.getItemById(id);
+    await this.branchAccess.assertAccess(user, item.branchId);
     return this.inventoryService.deleteItem(id);
   }
 
@@ -300,9 +367,12 @@ export class InventoryController {
   @ApiOkResponse({ description: 'Item updated with new stock level', type: InventoryItemResponseDto })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async adjustStock(
+    @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
-    @Body() dto: AdjustStockDto
+    @Body() dto: AdjustStockDto,
   ) {
+    const item = await this.inventoryService.getItemById(id);
+    await this.branchAccess.assertAccess(user, item.branchId);
     return this.inventoryService.adjustStock(id, dto);
   }
 
@@ -317,10 +387,11 @@ export class InventoryController {
   @ApiOkResponse({ description: 'Inventory summary with low-stock counts', type: InventorySummaryResponseDto })
   @ApiStandardErrors(401, 403, 404, 500)
   async getInventorySummary(
+    @CurrentUser() user: JwtPayload,
     @Param('branchId') branchId: string,
-    @Query('lowStockOnly') lowStockOnly?: string
+    @Query('lowStockOnly') lowStockOnly?: string,
   ) {
+    await this.branchAccess.assertAccess(user, branchId);
     return this.inventoryService.getInventorySummary(branchId, lowStockOnly === 'true');
   }
 }
-

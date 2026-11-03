@@ -127,6 +127,30 @@ export class TableController {
     return table;
   }
 
+  @Get(':id/qr')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TABLES_READ)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get existing table QR code and customer join URL (read-only)' })
+  @ApiParam({ name: 'id', description: 'Table UUID', example: 'e7b1a2c3-d4e5-6789-0123-456789abcdef' })
+  @ApiOkResponse({ description: 'QR code details for display/printing' })
+  @ApiStandardErrors(401, 403, 404, 500)
+  async getTableQr(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<{ qrCodeToken: string; qrJoinUrl: string; qrCodeUrl: string; tableUrl: string }> {
+    const table = await this.tableService.findById(id);
+    await this.branchAccess.assertAccess(user, table.branchId);
+
+    const joinUrl = table.qrJoinUrl || '';
+    return {
+      qrCodeToken: table.qrCodeToken ?? '',
+      qrJoinUrl: joinUrl,
+      qrCodeUrl: joinUrl,
+      tableUrl: joinUrl,
+    };
+  }
+
   @Patch(':id')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(Permission.TABLES_UPDATE)

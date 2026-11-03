@@ -571,6 +571,15 @@ export class DrizzleWaiterRepository {
     return { table, session: session ?? null, guests };
   }
 
+  async findAssignmentBranchId(assignmentId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ branchId: waiterTableAssignments.branchId })
+      .from(waiterTableAssignments)
+      .where(eq(waiterTableAssignments.id, assignmentId))
+      .limit(1);
+    return row?.branchId ?? null;
+  }
+
   async releaseTable(assignmentId: string): Promise<void> {
     await this.db
       .update(waiterTableAssignments)

@@ -197,6 +197,10 @@ export class WaiterService {
     });
   }
 
+  async getAssignmentBranchId(assignmentId: string): Promise<string | null> {
+    return this.waiterRepo.findAssignmentBranchId(assignmentId);
+  }
+
   async releaseAssignment(assignmentId: string): Promise<void> {
     return this.waiterRepo.releaseTable(assignmentId);
   }

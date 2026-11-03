@@ -31,6 +31,7 @@ import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../../common/decorators/require-permissions.decorator';
 import { Permission } from '@/authorization';
+import { BranchAccessService } from '../../authorization/services/branch-access.service';
 import { isUUID } from '@/common/shared';
 import type { JwtPayload } from '../../identity/adapters/jwt.strategy';
 import {
@@ -57,7 +58,10 @@ import { ApiStandardErrors } from '../../../common/swagger';
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('waiter/tables')
 export class WaiterTablesController {
-  constructor(private readonly waiterService: WaiterService) {}
+  constructor(
+    private readonly waiterService: WaiterService,
+    private readonly branchAccess: BranchAccessService,
+  ) {}
 
   /**
    * GET /waiter/tables
@@ -129,6 +133,7 @@ export class WaiterTablesController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: AssignTableDto,
   ): Promise<TableAssignmentDto> {
+    await this.branchAccess.assertAccess(user, dto.branchId);
     return this.waiterService.assignTable(dto, user.sub);
   }
 
@@ -145,9 +150,10 @@ export class WaiterTablesController {
   @ApiOkResponse({ description: 'Table unassigned successfully' })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async unassignTable(
-    @CurrentUser() _user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
     @Body() dto: UnassignTableDto,
   ): Promise<any> {
+    await this.branchAccess.assertAccess(user, dto.branchId);
     return this.waiterService.unassignTable(dto);
   }
 
@@ -165,8 +171,13 @@ export class WaiterTablesController {
   @ApiOkResponse({ description: 'Assignment released successfully' })
   @ApiStandardErrors(400, 401, 403, 404, 500)
   async releaseAssignment(
+    @CurrentUser() user: JwtPayload,
     @Param('assignmentId') assignmentId: string,
   ): Promise<{ success: boolean }> {
+    const branchId = await this.waiterService.getAssignmentBranchId(assignmentId);
+    if (branchId) {
+      await this.branchAccess.assertAccess(user, branchId);
+    }
     await this.waiterService.releaseAssignment(assignmentId);
     return { success: true };
   }
@@ -192,6 +203,7 @@ export class WaiterTablesController {
   ): Promise<any[]> {
     const branchId = (qBranchId && isUUID(qBranchId)) ? qBranchId : (user.branchId || undefined);
     if (!branchId) throw new BadRequestException('A valid branch UUID is required');
+    await this.branchAccess.assertAccess(user, branchId);
     return this.waiterService.getBranchAssignments(branchId, waiterId);
   }
 }

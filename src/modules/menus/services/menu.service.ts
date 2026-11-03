@@ -16,6 +16,8 @@
 // ============================================================================
 
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { and, eq, inArray } from 'drizzle-orm';
+import { DRIZZLE, type DrizzleDatabase, branches } from '@/database';
 import {
   MENU_REPOSITORY,
   IMenuRepository,
@@ -38,6 +40,8 @@ export class MenuService {
     private readonly menuRepository: IMenuRepository,
     private readonly restaurantRepo: DrizzleRestaurantRepository,
     private readonly orgRepo: DrizzleOrganizationRepository,
+    @Inject(DRIZZLE)
+    private readonly db: DrizzleDatabase,
   ) {}
 
   // ── Use Cases ─────────────────────────────────────────────────────────
@@ -219,6 +223,22 @@ export class MenuService {
     if (org && canAccessOrganization(user, org)) return;
 
     if (organizationIdsFromActor(user).includes(restaurant.organizationId)) return;
+
+    // Check if user manages any branch belonging to this restaurant
+    const userBranchIds = (user.scopes ?? [])
+      .filter((s) => s.type === 'branch' && s.id)
+      .map((s) => s.id as string);
+    if (user.branchId) userBranchIds.push(user.branchId);
+
+    if (userBranchIds.length > 0) {
+      const [matchingBranch] = await this.db
+        .select({ id: branches.id })
+        .from(branches)
+        .where(and(eq(branches.restaurantId, restaurantId), inArray(branches.id, userBranchIds)))
+        .limit(1);
+
+      if (matchingBranch) return;
+    }
 
     throw new ForbiddenException('You do not have access to this restaurant');
   }
