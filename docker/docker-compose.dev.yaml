@@ -31,6 +31,8 @@ services:
       target: worker
     container_name: tavonzaai-dev-worker
     restart: unless-stopped
+    environment:
+      IS_WORKER: "true"
     env_file:
       - path: .env
         required: false

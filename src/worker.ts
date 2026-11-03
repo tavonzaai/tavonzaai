@@ -4,6 +4,7 @@
  */
 import { config } from 'dotenv';
 config();
+process.env.IS_WORKER = 'true';
 
 import { NestFactory } from '@nestjs/core';
 import { WorkersModule } from './workers/workers.module';

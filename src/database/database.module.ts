@@ -40,6 +40,13 @@ import { OutboxService } from './outbox.service';
       inject: [DRIZZLE],
       useFactory: async (db: DrizzleDatabase) => {
         const logger = new Logger('DatabaseMigration');
+
+        // Prevent worker or replica containers from competing on database migrations
+        if (process.env.IS_WORKER === 'true' || process.env.SKIP_MIGRATIONS === 'true') {
+          logger.log('Skipping migrations (IS_WORKER=true or SKIP_MIGRATIONS=true)');
+          return true;
+        }
+
         const candidates = [
           resolve(process.cwd(), 'drizzle'),
           resolve(__dirname, '../../drizzle'),
@@ -47,15 +54,21 @@ import { OutboxService } from './outbox.service';
         ];
         const migrationsFolder = candidates.find((dir) => existsSync(dir));
         if (!migrationsFolder) {
-          throw new Error(
-            `Database migrations folder not found. Looked in: ${candidates.join(', ')}`,
+          logger.warn(
+            `Database migrations folder not found. Looked in: ${candidates.join(', ')}. Continuing without auto-migration.`,
           );
+          return false;
         }
 
-        logger.log(`Running database migrations from ${migrationsFolder}...`);
-        await migrate(db, { migrationsFolder });
-        logger.log('Database migrations completed successfully');
-        return true;
+        try {
+          logger.log(`Running database migrations from ${migrationsFolder}...`);
+          await migrate(db, { migrationsFolder });
+          logger.log('Database migrations completed successfully');
+          return true;
+        } catch (err: any) {
+          logger.error(`Database migration failed: ${err.message}`, err.stack);
+          throw err;
+        }
       },
     },
   ],

@@ -10,8 +10,8 @@ import {
 } from './token-policy';
 
 describe('token-policy', () => {
-  it('uses 7-day access and 90-day refresh lifetimes', () => {
-    assert.equal(ACCESS_TOKEN_TTL_SECONDS, 7 * 24 * 3600);
+  it('uses 15-minute access and 90-day refresh lifetimes', () => {
+    assert.equal(ACCESS_TOKEN_TTL_SECONDS, 15 * 60);
     assert.equal(REFRESH_TOKEN_TTL_SECONDS, 90 * 24 * 3600);
   });
 

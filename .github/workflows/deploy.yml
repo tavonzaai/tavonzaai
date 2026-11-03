@@ -126,17 +126,22 @@ jobs:
             docker compose -f docker-compose.dev.yaml up -d caddy
 
             echo "Waiting for readiness..."
-            for i in 1 2 3 4 5 6; do
+            READY=0
+            for i in $(seq 1 10); do
               if curl -sSf http://localhost:5000/health/readiness; then
+                READY=1
                 echo "Readiness check passed."
                 break
               fi
-              if [ "$i" -eq 6 ]; then
-                echo "Readiness check failed after 6 attempts."
-                exit 1
-              fi
-              sleep 5
+              echo "Waiting for backend readiness (attempt $i/10)..."
+              sleep 4
             done
+
+            if [ "$READY" -ne 1 ]; then
+              echo "Readiness check failed. Dumping container logs:"
+              docker compose -f docker-compose.dev.yaml -f docker-compose.deploy.yaml logs --tail 100 api worker
+              exit 1
+            fi
 
             echo "Cleaning up dangling Docker images..."
             docker image prune -f
