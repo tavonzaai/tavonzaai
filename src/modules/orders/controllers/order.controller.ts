@@ -144,6 +144,25 @@ export class OrderController {
     return OrderTrackingResponseDto.fromEntity(order);
   }
 
+  /**
+   * POST /orders/:orderId/cancel — Seated diner self-cancels a PENDING order.
+   */
+  @Post(':orderId/cancel')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: '[Customer/Guest] Cancel pending order' })
+  @ApiParam({ name: 'orderId', type: String })
+  @ApiOkResponse({ type: OrderDetailResponseDto })
+  @ApiStandardErrors(400, 401, 403, 404, 500)
+  async cancelCustomerOrder(
+    @CurrentUser() user: JwtPayload,
+    @Param('orderId') orderId: string,
+  ): Promise<OrderDetailResponseDto> {
+    const principal = await this.principals.resolve(user);
+    const order = await this.orderService.cancelCustomerOrder(principal, orderId);
+    return OrderDetailResponseDto.fromEntity(order);
+  }
+
   // ══════════════════════════════════════════════════════════════════════
   // WAITER / STAFF ENDPOINTS
   // ══════════════════════════════════════════════════════════════════════

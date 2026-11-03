@@ -645,7 +645,35 @@ export class TableSessionService {
     }
     const { session, guests } = await this.requireSessionWithGuests(guest.tableSessionId);
     await this.assertCanAccessSession(actor, session, guests);
-    return { success: true, orderMode };
+
+    const mode = orderMode.toLowerCase();
+    await this.db
+      .update(guestSessions)
+      .set({
+        orderMode: mode,
+        updatedAt: new Date(),
+      })
+      .where(eq(guestSessions.id, customerSessionId));
+
+    await this.outboxService.publishEvent({
+      aggregateType: 'SESSION',
+      aggregateId: session.id,
+      eventType: 'OrderModeChanged',
+      branchId: session.branchId,
+      payload: {
+        tableSessionId: session.id,
+        tableId: session.tableId,
+        customerSessionId,
+        orderMode: mode,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+
+    return {
+      success: true,
+      customerSessionId,
+      orderMode: mode,
+    };
   }
 
   /**

@@ -289,6 +289,8 @@ export class DrizzleWaiterOrderRepository {
     quantity: number;
     stationType?: 'KITCHEN' | 'BAR';
     estimatedPrepTime?: number;
+    modifierIds?: string[];
+    specialInstructions?: string | null;
   }>): Promise<any[]> {
     if (items.length === 0) return [];
     return this.db
@@ -304,6 +306,8 @@ export class DrizzleWaiterOrderRepository {
           stationType: (item.stationType ?? 'KITCHEN') as 'KITCHEN' | 'BAR',
           status: 'PENDING' as const,
           estimatedPrepTime: item.estimatedPrepTime ?? 15,
+          modifierIds: item.modifierIds ?? [],
+          specialInstructions: item.specialInstructions ?? null,
         })),
       )
       .returning();

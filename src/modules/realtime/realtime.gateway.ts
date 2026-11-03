@@ -297,6 +297,12 @@ export class RealtimeGateway
       RealtimeChannels.waiter(payload.branchId),
       RealtimeChannels.order(payload.orderId),
     ];
+    if (payload.tableSessionId) {
+      rooms.push(RealtimeChannels.session(payload.tableSessionId));
+    }
+    if (payload.tableId) {
+      rooms.push(RealtimeChannels.table(payload.tableId));
+    }
     rooms.forEach((room) => this.emitToRoom(room, 'ORDER_ITEM_STATUS_CHANGED', payload));
   }
 

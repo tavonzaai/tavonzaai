@@ -10,6 +10,7 @@ import {
   integer,
   boolean,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import {
   orderChannelEnum,
   orderStatusEnum,
@@ -91,6 +92,8 @@ export const orderItems = pgTable('order_items', {
   subtotal: doublePrecision('subtotal').notNull(),
   stationType: stationTypeEnum('station_type').notNull(),
   status: orderItemStatusEnum('status').default('PENDING'),
+  modifierIds: uuid('modifier_ids').array().default(sql`'{}'`).notNull(),
+  specialInstructions: text('special_instructions'),
   estimatedPrepTime: integer('estimated_prep_time').default(15),
   preparingAt: timestamp('preparing_at', { withTimezone: true }),
   readyAt: timestamp('ready_at', { withTimezone: true }),

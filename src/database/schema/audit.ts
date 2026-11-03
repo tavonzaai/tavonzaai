@@ -8,14 +8,16 @@ import {
   date,
   integer,
   jsonb,
-  index
+  index,
+  check
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { orderStatusEnum, orderItemStatusEnum, otpPurposeEnum } from './enums';
 import { branches } from './hierarchy';
 import { users, customers } from './users';
 import { orders, orderItems } from './orders';
 import { tables } from './tables';
-import { tableSessions } from './sessions';
+import { tableSessions, guestSessions } from './sessions';
 
 export const auditLogs = pgTable('audit_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -35,14 +37,20 @@ export const auditLogs = pgTable('audit_logs', {
 export const orderReviews = pgTable('order_reviews', {
   id: uuid('id').defaultRandom().primaryKey(),
   orderId: uuid('order_id').unique().notNull().references(() => orders.id, { onDelete: 'cascade' }),
-  customerId: uuid('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
+  customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'cascade' }),
+  guestSessionId: uuid('guest_session_id').references(() => guestSessions.id, { onDelete: 'cascade' }),
   rating: integer('rating').notNull(),
   comment: text('comment'),
   isApproved: boolean('is_approved').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
-  customerIdx: index('order_reviews_customer_idx').on(table.customerId)
+  customerIdx: index('order_reviews_customer_idx').on(table.customerId),
+  guestSessionIdx: index('order_reviews_guest_session_idx').on(table.guestSessionId),
+  singleReviewer: check(
+    'order_reviews_single_reviewer',
+    sql`(${table.customerId} IS NOT NULL) OR (${table.guestSessionId} IS NOT NULL)`
+  )
 }));
 
 export const statusChangeLogs = pgTable('status_change_logs', {

@@ -540,6 +540,7 @@ export class DrizzleOrderRepository implements IOrderRepository {
         name: parsed.name,
         unitPrice: Number(item.unitPrice),
         quantity: item.quantity,
+        modifierIds: item.modifierIds ?? [],
         specialInstructions: item.specialInstructions ?? record.specialInstructions ?? null,
         addOns: parsed.addOns,
         addOnsTotal: parsed.addOns.reduce((sum, addon) => sum + addon.price, 0),

@@ -35,6 +35,14 @@ export class SubmitFeedbackDto {
   @IsOptional()
   @IsUUID()
   customerId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional guest session UUID if dining as a table guest',
+    example: '11223344-5566-7788-99aa-bbccddeeff00',
+  })
+  @IsOptional()
+  @IsUUID()
+  guestSessionId?: string;
 }
 
 export class FeedbackResponseDto {
@@ -50,11 +58,17 @@ export class FeedbackResponseDto {
   })
   orderId!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: '11223344-5566-7788-99aa-bbccddeeff00',
     description: 'Customer UUID',
   })
-  customerId!: string;
+  customerId?: string | null;
+
+  @ApiPropertyOptional({
+    example: '22334455-6677-8899-aabb-ccddeeff0011',
+    description: 'Guest Session UUID',
+  })
+  guestSessionId?: string | null;
 
   @ApiProperty({
     example: 5,

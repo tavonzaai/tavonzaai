@@ -4,6 +4,7 @@
 
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module';
+import { RealtimeModule } from '../realtime/realtime.module';
 import { WaiterService } from './services/waiter.service';
 import { DrizzleWaiterRepository } from './repositories/drizzle-waiter.repository';
 import { DrizzleWaiterOrderRepository } from './repositories/drizzle-waiter-order.repository';
@@ -19,6 +20,7 @@ import {
 @Module({
   imports: [
     IdentityModule, // provides JwtModule + PassportModule for JwtAuthGuard
+    RealtimeModule,
   ],
   controllers: [
     WaiterTablesController,

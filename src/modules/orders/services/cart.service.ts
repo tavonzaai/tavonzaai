@@ -83,6 +83,7 @@ export interface PricedLine {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  modifierIds?: string[];
   specialInstructions: string | null;
   estimatedPrepTime: number;
   categoryName: string | null;
@@ -304,6 +305,7 @@ export class CartService {
         quantity: line.quantity,
         unitPrice,
         lineTotal,
+        modifierIds: line.modifierIds ?? [],
         specialInstructions: line.specialInstructions,
         estimatedPrepTime: item.estimatedPrepTime ?? 15,
         categoryName: item.categoryName,

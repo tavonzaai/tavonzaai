@@ -83,6 +83,8 @@ export interface RealtimeOrderItemStatusChangedPayload {
   branchId: string;
   orderId: string;
   orderItemId: string;
+  tableSessionId?: string | null;
+  tableId?: string | null;
   productName: string;
   stationType: StationType;
   status: OrderItemStatus;

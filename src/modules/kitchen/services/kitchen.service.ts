@@ -46,6 +46,8 @@ export class KitchenService {
         branchId: updated.branchId,
         orderId: updated.orderId,
         orderItemId: updated.id,
+        tableSessionId: updated.tableSessionId ?? null,
+        tableId: updated.tableId ?? null,
         productName: updated.productName,
         stationType: updated.stationType as any,
         status: updated.status as any,

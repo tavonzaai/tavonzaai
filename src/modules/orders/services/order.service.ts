@@ -278,6 +278,20 @@ export class OrderService {
     return order;
   }
 
+  /**
+   * Allows a seated diner to self-cancel an order while it is still in PENDING/SUBMITTED status.
+   * Throws if staff has already accepted or kitchen has started cooking.
+   */
+  async cancelCustomerOrder(principal: CustomerPrincipal, orderId: string): Promise<Order> {
+    const order = await this.getOrderForCustomer(principal, orderId);
+    if (order.status !== 'SUBMITTED' && (order.status as string) !== 'PENDING') {
+      throw new BadRequestException(
+        `Cannot cancel order in status "${order.status}". Diners can only cancel orders while they are pending staff confirmation.`,
+      );
+    }
+    return this.updateOrderStatus(order.id, 'CANCELLED');
+  }
+
   async getOrdersForCustomer(
     principal: CustomerPrincipal,
     filters?: { status?: OrderStatus; search?: string; branchId?: string },
@@ -542,6 +556,7 @@ export class OrderService {
     if (newStatus === 'ACCEPTED') eventType = 'OrderAccepted';
     if (newStatus === 'REJECTED') eventType = 'OrderRejected';
     if (newStatus === 'SERVED') eventType = 'OrderServed';
+    if (newStatus === 'CANCELLED') eventType = 'OrderCancelled';
 
     await this.outboxService.publishEvent({
       aggregateType: 'ORDER',

@@ -66,6 +66,7 @@ import type {
 } from '../dto/waiter-request.dto';
 import { GlobalRole } from '@/authorization';
 import { OutboxService } from '@/database';
+import { RealtimeGateway } from '../../realtime/realtime.gateway';
 
 @Injectable()
 export class WaiterService {
@@ -75,6 +76,7 @@ export class WaiterService {
     private readonly alertRepo: DrizzleAlertRepository,
     private readonly userRepo: DrizzleUserRepository,
     private readonly outboxService: OutboxService,
+    private readonly realtimeGateway: RealtimeGateway,
     @Inject(DRIZZLE) private readonly db: DrizzleDatabase,
   ) {}
 
@@ -223,6 +225,17 @@ export class WaiterService {
 
     if (order.tableId) {
       await this.waiterRepo.updateTableStatus(order.tableId, 'PREPARING');
+      this.realtimeGateway.emitTableStatusChanged({
+        eventType: 'TABLE_STATUS_CHANGED',
+        eventId: order.tableId,
+        branchId: order.branchId,
+        tableId: order.tableId,
+        tableLabel: 'Table',
+        serviceStatus: 'PREPARING',
+        operationalFlag: 'NORMAL',
+        activeSessionId: order.tableSessionId,
+        occurredAt: new Date().toISOString(),
+      });
       await this.outboxService.publishEvent({
         aggregateType: 'TABLE',
         aggregateId: order.tableId,
@@ -239,6 +252,19 @@ export class WaiterService {
         },
       });
     }
+
+    this.realtimeGateway.emitOrderStatusChanged({
+      eventType: 'ORDER_STATUS_CHANGED',
+      eventId: order.id,
+      branchId: order.branchId,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      tableId: order.tableId,
+      tableSessionId: order.tableSessionId,
+      status: 'CONFIRMED',
+      acceptedById: waiterId,
+      occurredAt: new Date().toISOString(),
+    });
 
     await this.outboxService.publishEvent({
       aggregateType: 'ORDER',
@@ -275,6 +301,20 @@ export class WaiterService {
     const reasonCode = dto.rejectionReasonCode ?? dto.reasonCode ?? 'OTHER';
     await this.orderRepo.rejectOrder(dto.orderId, dto.reason, reasonCode, profile?.id);
 
+    this.realtimeGateway.emitOrderStatusChanged({
+      eventType: 'ORDER_STATUS_CHANGED',
+      eventId: order.id,
+      branchId: order.branchId,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      tableId: order.tableId,
+      tableSessionId: order.tableSessionId,
+      status: 'REJECTED',
+      rejectionReasonCode: reasonCode as any,
+      rejectionReason: dto.reason,
+      occurredAt: new Date().toISOString(),
+    });
+
     await this.outboxService.publishEvent({
       aggregateType: 'ORDER',
       aggregateId: order.id,
@@ -308,6 +348,48 @@ export class WaiterService {
     }
 
     await this.orderRepo.markServed(orderId);
+
+    if (order.tableId) {
+      await this.waiterRepo.updateTableStatus(order.tableId, 'SERVING');
+      this.realtimeGateway.emitTableStatusChanged({
+        eventType: 'TABLE_STATUS_CHANGED',
+        eventId: order.tableId,
+        branchId: order.branchId,
+        tableId: order.tableId,
+        tableLabel: 'Table',
+        serviceStatus: 'SERVING',
+        operationalFlag: 'NORMAL',
+        activeSessionId: order.tableSessionId,
+        occurredAt: new Date().toISOString(),
+      });
+      await this.outboxService.publishEvent({
+        aggregateType: 'TABLE',
+        aggregateId: order.tableId,
+        eventType: 'TableStatusChanged',
+        branchId: order.branchId,
+        payload: {
+          tableId: order.tableId,
+          tableLabel: 'Table',
+          branchId: order.branchId,
+          serviceStatus: 'SERVING',
+          operationalFlag: 'NORMAL',
+          activeSessionId: order.tableSessionId,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    this.realtimeGateway.emitOrderStatusChanged({
+      eventType: 'ORDER_STATUS_CHANGED',
+      eventId: order.id,
+      branchId: order.branchId,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      tableId: order.tableId,
+      tableSessionId: order.tableSessionId,
+      status: 'SERVED',
+      occurredAt: new Date().toISOString(),
+    });
 
     await this.outboxService.publishEvent({
       aggregateType: 'ORDER',
@@ -370,6 +452,7 @@ export class WaiterService {
       stationType: 'KITCHEN' | 'BAR';
       estimatedPrepTime: number;
       isStockTracked: boolean;
+      modifierIds?: string[];
       specialInstructions?: string;
     }> = [];
 
@@ -404,6 +487,7 @@ export class WaiterService {
         stationType: stationForCategory(catalog.categoryName),
         estimatedPrepTime: catalog.estimatedPrepTime ?? 15,
         isStockTracked: Boolean(catalog.isStockTracked),
+        modifierIds: selected.map((m) => m.id),
         specialInstructions: line.specialInstructions,
       });
     }
@@ -499,6 +583,8 @@ export class WaiterService {
         quantity: item.quantity,
         stationType: item.stationType,
         estimatedPrepTime: item.estimatedPrepTime,
+        modifierIds: item.modifierIds ?? [],
+        specialInstructions: item.specialInstructions ?? null,
       })),
     );
 

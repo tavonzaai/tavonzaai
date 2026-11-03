@@ -1,9 +1,11 @@
 import { Injectable, Optional, Inject } from '@nestjs/common';
-import { eq, and, sql, lte } from 'drizzle-orm';
+import { eq, and, or, inArray, sql, lte } from 'drizzle-orm';
 import {
   createDrizzleDatabase,
   tableSessions,
+  guestSessions,
   tables,
+  orders,
   branchSettings,
   OutboxService,
   DRIZZLE,
@@ -85,6 +87,30 @@ export class IdleSessionJob {
       let closedCount = 0;
 
       for (const session of activeSessions) {
+        // Invariant guard: Do NOT abandon dining tables that have unpaid orders or food in preparation/service
+        const [activeOrder] = await this.db
+          .select({ id: orders.id })
+          .from(orders)
+          .where(
+            and(
+              eq(orders.tableSessionId, session.sessionId),
+              or(
+                eq(orders.paymentStatus, 'UNPAID'),
+                inArray(orders.status, ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED'])
+              )
+            )
+          )
+          .limit(1);
+
+        if (activeOrder) {
+          // Diners are actively eating or have an unsettled bill — touch session and skip abandonment
+          await this.db
+            .update(tableSessions)
+            .set({ updatedAt: new Date() })
+            .where(eq(tableSessions.id, session.sessionId));
+          continue;
+        }
+
         // Mark session as closed due to idle timeout
         await this.db
           .update(tableSessions)
@@ -94,6 +120,15 @@ export class IdleSessionJob {
             updatedAt: new Date(),
           })
           .where(eq(tableSessions.id, session.sessionId));
+
+        await this.db
+          .update(guestSessions)
+          .set({
+            status: 'CLOSED',
+            leftAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(guestSessions.tableSessionId, session.sessionId));
 
         // Free up the table
         await this.db

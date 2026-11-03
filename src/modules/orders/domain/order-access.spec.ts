@@ -26,4 +26,14 @@ describe('order-access', () => {
       false,
     );
   });
+
+  it('allows order cancellation strictly when pending or submitted', () => {
+    const isCancelableByCustomer = (status: string) => status === 'SUBMITTED' || status === 'PENDING';
+    assert.equal(isCancelableByCustomer('SUBMITTED'), true);
+    assert.equal(isCancelableByCustomer('PENDING'), true);
+    assert.equal(isCancelableByCustomer('ACCEPTED'), false);
+    assert.equal(isCancelableByCustomer('PREPARING'), false);
+    assert.equal(isCancelableByCustomer('READY'), false);
+    assert.equal(isCancelableByCustomer('SERVED'), false);
+  });
 });

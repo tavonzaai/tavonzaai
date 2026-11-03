@@ -50,6 +50,9 @@ export class OrderItemResponseDto {
   @ApiPropertyOptional({ example: 15, description: 'Estimated preparation time in minutes' })
   estimatedPrepTime?: number | null;
 
+  @ApiPropertyOptional({ type: [String], description: 'Selected modifier UUIDs' })
+  modifierIds?: string[];
+
   static fromProps(props: OrderItemProps): OrderItemResponseDto {
     const dto = new OrderItemResponseDto();
     dto.id = props.id;
@@ -57,6 +60,7 @@ export class OrderItemResponseDto {
     dto.name = props.name;
     dto.unitPrice = props.unitPrice;
     dto.quantity = props.quantity;
+    dto.modifierIds = props.modifierIds ?? [];
     dto.specialInstructions = props.specialInstructions;
     dto.addOns = props.addOns;
     dto.addOnsTotal = props.addOnsTotal;

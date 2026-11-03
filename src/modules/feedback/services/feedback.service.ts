@@ -15,57 +15,40 @@ export class FeedbackService {
     rating: number;
     comment?: string;
     customerId?: string;
+    guestSessionId?: string;
   }) {
     let customerId = data.customerId;
+    let guestSessionId = data.guestSessionId;
 
-    if (!customerId) {
-      const [order] = await this.db
-        .select({ customerId: orders.customerId })
-        .from(orders)
-        .where(eq(orders.id, data.orderId))
-        .limit(1);
+    const [order] = await this.db
+      .select({
+        id: orders.id,
+        customerId: orders.customerId,
+        guestSessionId: orders.guestSessionId,
+      })
+      .from(orders)
+      .where(eq(orders.id, data.orderId))
+      .limit(1);
 
-      if (!order) {
-        throw new NotFoundException(`Order ${data.orderId} not found`);
-      }
+    if (!order) {
+      throw new NotFoundException(`Order ${data.orderId} not found`);
+    }
+
+    if (!customerId && !guestSessionId) {
       customerId = order.customerId ?? undefined;
+      guestSessionId = order.guestSessionId ?? undefined;
     }
 
-    if (!customerId) {
-      let [existingCustomer] = await this.db.select().from(customers).limit(1);
-      if (!existingCustomer) {
-        const [guestUser] = await this.db
-          .insert(users)
-          .values({
-            email: 'guest@tavonza.ai',
-            name: 'Table Guest',
-            role: 'CUSTOMER',
-          })
-          .returning();
-
-        if (guestUser) {
-          const [newCustomer] = await this.db
-            .insert(customers)
-            .values({
-              userId: guestUser.id,
-            })
-            .returning();
-
-          existingCustomer = newCustomer;
-        }
-      }
-      customerId = existingCustomer?.id;
-    }
-
-    if (!customerId) {
-      throw new NotFoundException('Could not resolve customer profile for review');
+    if (!customerId && !guestSessionId) {
+      throw new NotFoundException('Could not resolve customer or guest session for review attribution');
     }
 
     const [result] = await this.db
       .insert(orderReviews)
       .values({
         orderId: data.orderId,
-        customerId,
+        customerId: customerId ?? null,
+        guestSessionId: guestSessionId ?? null,
         rating: Math.min(5, Math.max(1, Number(data.rating))),
         comment: data.comment ?? null,
       })

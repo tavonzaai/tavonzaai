@@ -25,6 +25,7 @@ export interface OrderItemProps {
   name: string;
   unitPrice: number;
   quantity: number;
+  modifierIds?: string[];
   specialInstructions: string | null;
   addOns: OrderItemAddOn[];
   addOnsTotal: number;
@@ -159,14 +160,20 @@ export class Order {
     completed: boolean;
     active: boolean;
   }> {
-    const statusOrder: OrderStatus[] = [
-      'SUBMITTED',
-      'PREPARING',
-      'READY',
-      'SERVED',
-    ];
+    const statusMap: Record<string, number> = {
+      SUBMITTED: 0,
+      PENDING: 0,
+      ACCEPTED: 1,
+      CONFIRMED: 1,
+      KITCHEN_QUEUE: 1,
+      PREPARING: 1,
+      READY: 2,
+      SERVED: 3,
+      SERVING: 3,
+      COMPLETED: 3,
+    };
 
-    const currentIndex = statusOrder.indexOf(this.status);
+    const currentIndex = statusMap[this.status] ?? 0;
 
     return [
       { step: 'Order Received', completed: false, active: false },
@@ -175,8 +182,8 @@ export class Order {
       { step: 'Served', completed: false, active: false },
     ].map((item, index) => ({
       ...item,
-      completed: currentIndex > index,
-      active: currentIndex === index,
+      completed: currentIndex > index || (index === 3 && currentIndex === 3),
+      active: currentIndex === index && index !== 3,
     }));
   }
 }

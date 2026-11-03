@@ -14,7 +14,7 @@
 
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
-import { menuItems, orderItems, orders } from '@/database';
+import { menuItems, orderItems, orders, tableSessions } from '@/database';
 import {
   ORDER_REPOSITORY,
   type IOrderRepository,
@@ -125,10 +125,21 @@ export class CheckoutService {
             stationType: stationForCategory(line.categoryName),
             status: 'PENDING' as const,
             estimatedPrepTime: line.estimatedPrepTime,
+            modifierIds: line.modifierIds ?? [],
+            specialInstructions: line.specialInstructions ?? null,
           })),
         );
 
         await this.cartRepo.clearItems(cart.id, tx);
+
+        // Touch table session updatedAt to reset the idle timer
+        if (context.tableSessionId) {
+          await tx
+            .update(tableSessions)
+            .set({ updatedAt: new Date() })
+            .where(eq(tableSessions.id, context.tableSessionId));
+        }
+
         return order!.id;
       });
     } catch (error) {

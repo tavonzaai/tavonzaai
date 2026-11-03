@@ -40,6 +40,7 @@ export const guestSessions = pgTable('guest_sessions', {
   seatLabel: varchar('seat_label', { length: 50 }),
   otpVerifiedAt: timestamp('otp_verified_at', { withTimezone: true }),
   isHostGuest: boolean('is_host_guest').default(false),
+  orderMode: varchar('order_mode', { length: 20 }).default('together').notNull(),
   joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow(),
   leftAt: timestamp('left_at', { withTimezone: true }),
   status: guestSessionStatusEnum('status').default('ACTIVE'),
