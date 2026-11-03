@@ -31,6 +31,7 @@ export class FifoWorker<T = unknown, R = void> {
     const workerOptions: WorkerOptions = {
       connection: redisConn,
       prefix: '{bull}',
+      skipVersionCheck: true,
       concurrency: options?.concurrency ?? 1, // Default concurrency: 1 ensures strict sequential FIFO
       limiter: options?.limiter,
     };
