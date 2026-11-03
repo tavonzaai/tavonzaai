@@ -201,7 +201,9 @@ export const STAFF_ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
   [StaffRole.BRANCH_MANAGER]: BRANCH_MANAGER_PERMISSIONS,
   [StaffRole.HOST]: [
     Permission.MANAGE_RESERVATIONS,
+    Permission.MANAGE_TABLES,
     Permission.TABLES_READ,
+    Permission.TABLES_UPDATE,
     Permission.RESERVATIONS_READ,
     Permission.RESERVATIONS_WRITE,
     Permission.RESERVATIONS_UPDATE,
@@ -216,6 +218,8 @@ export const STAFF_ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
     Permission.ORDERS_SERVE,
     Permission.UPDATE_ORDER_STATUS,
     Permission.TABLES_READ,
+    Permission.TABLES_UPDATE,
+    Permission.MANAGE_TABLES,
     Permission.ALERTS_READ,
     Permission.ALERTS_ACKNOWLEDGE,
     Permission.ALERTS_RESOLVE,
@@ -227,6 +231,7 @@ export const STAFF_ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
     Permission.ORDERS_UPDATE,
     Permission.MENU_READ,
     Permission.MENU_UPDATE,
+    Permission.MANAGE_MENU,
     Permission.TABLES_READ,
   ],
   [StaffRole.BARTENDER]: [
@@ -236,6 +241,7 @@ export const STAFF_ROLE_DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
     Permission.ORDERS_UPDATE,
     Permission.MENU_READ,
     Permission.MENU_UPDATE,
+    Permission.MANAGE_MENU,
     Permission.TABLES_READ,
   ],
   [StaffRole.CASHIER]: [
@@ -283,10 +289,19 @@ export function resolveStaffPermissions(
   role: StaffRole,
   explicitPermissions: Permission[] = []
 ): Permission[] {
-  if (explicitPermissions.length > 0) {
+  const roleDefaults = STAFF_ROLE_DEFAULT_PERMISSIONS[role] ?? [];
+  if (explicitPermissions.length === 0) {
+    return [...roleDefaults];
+  }
+
+  // An explicit template on a BRANCH_MANAGER allows a reduced assistant-manager template
+  if (role === StaffRole.BRANCH_MANAGER) {
     return Array.from(new Set(explicitPermissions));
   }
-  return [...(STAFF_ROLE_DEFAULT_PERMISSIONS[role] ?? [])];
+
+  // For floor roles (WAITER, KITCHEN_STAFF, BARTENDER, CASHIER, HOST),
+  // explicit grants are additive to the role's essential operational capabilities.
+  return Array.from(new Set([...roleDefaults, ...explicitPermissions]));
 }
 
 export function resolvePermissions(
