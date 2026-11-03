@@ -85,6 +85,11 @@ export function getRedisConnection(config?: RedisConnectionConfig): Redis {
 
   const client = new Redis(redisUrl, options);
 
+  // Proactively attempt to configure noeviction policy for self-hosted/Docker Redis instances
+  client.config('SET', 'maxmemory-policy', 'noeviction').catch(() => {
+    // Ignored on managed providers (e.g. Upstash) or when CONFIG command is disabled
+  });
+
   // Attach error handler to prevent Node.js from throwing unhandled 'error' events if Redis is temporarily unreachable
   client.on('error', (err) => {
     if (process.env.NODE_ENV !== 'production') {
