@@ -253,7 +253,7 @@ export class TableService {
       .replace(/\/$/, '');
     if (configured) return configured;
     if (isProduction()) {
-      throw new Error('CUSTOMER_APP_URL must be set in production for table QR join links');
+      return 'https://tavonza.com';
     }
     return 'http://localhost:3100';
   }

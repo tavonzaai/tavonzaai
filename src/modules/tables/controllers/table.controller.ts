@@ -143,10 +143,13 @@ export class TableController {
     await this.branchAccess.assertAccess(user, table.branchId);
 
     const joinUrl = table.qrJoinUrl || '';
+    const qrImageUrl = joinUrl
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}`
+      : '';
     return {
       qrCodeToken: table.qrCodeToken ?? '',
       qrJoinUrl: joinUrl,
-      qrCodeUrl: joinUrl,
+      qrCodeUrl: qrImageUrl,
       tableUrl: joinUrl,
     };
   }
