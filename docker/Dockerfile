@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=node:20-slim
+ARG BASE_IMAGE=node:22-slim
 
 # --- 1. Base Runtime Layer ---
 FROM ${BASE_IMAGE} AS base
